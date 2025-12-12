@@ -1,0 +1,253 @@
+/* ============================================================
+   HealthChecker+ • Iteration 21 — Style Sheet
+   Premium Dark-Gold Theme + Responsive Layout
+============================================================ */
+
+/* ------------ GLOBAL RESET ------------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Segoe UI, Arial, sans-serif;
+}
+
+body {
+    background: #0a0a0a;
+    color: #f2f2f2;
+    padding-bottom: 60px;
+    line-height: 1.5;
+}
+
+/* ---------------------------------------
+   RESPONSIVE LAYOUT WRAPPER
+   Mobile = full width
+   Laptop = centered 800–900px
+----------------------------------------- */
+.screen {
+    display: none;
+    padding: 20px;
+}
+
+/* active screen visible */
+.screen.active {
+    display: block;
+}
+
+/* Desktop/laptop layout */
+@media (min-width: 900px) {
+    .screen {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+}
+
+/* ---------------------------------------
+   TOP NAVIGATION TABS
+----------------------------------------- */
+.top-nav {
+    display: flex;
+    flex-wrap: wrap;
+    background: #141414;
+    border-bottom: 2px solid gold;
+    padding: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+}
+
+.tab-btn {
+    background: #222;
+    color: gold;
+    border: 1px solid gold;
+    padding: 8px 12px;
+    margin: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.2s ease;
+}
+
+.tab-btn:hover {
+    background: gold;
+    color: #000;
+}
+
+.tab-btn.active {
+    background: gold;
+    color: #000;
+    font-weight: bold;
+}
+
+/* ---------------------------------------
+   HEADERS
+----------------------------------------- */
+h1 {
+    font-size: 26px;
+    margin-bottom: 12px;
+    color: gold;
+}
+
+h2 {
+    margin-top: 20px;
+    color: #d9d9d9;
+}
+
+h3 {
+    margin-bottom: 6px;
+}
+
+/* ---------------------------------------
+   FORMS
+----------------------------------------- */
+.form-block {
+    margin-bottom: 18px;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid gold;
+    background: #111;
+    color: #fff;
+    border-radius: 4px;
+    margin-top: 4px;
+}
+
+input:focus, select:focus {
+    outline: 2px solid gold;
+}
+
+/* ---------------------------------------
+   BUTTONS
+----------------------------------------- */
+.primary-btn {
+    background: gold;
+    color: black;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 14px;
+    font-size: 16px;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.primary-btn:hover {
+    background: #ffd700;
+}
+
+/* ---------------------------------------
+   DASHBOARD CARDS
+----------------------------------------- */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.card {
+    background: #1a1a1a;
+    border: 1px solid #444;
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.card p {
+    color: #ffd700;
+    font-size: 20px;
+    margin-top: 4px;
+}
+
+/* ---------------------------------------
+   ACCORDION FOR MULTI-SYMPTOMS
+----------------------------------------- */
+.accordion-item {
+    border: 1px solid gold;
+    margin-bottom: 12px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.accordion-header {
+    background: #111;
+    padding: 10px;
+    cursor: pointer;
+    color: gold;
+    font-weight: bold;
+}
+
+.accordion-content {
+    display: none;
+    background: #1b1b1b;
+    padding: 12px;
+    animation: fadeIn 0.3s ease;
+}
+
+.accordion-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ---------------------------------------
+   REPORTS LIST
+----------------------------------------- */
+#report-list {
+    margin-top: 20px;
+}
+
+.log-entry {
+    background: #111;
+    border: 1px solid #333;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+/* ---------------------------------------
+   URGENT OVERLAY — FLASHING RED
+----------------------------------------- */
+#urgent-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 0, 0, 0.55);
+    animation: flash 1s infinite;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+@keyframes flash {
+    0%   { background: rgba(255,0,0,0.3); }
+    50%  { background: rgba(255,0,0,0.6); }
+    100% { background: rgba(255,0,0,0.3); }
+}
+
+.urgent-box {
+    background: #111;
+    padding: 30px;
+    border: 2px solid gold;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.urgent-box h1 {
+    color: gold;
+    margin-bottom: 12px;
+}
+
+/* ---------------------------------------
+   CHART SPACING
+----------------------------------------- */
+canvas {
+    margin-top: 25px;
+    background: #111;
+    padding: 10px;
+    border-radius: 6px;
+}

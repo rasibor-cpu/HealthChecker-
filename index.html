@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HealthChecker+ - iOS Compatible Black & Gold</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- iOS web app hints -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: rgba(0,0,0,0);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: #000000;
+      color: #f4d03f;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      max-width: 1100px;
+      margin: 10px auto 40px auto;
+      background: #111111;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      padding: 15px 15px 25px 15px;
+      border: 1px solid #f4d03f33;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f4d03f44;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f4d03f;
+    }
+
+    header small {
+      font-size: 11px;
+      color: #f7e79b;
+    }
+
+    #userNameDisplay {
+      font-weight: 600;
+      font-size: 13px;
+      color: #f4d03f;
+    }
+
+    /* Top tabs – make scrollable on small iPhones */
+    nav.tabs {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 4px;
+      border-bottom: 1px solid #f4d03f33;
+      padding-bottom: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    nav.tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    nav.tabs button {
+      border: 1px solid #f4d03f44;
+      background: #191919;
+      color: #f7e79b;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.1s, color 0.2s, border-color 0.2s;
+      min-height: 32px;
+    }
+
+    nav.tabs button.active {
+      background: #f4d03f;
+      color: #000000;
+      font-weight: 600;
+      border-color: #f4d03f;
+    }
+
+    nav.tabs button:active {
+      transform: scale(0.97);
+    }
+
+    main {
+      margin-top: 12px;
+    }
+
+    section.tab {
+      display: none;
+      padding-top: 4px;
+    }
+
+    section.tab.active {
+      display: block;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: #f4d03f;
+    }
+
+    h3 {
+      font-size: 14px;
+      margin: 8px 0 4px 0;
+      color: #f7e79b;
+    }
+
+    .card {
+      background: #181818;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #f4d03f33;
+      color: #f7e79b;
+    }
+
+    label {
+      font-size: 13px;
+      display: block;
+      margin: 6px 0 2px 0;
+      color: #f7e79b;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #f4d03f55;
+      font-size: 13px;
+      background: #101010;
+      color: #f7e79b;
+      -webkit-appearance: none;
+    }
+
+    textarea {
+      min-height: 70px;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #f4d03f77;
+    }
+
+    select option {
+      background: #101010;
+      color: #f7e79b;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: transparent;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px;
+      background: #333333;
+      border-radius: 999px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #f4d03f;
+      margin-top: -7px;
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 4px;
+      background: #333333;
+      border-radius: 999px;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #f4d03f;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .col-50 { flex: 1 1 48%; min-width: 140px; }
+    .col-25 { flex: 1 1 23%; min-width: 120px; }
+    .col-100 { flex: 1 1 100%; }
+
+    button.primary {
+      border: none;
+      background: #f4d03f;
+      color: #000000;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+      font-weight: 600;
+      min-height: 36px;
+    }
+
+    button.secondary {
+      border: 1px solid #f4d03f;
+      background: #111111;
+      color: #f7e79b;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 6px;
+      min-height: 32px;
+    }
+
+    button.primary:active,
+    button.secondary:active {
+      transform: scale(0.97);
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .metric-card {
+      flex: 1 1 150px;
+      background: #151515;
+      border-radius: 8px;
+      border: 1px solid #f4d03f33;
+      padding: 8px;
+      color: #f7e79b;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: #fbeea8;
+    }
+
+    .metric-value {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 4px;
+      color: #f4d03f;
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: #f7e79b;
+    }
+
+    .mini-bar {
+      width: 100%;
+      height: 8px;
+      background: #333333;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .mini-bar-inner {
+      height: 8px;
+      width: 0%;
+      background: #f4d03f;
+      transition: width 0.3s;
+    }
+
+    table.report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    table.report-table th,
+    table.report-table td {
+      border: 1px solid #f4d03f33;
+      padding: 4px 6px;
+      text-align: left;
+      color: #f7e79b;
+    }
+
+    table.report-table th {
+      background: #222222;
+      font-weight: 600;
+    }
+
+    .note {
+      font-size: 11px;
+      color: #fbeea8;
+      margin-top: 6px;
+    }
+
+    #urgentOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      color: #f4d03f;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      text-align: center;
+      padding: 20px;
+      animation: flash 1s infinite;
+    }
+
+    #urgentOverlayContent {
+      max-width: 450px;
+      margin: 0 auto;
+      background: #111111;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid #f4d03f;
+    }
+
+    #urgentOverlay h2 {
+      font-size: 22px;
+      margin-bottom: 6px;
+      color: #f4d03f;
+    }
+
+    #urgentOverlay p {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #f7e79b;
+    }
+
+    #urgentOverlay button {
+      margin-top: 10px;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0.9; }
+      50% { opacity: 1; }
+      100% { opacity: 0.9; }
+    }
+
+    .cond-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #f4d03f11;
+      border: 1px solid #f4d03f66;
+      margin: 2px;
+      font-size: 11px;
+      color: #f7e79b;
+    }
+
+    .cond-pill button {
+      border: none;
+      background: transparent;
+      margin-left: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #f4d03f;
+    }
+
+    @media (max-width: 700px) {
+      #app {
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+        border-left: none;
+        border-right: none;
+      }
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>HealthChecker+</h1>
+      <small>Iteration 21 – iOS-compatible black & gold base</small>
+    </div>
+    <div>
+      <span style="font-size:11px;color:#fbeea8;">Signed in as:</span>
+      <span id="userNameDisplay">Anonymous</span>
+    </div>
+  </header>
+
+  <!-- TAB ORDER: Instructions, Profile, Dashboard, Symptom, Urine, Stool, Heart, Payments, Reports -->
+  <nav class="tabs">
+    <button class="active" data-tab="instructions">Instructions</button>
+    <button data-tab="profile">Profile</button>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="symptom">Symptom Checker</button>
+    <button data-tab="urine">Urine / Renal Helper</button>
+    <button data-tab="stool">Stool / Bowel Helper</button>
+    <button data-tab="heart">Heart / Hydration Helper</button>
+    <button data-tab="payments">Payments</button>
+    <button data-tab="reports">Reports</button>
+  </nav>
+
+  <main>
+    <!-- INSTRUCTIONS -->
+    <section class="tab active" id="tab-instructions">
+      <h2>Instructions</h2>
+      <div class="card">
+        <p style="font-size:12px;">
+          1. Start from the <strong>Profile</strong> tab. Enter your details and add any existing
+          conditions (from suggested dropdowns or your own text). This helps the engine weigh severity.<br/>
+          2. Use the <strong>Symptom Checker</strong> to add up to 10 symptoms. For each one, select
+          a body part, pick a common symptom from the dropdown, adjust severity (1–10) and duration,
+          and optionally type any extra notes. Click <strong>Get Diagnosis</strong> for a general
+          triage-style recommendation.<br/>
+          3. Use <strong>Urine</strong>, <strong>Stool</strong> and <strong>Heart / Hydration</strong>
+          helpers for focused checks. Each generates a severity rating and recommended action and
+          updates your Dashboard & Reports.<br/>
+          4. In <strong>Payments</strong>, record single bundles or subscriptions:<br/>
+          • ₦200 = 3 diagnosis credits<br/>
+          • ₦500 daily<br/>
+          • ₦2,499 weekly<br/>
+          • ₦9,999 monthly<br/>
+          • ₦79,999 annual<br/>
+          Every 10 paid credits earns a bonus free diagnosis. These unlock report export actions.<br/>
+          5. The <strong>Dashboard</strong> provides a triage-style overall risk snapshot (Low /
+          Moderate / High) based on recent checks and your conditions. This is a general tool only
+          and does not replace your doctor.
+        </p>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="tab" id="tab-profile">
+      <h2>Profile</h2>
+      <div class="card">
+        <div class="row">
+          <div class="col-50">
+            <label for="profileName">Name</label>
+            <input type="text" id="profileName" />
+          </div>
+          <div class="col-25">
+            <label for="profileAge">Age</label>
+            <input type="number" id="profileAge" min="0" />
+          </div>
+          <div class="col-25">
+            <label for="profileSex">Sex</label>
+            <select id="profileSex">
+              <option value="">Select...</option>
+              <option>Male</option>
+              <option>Female</option>
+            </select>
+          </div>
+        </div>
+
+        <h3>Existing Conditions</h3>
+        <p class="note">
+          Tick the common ones if applicable, then add any specific diagnosis using the dropdown
+          suggestions or your own text (e.g. "Type 2 diabetes", "CKD stage 3", "Atrial fibrillation").
+        </p>
+        <div class="row" style="font-size:12px;">
+          <div class="col-50">
+            <label><input type="checkbox" class="condChk" value="Diabetes" /> Diabetes</label>
+            <label><input type="checkbox" class="condChk" value="Hypertension" /> Hypertension</label>
+            <label><input type="checkbox" class="condChk" value="Heart disease" /> Heart disease</label>
+            <label><input type="checkbox" class="condChk" value="Kidney disease" /> Kidney disease</label>
+            <label><input type="checkbox" class="condChk" value="Asthma" /> Asthma</label>
+          </div>
+          <div class="col-50">
+            <label><input type="checkbox" class="condChk" value="Ulcer" /> Ulcer</label>
+            <label><input type="checkbox" class="condChk" value="Sickle cell" /> Sickle cell</label>
+            <label><input type="checkbox" class="condChk" value="Stroke history" /> Stroke history</label>
+            <label><input type="checkbox" class="condChk" value="Immunosuppression" /> Immunosuppression</label>
+            <label id="pregnancyLabel" style="display:none;">
+              <input type="checkbox" class="condChk" value="Pregnancy" /> Pregnancy
+            </label>
+          </div>
+        </div>
+
+        <label for="conditionInput">Add specific conditions (with suggestions)</label>
+        <input list="conditionSuggestions" id="conditionInput"
+               placeholder="e.g. Type 2 diabetes, CKD stage 3, coronary artery disease" />
+        <datalist id="conditionSuggestions">
+          <option>Type 1 diabetes</option>
+          <option>Type 2 diabetes</option>
+          <option>CKD stage 3</option>
+          <option>CKD stage 4</option>
+          <option>CKD stage 5</option>
+          <option>Coronary artery disease</option>
+          <option>Heart failure</option>
+          <option>Atrial fibrillation</option>
+          <option>Hyperlipidaemia</option>
+          <option>Obesity</option>
+          <option>Chronic liver disease</option>
+          <option>Asthma</option>
+          <option>COPD</option>
+          <option>Peptic ulcer disease</option>
+          <option>Epilepsy</option>
+          <option>Stroke (previous)</option>
+          <option>Thyroid disease</option>
+          <option>Rheumatoid arthritis</option>
+          <option>Systemic lupus erythematosus</option>
+          <option>HIV</option>
+          <option>Cancer</option>
+          <option>Organ transplant</option>
+        </datalist>
+        <button type="button" class="secondary" id="btnAddCondition">Add condition</button>
+
+        <div id="conditionList" style="margin-top:6px;"></div>
+
+        <label for="otherConditions">Other notes (e.g. drug allergies)</label>
+        <input type="text" id="otherConditions"
+               placeholder="e.g. allergic to penicillin, contrast dye, specific drugs" />
+
+        <button class="primary" id="btnSaveProfile">Save Profile</button>
+        <div id="profileStatus" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="tab" id="tab-dashboard">
+      <h2>Dashboard – Health Snapshot</h2>
+      <div class="card">
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-label">Total Checks</div>
+            <div class="metric-value" id="metricTotalChecks">0</div>
+            <div class="metric-sub">All tools, this device</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Urgent Cases</div>
+            <div class="metric-value" id="metricUrgentCases">0</div>
+            <div class="mini-bar">
+              <div class="mini-bar-inner" id="barUrgentShare"></div>
+            </div>
+            <div class="metric-sub" id="metricUrgentShareLabel">0% of all checks</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Last Severity</div>
+            <div class="metric-value" id="metricLastSeverity">–</div>
+            <div class="metric-sub" id="metricLastTime">No checks yet</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Credits / Subscription</div>
+            <div class="metric-value" id="metricPaidUses">0</div>
+            <div class="metric-sub" id="metricBonusInfo">
+              Credits: 0 | Bonus: 0 | Sub: none
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Overall triage-style risk</div>
+            <div class="metric-value" id="metricRiskLevel">Low</div>
+            <div class="metric-sub" id="metricRiskDetail">
+              Based on recent checks & conditions
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Recent Activity (last 5 checks)</h3>
+        <div id="recentChecksList" style="font-size:12px;color:#f7e79b;margin-top:4px;">
+          No checks recorded yet.
+        </div>
+        <p class="note">
+          Risk level is a simple triage-style view (green / amber / red) based on the share of urgent
+          checks, the last severity, and the number of existing conditions. It is not a formal score
+          like NEWS2 or SOFA and does not replace clinical judgement.
+        </p>
+      </div>
+    </section>
+
+    <!-- SYMPTOM CHECKER -->
+    <section class="tab" id="tab-symptom">
+      <h2>Symptom Checker</h2>
+      <div class="card">
+        <p style="font-size:12px;margin-bottom:6px;">
+          Add up to <strong>10 symptoms</strong>. For each one, select a body area, choose a common
+          symptom from the dropdown, adjust severity (1–10) and duration, and optionally type extra
+          detail. The engine weights the result with your existing conditions.
+        </p>
+
+        <button class="secondary" id="btnAddSymptom">+ Add Symptom</button>
+        <span class="note" id="symptomCountNote">0 / 10 added</span>
+
+        <div id="symptomList" style="margin-top:6px;"></div>
+
+        <label for="otherNotes">Other notes (optional)</label>
+        <textarea id="otherNotes" placeholder="Any extra details your doctor should know"></textarea>
+
+        <button class="primary" id="btnGetDiagnosis">Get Diagnosis</button>
+        <div id="diagnosisResult" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+    </section>
+
+    <!-- URINE -->
+    <section class="tab" id="tab-urine">
+      <h2>Urine / Renal Helper</h2>
+      <div class="card">
+        <div class="row">
+          <div class="col-50">
+            <label for="urineColor">Urine colour</label>
+            <select id="urineColor">
+              <option value="">Select...</option>
+              <option>Clear</option>
+              <option>Pale yellow</option>
+              <option>Yellow</option>
+              <option>Dark yellow</option>
+              <option>Orange</option>
+              <option>Brown</option>
+              <option>Red / blood-tinged</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="urineFreqBracket">Frequency (per day)</label>
+            <select id="urineFreqBracket">
+              <option value="">Select...</option>
+              <option>1–3 times/day</option>
+              <option>4–6 times/day</option>
+              <option>7–10 times/day</option>
+              <option>>10 times/day</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="urineVolume">Volume</label>
+            <select id="urineVolume">
+              <option value="">Select...</option>
+              <option>Small</option>
+              <option>Normal</option>
+              <option>Large</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="urinePain">Pain / burning?</label>
+            <select id="urinePain">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>Mild</option>
+              <option>Moderate / severe</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="urineFoam">Foamy urine?</label>
+            <select id="urineFoam">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>Yes, occasionally</option>
+              <option>Yes, very often</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="urineSmell">Strong smell?</label>
+            <select id="urineSmell">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>Yes, slightly</option>
+              <option>Yes, very strong</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary" id="btnAssessUrine">Assess</button>
+        <div id="urineResult" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+    </section>
+
+    <!-- STOOL -->
+    <section class="tab" id="tab-stool">
+      <h2>Stool / Bowel Helper</h2>
+      <div class="card">
+        <div class="row">
+          <div class="col-50">
+            <label for="stoolFreqPerDay">Frequency per day</label>
+            <input type="number" id="stoolFreqPerDay" min="0" placeholder="e.g. 1, 2, 3" />
+          </div>
+          <div class="col-50">
+            <label for="stoolForm">Form (Bristol)</label>
+            <select id="stoolForm">
+              <option value="">Select...</option>
+              <option>Type 1 – hard pellets</option>
+              <option>Type 2 – lumpy</option>
+              <option>Type 3 – sausage with cracks</option>
+              <option>Type 4 – smooth sausage</option>
+              <option>Type 5 – soft blobs</option>
+              <option>Type 6 – mushy</option>
+              <option>Type 7 – watery</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="stoolColour">Colour</label>
+            <select id="stoolColour">
+              <option value="">Select...</option>
+              <option>Brown</option>
+              <option>Yellow</option>
+              <option>Green</option>
+              <option>Black / tarry</option>
+              <option>Red / blood</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="stoolPainScale">Pain severity (1–10)</label>
+            <input type="range" id="stoolPainScale" min="1" max="10" value="1" />
+            <span id="stoolPainLabel" style="font-size:11px;">1 (very mild)</span>
+          </div>
+          <div class="col-50">
+            <label for="stoolDuration">Duration of bowel problem</label>
+            <select id="stoolDuration">
+              <option value="">Select...</option>
+              <option>< 24 hours</option>
+              <option>1–3 days</option>
+              <option>4–7 days</option>
+              <option>1–2 weeks</option>
+              <option>> 2 weeks</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary" id="btnAssessStool">Assess</button>
+        <div id="stoolResult" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+    </section>
+
+    <!-- HEART / HYDRATION -->
+    <section class="tab" id="tab-heart">
+      <h2>Heart / Hydration Helper</h2>
+      <div class="card">
+        <div class="row">
+          <div class="col-50">
+            <label for="heartChestPain">Chest pain?</label>
+            <select id="heartChestPain">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>Mild / positional</option>
+              <option>Heavy / squeezing</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="heartBreathless">Breathlessness?</label>
+            <select id="heartBreathless">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>On exertion</option>
+              <option>At rest</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="heartPalp">Palpitations?</label>
+            <select id="heartPalp">
+              <option value="">Select...</option>
+              <option>No</option>
+              <option>Occasional</option>
+              <option>Frequent / dizzy</option>
+            </select>
+          </div>
+          <div class="col-50">
+            <label for="heartRate">Approximate heart rate (bpm)</label>
+            <input type="number" id="heartRate" min="30" max="220" placeholder="e.g. 80" />
+          </div>
+          <div class="col-50">
+            <label for="hydrationLevel">Hydration level (1–10)</label>
+            <input type="range" id="hydrationLevel" min="1" max="10" value="5" />
+            <span id="hydrationLabel" style="font-size:11px;">5 (average)</span>
+          </div>
+          <div class="col-50">
+            <label for="heartDuration">Duration of symptoms</label>
+            <select id="heartDuration">
+              <option value="">Select...</option>
+              <option>< 24 hours</option>
+              <option>1–3 days</option>
+              <option>4–7 days</option>
+              <option>1–2 weeks</option>
+              <option>> 2 weeks</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary" id="btnAssessHeart">Assess</button>
+        <div id="heartResult" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+    </section>
+
+    <!-- PAYMENTS -->
+    <section class="tab" id="tab-payments">
+      <h2>Payments</h2>
+      <div class="card">
+        <p style="font-size:12px;margin-bottom:6px;">
+          Simulation only (no real money yet).<br/>
+          • <strong>Single bundle:</strong> ₦200 = 3 diagnosis credits.<br/>
+          • <strong>Daily subscription:</strong> ₦500.<br/>
+          • <strong>Weekly subscription:</strong> ₦2,499.<br/>
+          • <strong>Monthly subscription:</strong> ₦9,999.<br/>
+          • <strong>Annual subscription:</strong> ₦79,999.<br/>
+          After each 10 paid credits, you earn <strong>1 bonus free diagnosis</strong>.
+        </p>
+        <button class="primary" id="btnRecordBundle">Record ₦200 Bundle (3 credits)</button>
+        <button class="secondary" id="btnDaily">Activate Daily (₦500)</button>
+        <button class="secondary" id="btnWeekly">Activate Weekly (₦2,499)</button>
+        <button class="secondary" id="btnMonthly">Activate Monthly (₦9,999)</button>
+        <button class="secondary" id="btnAnnual">Activate Annual (₦79,999)</button>
+        <button class="secondary" id="btnUseBonus">Use 1 Bonus Free Check</button>
+        <div id="paymentStatus" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="tab" id="tab-reports">
+      <h2>Reports</h2>
+      <div class="card">
+        <p style="font-size:12px;">
+          Summary of checks performed on this device. Export actions are available after at least
+          one bundle or subscription is recorded.
+        </p>
+        <div style="margin-bottom:6px;">
+          <button class="primary" id="btnPrintReport">Print report</button>
+          <button class="secondary" id="btnCopyReport">Copy report text</button>
+        </div>
+        <div id="reportsTable" style="margin-top:6px;font-size:12px;">
+          No records yet.
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- URGENT OVERLAY -->
+<div id="urgentOverlay">
+  <div id="urgentOverlayContent">
+    <h2>URGENT – SEEK CARE NOW</h2>
+    <p>Your symptoms may require immediate medical attention. Please contact a doctor or
+      emergency service immediately.</p>
+    <button class="primary" id="btnCloseUrgentOverlay">I Understand</button>
+  </div>
+</div>
+
+<script>
+  // GLOBAL STATE
+  let healthLog = [];
+  let paidCreditsTotal = 0;
+  let creditBalance = 0;
+  let bonusAvailable = 0;
+  let subscriptionLevel = "none";
+  let userProfile = {
+    name: "Anonymous",
+    age: null,
+    sex: "",
+    existingConditions: [],
+    otherConditions: ""
+  };
+
+  const MAX_SYMPTOMS = 10;
+
+  const bodyAreas = [
+    "Head", "Eyes", "Ears", "Nose", "Throat", "Neck",
+    "Chest", "Upper back", "Lower back",
+    "Left arm", "Right arm",
+    "Upper abdomen", "Lower abdomen", "Pelvis",
+    "Left leg", "Right leg",
+    "Hands / fingers", "Feet / toes",
+    "Skin (general)", "Other"
+  ];
+
+  const bodyAreaSymptoms = {
+    "Head": [
+      "Headache",
+      "Throbbing headache",
+      "Pressure in head",
+      "Lightheadedness",
+      "Dizziness"
+    ],
+    "Eyes": [
+      "Blurred vision",
+      "Red eye",
+      "Eye pain",
+      "Double vision"
+    ],
+    "Ears": [
+      "Ear pain",
+      "Ringing in ears",
+      "Hearing loss"
+    ],
+    "Nose": [
+      "Blocked nose",
+      "Runny nose",
+      "Nosebleeds"
+    ],
+    "Throat": [
+      "Sore throat",
+      "Difficulty swallowing",
+      "Hoarse voice"
+    ],
+    "Neck": [
+      "Neck pain",
+      "Stiff neck",
+      "Swollen glands"
+    ],
+    "Chest": [
+      "Mild chest discomfort",
+      "Heavy / squeezing chest pain",
+      "Chest tightness",
+      "Palpitations"
+    ],
+    "Upper back": [
+      "Upper back pain",
+      "Burning between shoulder blades"
+    ],
+    "Lower back": [
+      "Lower back pain",
+      "Sciatica-like pain"
+    ],
+    "Left arm": [
+      "Left arm pain",
+      "Left arm weakness",
+      "Numbness in left arm"
+    ],
+    "Right arm": [
+      "Right arm pain",
+      "Right arm weakness",
+      "Numbness in right arm"
+    ],
+    "Upper abdomen": [
+      "Upper abdominal pain",
+      "Heartburn",
+      "Nausea"
+    ],
+    "Lower abdomen": [
+      "Lower abdominal pain",
+      "Cramping",
+      "Bloating"
+    ],
+    "Pelvis": [
+      "Pelvic pain",
+      "Urinary discomfort",
+      "Vaginal or penile discharge"
+    ],
+    "Left leg": [
+      "Left leg pain",
+      "Swelling in left leg",
+      "Numbness in left leg"
+    ],
+    "Right leg": [
+      "Right leg pain",
+      "Swelling in right leg",
+      "Numbness in right leg"
+    ],
+    "Hands / fingers": [
+      "Finger joint pain",
+      "Hand numbness",
+      "Weak grip"
+    ],
+    "Feet / toes": [
+      "Foot pain",
+      "Burning feet",
+      "Numb toes"
+    ],
+    "Skin (general)": [
+      "Rash",
+      "Itching",
+      "Skin colour change",
+      "Wound not healing"
+    ],
+    "Other": [
+      "Fever",
+      "Chills",
+      "Generalised weakness",
+      "Unexplained weight loss"
+    ]
+  };
+
+  function mapDurationToScore(text) {
+    if (!text) return 0;
+    if (text.includes("< 24")) return 1;
+    if (text.includes("1–3")) return 2;
+    if (text.includes("4–7")) return 3;
+    if (text.includes("1–2 weeks")) return 4;
+    if (text.includes("> 2 weeks")) return 5;
+    return 0;
+  }
+
+  function getProfileRiskMultiplier() {
+    const conds = userProfile.existingConditions || [];
+    if (conds.length === 0) return 1;
+    const lower = conds.map(c => c.toLowerCase());
+    if (
+      lower.some(c =>
+        c.includes("heart") ||
+        c.includes("coronary") ||
+        c.includes("kidney") ||
+        c.includes("ckd") ||
+        c.includes("stroke") ||
+        c.includes("immunosuppression") ||
+        c.includes("hiv") ||
+        c.includes("cancer")
+      )
+    ) {
+      return 1.5;
+    }
+    return 1.2;
+  }
+
+  // TABS
+  function initTabs() {
+    const tabButtons = document.querySelectorAll("nav.tabs button");
+    const tabSections = document.querySelectorAll("section.tab");
+    tabButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const target = btn.getAttribute("data-tab");
+        tabButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        tabSections.forEach(sec => {
+          if (sec.id === "tab-" + target) sec.classList.add("active");
+          else sec.classList.remove("active");
+        });
+      });
+    });
+  }
+
+  // DASHBOARD & REPORTS
+  function computeAndRenderRisk(total, urgent, condCount, lastSeverity) {
+    const riskEl = document.getElementById("metricRiskLevel");
+    const detailEl = document.getElementById("metricRiskDetail");
+
+    let urgentShare = 0;
+    if (total > 0) urgentShare = (urgent / total) * 100;
+
+    let score = 0;
+    score += urgentShare / 25;
+    score += condCount * 0.7;
+    if (lastSeverity === "Urgent") score += 3;
+    else if (lastSeverity === "See doctor soon") score += 1.5;
+
+    let level = "Low";
+    let detail = "Green: few urgent checks, limited conditions.";
+
+    if (score > 3 && score <= 6) {
+      level = "Moderate";
+      detail = "Amber: some urgent checks and/or multiple conditions.";
+    } else if (score > 6) {
+      level = "High";
+      detail = "Red: repeated urgent checks and/or heavier condition load.";
+    }
+
+    riskEl.textContent = level;
+    detailEl.textContent = detail;
+  }
+
+  function renderDashboard() {
+    const total = healthLog.length;
+    const urgent = healthLog.filter(x => x.severity === "Urgent").length;
+
+    document.getElementById("metricTotalChecks").textContent = total;
+    document.getElementById("metricUrgentCases").textContent = urgent;
+
+    let share = 0;
+    if (total > 0) share = Math.round((urgent / total) * 100);
+    document.getElementById("barUrgentShare").style.width = share + "%";
+    document.getElementById("metricUrgentShareLabel").textContent =
+      share + "% of all checks";
+
+    let lastSeverity = null;
+    if (total > 0) {
+      const last = healthLog[total - 1];
+      lastSeverity = last.severity;
+      document.getElementById("metricLastSeverity").textContent = last.severity;
+      document.getElementById("metricLastTime").textContent =
+        new Date(last.time).toLocaleString();
+    } else {
+      document.getElementById("metricLastSeverity").textContent = "–";
+      document.getElementById("metricLastTime").textContent = "No checks yet";
+    }
+
+    const condCount = (userProfile.existingConditions || []).length;
+    computeAndRenderRisk(total, urgent, condCount, lastSeverity);
+
+    const subText = subscriptionLevel === "none" ? "none" : subscriptionLevel;
+    document.getElementById("metricPaidUses").textContent = creditBalance;
+    document.getElementById("metricBonusInfo").textContent =
+      "Credits: " + creditBalance +
+      " | Bonus: " + bonusAvailable +
+      " | Sub: " + subText;
+
+    const recentEl = document.getElementById("recentChecksList");
+    if (total === 0) {
+      recentEl.textContent = "No checks recorded yet.";
+    } else {
+      const lastFive = healthLog.slice(-5).reverse();
+      let html = "<ul>";
+      lastFive.forEach(item => {
+        html += "<li>" +
+          new Date(item.time).toLocaleString() +
+          " — " + item.type +
+          " — " + item.severity +
+          " — " + item.action +
+          "</li>";
+      });
+      html += "</ul>";
+      recentEl.innerHTML = html;
+    }
+  }
+
+  function renderReports() {
+    const container = document.getElementById("reportsTable");
+    if (!container) return;
+
+    if (healthLog.length === 0) {
+      container.textContent = "No records yet.";
+      return;
+    }
+
+    let html = '<table class="report-table">';
+    html += "<thead><tr><th>Time</th><th>Tool</th><th>Severity</th><th>Recommended action</th><th>Details</th></tr></thead><tbody>";
+    healthLog.slice().reverse().forEach(entry => {
+      html += "<tr><td>" +
+        new Date(entry.time).toLocaleString() + "</td><td>" +
+        entry.type + "</td><td>" +
+        entry.severity + "</td><td>" +
+        entry.action + "</td><td>" +
+        entry.symptomsText + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+
+  function addLogEntry(type, severity, action, details) {
+    healthLog.push({
+      time: new Date().toISOString(),
+      type: type,
+      severity: severity,
+      action: action,
+      symptomsText: details
+    });
+    renderDashboard();
+    renderReports();
+  }
+
+  // SYMPTOM UI
+  function initSymptomUI() {
+    document.getElementById("btnAddSymptom").addEventListener("click", addSymptomRow);
+    document.getElementById("btnGetDiagnosis").addEventListener("click", handleGetDiagnosis);
+    updateSymptomCount();
+  }
+
+  function addSymptomRow() {
+    const container = document.getElementById("symptomList");
+    const count = container.querySelectorAll(".symptom-row").length;
+    if (count >= MAX_SYMPTOMS) {
+      alert("Maximum of 10 symptoms reached.");
+      return;
+    }
+
+    const row = document.createElement("div");
+    row.className = "card symptom-row";
+    row.style.padding = "8px";
+    row.style.marginBottom = "6px";
+
+    const id = "sym_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const bodyId = id + "_body";
+    const symId = id + "_sym";
+    const extraId = id + "_extra";
+    const sevId = id + "_sev";
+    const durId = id + "_dur";
+
+    let bodyOptions = '<option value="">Body area...</option>';
+    bodyAreas.forEach(a => {
+      bodyOptions += '<option value="' + a + '">' + a + '</option>';
+    });
+
+    row.innerHTML =
+      '<label>Body area</label>' +
+      '<select id="' + bodyId + '" data-role="bodyArea">' + bodyOptions + '</select>' +
+      '<label>Symptom (from list)</label>' +
+      '<select id="' + symId + '" data-role="symptom"><option value="">Select symptom...</option></select>' +
+      '<label>Extra description (optional)</label>' +
+      '<input type="text" id="' + extraId + '" data-role="extra" placeholder="e.g. started suddenly, worse at night" />' +
+      '<label>Severity (1–10)</label>' +
+      '<input type="range" id="' + sevId + '" data-role="severity" min="1" max="10" value="3" />' +
+      '<span class="sevLabel" style="font-size:11px;">3 (mild)</span>' +
+      '<label>Duration</label>' +
+      '<select id="' + durId + '" data-role="duration">' +
+        '<option value="">Select...</option>' +
+        '<option>< 24 hours</option>' +
+        '<option>1–3 days</option>' +
+        '<option>4–7 days</option>' +
+        '<option>1–2 weeks</option>' +
+        '<option>> 2 weeks</option>' +
+      '</select>' +
+      '<button type="button" class="secondary removeBtn">Remove</button>';
+
+    container.appendChild(row);
+
+    const bodySelect = document.getElementById(bodyId);
+    const symptomSelect = document.getElementById(symId);
+    const sevInput = document.getElementById(sevId);
+    const sevLabel = row.querySelector(".sevLabel");
+
+    bodySelect.addEventListener("change", () => {
+      const area = bodySelect.value;
+      const list = bodyAreaSymptoms[area] || [];
+      symptomSelect.innerHTML = '<option value="">Select symptom...</option>';
+      list.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s;
+        symptomSelect.appendChild(opt);
+      });
+    });
+
+    sevInput.addEventListener("input", () => {
+      const v = Number(sevInput.value);
+      let txt = v + " (mild)";
+      if (v >= 4 && v <= 6) txt = v + " (moderate)";
+      if (v >= 7) txt = v + " (severe)";
+      sevLabel.textContent = txt;
+    });
+
+    row.querySelector(".removeBtn").addEventListener("click", () => {
+      row.remove();
+      updateSymptomCount();
+    });
+
+    updateSymptomCount();
+  }
+
+  function updateSymptomCount() {
+    const container = document.getElementById("symptomList");
+    const count = container ? container.querySelectorAll(".symptom-row").length : 0;
+    const label = document.getElementById("symptomCountNote");
+    if (label) label.textContent = count + " / " + MAX_SYMPTOMS + " added";
+  }
+
+  // SYMPTOM DIAGNOSIS
+  function handleGetDiagnosis() {
+    const rows = document.querySelectorAll(".symptom-row");
+    const allSymptoms = [];
+    let maxSeverity = 0;
+    let maxDurationScore = 0;
+    let chestFlag = false;
+    let neuroFlag = false;
+    let bleedingFlag = false;
+
+    rows.forEach(row => {
+      const bodySel = row.querySelector('[data-role="bodyArea"]');
+      const symSel = row.querySelector('[data-role="symptom"]');
+      const extraInput = row.querySelector('[data-role="extra"]');
+      const sevInput = row.querySelector('[data-role="severity"]');
+      const durSel = row.querySelector('[data-role="duration"]');
+
+      if (!bodySel || !symSel || !sevInput || !durSel) return;
+
+      const body = bodySel.value;
+      const symptom = symSel.value;
+      const extra = (extraInput && extraInput.value.trim()) || "";
+      const sevVal = Number(sevInput.value || 0);
+      const durVal = durSel.value;
+
+      if (body || symptom || extra) {
+        const combinedText = ((body || "Body") + ": " +
+          (symptom || "unspecified symptom") +
+          (extra ? " (" + extra + ")" : ""));
+
+        allSymptoms.push(
+          combinedText +
+          " | severity " + sevVal + "/10 | duration " + (durVal || "n/a")
+        );
+
+        if (sevVal > maxSeverity) maxSeverity = sevVal;
+        const durScore = mapDurationToScore(durVal);
+        if (durScore > maxDurationScore) maxDurationScore = durScore;
+
+        const lc = (symptom + " " + extra).toLowerCase();
+        if (body === "Chest" ||
+            lc.includes("heavy / squeezing chest pain") ||
+            lc.includes("chest tightness")) {
+          chestFlag = true;
+        }
+        if (lc.includes("weakness") || lc.includes("paralysis") || lc.includes("numb")) {
+          neuroFlag = true;
+        }
+        if (lc.includes("blood") || lc.includes("bleed")) {
+          bleedingFlag = true;
+        }
+      }
+    });
+
+    const notes = document.getElementById("otherNotes").value.trim();
+    if (notes) allSymptoms.push("Notes: " + notes);
+
+    if (allSymptoms.length === 0) {
+      alert("Please add at least one symptom.");
+      return;
+    }
+
+    let numericScore = maxSeverity;
+    numericScore += maxDurationScore;
+
+    const riskMult = getProfileRiskMultiplier();
+    numericScore = numericScore * riskMult;
+
+    let severity = "Self-care";
+    let action = "Self-care at home, monitor symptoms and seek routine care if not improving.";
+
+    if (numericScore >= 10 || maxDurationScore >= 4) {
+      severity = "See doctor soon";
+      action = "Book an appointment with a doctor within the next few days.";
+    }
+    if (numericScore >= 14 || (chestFlag && maxSeverity >= 7) || neuroFlag || bleedingFlag) {
+      severity = "Urgent";
+      action = "Seek urgent medical attention immediately (emergency / casualty).";
+    }
+
+    const resEl = document.getElementById("diagnosisResult");
+    resEl.innerHTML =
+      '<div class="card"><b>Severity:</b> ' + severity +
+      '<br/><b>Recommended action:</b> ' + action +
+      '<br/><b>Symptoms:</b> ' + allSymptoms.join("; ") + '</div>';
+
+    registerDiagnosisUse();
+    addLogEntry("Symptom checker", severity, action, allSymptoms.join("; "));
+
+    if (severity === "Urgent") {
+      document.getElementById("urgentOverlay").style.display = "flex";
+    }
+  }
+
+  function registerDiagnosisUse() {
+    if (creditBalance > 0) {
+      creditBalance--;
+    }
+    renderDashboard();
+  }
+
+  // URINE HELPER
+  function assessUrine() {
+    const color = document.getElementById("urineColor").value;
+    const freq  = document.getElementById("urineFreqBracket").value;
+    const vol   = document.getElementById("urineVolume").value;
+    const pain  = document.getElementById("urinePain").value;
+    const foam  = document.getElementById("urineFoam").value;
+    const smell = document.getElementById("urineSmell").value;
+
+    let msg = [];
+    if (color) msg.push("Colour: " + color);
+    if (freq)  msg.push("Frequency: " + freq);
+    if (vol)   msg.push("Volume: " + vol);
+    if (pain)  msg.push("Pain: " + pain);
+    if (foam)  msg.push("Foam: " + foam);
+    if (smell) msg.push("Smell: " + smell);
+
+    const joined = msg.join(" | ").toLowerCase();
+
+    let severity = "Self-care";
+    let action = "Hydrate well and monitor. Seek routine review if changes persist.";
+
+    if (
+      joined.includes("red / blood-tinged") ||
+      joined.includes("brown") ||
+      joined.includes("orange") ||
+      joined.includes("moderate / severe")
+    ) {
+      severity = "Urgent";
+      action = "Possible bleeding or serious kidney / bladder issue. Seek urgent care.";
+    } else if (
+      joined.includes("dark yellow") ||
+      joined.includes("yes, very often") ||
+      joined.includes(">10 times/day") ||
+      joined.includes("very strong")
+    ) {
+      severity = "See doctor soon";
+      action = "See your doctor soon for urine tests and review.";
+    }
+
+    document.getElementById("urineResult").innerHTML =
+      "<b>Severity:</b> " + severity + "<br>" +
+      "<b>Recommended action:</b> " + action + "<br>" +
+      "<b>Summary:</b> " + (msg.length ? msg.join(", ") : "No data");
+
+    addLogEntry("Urine helper", severity, action, msg.length ? msg.join(", ") : "No data");
+
+    if (severity === "Urgent") {
+      document.getElementById("urgentOverlay").style.display = "flex";
+    }
+  }
+
+  // STOOL HELPER
+  function assessStool() {
+    const freq = Number(document.getElementById("stoolFreqPerDay").value || 0);
+    const form = document.getElementById("stoolForm").value;
+    const colour = document.getElementById("stoolColour").value;
+    const painScale = Number(document.getElementById("stoolPainScale").value || 1);
+    const duration = document.getElementById("stoolDuration").value;
+
+    let msg = [];
+    if (freq) msg.push("Frequency/day: " + freq);
+    if (form) msg.push("Form: " + form);
+    if (colour) msg.push("Colour: " + colour);
+    msg.push("Pain: " + painScale + "/10");
+    if (duration) msg.push("Duration: " + duration);
+
+    const joined = msg.join(" | ").toLowerCase();
+    const durScore = mapDurationToScore(duration);
+
+    let severity = "Self-care";
+    let action = "Adjust diet, hydrate well and monitor. See a doctor if symptoms persist.";
+
+    if (
+      joined.includes("black / tarry") ||
+      joined.includes("red / blood") ||
+      (joined.includes("type 7") && durScore >= 2 && painScale >= 6)
+    ) {
+      severity = "Urgent";
+      action = "Possible bleeding or serious bowel issue. Seek urgent care.";
+    } else if (
+      freq >= 3 ||
+      joined.includes("type 1") ||
+      joined.includes("type 2") ||
+      joined.includes("type 6") ||
+      joined.includes("type 7") ||
+      durScore >= 3
+    ) {
+      severity = "See doctor soon";
+      action = "See a doctor soon for assessment, especially if changes are new.";
+    }
+
+    document.getElementById("stoolResult").innerHTML =
+      "<b>Severity:</b> " + severity + "<br>" +
+      "<b>Recommended action:</b> " + action + "<br>" +
+      "<b>Summary:</b> " + (msg.length ? msg.join(", ") : "No data");
+
+    addLogEntry("Stool helper", severity, action, msg.length ? msg.join(", ") : "No data");
+
+    if (severity === "Urgent") {
+      document.getElementById("urgentOverlay").style.display = "flex";
+    }
+  }
+
+  // HEART / HYDRATION HELPER
+  function assessHeart() {
+    const chest = document.getElementById("heartChestPain").value;
+    const breath = document.getElementById("heartBreathless").value;
+    const palp = document.getElementById("heartPalp").value;
+    const rate = Number(document.getElementById("heartRate").value || 0);
+    const hyd = Number(document.getElementById("hydrationLevel").value || 5);
+    const duration = document.getElementById("heartDuration").value;
+
+    let msg = [];
+    if (chest) msg.push("Chest pain: " + chest);
+    if (breath) msg.push("Breathlessness: " + breath);
+    if (palp) msg.push("Palpitations: " + palp);
+    if (rate) msg.push("Heart rate: " + rate + " bpm");
+    msg.push("Hydration: " + hyd + "/10");
+    if (duration) msg.push("Duration: " + duration);
+
+    const joined = msg.join(" | ").toLowerCase();
+    const durScore = mapDurationToScore(duration);
+
+    let severity = "Self-care";
+    let action = "Rest, hydrate, and monitor. Reduce caffeine and stress. See doctor if recurring.";
+
+    if (
+      joined.includes("heavy / squeezing") ||
+      joined.includes("at rest") ||
+      joined.includes("frequent / dizzy") ||
+      rate > 130 ||
+      rate < 45
+    ) {
+      severity = "Urgent";
+      action = "Possible heart / circulation emergency. Seek urgent care immediately.";
+    } else if (
+      joined.includes("on exertion") ||
+      durScore >= 3
+    ) {
+      severity = "See doctor soon";
+      action = "Arrange a cardiology or general review soon, especially if symptoms repeat.";
+    }
+
+    document.getElementById("heartResult").innerHTML =
+      "<b>Severity:</b> " + severity + "<br>" +
+      "<b>Recommended action:</b> " + action + "<br>" +
+      "<b>Summary:</b> " + (msg.length ? msg.join(", ") : "No data");
+
+    addLogEntry("Heart / hydration helper", severity, action, msg.length ? msg.join(", ") : "No data");
+
+    if (severity === "Urgent") {
+      document.getElementById("urgentOverlay").style.display = "flex";
+    }
+  }
+
+  // PAYMENTS
+  function initPayments() {
+    document.getElementById("btnRecordBundle").addEventListener("click", () => {
+      paidCreditsTotal += 3;
+      creditBalance += 3;
+      if (paidCreditsTotal % 10 === 0) bonusAvailable++;
+      document.getElementById("paymentStatus").textContent =
+        "Recorded ₦200 bundle (3 credits). Credits: " +
+        creditBalance + ". Bonus free checks: " + bonusAvailable + ".";
+      renderDashboard();
+    });
+
+    document.getElementById("btnDaily").addEventListener("click", () => {
+      subscriptionLevel = "daily";
+      document.getElementById("paymentStatus").textContent =
+        "Daily subscription activated (₦500 concept demo).";
+      renderDashboard();
+    });
+
+    document.getElementById("btnWeekly").addEventListener("click", () => {
+      subscriptionLevel = "weekly";
+      document.getElementById("paymentStatus").textContent =
+        "Weekly subscription activated (concept demo).";
+      renderDashboard();
+    });
+
+    document.getElementById("btnMonthly").addEventListener("click", () => {
+      subscriptionLevel = "monthly";
+      document.getElementById("paymentStatus").textContent =
+        "Monthly subscription activated (concept demo).";
+      renderDashboard();
+    });
+
+    document.getElementById("btnAnnual").addEventListener("click", () => {
+      subscriptionLevel = "annual";
+      document.getElementById("paymentStatus").textContent =
+        "Annual subscription activated (concept demo).";
+      renderDashboard();
+    });
+
+    document.getElementById("btnUseBonus").addEventListener("click", () => {
+      if (bonusAvailable > 0) {
+        bonusAvailable--;
+        creditBalance++;
+        document.getElementById("paymentStatus").textContent =
+          "Used 1 bonus free check. Credits: " +
+          creditBalance + ". Bonus left: " + bonusAvailable + ".";
+        renderDashboard();
+      } else {
+        document.getElementById("paymentStatus").textContent =
+          "No bonus free checks yet. You earn one after every 10 paid credits.";
+      }
+    });
+  }
+
+  function userHasPaidAccess() {
+    return subscriptionLevel !== "none" || paidCreditsTotal > 0;
+  }
+
+  // PROFILE
+  function initProfile() {
+    const sexSelect = document.getElementById("profileSex");
+    sexSelect.addEventListener("change", () => {
+      const lbl = document.getElementById("pregnancyLabel");
+      if (sexSelect.value === "Female") lbl.style.display = "block";
+      else {
+        lbl.style.display = "none";
+        lbl.querySelector("input").checked = false;
+      }
+    });
+
+    document.getElementById("btnAddCondition").addEventListener("click", () => {
+      const input = document.getElementById("conditionInput");
+      const value = input.value.trim();
+      if (!value) return;
+      const list = document.getElementById("conditionList");
+
+      const existingPills = list.querySelectorAll(".cond-pill");
+      for (const pill of existingPills) {
+        if ((pill.dataset.value || "").toLowerCase() === value.toLowerCase()) {
+          input.value = "";
+          return;
+        }
+      }
+
+      const pill = document.createElement("span");
+      pill.className = "cond-pill";
+      pill.dataset.value = value;
+      pill.textContent = value;
+
+      const xBtn = document.createElement("button");
+      xBtn.type = "button";
+      xBtn.textContent = "×";
+      xBtn.addEventListener("click", () => pill.remove());
+
+      pill.appendChild(xBtn);
+      list.appendChild(pill);
+      input.value = "";
+    });
+
+    document.getElementById("btnSaveProfile").addEventListener("click", () => {
+      const name = document.getElementById("profileName").value.trim() || "Anonymous";
+      const ageVal = document.getElementById("profileAge").value;
+      const sexVal = document.getElementById("profileSex").value;
+
+      const condChecks = document.querySelectorAll(".condChk");
+      const conds = [];
+      condChecks.forEach(chk => {
+        if (chk.checked) conds.push(chk.value);
+      });
+
+      const condPills = document.querySelectorAll("#conditionList .cond-pill");
+      condPills.forEach(pill => {
+        const v = pill.dataset.value;
+        if (v) conds.push(v);
+      });
+
+      const other = document.getElementById("otherConditions").value.trim();
+
+      userProfile = {
+        name: name,
+        age: ageVal || null,
+        sex: sexVal,
+        existingConditions: conds,
+        otherConditions: other
+      };
+
+      document.getElementById("userNameDisplay").textContent = name;
+      document.getElementById("profileStatus").textContent = "Profile saved.";
+      renderDashboard();
+    });
+  }
+
+  // REPORT ACTIONS (with iOS-safe clipboard fallback)
+  function initReportsActions() {
+    document.getElementById("btnPrintReport").addEventListener("click", () => {
+      if (!userHasPaidAccess()) {
+        alert("Report printing is reserved for paid users. Record a bundle or subscription first.");
+        return;
+      }
+      window.print();
+    });
+
+    document.getElementById("btnCopyReport").addEventListener("click", () => {
+      if (!userHasPaidAccess()) {
+        alert("Report copying is reserved for paid users. Record a bundle or subscription first.");
+        return;
+      }
+      if (healthLog.length === 0) {
+        alert("No records to copy.");
+        return;
+      }
+      let text = "HealthChecker+ – Report\n";
+      healthLog.slice().reverse().forEach(e => {
+        text +=
+          new Date(e.time).toLocaleString() +
+          " | " + e.type +
+          " | " + e.severity +
+          " | " + e.action +
+          " | " + e.symptomsText + "\n";
+      });
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+          .then(() => alert("Report copied to clipboard."))
+          .catch(() => iOSCopyFallback(text));
+      } else {
+        iOSCopyFallback(text);
+      }
+    });
+  }
+
+  // Fallback for iOS where clipboard API may be restricted
+  function iOSCopyFallback(text) {
+    const temp = document.createElement("textarea");
+    temp.value = text;
+    temp.style.position = "fixed";
+    temp.style.top = "0";
+    temp.style.left = "0";
+    temp.style.opacity = "0";
+    document.body.appendChild(temp);
+    temp.focus();
+    temp.select();
+    try {
+      const successful = document.execCommand("copy");
+      if (successful) {
+        alert("Report copied to clipboard (iOS fallback).");
+      } else {
+        alert("Please select and copy the text manually.");
+      }
+    } catch (e) {
+      alert("Please select and copy the text manually.");
+    }
+    document.body.removeChild(temp);
+  }
+
+  // INIT APP
+  function initApp() {
+    initTabs();
+    initSymptomUI();
+    initPayments();
+    initProfile();
+    initReportsActions();
+
+    document.getElementById("stoolPainScale").addEventListener("input", () => {
+      const v = Number(document.getElementById("stoolPainScale").value || 1);
+      let txt = v + " (very mild)";
+      if (v >= 4 && v <= 6) txt = v + " (moderate)";
+      if (v >= 7) txt = v + " (severe)";
+      document.getElementById("stoolPainLabel").textContent = txt;
+    });
+
+    document.getElementById("hydrationLevel").addEventListener("input", () => {
+      const v = Number(document.getElementById("hydrationLevel").value || 5);
+      let txt = v + " (low)";
+      if (v >= 4 && v <= 7) txt = v + " (average)";
+      if (v >= 8) txt = v + " (very good)";
+      document.getElementById("hydrationLabel").textContent = txt;
+    });
+
+    document.getElementById("btnAssessUrine").addEventListener("click", assessUrine);
+    document.getElementById("btnAssessStool").addEventListener("click", assessStool);
+    document.getElementById("btnAssessHeart").addEventListener("click", assessHeart);
+
+    document.getElementById("btnCloseUrgentOverlay").addEventListener("click", () => {
+      document.getElementById("urgentOverlay").style.display = "none";
+    });
+
+    renderDashboard();
+    renderReports();
+  }
+
+  document.addEventListener("DOMContentLoaded", initApp);
+</script>
+</body>
+</html>
