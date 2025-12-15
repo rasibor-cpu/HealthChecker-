@@ -1737,12 +1737,103 @@
   }
 
   document.addEventListener("DOMContentLoaded", initApp);
-</script>
-  <!-- TEMP_PLACEHOLDER_DELETE_LATER -->
+</script><!-- HCPLUS_PERSIST_V1 -->
 <script>
-  console.log("HealthChecker+ placeholder active – safe to delete");
+(function () {
+  const KEY = "hcplus_session_v1";
+
+  function safeParse(json) {
+    try { return JSON.parse(json); } catch (e) { return null; }
+  }
+
+  function getPersistableElements() {
+    return Array.from(document.querySelectorAll("input, select, textarea"))
+      .filter(el => {
+        const idOrName = el.id || el.name;
+        if (!idOrName) return false;
+        // Skip sensitive fields
+        const t = (el.type || "").toLowerCase();
+        if (t === "password") return false;
+        if (t === "file") return false;
+        return true;
+      });
+  }
+
+  function snapshot() {
+    const data = {};
+    getPersistableElements().forEach(el => {
+      const key = el.id || el.name;
+      if (el.type === "checkbox" || el.type === "radio") {
+        data[key] = !!el.checked;
+      } else {
+        data[key] = el.value;
+      }
+    });
+    return { savedAt: new Date().toISOString(), data };
+  }
+
+  function saveSession() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    } catch (e) {
+      // If storage is full or blocked, fail silently (do not break app)
+      console.warn("HCPlus session save skipped:", e);
+    }
+  }
+
+  function restoreSession() {
+    const raw = localStorage.getItem(KEY);
+    const payload = raw ? safeParse(raw) : null;
+    if (!payload || !payload.data) return false;
+
+    const data = payload.data;
+    getPersistableElements().forEach(el => {
+      const key = el.id || el.name;
+      if (!(key in data)) return;
+
+      if (el.type === "checkbox" || el.type === "radio") {
+        el.checked = !!data[key];
+      } else {
+        el.value = data[key];
+      }
+
+      // Trigger any existing listeners in your app
+      try {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (_) {}
+    });
+
+    return true;
+  }
+
+  function wireAutoSave() {
+    // Debounced save (prevents spamming localStorage)
+    let t = null;
+    const debounced = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(saveSession, 250);
+    };
+
+    document.addEventListener("input", debounced, true);
+    document.addEventListener("change", debounced, true);
+  }
+
+  // Expose a safe manual clear command (no UI changes needed)
+  window.HCPlus = window.HCPlus || {};
+  window.HCPlus.clearSavedSession = function () {
+    localStorage.removeItem(KEY);
+    console.log("HCPlus: saved session cleared");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    restoreSession();   // restore first
+    wireAutoSave();     // then autosave on edits
+  });
+})();
 </script>
-<!-- END_TEMP_PLACEHOLDER_DELETE_LATER -->
+<!-- /HCPLUS_PERSIST_V1 -->
 </body>
 </html>
+
 
