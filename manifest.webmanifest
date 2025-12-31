@@ -1,1 +1,33 @@
-
+{
+  "name": "HealthChecker+",
+  "short_name": "HC+",
+  "start_url": "/HealthChecker-/",
+  "scope": "/HealthChecker-/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#b08d2a",
+  "icons": [
+    {
+      "src": "/HealthChecker-/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/HealthChecker-/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/HealthChecker-/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/HealthChecker-/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
