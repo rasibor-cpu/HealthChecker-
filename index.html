@@ -17,14 +17,314 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <style>
+  <style><style>
+  .hc-card{background:#0b0b0b;border:1px solid #b08d57;border-radius:16px;padding:14px;color:#fff}
+  .hc-title{font-size:20px;font-weight:700}
+  .hc-sub{font-size:12px;opacity:.8;margin-top:4px}
+  .hc-row{display:flex;gap:10px;align-items:center}
+  .hc-space-between{justify-content:space-between}
+  .hc-chip{border:1px solid #b08d57;border-radius:999px;padding:6px 10px;font-size:12px}
+  .hc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .hc-metric{border:1px solid rgba(176,141,87,.5);border-radius:14px;padding:10px}
+  .hc-metric-h{font-size:12px;opacity:.85}
+  .hc-metric-v{font-size:18px;font-weight:700;margin-top:6px}
+  .hc-metric-s{font-size:12px;opacity:.8;margin-top:6px;line-height:1.25}
+  .hc-actions{display:flex;gap:10px;margin-top:14px}
+  .hc-btn{flex:1;background:#111;border:1px solid #b08d57;color:#fff;border-radius:12px;padding:10px;font-weight:600}
+  .hc-alert{border-left:3px solid #b08d57;background:#111;border-radius:10px;padding:10px;margin-top:8px;font-size:12px;opacity:.95}
+  @media (max-width:380px){.hc-grid{grid-template-columns:1fr}}
+</style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: rgba(0,0,0,0);
     }
+<script>
+/* ============================
+   HC+ Snapshot Home (v19)
+   LocalStorage-based
+============================ */
 
+const HC_USER_KEY = "hc_active_user"; // optional; fallback to "default"
+const HC_KEYS = {
+  glucoseLog: (u)=>`hc_${u}_glucose_log`,
+  bpLog:      (u)=>`hc_${u}_bp_log`,
+  sleepLog:   (u)=>`hc_${u}_sleep_log`,
+  labsLatest: (u)=>`hc_${u}_labs_latest`,
+  readiness:  (u)=>`hc_${u}_readiness_latest`
+};
+
+function hcGetActiveUser(){
+  try {
+    return localStorage.getItem(HC_USER_KEY) || "default";
+  } catch(e){ return "default"; }
+}
+
+function hcSafeParse(json, fallback){
+  try { return JSON.parse(json) ?? fallback; } catch(e){ return fallback; }
+}
+
+function hcNowISO(){
+  return new Date().toISOString();
+}
+
+function hcDayKeyFromTs(ts){
+  // device-local date key: YYYY-MM-DD
+  const d = ts ? new Date(ts) : new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+
+function hcLoadLog(key){
+  const raw = localStorage.getItem(key);
+  const arr = hcSafeParse(raw, []);
+  return Array.isArray(arr) ? arr : [];
+}
+
+function hcLoadObj(key){
+  const raw = localStorage.getItem(key);
+  return hcSafeParse(raw, null);
+}
+
+function hcLatestToday(log, valueFn){
+  const today = hcDayKeyFromTs();
+  const todayItems = log
+    .filter(x => hcDayKeyFromTs(x.ts || x.date || x.timestamp) === today)
+    .sort((a,b)=> new Date(b.ts || b.timestamp || b.date) - new Date(a.ts || a.timestamp || a.date));
+  if (todayItems.length) return { item: todayItems[0], scope:"today" };
+
+  const allItems = log
+    .slice()
+    .sort((a,b)=> new Date(b.ts || b.timestamp || b.date) - new Date(a.ts || a.timestamp || a.date));
+  if (allItems.length) return { item: allItems[0], scope:"latest" };
+
+  return { item: null, scope:"none" };
+}
+
+function hcStatusChip(label, status){
+  // status: green|amber|red
+  const chip = document.getElementById("hc-overall-chip");
+  if (!chip) return;
+  chip.textContent = `${label}: ${status.toUpperCase()}`;
+  chip.style.borderColor = "#b08d57";
+  chip.style.opacity = "1";
+}
+
+function hcComputeStatus(snapshot){
+  // overall uses 3 main domains: glucose, bp, sleep (renal modifies)
+  const sev = { green:0, amber:1, red:2 };
+  const worst = (a,b)=> (sev[a] > sev[b] ? a : b);
+
+  let g = snapshot.glucose.status;
+  let b = snapshot.bp.status;
+  let s = snapshot.sleep.status;
+
+  let overall = worst(worst(g,b),s);
+  // renal red bumps overall to at least amber
+  if (snapshot.renal.status === "red" && overall === "green") overall = "amber";
+  return overall;
+}
+
+function hcFlagGlucose(val){
+  if (val == null) return {status:"amber", text:"No recent glucose"};
+  if (val < 70) return {status:"red", text:"Low glucose"};
+  if (val <= 140) return {status:"green", text:"In target"};
+  if (val <= 180) return {status:"amber", text:"Above target"};
+  return {status:"red", text:"High glucose"};
+}
+
+function hcFlagBP(sys, dia){
+  if (sys == null || dia == null) return {status:"amber", text:"No recent BP"};
+  if (sys >= 140 || dia >= 90) return {status:"red", text:"High BP"};
+  if (sys >= 130 || dia >= 80) return {status:"amber", text:"Borderline BP"};
+  return {status:"green", text:"BP OK"};
+}
+
+function hcFlagSleep(score, spo2low, totalMinutes){
+  if (score == null && totalMinutes == null) return {status:"amber", text:"No recent sleep"};
+  // spo2 threshold (verify if artifact)
+  if (spo2low != null && spo2low <= 88) return {status:"red", text:"Low overnight O₂ (verify)"};
+  if (totalMinutes != null && totalMinutes < 360) return {status:"amber", text:"Short sleep"};
+  if (score != null && score < 50) return {status:"amber", text:"Sleep quality low"};
+  return {status:"green", text:"Sleep OK"};
+}
+
+function hcFlagRenal(egfr){
+  if (egfr == null) return {status:"amber", text:"No recent eGFR"};
+  if (egfr < 30) return {status:"red", text:"CKD stage 4+"};
+  if (egfr < 60) return {status:"amber", text:"CKD stage 3"};
+  return {status:"green", text:"Renal OK"};
+}
+
+function hcRenderAlerts(alerts){
+  const box = document.getElementById("hc-alerts");
+  if (!box) return;
+  box.innerHTML = "";
+  alerts.forEach(a=>{
+    const div = document.createElement("div");
+    div.className = "hc-alert";
+    div.textContent = a;
+    box.appendChild(div);
+  });
+}
+
+function hcRefreshSnapshot(){
+  const u = hcGetActiveUser();
+
+  const glucoseLog = hcLoadLog(HC_KEYS.glucoseLog(u));
+  const bpLog      = hcLoadLog(HC_KEYS.bpLog(u));
+  const sleepLog   = hcLoadLog(HC_KEYS.sleepLog(u));
+  const labs       = hcLoadObj(HC_KEYS.labsLatest(u));
+  const readiness  = hcLoadObj(HC_KEYS.readiness(u));
+
+  // latest readings
+  const gPick = hcLatestToday(glucoseLog);
+  const bPick = hcLatestToday(bpLog);
+  const sPick = hcLatestToday(sleepLog);
+
+  const gVal = gPick.item?.value ?? gPick.item?.glucose ?? null;
+  const gArrow = gPick.item?.trend ?? gPick.item?.arrow ?? "";
+  const gBand = gPick.item?.overnight_band ?? null;
+
+  const sys = bPick.item?.sys ?? bPick.item?.systolic ?? null;
+  const dia = bPick.item?.dia ?? bPick.item?.diastolic ?? null;
+  const pulse = bPick.item?.pulse ?? null;
+
+  const sleepScore = sPick.item?.score ?? null;
+  const totalMin   = sPick.item?.total_minutes ?? sPick.item?.totalMin ?? null;
+  const spo2Low    = sPick.item?.spo2_low ?? sPick.item?.spo2Low ?? null;
+  const snoreMin   = sPick.item?.snore_minutes ?? sPick.item?.snoreMin ?? null;
+
+  const egfr = labs?.egfr ?? null;
+  const creat = labs?.creatinine ?? null;
+  const hb = labs?.hb ?? labs?.hemoglobin ?? null;
+  const mcv = labs?.mcv ?? null;
+  const fit = labs?.fit ?? null;
+
+  const readyScore = readiness?.energy_score ?? readiness?.score ?? null;
+  const hrv = readiness?.hrv ?? null;
+  const sleepHR = readiness?.sleep_hr ?? null;
+
+  // flags
+  const gFlag = hcFlagGlucose(gVal);
+  const bFlag = hcFlagBP(sys, dia);
+  const sFlag = hcFlagSleep(sleepScore, spo2Low, totalMin);
+  const rFlag = hcFlagRenal(egfr);
+
+  const snapshot = {
+    glucose: { status:gFlag.status },
+    bp:      { status:bFlag.status },
+    sleep:   { status:sFlag.status },
+    renal:   { status:rFlag.status }
+  };
+
+  const overall = hcComputeStatus(snapshot);
+
+  // render header
+  const tsEl = document.getElementById("hc-snapshot-ts");
+  if (tsEl) tsEl.textContent = `Last updated: ${new Date().toLocaleString()}`;
+
+  const chip = document.getElementById("hc-overall-chip");
+  if (chip) {
+    chip.textContent = `Overall: ${overall.toUpperCase()}`;
+    chip.style.opacity = "1";
+  }
+
+  // render glucose
+  document.getElementById("hc-glucose-now").textContent =
+    gVal != null ? `${gVal} mg/dL ${gArrow}` : "—";
+  document.getElementById("hc-glucose-meta").textContent =
+    gPick.scope === "today" ? "Today’s latest reading" :
+    gPick.scope === "latest" ? "No reading today (showing latest)" : "No data yet";
+
+  // render bp
+  document.getElementById("hc-bp-now").textContent =
+    (sys != null && dia != null) ? `${sys}/${dia} mmHg` + (pulse ? ` (P ${pulse})` : "") : "—";
+  document.getElementById("hc-bp-meta").textContent =
+    bPick.scope === "today" ? "Today’s latest BP" :
+    bPick.scope === "latest" ? "No BP today (showing latest)" : "No data yet";
+
+  // render sleep
+  document.getElementById("hc-sleep-now").textContent =
+    (sleepScore != null) ? `Score ${sleepScore}` : (totalMin!=null ? `${Math.round(totalMin/60)}h ${totalMin%60}m` : "—");
+  let sleepMeta = sPick.scope === "today" ? "Today’s sleep entry" :
+                  sPick.scope === "latest" ? "No sleep today (showing latest)" : "No data yet";
+  if (spo2Low != null) sleepMeta += ` • O₂ low ${spo2Low}%`;
+  if (snoreMin != null) sleepMeta += ` • Snore ${Math.round(snoreMin/60)}h ${snoreMin%60}m`;
+  document.getElementById("hc-sleep-meta").textContent = sleepMeta;
+
+  // renal
+  document.getElementById("hc-kidney-now").textContent =
+    (egfr != null) ? `eGFR ${egfr}` : "—";
+  document.getElementById("hc-kidney-meta").textContent =
+    (creat != null) ? `Creat ${creat} • Avoid NSAIDs • Hydrate smart` : "Latest labs not set";
+
+  // blood
+  document.getElementById("hc-blood-now").textContent =
+    (hb != null) ? `Hb ${hb}` : "—";
+  let bloodMeta = (mcv != null) ? `MCV ${mcv}` : "Latest blood indices not set";
+  if (fit != null) bloodMeta += ` • FIT: ${fit}`;
+  document.getElementById("hc-blood-meta").textContent = bloodMeta;
+
+  // readiness
+  document.getElementById("hc-ready-now").textContent =
+    (readyScore != null) ? `Score ${readyScore}` : "—";
+  let readyMeta = [];
+  if (sleepHR != null) readyMeta.push(`Sleep HR ${sleepHR}`);
+  if (hrv != null) readyMeta.push(`HRV ${hrv}ms`);
+  document.getElementById("hc-ready-meta").textContent =
+    readyMeta.length ? readyMeta.join(" • ") : "No readiness data yet";
+
+  // alerts (short, actionable)
+  const alerts = [];
+  if (gFlag.status === "red") alerts.push("Glucose is out of range today. Consider hydration + light walk; review last meal and timing.");
+  if (bFlag.status === "red") alerts.push("BP is high. Recheck after 5–10 minutes seated; avoid salt/caffeine now.");
+  if (sFlag.status === "red") alerts.push("Overnight oxygen low (may be artifact). If repeated, consider sleep apnea evaluation.");
+  if (rFlag.status === "amber" || rFlag.status === "red") alerts.push("Kidney protection: avoid NSAIDs; prioritize hydration and BP control.");
+  if (!alerts.length) alerts.push("No critical flags detected. Maintain routine and log today’s readings.");
+
+  hcRenderAlerts(alerts);
+}
+
+function hcShowSnapshotAsHome(){
+  // Hide other sections if you have them
+  // (Optional) add IDs for other screens later.
+  const snap = document.getElementById("hc-snapshot-screen");
+  if (snap) snap.style.display = "block";
+  hcRefreshSnapshot();
+}
+
+function hcIsLoggedIn(){
+  // Minimal stub: adapt to your real login logic
+  // If you already store a session token/user in localStorage, check it here.
+  const u = hcGetActiveUser();
+  return !!u; // treat "default" as logged-in for now
+}
+
+/* Hook: make Snapshot the default after login/app open */
+document.addEventListener("DOMContentLoaded", ()=>{
+  // If you have a real login gate, replace this with that check.
+  if (hcIsLoggedIn()){
+    hcShowSnapshotAsHome();
+  }
+});
+
+/* Update snapshot when app returns to foreground */
+document.addEventListener("visibilitychange", ()=>{
+  if (!document.hidden) hcRefreshSnapshot();
+});
+
+/* Placeholders for navigation buttons */
+function hcOpenAddReading(){
+  alert("Next: we will connect this button to your existing Add Reading form or create a simple modal.");
+}
+function hcOpenTrends(){
+  alert("Next: we will connect this to the Trends page (weekly view).");
+}
+                         </script>
     body<!-- =======================
      HC+ SNAPSHOT HOME (v19)
 ======================= -->
@@ -1903,6 +2203,7 @@
 <!-- /HCPLUS_PERSIST_V1 -->
 </body>
 </html>
+
 
 
 
