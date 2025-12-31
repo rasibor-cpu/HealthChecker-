@@ -25,7 +25,66 @@
       -webkit-tap-highlight-color: rgba(0,0,0,0);
     }
 
-    body {
+    body<!-- =======================
+     HC+ SNAPSHOT HOME (v19)
+======================= -->
+<section id="hc-snapshot-screen" style="display:none;">
+  <div class="hc-card">
+    <div class="hc-row hc-space-between">
+      <div>
+        <div class="hc-title">Health Snapshot</div>
+        <div class="hc-sub" id="hc-snapshot-ts">Last updated: —</div>
+      </div>
+      <div class="hc-chip" id="hc-overall-chip">Overall: —</div>
+    </div>
+
+    <div class="hc-grid">
+      <div class="hc-metric">
+        <div class="hc-metric-h">Glucose</div>
+        <div class="hc-metric-v" id="hc-glucose-now">—</div>
+        <div class="hc-metric-s" id="hc-glucose-meta">—</div>
+      </div>
+
+      <div class="hc-metric">
+        <div class="hc-metric-h">Blood Pressure</div>
+        <div class="hc-metric-v" id="hc-bp-now">—</div>
+        <div class="hc-metric-s" id="hc-bp-meta">—</div>
+      </div>
+
+      <div class="hc-metric">
+        <div class="hc-metric-h">Sleep</div>
+        <div class="hc-metric-v" id="hc-sleep-now">—</div>
+        <div class="hc-metric-s" id="hc-sleep-meta">—</div>
+      </div>
+
+      <div class="hc-metric">
+        <div class="hc-metric-h">Kidney</div>
+        <div class="hc-metric-v" id="hc-kidney-now">—</div>
+        <div class="hc-metric-s" id="hc-kidney-meta">—</div>
+      </div>
+
+      <div class="hc-metric">
+        <div class="hc-metric-h">Blood / Anemia</div>
+        <div class="hc-metric-v" id="hc-blood-now">—</div>
+        <div class="hc-metric-s" id="hc-blood-meta">—</div>
+      </div>
+
+      <div class="hc-metric">
+        <div class="hc-metric-h">Readiness</div>
+        <div class="hc-metric-v" id="hc-ready-now">—</div>
+        <div class="hc-metric-s" id="hc-ready-meta">—</div>
+      </div>
+    </div>
+
+    <div class="hc-alerts" id="hc-alerts" style="margin-top:12px;"></div>
+
+    <div class="hc-actions">
+      <button class="hc-btn" onclick="hcOpenAddReading()">Add New Reading</button>
+      <button class="hc-btn" onclick="hcRefreshSnapshot()">Refresh</button>
+      <button class="hc-btn" onclick="hcOpenTrends()">Trends</button>
+    </div>
+  </div>
+</section>
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
       background: #000000;
       color: #f4d03f;
@@ -1844,6 +1903,7 @@
 <!-- /HCPLUS_PERSIST_V1 -->
 </body>
 </html>
+
 
 
 
