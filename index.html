@@ -2,181 +2,251 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <meta name="theme-color" content="#0b6aa7" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="HealthChecker+" />
-  <title>HealthChecker+ v19.0.0 (Unified Snapshot + Engine)</title>
+  <link rel="manifest" href="/HealthChecker-/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/HealthChecker-/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/HealthChecker-/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/HealthChecker-/icon-512.png">
 
-  <!-- Optional PWA hooks (won't break if files aren't present) -->
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+  <meta name="theme-color" content="#2b7bb9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="HealthChecker+">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <title>HealthChecker+ – Iteration 21 (Snapshot + Trends + Symptom + Family)</title>
 
   <style>
     :root{
-      --bg0:#f4fbff;
-      --bg1:#ffffff;
-      --ink:#0a2540;
-      --muted:#4b6a84;
-      --line:#d6e9f7;
-      --brand:#0b6aa7;
-      --brand2:#2aa3d6;
-      --ok:#1b8f5a;
-      --warn:#c57a00;
-      --bad:#c62828;
+      --bg:#f6fbff;
       --card:#ffffff;
-      --shadow:0 6px 18px rgba(10,37,64,.08);
-      --radius:16px;
+      --text:#0c2336;
+      --muted:#567189;
+      --line:#d9e8f5;
+      --brand:#2b7bb9;
+      --brand2:#4aa3df;
+      --ok:#1f9d55;
+      --warn:#f0a202;
+      --bad:#d64545;
+      --shadow: 0 10px 25px rgba(12,35,54,.10);
+      --radius: 16px;
     }
-    *{box-sizing:border-box}
-    html,body{margin:0;padding:0;background:linear-gradient(180deg,var(--bg0),#ffffff 40%, #f6fbff);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
-    a{color:var(--brand)}
-    #app{max-width:1100px;margin:10px auto 60px auto;padding:12px}
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    body{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(74,163,223,.25), transparent 60%),
+                  radial-gradient(900px 500px at 90% 0%, rgba(43,123,185,.18), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      line-height: 1.35;
+    }
+    #app{max-width:1100px;margin:10px auto 30px;padding:12px}
     header{
-      background:linear-gradient(90deg,#ffffff, #f5fbff);
+      background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
       border:1px solid var(--line);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:12px 12px 10px 12px;
-      display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      position: sticky; top: 8px; z-index: 50;
+      backdrop-filter: blur(8px);
     }
-    .hdr-left{display:flex;gap:10px;align-items:center}
+    .h-left{display:flex;gap:10px;align-items:center;min-width:0}
     .logo{
       width:42px;height:42px;border-radius:14px;
-      background:radial-gradient(circle at 30% 30%, #8be1ff, #2aa3d6 45%, #0b6aa7 80%);
-      box-shadow:0 8px 18px rgba(11,106,167,.22);
-      border:1px solid rgba(255,255,255,.9);
-      flex:0 0 auto;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 10px 18px rgba(43,123,185,.25);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+      flex: 0 0 auto;
     }
-    h1{margin:0;font-size:18px;line-height:1.2}
-    .sub{margin-top:2px;color:var(--muted);font-size:12px}
-    .hdr-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-    .chip{
-      display:inline-flex;gap:8px;align-items:center;
-      padding:8px 10px;border-radius:999px;border:1px solid var(--line);
-      background:#fff;box-shadow:0 2px 8px rgba(10,37,64,.05);
-      font-size:12px;color:var(--muted)
-    }
-    .chip b{color:var(--ink)}
-    .btn{
-      border:1px solid var(--line);
-      background:#fff;color:var(--ink);
-      padding:10px 12px;border-radius:12px;
-      font-weight:600;font-size:13px;cursor:pointer;
-      box-shadow:0 2px 10px rgba(10,37,64,.05);
-      -webkit-tap-highlight-color:transparent;
-    }
-    .btn.primary{background:linear-gradient(90deg,var(--brand),var(--brand2));color:#fff;border-color:transparent}
-    .btn.danger{background:#fff;color:var(--bad);border-color:#ffd7d7}
-    .btn:active{transform:scale(.98)}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .col{flex:1 1 240px;min-width:240px}
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:12px;margin-top:12px;
-    }
-    .tabs{
-      margin-top:12px;
-      display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;
-      -webkit-overflow-scrolling:touch;
-      padding:4px 2px 8px 2px;
-    }
-    .tabs::-webkit-scrollbar{display:none}
-    .tabbtn{
-      flex:0 0 auto;
+    .h-title{min-width:0}
+    .h-title h1{font-size:16px;font-weight:800;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .h-title small{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+    .h-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .pill{
       border:1px solid var(--line);
       background:#fff;
-      color:var(--muted);
-      padding:10px 12px;border-radius:999px;
-      font-weight:700;font-size:13px;cursor:pointer;
-      white-space:nowrap;
+      border-radius:999px;
+      padding: 6px 10px;
+      font-size:12px;
+      color: var(--muted);
+      display:inline-flex;align-items:center;gap:6px;
+      box-shadow: 0 6px 14px rgba(12,35,54,.06);
     }
-    .tabbtn.active{
-      background:linear-gradient(90deg,var(--brand),var(--brand2));
-      border-color:transparent;color:#fff;
-    }
-    section.view{display:none}
-    section.view.active{display:block}
-    h2{margin:0 0 8px 0;font-size:16px}
-    h3{margin:10px 0 6px 0;font-size:14px;color:var(--ink)}
-    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px 0}
-    input,select,textarea{
+    .select, input[type="text"], input[type="number"], input[type="date"], textarea, select{
       width:100%;
       border:1px solid var(--line);
-      border-radius:12px;
-      padding:10px 10px;
-      font-size:14px;
-      background:#fff;color:var(--ink);
+      border-radius: 12px;
+      padding:10px;
+      font-size:13px;
+      background:#fff;
+      color: var(--text);
       outline:none;
     }
-    textarea{min-height:92px;resize:vertical}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-    @media(max-width:720px){
-      #app{margin:0 auto 70px auto}
-      .grid2,.grid3{grid-template-columns:1fr}
-      .col{min-width:100%}
+    textarea{min-height:90px;resize:vertical}
+    .btn{
+      border:1px solid var(--line);
+      background:#fff;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size:13px;
+      font-weight:700;
+      cursor:pointer;
     }
-    .metricGrid{
-      display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px
+    .btn.primary{
+      border-color: rgba(43,123,185,.25);
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      color:#fff;
     }
-    @media(max-width:900px){.metricGrid{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:520px){.metricGrid{grid-template-columns:1fr}}
+    .btn.ghost{
+      background: transparent;
+      border-color: var(--line);
+      color: var(--brand);
+    }
+    .btn:active{transform: scale(.98)}
+    .top-tabs{
+      margin-top:10px;
+      display:flex;gap:6px;
+      overflow-x:auto; -webkit-overflow-scrolling:touch;
+      padding: 8px 4px 2px;
+    }
+    .top-tabs::-webkit-scrollbar{display:none}
+    .tab-btn{
+      white-space:nowrap;
+      border:1px solid var(--line);
+      background:#fff;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-size:13px;
+      font-weight:800;
+      cursor:pointer;
+      box-shadow: 0 6px 14px rgba(12,35,54,.06);
+    }
+    .tab-btn.active{
+      background: linear-gradient(135deg, rgba(43,123,185,.12), rgba(74,163,223,.12));
+      color: var(--text);
+      border-color: rgba(43,123,185,.25);
+    }
+    main{margin-top:10px}
+    section.tab{display:none}
+    section.tab.active{display:block}
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width:780px){.grid{grid-template-columns:1fr}}
+    .card{
+      background: rgba(255,255,255,.96);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+    .card h2{font-size:15px;margin-bottom:8px}
+    .sub{font-size:12px;color:var(--muted)}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .col-50{flex:1 1 240px}
+    .col-33{flex:1 1 180px}
+    .col-25{flex:1 1 140px}
+    .metric-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width:420px){.metric-grid{grid-template-columns:1fr}}
     .metric{
-      border:1px solid var(--line);border-radius:14px;padding:10px;background:#fff
-    }
-    .mLabel{font-size:12px;color:var(--muted)}
-    .mValue{margin-top:6px;font-size:20px;font-weight:800}
-    .mSub{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.35}
-    .statusPill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:7px 10px;border-radius:999px;
       border:1px solid var(--line);
-      font-size:12px;font-weight:800;
-      background:#fff
+      border-radius: 14px;
+      padding: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,251,255,.90));
     }
-    .pill-ok{color:var(--ok);border-color:#cfeede;background:#f4fffa}
-    .pill-warn{color:var(--warn);border-color:#ffe6be;background:#fffaf1}
-    .pill-bad{color:var(--bad);border-color:#ffd7d7;background:#fff4f4}
-    .note{font-size:12px;color:var(--muted);line-height:1.45}
-    .alert{
-      margin-top:8px;padding:10px;border-radius:14px;
-      border:1px solid var(--line);background:#fff
-    }
-    .alert.ok{border-color:#cfeede;background:#f4fffa}
-    .alert.warn{border-color:#ffe6be;background:#fffaf1}
-    .alert.bad{border-color:#ffd7d7;background:#fff4f4}
-    .small{font-size:12px;color:var(--muted)}
-    canvas{
-      width:100%;
-      height:220px;
+    .m-label{font-size:11px;color:var(--muted);font-weight:800}
+    .m-value{font-size:18px;font-weight:900;margin-top:6px}
+    .m-note{font-size:12px;color:var(--muted);margin-top:6px}
+    .status{
+      display:inline-flex; align-items:center; gap:6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size:12px;
+      font-weight:900;
       border:1px solid var(--line);
-      border-radius:14px;
       background:#fff;
     }
-    .table{
-      width:100%;border-collapse:collapse;font-size:12px;margin-top:8px
-    }
-    .table th,.table td{border:1px solid var(--line);padding:6px 8px;text-align:left}
-    .table th{background:#f3faff}
-    .divider{height:1px;background:var(--line);margin:10px 0}
-    .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .inline > * {flex:1 1 200px}
-    .right{text-align:right}
-    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Courier New",monospace;font-size:12px;background:#f3faff;border:1px solid var(--line);padding:2px 6px;border-radius:8px}
-    .mutedBox{
-      border:1px dashed var(--line);
-      background:#fbfeff;
-      border-radius:14px;
-      padding:10px;
-      color:var(--muted);
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
+
+    .alerts{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .alert{
+      border:1px solid var(--line);
+      border-left: 5px solid rgba(43,123,185,.55);
+      background: rgba(43,123,185,.06);
+      border-radius: 14px;
+      padding: 10px;
       font-size:12px;
+      color: var(--text);
+    }
+
+    .divider{height:1px;background:var(--line);margin:10px 0}
+    .minihelp{font-size:12px;color:var(--muted);margin-top:6px}
+    .canvas-wrap{border:1px solid var(--line);border-radius:14px;padding:10px;background:#fff}
+    canvas{width:100%;height:210px;display:block}
+    .small{font-size:11px;color:var(--muted)}
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background:#fff;
+      font-size:12px;
+      font-weight:800;
+      color: var(--muted);
+    }
+
+    /* Modal */
+    .modal{
+      position:fixed; inset:0;
+      background: rgba(12,35,54,.40);
+      display:none; align-items:center; justify-content:center;
+      z-index: 9999;
+      padding: 14px;
+    }
+    .modal .box{
+      width:min(760px, 100%);
+      background:#fff;
+      border-radius: 18px;
+      border:1px solid var(--line);
+      box-shadow: 0 18px 45px rgba(12,35,54,.25);
+      padding: 12px;
+      max-height: 86vh;
+      overflow:auto;
+    }
+    .box h3{font-size:15px;margin-bottom:8px}
+    .xrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .closeX{border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--muted);padding:6px 10px}
+    .list{
+      display:flex;flex-direction:column;gap:8px;margin-top:10px
+    }
+    .list-item{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,251,255,.90));
+      display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;
+    }
+    .li-main{min-width:0}
+    .li-main b{display:block;font-size:13px}
+    .li-main span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+    .li-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .file-note{
+      font-size:12px;color:var(--muted);
+      border:1px dashed var(--line);
+      padding:10px;border-radius:14px;background:rgba(74,163,223,.05);
     }
   </style>
 </head>
@@ -185,2132 +255,1916 @@
 <div id="app">
 
   <header>
-    <div class="hdr-left">
-      <div class="logo" aria-hidden="true"></div>
-      <div>
-        <h1>HealthChecker+</h1>
-        <div class="sub">v19.0.0 • Unified Snapshot + Symptom Engine • Offline-first (LocalStorage) • Backend-ready</div>
+    <div class="h-left">
+      <div class="logo">HC+</div>
+      <div class="h-title">
+        <h1>HealthChecker+ (Iteration 21)</h1>
+        <small>Snapshot + Trends + Symptom Checker + Family (10) • Offline-first • GitHub Pages</small>
       </div>
     </div>
-    <div class="hdr-right">
-      <div class="chip">
-        <span>Active:</span> <b id="activePersonLabel">Primary</b>
-      </div>
-      <div class="chip">
-        <span>Last updated:</span> <b id="lastUpdatedLabel">—</b>
-      </div>
-      <button class="btn" id="btnQuickRefresh">Refresh</button>
-      <button class="btn primary" id="btnGoSnapshot">Snapshot</button>
+
+    <div class="h-right">
+      <span class="pill">
+        <span style="font-weight:900;color:var(--text)">Person</span>
+        <select id="personSelect" class="select" style="width:auto; padding:8px 10px; border-radius:999px">
+          <!-- filled by JS -->
+        </select>
+      </span>
+      <button class="btn" id="btnManageFamily">Family</button>
+      <button class="btn primary" id="btnQuickAdd">Add Reading</button>
     </div>
   </header>
 
-  <nav class="tabs" aria-label="Top navigation tabs">
-    <button class="tabbtn active" data-view="snapshot">Snapshot</button>
-    <button class="tabbtn" data-view="addreadings">Add Readings</button>
-    <button class="tabbtn" data-view="trends">Trends</button>
-    <button class="tabbtn" data-view="symptom">Symptom Checker</button>
-    <button class="tabbtn" data-view="profile">Profile</button>
-    <button class="tabbtn" data-view="reports">Reports</button>
-    <button class="tabbtn" data-view="settings">Settings</button>
-  </nav>
+  <div class="top-tabs" id="topTabs">
+    <button class="tab-btn active" data-tab="snapshot">Snapshot</button>
+    <button class="tab-btn" data-tab="trends">Trends</button>
+    <button class="tab-btn" data-tab="profile">Profile</button>
+    <button class="tab-btn" data-tab="symptom">Symptom Checker</button>
+    <button class="tab-btn" data-tab="reports">Reports</button>
+    <button class="tab-btn" data-tab="import">Attach Reports</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+  </div>
 
-  <!-- SNAPSHOT -->
-  <section class="view active" id="view-snapshot">
-    <div class="card">
-      <div class="inline">
-        <div>
-          <h2>Health Snapshot</h2>
-          <div class="small" id="snapshotScopeLabel">Shows Today’s latest values (or latest available if none today).</div>
-        </div>
-        <div class="right">
-          <span class="statusPill pill-warn" id="overallPill">OVERALL: —</span>
-        </div>
-      </div>
-
-      <div class="metricGrid" style="margin-top:12px;">
-        <div class="metric">
-          <div class="mLabel">Glucose (latest)</div>
-          <div class="mValue" id="snapGlucose">—</div>
-          <div class="mSub" id="snapGlucoseSub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Estimated HbA1c (rolling)</div>
-          <div class="mValue" id="snapA1c">—</div>
-          <div class="mSub" id="snapA1cSub">Computed from rolling average glucose (default 14 days).</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Blood Pressure (latest)</div>
-          <div class="mValue" id="snapBP">—</div>
-          <div class="mSub" id="snapBPSub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Sleep (latest)</div>
-          <div class="mValue" id="snapSleep">—</div>
-          <div class="mSub" id="snapSleepSub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">SpO₂ (lowest)</div>
-          <div class="mValue" id="snapSpO2">—</div>
-          <div class="mSub" id="snapSpO2Sub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">BMI (profile)</div>
-          <div class="mValue" id="snapBMI">—</div>
-          <div class="mSub" id="snapBMISub">Computed from height & weight (optional).</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Kidney (latest labs)</div>
-          <div class="mValue" id="snapKidney">—</div>
-          <div class="mSub" id="snapKidneySub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Blood / Anemia (latest labs)</div>
-          <div class="mValue" id="snapBlood">—</div>
-          <div class="mSub" id="snapBloodSub">—</div>
-        </div>
-
-        <div class="metric">
-          <div class="mLabel">Today’s Key Alerts</div>
-          <div class="mValue" style="font-size:16px" id="snapAlertTitle">—</div>
-          <div class="mSub" id="snapAlerts">—</div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="row">
-        <button class="btn primary" id="btnSnapshotAddReading">Add Today’s Readings</button>
-        <button class="btn" id="btnSnapshotTrends">View Trends</button>
-        <button class="btn" id="btnSnapshotSymptom">Run Symptom Check</button>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="mutedBox">
-        Note: This snapshot is a decision-support dashboard only. For emergencies (chest pain, stroke symptoms, severe breathlessness, fainting), seek urgent medical care.
-      </div>
-    </div>
-  </section>
-
-  <!-- ADD READINGS -->
-  <section class="view" id="view-addreadings">
-    <div class="card">
-      <h2>Add Readings (Offline)</h2>
-      <div class="note">Log daily values here. Snapshot & Trends update automatically. Use the person selector in <b>Profile</b> to switch between Primary and dependants.</div>
-
-      <div class="grid2" style="margin-top:10px;">
-        <div>
-          <h3>Glucose</h3>
-          <label>Value (mg/dL)</label>
-          <input type="number" id="inGlucose" placeholder="e.g. 108" min="20" max="600" />
-          <label>Trend/Arrow (optional)</label>
-          <select id="inGlucoseTrend">
-            <option value="">—</option>
-            <option value="↘">↘ Falling</option>
-            <option value="→">→ Flat</option>
-            <option value="↗">↗ Rising</option>
-          </select>
-          <label>Time (optional; default now)</label>
-          <input type="datetime-local" id="inGlucoseTs" />
-          <button class="btn primary" id="btnSaveGlucose">Save Glucose</button>
-          <div class="small" id="glucoseSavedMsg"></div>
-        </div>
-
-        <div>
-          <h3>Blood Pressure</h3>
-          <div class="grid3">
-            <div>
-              <label>Systolic</label>
-              <input type="number" id="inSys" placeholder="e.g. 128" min="60" max="260" />
-            </div>
-            <div>
-              <label>Diastolic</label>
-              <input type="number" id="inDia" placeholder="e.g. 78" min="30" max="160" />
-            </div>
-            <div>
-              <label>Pulse (optional)</label>
-              <input type="number" id="inPulse" placeholder="e.g. 62" min="25" max="220" />
-            </div>
-          </div>
-          <label>Time (optional; default now)</label>
-          <input type="datetime-local" id="inBPTs" />
-          <button class="btn primary" id="btnSaveBP">Save BP</button>
-          <div class="small" id="bpSavedMsg"></div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="grid2">
-        <div>
-          <h3>Sleep</h3>
-          <div class="grid3">
-            <div>
-              <label>Sleep score (0–100)</label>
-              <input type="number" id="inSleepScore" min="0" max="100" placeholder="e.g. 44" />
-            </div>
-            <div>
-              <label>Total sleep (minutes)</label>
-              <input type="number" id="inSleepMin" min="0" max="1200" placeholder="e.g. 288" />
-            </div>
-            <div>
-              <label>Snore (minutes, optional)</label>
-              <input type="number" id="inSnoreMin" min="0" max="1200" placeholder="e.g. 148" />
-            </div>
-          </div>
-          <label>Sleep window date (optional; default today)</label>
-          <input type="date" id="inSleepDate" />
-          <button class="btn primary" id="btnSaveSleep">Save Sleep</button>
-          <div class="small" id="sleepSavedMsg"></div>
-        </div>
-
-        <div>
-          <h3>SpO₂</h3>
-          <label>Lowest overnight SpO₂ (%)</label>
-          <input type="number" id="inSpO2Low" min="50" max="100" placeholder="e.g. 75" />
-          <label>Date (optional; default today)</label>
-          <input type="date" id="inSpO2Date" />
-          <button class="btn primary" id="btnSaveSpO2">Save SpO₂</button>
-          <div class="small" id="spo2SavedMsg"></div>
-
-          <div class="divider"></div>
-
-          <h3>Labs (optional)</h3>
-          <div class="grid3">
-            <div>
-              <label>Creatinine (µmol/L or mg/dL)</label>
-              <input type="text" id="inCreat" placeholder="e.g. 138 µmol/L" />
-            </div>
-            <div>
-              <label>eGFR (mL/min/1.73m²)</label>
-              <input type="number" id="inEgfr" min="1" max="200" placeholder="e.g. 50" />
-            </div>
-            <div>
-              <label>Urea (optional)</label>
-              <input type="text" id="inUrea" placeholder="e.g. 11.5 mmol/L" />
-            </div>
-          </div>
-
-          <div class="grid3">
-            <div>
-              <label>Hb (g/dL)</label>
-              <input type="number" id="inHb" min="3" max="25" step="0.1" placeholder="e.g. 11.0" />
-            </div>
-            <div>
-              <label>MCV (fL)</label>
-              <input type="number" id="inMcv" min="50" max="120" step="0.1" placeholder="e.g. 79.2" />
-            </div>
-            <div>
-              <label>FIT (optional)</label>
-              <select id="inFit">
-                <option value="">—</option>
-                <option value="Negative">Negative</option>
-                <option value="Positive">Positive</option>
-              </select>
-            </div>
-          </div>
-
-          <label>Lab date (optional; default today)</label>
-          <input type="date" id="inLabDate" />
-          <button class="btn primary" id="btnSaveLabs">Save Labs</button>
-          <div class="small" id="labsSavedMsg"></div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="grid2">
-        <div>
-          <h3>Medical Report Attachment (Offline + Backend-ready)</h3>
-          <div class="note">
-            Offline extraction works from <b>pasted text</b>. If you later enable backend OCR, file upload can extract automatically via <span class="kbd">/api/ocr</span>.
-          </div>
-
-          <label>Attach report file (image/pdf) (optional)</label>
-          <input type="file" id="inReportFile" accept="image/*,.pdf" />
-
-          <label>Or paste report text here (recommended for offline extraction)</label>
-          <textarea id="inReportText" placeholder="Paste the report text (or key lines). Then click Extract."></textarea>
-
-          <div class="row">
-            <button class="btn" id="btnExtractReport">Extract Values</button>
-            <button class="btn primary" id="btnSaveReport">Save Report Record</button>
-          </div>
-
-          <div class="alert" id="reportExtractMsg" style="display:none;"></div>
-        </div>
-
-        <div>
-          <h3>Extracted Values Preview</h3>
-          <div class="mutedBox" id="extractedPreview">No extracted values yet.</div>
-          <div class="divider"></div>
-          <div class="note">After you save, Snapshot & Labs update automatically (if relevant fields were detected).</div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- TRENDS -->
-  <section class="view" id="view-trends">
-    <div class="card">
-      <div class="inline">
-        <div>
-          <h2>Trends</h2>
-          <div class="small">Choose a metric and time window. Charts are offline and update from stored logs.</div>
-        </div>
-        <div class="inline">
+  <main>
+    <!-- SNAPSHOT -->
+    <section class="tab active" id="tab-snapshot">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
           <div>
-            <label>Metric</label>
-            <select id="trendMetric">
-              <option value="glucose">Glucose (mg/dL)</option>
-              <option value="bp_sys">BP Systolic</option>
-              <option value="bp_dia">BP Diastolic</option>
-              <option value="sleep_score">Sleep score</option>
-              <option value="sleep_minutes">Sleep minutes</option>
-              <option value="spo2_low">SpO₂ lowest</option>
+            <h2>Health Snapshot</h2>
+            <div class="sub" id="snapTs">Last refreshed: —</div>
+            <div class="minihelp" id="snapPersonLine">—</div>
+          </div>
+          <div class="status" id="overallStatus">
+            <span class="dot warn" id="overallDot"></span>
+            <span id="overallText">Overall: —</span>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric">
+            <div class="m-label">Glucose (latest)</div>
+            <div class="m-value" id="mGlucose">—</div>
+            <div class="m-note" id="mGlucoseNote">—</div>
+          </div>
+
+          <div class="metric">
+            <div class="m-label">Estimated HbA1c (moving)</div>
+            <div class="m-value" id="mA1c">—</div>
+            <div class="m-note" id="mA1cNote">Derived from recent glucose log</div>
+          </div>
+
+          <div class="metric">
+            <div class="m-label">Blood Pressure (latest)</div>
+            <div class="m-value" id="mBP">—</div>
+            <div class="m-note" id="mBPNote">—</div>
+          </div>
+
+          <div class="metric">
+            <div class="m-label">Sleep (latest)</div>
+            <div class="m-value" id="mSleep">—</div>
+            <div class="m-note" id="mSleepNote">—</div>
+          </div>
+
+          <div class="metric">
+            <div class="m-label">SpO₂ (overnight low / latest)</div>
+            <div class="m-value" id="mSpO2">—</div>
+            <div class="m-note" id="mSpO2Note">—</div>
+          </div>
+
+          <div class="metric">
+            <div class="m-label">Weight / BMI</div>
+            <div class="m-value" id="mBMI">—</div>
+            <div class="m-note" id="mBMINote">Set height + weight in Profile</div>
+          </div>
+        </div>
+
+        <div class="alerts" id="alertsBox"></div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <button class="btn primary" id="btnRefreshSnapshot">Refresh Snapshot</button>
+          <button class="btn" id="btnGoTrends">View Trends</button>
+          <button class="btn" id="btnGoSymptom">Run Symptom Check</button>
+        </div>
+        <div class="minihelp">Tip: Use <b>Add Reading</b> to log today’s values. Snapshot updates automatically on return to the app.</div>
+      </div>
+    </section>
+
+    <!-- TRENDS -->
+    <section class="tab" id="tab-trends">
+      <div class="grid">
+        <div class="card">
+          <h2>Glucose Trend (last 14 days)</h2>
+          <div class="sub">Line chart uses your device time.</div>
+          <div class="canvas-wrap"><canvas id="cGlucose"></canvas></div>
+          <div class="small" id="cGlucoseHint">—</div>
+        </div>
+
+        <div class="card">
+          <h2>Blood Pressure Trend (last 30 days)</h2>
+          <div class="sub">Systolic & diastolic plotted together.</div>
+          <div class="canvas-wrap"><canvas id="cBP"></canvas></div>
+          <div class="small" id="cBPHint">—</div>
+        </div>
+
+        <div class="card">
+          <h2>Sleep Trend (last 14 days)</h2>
+          <div class="sub">Sleep score or total hours (whichever you log).</div>
+          <div class="canvas-wrap"><canvas id="cSleep"></canvas></div>
+          <div class="small" id="cSleepHint">—</div>
+        </div>
+
+        <div class="card">
+          <h2>SpO₂ Trend (last 14 days)</h2>
+          <div class="sub">Overnight lowest oxygen (verify artifacts if unusually low).</div>
+          <div class="canvas-wrap"><canvas id="cSpO2"></canvas></div>
+          <div class="small" id="cSpO2Hint">—</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:10px">
+        <h2>Moving HbA1c Trend</h2>
+        <div class="sub">Computed from average glucose (mg/dL) using ADAG relationship.</div>
+        <div class="canvas-wrap"><canvas id="cA1c"></canvas></div>
+        <div class="small" id="cA1cHint">—</div>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="tab" id="tab-profile">
+      <div class="card">
+        <h2>Profile (for selected person)</h2>
+        <div class="sub">Birthday uses a scrollable date picker on mobile. Age is calculated automatically.</div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="col-50">
+            <label class="small">Full name</label>
+            <input type="text" id="pName" placeholder="e.g., Jane Doe">
+          </div>
+          <div class="col-25">
+            <label class="small">Sex</label>
+            <select id="pSex">
+              <option value="">Select…</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
             </select>
           </div>
-          <div>
-            <label>Window</label>
-            <select id="trendWindow">
-              <option value="7">7 days</option>
-              <option value="14" selected>14 days</option>
-              <option value="30">30 days</option>
-              <option value="90">90 days</option>
-            </select>
+          <div class="col-25">
+            <label class="small">Date of birth</label>
+            <input type="date" id="pDob">
+          </div>
+          <div class="col-25">
+            <label class="small">Age (auto)</label>
+            <input type="text" id="pAge" disabled>
           </div>
         </div>
-      </div>
 
-      <div style="margin-top:10px;">
-        <canvas id="trendCanvas" width="1000" height="260"></canvas>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="grid2">
-        <div class="mutedBox" id="trendStats">—</div>
-        <div class="mutedBox">
-          Tip: For HbA1c estimate, keep logging glucose daily (fasting + post-meal when possible). The estimate updates automatically in Snapshot.
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SYMPTOM CHECKER -->
-  <section class="view" id="view-symptom">
-    <div class="card">
-      <h2>Symptom Checker (Expanded)</h2>
-      <div class="note">
-        Add up to <b>10 symptoms</b>. This is a triage-style engine. It weights risk using age, conditions, and red-flag patterns (stroke, heart, bleeding, sepsis cues).
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="row">
-        <button class="btn" id="btnAddSymptom">+ Add Symptom</button>
-        <button class="btn danger" id="btnClearSymptoms">Clear</button>
-      </div>
-
-      <div id="symptomList" style="margin-top:10px;"></div>
-
-      <label>Other notes (optional)</label>
-      <textarea id="symOtherNotes" placeholder="Extra details (e.g., new meds, fever, recent fall, recent infection, missed meds)."></textarea>
-
-      <div class="row">
-        <button class="btn primary" id="btnRunTriage">Run Triage</button>
-      </div>
-
-      <div id="triageResult" style="margin-top:12px;"></div>
-
-      <div class="divider"></div>
-      <div class="mutedBox">
-        Emergency red flags include: one-sided weakness, facial droop, speech difficulty, severe chest pain, severe breathlessness, black/tarry stool, vomiting blood, fainting, new confusion. Seek urgent care.
-      </div>
-    </div>
-  </section>
-
-  <!-- PROFILE -->
-  <section class="view" id="view-profile">
-    <div class="card">
-      <h2>Profile (Primary + Family)</h2>
-      <div class="note">
-        Select Primary or a dependant. Each person has their own profile, conditions, and logs. Snapshot always reflects the active person.
-      </div>
-
-      <div class="grid2" style="margin-top:10px;">
-        <div>
-          <label>Select person</label>
-          <select id="personSelect"></select>
-          <div class="small">Primary + 9 dependants = 10 total family users.</div>
-        </div>
-        <div class="mutedBox">
-          <b>Doctor version readiness:</b> we can later enable multi-patient exports, doctor portal, and secure sync with backend.
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <h3>Basic Identification</h3>
-      <div class="grid3">
-        <div>
-          <label>Name</label>
-          <input type="text" id="pName" placeholder="e.g. Mary Johnson" />
-        </div>
-        <div>
-          <label>Sex</label>
-          <select id="pSex">
-            <option value="">Select…</option>
-            <option>Male</option>
-            <option>Female</option>
-          </select>
-        </div>
-        <div>
-          <label>Relationship (for dependants)</label>
-          <select id="pRel">
-            <option value="">—</option>
-            <option>Self (Primary)</option>
-            <option>Mother</option><option>Father</option>
-            <option>Spouse</option><option>Son</option><option>Daughter</option>
-            <option>Brother</option><option>Sister</option>
-            <option>Guardian</option><option>Other</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="grid3">
-        <div>
-          <label>Date of birth</label>
-          <input type="date" id="pDob" />
-        </div>
-        <div>
-          <label>Age (auto-calculated)</label>
-          <input type="number" id="pAge" disabled />
-        </div>
-        <div>
-          <label>Height (cm) (optional)</label>
-          <input type="number" id="pHeightCm" min="50" max="250" placeholder="e.g. 175" />
-        </div>
-      </div>
-
-      <div class="grid3">
-        <div>
-          <label>Weight (kg) (optional)</label>
-          <input type="number" id="pWeightKg" min="10" max="400" step="0.1" placeholder="e.g. 95.0" />
-        </div>
-        <div>
-          <label>BMI (auto)</label>
-          <input type="text" id="pBMI" disabled />
-        </div>
-        <div>
-          <label>Known conditions (user-entered)</label>
-          <input list="condSuggest" id="pCondInput" placeholder="Type and Add (e.g., Stroke, Hypertension, Diabetes)" />
-          <datalist id="condSuggest">
-            <option>Stroke (previous)</option>
-            <option>Transient ischemic attack (TIA)</option>
-            <option>Hypertension</option>
-            <option>Type 2 diabetes</option>
-            <option>Type 1 diabetes</option>
-            <option>Chronic kidney disease</option>
-            <option>Heart failure</option>
-            <option>Coronary artery disease</option>
-            <option>Atrial fibrillation</option>
-            <option>Asthma</option>
-            <option>COPD</option>
-            <option>Seizure disorder</option>
-            <option>Dementia</option>
-            <option>Parkinson’s disease</option>
-            <option>Depression</option>
-            <option>Chronic liver disease</option>
-            <option>Peptic ulcer disease</option>
-            <option>Cancer</option>
-          </datalist>
-          <button class="btn" id="btnAddCond" style="margin-top:8px;">Add Condition</button>
-        </div>
-      </div>
-
-      <div id="condPills" class="inline" style="margin-top:10px;"></div>
-
-      <label>Other notes (optional)</label>
-      <input type="text" id="pOtherNotes" placeholder="Allergies, key meds, mobility limits, etc." />
-
-      <div class="row" style="margin-top:10px;">
-        <button class="btn primary" id="btnSaveProfile">Save Profile</button>
-        <button class="btn danger" id="btnResetPerson">Reset This Person</button>
-      </div>
-
-      <div class="small" id="profileSavedMsg" style="margin-top:8px;"></div>
-    </div>
-  </section>
-
-  <!-- REPORTS -->
-  <section class="view" id="view-reports">
-    <div class="card">
-      <h2>Reports (Offline)</h2>
-      <div class="note">Exports can be enhanced later (PDF/Doctor pack) once backend is enabled. For now, this shows your stored logs and triage history per person.</div>
-
-      <div class="row" style="margin-top:10px;">
-        <button class="btn" id="btnCopyReport">Copy Report Text</button>
-        <button class="btn" id="btnPrintReport">Print</button>
-      </div>
-
-      <div class="divider"></div>
-
-      <h3>Recent Logs</h3>
-      <div id="reportTableWrap">—</div>
-
-      <div class="divider"></div>
-
-      <h3>Attached Reports (Metadata)</h3>
-      <div id="attachedReportsWrap">—</div>
-    </div>
-  </section>
-
-  <!-- SETTINGS -->
-  <section class="view" id="view-settings">
-    <div class="card">
-      <h2>Settings</h2>
-
-      <div class="grid2">
-        <div>
-          <h3>Offline data</h3>
-          <div class="note">All data is stored locally in your browser storage (LocalStorage). This survives phone restarts unless you clear site data.</div>
-          <div class="row" style="margin-top:10px;">
-            <button class="btn" id="btnExportJSON">Export JSON</button>
-            <button class="btn danger" id="btnClearAll">Clear ALL Local Data</button>
+        <div class="row" style="margin-top:8px">
+          <div class="col-25">
+            <label class="small">Height (cm)</label>
+            <input type="number" id="pHeightCm" min="0" step="0.1" placeholder="e.g., 175">
           </div>
-          <div class="small" id="settingsMsg" style="margin-top:8px;"></div>
+          <div class="col-25">
+            <label class="small">Weight (kg) (optional)</label>
+            <input type="number" id="pWeightKg" min="0" step="0.1" placeholder="e.g., 78.5">
+          </div>
+          <div class="col-25">
+            <label class="small">BMI (auto)</label>
+            <input type="text" id="pBMI" disabled>
+          </div>
+          <div class="col-25">
+            <label class="small">Conditions (free input)</label>
+            <input type="text" id="pConditions" placeholder="e.g., diabetes, hypertension, stroke history">
+          </div>
         </div>
 
-        <div>
-          <h3>Backend-ready</h3>
-          <div class="note">
-            Optional endpoints (if/when you deploy):
-            <div style="margin-top:6px;">
-              • OCR: <span class="kbd">POST /api/ocr</span> (file) → returns extracted text<br>
-              • Sync: <span class="kbd">POST /api/sync</span> (payload) → store and return server state
+        <div style="margin-top:10px">
+          <label class="small">Notes (optional)</label>
+          <textarea id="pNotes" placeholder="Allergies, meds summary, key history, etc."></textarea>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="btnSaveProfile">Save Profile</button>
+          <span class="badge" id="profileSavedBadge">Not saved</span>
+        </div>
+
+        <div class="minihelp">We removed pre-filled illnesses. Each user can enter their own.</div>
+      </div>
+    </section>
+
+    <!-- SYMPTOM CHECKER -->
+    <section class="tab" id="tab-symptom">
+      <div class="card">
+        <h2>Symptom Checker (restored)</h2>
+        <div class="sub">Supports broader neuro/stroke relapse and general symptoms. Add up to 10 symptoms.</div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <button class="btn" id="btnAddSymptom">+ Add Symptom</button>
+          <span class="badge" id="symCount">0 / 10</span>
+        </div>
+
+        <div id="symList" style="margin-top:10px"></div>
+
+        <div style="margin-top:10px">
+          <label class="small">Other notes (optional)</label>
+          <textarea id="symNotes" placeholder="Anything else that matters (timing, triggers, recent infection, new meds, etc.)"></textarea>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="btnRunCheck">Get Recommendation</button>
+          <button class="btn" id="btnClearSymptoms">Clear</button>
+        </div>
+
+        <div id="symResult" style="margin-top:10px"></div>
+
+        <div class="minihelp">
+          This is a triage-style guidance tool and does not replace clinical judgement.
+          If symptoms suggest emergency (stroke/heart attack/severe breathlessness), seek urgent care.
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="tab" id="tab-reports">
+      <div class="card">
+        <h2>Reports (local)</h2>
+        <div class="sub">Shows recent activity and logs. Export is basic (copy text / print).</div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <button class="btn primary" id="btnCopyReport">Copy Report</button>
+          <button class="btn" id="btnPrintReport">Print</button>
+          <button class="btn" id="btnClearLogs">Clear Logs (current person)</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="reportBox" class="file-note">No activity yet.</div>
+      </div>
+    </section>
+
+    <!-- IMPORT / ATTACH REPORTS -->
+    <section class="tab" id="tab-import">
+      <div class="card">
+        <h2>Attach Medical Reports</h2>
+        <div class="sub">
+          You can attach images/PDF screenshots for storage, and/or paste report text for automatic extraction.
+          Full screenshot-to-values OCR is optional and requires internet (Tesseract.js). If offline, use paste-text extraction or manual entry.
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="col-50">
+            <div class="file-note">
+              <b>Option A (recommended): Paste report text</b><br>
+              Paste the lab report text (from email/portal/PDF copy). The app will attempt to extract values (HbA1c, creatinine, eGFR, Hb, MCV, PSA, etc.) using pattern matching.
             </div>
           </div>
-
-          <label>Backend base URL (optional)</label>
-          <input type="text" id="backendUrl" placeholder="e.g. https://yourdomain.com" />
-          <div class="row" style="margin-top:10px;">
-            <button class="btn" id="btnSaveBackend">Save Backend URL</button>
-            <button class="btn" id="btnTestBackend">Test Backend</button>
+          <div class="col-50">
+            <div class="file-note">
+              <b>Option B: Attach screenshots</b><br>
+              This stores the images in your browser (as references) for that person. If you turn on OCR (online), the app can attempt text extraction from images. Otherwise, use manual values.
+            </div>
           </div>
-          <div class="small" id="backendMsg" style="margin-top:8px;"></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <label class="small">Paste report text here (optional)</label>
+          <textarea id="importText" placeholder="Paste lab report text..."></textarea>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="btnParseText">Extract Values</button>
+          <button class="btn" id="btnApplyExtracted">Apply to Labs/Readings</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="col-50">
+            <label class="small">Attach screenshot(s) (image)</label>
+            <input type="file" id="importFiles" accept="image/*" multiple class="select">
+            <div class="minihelp">Images are stored locally in this browser only.</div>
+          </div>
+          <div class="col-50">
+            <label class="small">OCR (optional, needs internet)</label>
+            <div class="row">
+              <button class="btn" id="btnEnableOCR">Enable OCR</button>
+              <button class="btn" id="btnRunOCR">Run OCR on latest image</button>
+            </div>
+            <div class="minihelp" id="ocrStatus">OCR is OFF.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="file-note" id="extractedBox">No extracted values yet.</div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="tab" id="tab-settings">
+      <div class="card">
+        <h2>Settings</h2>
+        <div class="sub">Offline-first by default. Backend-ready structure maintained.</div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <button class="btn" id="btnBackup">Backup (copy JSON)</button>
+          <button class="btn" id="btnRestore">Restore (paste JSON)</button>
+          <button class="btn" id="btnFactoryReset">Factory reset (all persons)</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <label class="small">Backup / Restore box</label>
+          <textarea id="backupBox" placeholder="Backup JSON will appear here. Paste JSON here to restore."></textarea>
+        </div>
+
+        <div class="minihelp">
+          Note: Data is stored in <b>localStorage</b> on this device/browser.
+          If you clear browser data, logs will be lost unless you back up.
         </div>
       </div>
+    </section>
 
-      <div class="divider"></div>
+  </main>
+</div>
 
-      <div class="mutedBox">
-        If “Add to Home Screen” is greyed out on some browsers, open the file via a local server or via GitHub Pages, then use the browser menu → Add to Home Screen.
+<!-- FAMILY MODAL -->
+<div class="modal" id="familyModal">
+  <div class="box">
+    <div class="xrow">
+      <h3>Family Mode (up to 10 people)</h3>
+      <button class="closeX" id="closeFamily">✕</button>
+    </div>
+    <div class="sub">Create/edit up to 10 profiles (Primary + 9 dependants). Switch person from the header dropdown.</div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <button class="btn primary" id="btnAddDependent">Add/Replace Dependant</button>
+      <button class="btn" id="btnRemoveDependent">Remove Selected Person</button>
+    </div>
+
+    <div class="list" id="familyList"></div>
+
+    <div class="divider"></div>
+
+    <div class="file-note">
+      <b>Identification fields required (per user request):</b> Name, DOB, Sex. Optional: height/weight/conditions/notes.
+    </div>
+  </div>
+</div>
+
+<!-- QUICK ADD MODAL -->
+<div class="modal" id="addModal">
+  <div class="box">
+    <div class="xrow">
+      <h3>Add Reading (manual)</h3>
+      <button class="closeX" id="closeAdd">✕</button>
+    </div>
+    <div class="sub">Logs to the currently selected person.</div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <div class="col-25">
+        <label class="small">Glucose (mg/dL)</label>
+        <input type="number" id="aGlucose" min="0" step="1" placeholder="e.g., 108">
+      </div>
+      <div class="col-25">
+        <label class="small">Trend arrow (optional)</label>
+        <select id="aGlucoseTrend">
+          <option value="">—</option>
+          <option value="↘">↘</option>
+          <option value="→">→</option>
+          <option value="↗">↗</option>
+        </select>
+      </div>
+      <div class="col-25">
+        <label class="small">BP Systolic</label>
+        <input type="number" id="aSys" min="0" step="1" placeholder="e.g., 120">
+      </div>
+      <div class="col-25">
+        <label class="small">BP Diastolic</label>
+        <input type="number" id="aDia" min="0" step="1" placeholder="e.g., 82">
+      </div>
+      <div class="col-25">
+        <label class="small">Pulse (optional)</label>
+        <input type="number" id="aPulse" min="0" step="1" placeholder="e.g., 83">
+      </div>
+      <div class="col-25">
+        <label class="small">Sleep score (optional)</label>
+        <input type="number" id="aSleepScore" min="0" step="1" placeholder="e.g., 44">
+      </div>
+      <div class="col-25">
+        <label class="small">Sleep hours (optional)</label>
+        <input type="number" id="aSleepHours" min="0" step="0.1" placeholder="e.g., 6.5">
+      </div>
+      <div class="col-25">
+        <label class="small">SpO₂ low % (optional)</label>
+        <input type="number" id="aSpO2Low" min="0" step="1" placeholder="e.g., 92">
       </div>
     </div>
-  </section>
 
+    <div class="divider"></div>
+
+    <div class="row">
+      <button class="btn primary" id="btnSaveReading">Save</button>
+      <button class="btn" id="btnSaveReadingAndSnapshot">Save + Refresh Snapshot</button>
+    </div>
+
+    <div class="minihelp">Tip: If you only enter one field, the app saves only that metric.</div>
+  </div>
 </div>
 
 <script>
-/* =========================================================
-   HealthChecker+ v19.0.0 Unified
-   Offline-first (LocalStorage) • Backend-ready hooks
+/* ==========================================================
+   HealthChecker+ Iteration 21 (single-file)
+   - Snapshot is default home
+   - Restored Symptom Checker
+   - Family mode (10 profiles)
+   - Moving HbA1c (from glucose logs)
+   - Trend charts (canvas)
+   - Attach reports: paste-text extraction + optional OCR online
+   - Offline-first localStorage, backend-ready structure
+========================================================== */
 
-   Data model (per personId):
-   - profile: {name, sex, rel, dob, heightCm, weightKg, conditions[], notes}
-   - logs:
-     - glucose: [{ts, value, trend}]
-     - bp:      [{ts, sys, dia, pulse}]
-     - sleep:   [{dateKey, score, minutes, snoreMinutes}]
-     - spo2:    [{dateKey, low}]
-     - labs:    {dateKey, creat, egfr, urea, hb, mcv, fit}
-     - triage:  [{ts, severity, action, summary}]
-     - attachments: [{ts, fileName, pasted, extractedObj}]
-========================================================= */
+/* ------------------------------
+   STORAGE KEYS / MODEL
+------------------------------ */
+const HC = {
+  version: "21.0.0",
+  maxPeople: 10,
+  rootKey: "hcplus_v21_store",
+  activeIdKey: "hcplus_v21_active_person_id",
+  ocrEnabledKey: "hcplus_v21_ocr_enabled"
+};
 
-(function(){
-  const APP_VERSION = "19.0.0";
-  const KEY_ACTIVE = "hc_active_person";
-  const KEY_BACKEND = "hc_backend_url";
+function nowISO(){ return new Date().toISOString(); }
+function dayKey(ts){
+  const d = ts ? new Date(ts) : new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const da = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${da}`;
+}
 
-  // Primary + 9 dependants
-  const PERSON_IDS = ["primary","dep1","dep2","dep3","dep4","dep5","dep6","dep7","dep8","dep9"];
-
-  const K = {
-    profile: (p)=>`hc_${APP_VERSION}_${p}_profile`,
-    glucose: (p)=>`hc_${APP_VERSION}_${p}_glucose`,
-    bp:      (p)=>`hc_${APP_VERSION}_${p}_bp`,
-    sleep:   (p)=>`hc_${APP_VERSION}_${p}_sleep`,
-    spo2:    (p)=>`hc_${APP_VERSION}_${p}_spo2`,
-    labs:    (p)=>`hc_${APP_VERSION}_${p}_labs`,
-    triage:  (p)=>`hc_${APP_VERSION}_${p}_triage`,
-    attach:  (p)=>`hc_${APP_VERSION}_${p}_attach`
+function safeParse(s, fallback){
+  try{ return JSON.parse(s) ?? fallback; } catch(e){ return fallback; }
+}
+function loadStore(){
+  const raw = localStorage.getItem(HC.rootKey);
+  const st = safeParse(raw, null);
+  if (st && st.people && Array.isArray(st.people)) return st;
+  // initialize
+  const primaryId = "p1";
+  const init = {
+    meta: { version: HC.version, createdAt: nowISO(), updatedAt: nowISO() },
+    people: [
+      {
+        id: primaryId,
+        label: "Primary",
+        profile: { name:"", sex:"", dob:"", heightCm:null, weightKg:null, conditions:"", notes:"" },
+        logs: { glucose:[], bp:[], sleep:[], spo2:[], checks:[], imports:[] },
+        labs: { hbA1c:null, creatinine:null, egfr:null, hb:null, mcv:null, psa:null, fit:null, updatedAt:null }
+      }
+    ]
   };
+  localStorage.setItem(HC.rootKey, JSON.stringify(init));
+  localStorage.setItem(HC.activeIdKey, primaryId);
+  return init;
+}
+function saveStore(store){
+  store.meta.updatedAt = nowISO();
+  localStorage.setItem(HC.rootKey, JSON.stringify(store));
+}
+function getActiveId(){
+  return localStorage.getItem(HC.activeIdKey) || "p1";
+}
+function setActiveId(id){
+  localStorage.setItem(HC.activeIdKey, id);
+}
+function getPerson(store, id){
+  return store.people.find(p => p.id === id) || store.people[0];
+}
+function upsertPerson(store, person){
+  const idx = store.people.findIndex(p => p.id === person.id);
+  if (idx >= 0) store.people[idx] = person;
+  else store.people.push(person);
+}
+function computeAge(dobStr){
+  if (!dobStr) return "";
+  const dob = new Date(dobStr);
+  if (isNaN(dob.getTime())) return "";
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age >= 0 ? String(age) : "";
+}
+function computeBMI(heightCm, weightKg){
+  const h = Number(heightCm);
+  const w = Number(weightKg);
+  if (!h || !w) return "";
+  const hm = h / 100;
+  const bmi = w / (hm*hm);
+  if (!isFinite(bmi)) return "";
+  return bmi.toFixed(1);
+}
 
-  function nowISO(){ return new Date().toISOString(); }
-  function dayKey(d){
-    const x = d ? new Date(d) : new Date();
-    const y = x.getFullYear();
-    const m = String(x.getMonth()+1).padStart(2,"0");
-    const dd = String(x.getDate()).padStart(2,"0");
-    return `${y}-${m}-${dd}`;
+/* ------------------------------
+   UI: TABS
+------------------------------ */
+function showTab(name){
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.remove("active"));
+  const el = document.getElementById("tab-" + name);
+  if (el) el.classList.add("active");
+  if (name === "snapshot") refreshSnapshot();
+  if (name === "trends") renderTrends();
+  if (name === "reports") renderReports();
+  if (name === "profile") loadProfileToUI();
+}
+
+/* ------------------------------
+   PERSON SELECTOR + FAMILY MODE
+------------------------------ */
+function personDisplayName(p){
+  const name = (p.profile?.name || "").trim();
+  if (name) return name;
+  return p.label || p.id;
+}
+
+function fillPersonSelect(){
+  const store = loadStore();
+  const sel = document.getElementById("personSelect");
+  const active = getActiveId();
+  sel.innerHTML = "";
+  store.people.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = `${personDisplayName(p)}${p.id === "p1" ? " (Primary)" : ""}`;
+    sel.appendChild(opt);
+  });
+  sel.value = active;
+}
+
+function openFamilyModal(){
+  document.getElementById("familyModal").style.display = "flex";
+  renderFamilyList();
+}
+function closeFamilyModal(){
+  document.getElementById("familyModal").style.display = "none";
+}
+function renderFamilyList(){
+  const store = loadStore();
+  const list = document.getElementById("familyList");
+  list.innerHTML = "";
+  const active = getActiveId();
+
+  store.people.forEach(p => {
+    const age = computeAge(p.profile?.dob || "");
+    const sex = p.profile?.sex || "";
+    const line = [];
+    if (sex) line.push(sex);
+    if (age) line.push(`Age ${age}`);
+    if (p.profile?.dob) line.push(`DOB ${p.profile.dob}`);
+
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div class="li-main">
+        <b>${personDisplayName(p)} ${p.id === active ? "• Selected" : ""}</b>
+        <span>${line.length ? line.join(" • ") : "No demographic details saved yet"}</span>
+      </div>
+      <div class="li-actions">
+        <button class="btn" data-act="select" data-id="${p.id}">Select</button>
+        <button class="btn" data-act="edit" data-id="${p.id}">Edit Profile</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("button[data-act]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if (act === "select"){
+        setActiveId(id);
+        fillPersonSelect();
+        renderFamilyList();
+        refreshSnapshot();
+      }
+      if (act === "edit"){
+        setActiveId(id);
+        fillPersonSelect();
+        closeFamilyModal();
+        showTab("profile");
+      }
+    });
+  });
+}
+
+function addOrReplaceDependant(){
+  const store = loadStore();
+  if (store.people.length >= HC.maxPeople){
+    alert("Maximum of 10 people reached. Remove one to add another.");
+    return;
   }
-  function safeParse(s, fallback){
-    try { const j = JSON.parse(s); return (j===null || j===undefined) ? fallback : j; } catch(e){ return fallback; }
+  // Create a new dependant (p2..p10)
+  let nextNum = 2;
+  const used = new Set(store.people.map(p => p.id));
+  while (used.has("p" + nextNum) && nextNum <= HC.maxPeople) nextNum++;
+  if (nextNum > HC.maxPeople){
+    alert("No available slot.");
+    return;
   }
-  function loadArr(key){ const a = safeParse(localStorage.getItem(key), []); return Array.isArray(a) ? a : []; }
-  function saveArr(key, arr){ localStorage.setItem(key, JSON.stringify(arr)); }
-  function loadObj(key){ return safeParse(localStorage.getItem(key), null); }
-  function saveObj(key, obj){ localStorage.setItem(key, JSON.stringify(obj)); }
+  const id = "p" + nextNum;
+  const dep = {
+    id,
+    label: "Dependant " + (nextNum-1),
+    profile: { name:"", sex:"", dob:"", heightCm:null, weightKg:null, conditions:"", notes:"" },
+    logs: { glucose:[], bp:[], sleep:[], spo2:[], checks:[], imports:[] },
+    labs: { hbA1c:null, creatinine:null, egfr:null, hb:null, mcv:null, psa:null, fit:null, updatedAt:null }
+  };
+  store.people.push(dep);
+  saveStore(store);
+  setActiveId(id);
+  fillPersonSelect();
+  renderFamilyList();
+  closeFamilyModal();
+  showTab("profile");
+}
 
-  function getActive(){ return localStorage.getItem(KEY_ACTIVE) || "primary"; }
-  function setActive(p){ localStorage.setItem(KEY_ACTIVE, p); updateActiveLabel(); refreshAll(); }
-
-  function getBackend(){ return localStorage.getItem(KEY_BACKEND) || ""; }
-  function setBackend(url){ localStorage.setItem(KEY_BACKEND, url || ""); }
-
-  function labelForPersonId(pid){
-    if(pid==="primary") return "Primary";
-    return "Dependant " + pid.replace("dep","");
+function removeSelectedPerson(){
+  const store = loadStore();
+  const active = getActiveId();
+  if (active === "p1"){
+    alert("Primary user cannot be removed.");
+    return;
   }
+  store.people = store.people.filter(p => p.id !== active);
+  saveStore(store);
+  setActiveId("p1");
+  fillPersonSelect();
+  renderFamilyList();
+  refreshSnapshot();
+}
 
-  function updateActiveLabel(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-    const label = prof?.name ? `${labelForPersonId(pid)} (${prof.name})` : labelForPersonId(pid);
-    document.getElementById("activePersonLabel").textContent = label;
+/* ------------------------------
+   LOGGING READINGS
+------------------------------ */
+function pushLog(person, key, item){
+  if (!person.logs[key]) person.logs[key] = [];
+  person.logs[key].push(item);
+  // keep recent size reasonable
+  if (person.logs[key].length > 2000) person.logs[key] = person.logs[key].slice(-2000);
+}
+function getLatest(logArr){
+  if (!Array.isArray(logArr) || !logArr.length) return null;
+  const sorted = logArr.slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
+  return sorted[0] || null;
+}
+function getLatestTodayOrLatest(logArr){
+  if (!Array.isArray(logArr) || !logArr.length) return { item:null, scope:"none" };
+  const today = dayKey();
+  const todayItems = logArr.filter(x => dayKey(x.ts) === today).sort((a,b)=> new Date(b.ts)-new Date(a.ts));
+  if (todayItems.length) return { item: todayItems[0], scope:"today" };
+  const all = logArr.slice().sort((a,b)=> new Date(b.ts)-new Date(a.ts));
+  return { item: all[0], scope:"latest" };
+}
+
+function openAddModal(){
+  document.getElementById("addModal").style.display = "flex";
+}
+function closeAddModal(){
+  document.getElementById("addModal").style.display = "none";
+}
+function clearAddFields(){
+  ["aGlucose","aSys","aDia","aPulse","aSleepScore","aSleepHours","aSpO2Low"].forEach(id=>{
+    const el = document.getElementById(id); if (el) el.value="";
+  });
+  document.getElementById("aGlucoseTrend").value="";
+}
+
+function saveReading(refreshAfter){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+
+  const ts = nowISO();
+  const g = Number(document.getElementById("aGlucose").value || 0) || null;
+  const gTrend = document.getElementById("aGlucoseTrend").value || "";
+  const sys = Number(document.getElementById("aSys").value || 0) || null;
+  const dia = Number(document.getElementById("aDia").value || 0) || null;
+  const pulse = Number(document.getElementById("aPulse").value || 0) || null;
+  const sleepScore = Number(document.getElementById("aSleepScore").value || 0) || null;
+  const sleepHours = Number(document.getElementById("aSleepHours").value || 0) || null;
+  const spo2Low = Number(document.getElementById("aSpO2Low").value || 0) || null;
+
+  let did = false;
+
+  if (g != null){
+    pushLog(p, "glucose", { ts, value:g, trend:gTrend });
+    did = true;
   }
-
-  function getProfile(pid){
-    return loadObj(K.profile(pid)) || {
-      name: (pid==="primary") ? "Primary" : "",
-      sex: "",
-      rel: (pid==="primary") ? "Self (Primary)" : "",
-      dob: "",
-      heightCm: "",
-      weightKg: "",
-      conditions: [],
-      notes: ""
-    };
+  if (sys != null && dia != null){
+    pushLog(p, "bp", { ts, sys, dia, pulse });
+    did = true;
   }
-
-  function setProfile(pid, profile){
-    saveObj(K.profile(pid), profile);
+  if (sleepScore != null || sleepHours != null){
+    const totalMinutes = sleepHours != null ? Math.round(sleepHours * 60) : null;
+    pushLog(p, "sleep", { ts, score: sleepScore, totalMinutes });
+    did = true;
   }
-
-  function computeAge(dobStr){
-    if(!dobStr) return "";
-    const dob = new Date(dobStr);
-    if(String(dob) === "Invalid Date") return "";
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if(m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    if(age < 0) age = 0;
-    return age;
-  }
-
-  function computeBMI(heightCm, weightKg){
-    const h = Number(heightCm);
-    const w = Number(weightKg);
-    if(!h || !w) return "";
-    const hm = h / 100;
-    if(hm <= 0) return "";
-    const bmi = w / (hm*hm);
-    return bmi.toFixed(1);
-  }
-
-  function latestTodayOrLatest(items, tsField="ts"){
-    const today = dayKey();
-    const sorted = items.slice().sort((a,b)=> new Date(b[tsField]||b.ts||b.date||b.dateKey) - new Date(a[tsField]||a.ts||a.date||a.dateKey));
-    const todays = sorted.filter(x => dayKey(x[tsField]||x.ts||x.date||x.dateKey) === today);
-    if(todays.length) return {item:todays[0], scope:"today"};
-    if(sorted.length) return {item:sorted[0], scope:"latest"};
-    return {item:null, scope:"none"};
-  }
-
-  /* ===========================
-     Flags / Status
-  ============================ */
-  function pill(el, level, text){
-    el.classList.remove("pill-ok","pill-warn","pill-bad");
-    if(level==="ok") el.classList.add("pill-ok");
-    if(level==="warn") el.classList.add("pill-warn");
-    if(level==="bad") el.classList.add("pill-bad");
-    el.textContent = text;
-  }
-
-  function flagGlucose(val){
-    if(val==null) return {lvl:"warn", msg:"No glucose logged"};
-    if(val < 70) return {lvl:"bad", msg:"Hypoglycaemia risk"};
-    if(val <= 140) return {lvl:"ok", msg:"In target"};
-    if(val <= 180) return {lvl:"warn", msg:"Above target"};
-    return {lvl:"bad", msg:"High glucose"};
-  }
-
-  function flagBP(sys, dia){
-    if(sys==null || dia==null) return {lvl:"warn", msg:"No BP logged"};
-    if(sys>=180 || dia>=120) return {lvl:"bad", msg:"Hypertensive crisis"};
-    if(sys>=140 || dia>=90) return {lvl:"bad", msg:"High BP"};
-    if(sys>=130 || dia>=80) return {lvl:"warn", msg:"Borderline BP"};
-    return {lvl:"ok", msg:"BP OK"};
-  }
-
-  function flagSleep(score, minutes){
-    if(score==null && minutes==null) return {lvl:"warn", msg:"No sleep logged"};
-    if(minutes!=null && minutes < 300) return {lvl:"warn", msg:"Short sleep"};
-    if(score!=null && score < 50) return {lvl:"warn", msg:"Low sleep quality"};
-    return {lvl:"ok", msg:"Sleep OK"};
-  }
-
-  function flagSpO2(low){
-    if(low==null) return {lvl:"warn", msg:"No SpO₂ logged"};
-    if(low <= 88) return {lvl:"bad", msg:"Low SpO₂ (verify / repeat)"};
-    if(low <= 92) return {lvl:"warn", msg:"Borderline SpO₂"};
-    return {lvl:"ok", msg:"SpO₂ OK"};
-  }
-
-  function flagRenal(egfr){
-    if(egfr==null) return {lvl:"warn", msg:"No eGFR set"};
-    if(egfr < 30) return {lvl:"bad", msg:"CKD stage 4+"};
-    if(egfr < 60) return {lvl:"warn", msg:"CKD stage 3"};
-    return {lvl:"ok", msg:"Renal OK"};
-  }
-
-  function overallFrom(flags){
-    // pick worst severity among flags
-    const rank = {ok:0, warn:1, bad:2};
-    let worst = "ok";
-    flags.forEach(f => { if(rank[f.lvl] > rank[worst]) worst = f.lvl; });
-    return worst;
-  }
-
-  /* ===========================
-     HbA1c estimate (rolling)
-     A1c = (eAG + 46.7) / 28.7
-     We'll estimate eAG as mean glucose over window days.
-  ============================ */
-  function mean(arr){
-    if(!arr.length) return null;
-    return arr.reduce((a,b)=>a+b,0) / arr.length;
-  }
-  function estA1cFromEAG(eag){
-    if(eag==null) return null;
-    return (eag + 46.7) / 28.7;
-  }
-  function rollingGlucoseMean(pid, days){
-    const logs = loadArr(K.glucose(pid));
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (days-1));
-    const vals = logs
-      .filter(x => x.value!=null && x.ts && new Date(x.ts) >= cutoff)
-      .map(x => Number(x.value))
-      .filter(v => !Number.isNaN(v));
-    const m = mean(vals);
-    return {mean: m, n: vals.length};
-  }
-
-  /* ===========================
-     Snapshot Render
-  ============================ */
-  function renderSnapshot(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-
-    // logs
-    const gPick = latestTodayOrLatest(loadArr(K.glucose(pid)));
-    const bPick = latestTodayOrLatest(loadArr(K.bp(pid)));
-    const sPick = latestTodayOrLatest(loadArr(K.sleep(pid)), "dateKey");
-    const oPick = latestTodayOrLatest(loadArr(K.spo2(pid)), "dateKey");
-    const labs = loadObj(K.labs(pid));
-
-    // values
-    const gVal = gPick.item?.value ?? null;
-    const gTrend = gPick.item?.trend ?? "";
-    const sys = bPick.item?.sys ?? null;
-    const dia = bPick.item?.dia ?? null;
-    const pulse = bPick.item?.pulse ?? null;
-
-    const sleepScore = sPick.item?.score ?? null;
-    const sleepMin = sPick.item?.minutes ?? null;
-    const snoreMin = sPick.item?.snoreMinutes ?? null;
-
-    const spo2Low = oPick.item?.low ?? null;
-
-    const egfr = labs?.egfr ?? null;
-    const creat = labs?.creat ?? null;
-    const hb = labs?.hb ?? null;
-    const mcv = labs?.mcv ?? null;
-    const fit = labs?.fit ?? null;
-
-    const bmi = computeBMI(prof.heightCm, prof.weightKg);
-
-    // HbA1c estimate
-    const roll = rollingGlucoseMean(pid, 14);
-    const a1c = estA1cFromEAG(roll.mean);
-
-    // flags
-    const fG = flagGlucose(gVal);
-    const fB = flagBP(sys, dia);
-    const fS = flagSleep(sleepScore, sleepMin);
-    const fO = flagSpO2(spo2Low);
-    const fR = flagRenal(egfr);
-
-    const overall = overallFrom([fG,fB,fS,fO,fR]);
-
-    const overallPill = document.getElementById("overallPill");
-    if(overall==="ok") pill(overallPill,"ok","OVERALL: GREEN");
-    if(overall==="warn") pill(overallPill,"warn","OVERALL: AMBER");
-    if(overall==="bad") pill(overallPill,"bad","OVERALL: RED");
-
-    // scope label
-    const scope = (gPick.scope==="today" || bPick.scope==="today" || sPick.scope==="today" || oPick.scope==="today") ? "Today’s latest values (or latest available if none today)." : "Latest values (no entry today).";
-    document.getElementById("snapshotScopeLabel").textContent = scope;
-
-    // render metric text
-    document.getElementById("snapGlucose").textContent = (gVal!=null) ? `${gVal} mg/dL ${gTrend}` : "—";
-    document.getElementById("snapGlucoseSub").textContent = (gPick.scope==="today") ? `Today • ${fG.msg}` : (gPick.scope==="latest") ? `Latest • ${fG.msg}` : "No data yet";
-
-    document.getElementById("snapA1c").textContent = (a1c!=null) ? `${a1c.toFixed(2)}%` : "—";
-    document.getElementById("snapA1cSub").textContent = (roll.n>0) ? `Based on ${roll.n} glucose readings in last 14 days (avg ${roll.mean.toFixed(0)} mg/dL).` : "Log glucose readings to compute estimate.";
-
-    document.getElementById("snapBP").textContent = (sys!=null && dia!=null) ? `${sys}/${dia} mmHg` + (pulse?` (P ${pulse})`:"") : "—";
-    document.getElementById("snapBPSub").textContent = (bPick.scope==="today") ? `Today • ${fB.msg}` : (bPick.scope==="latest") ? `Latest • ${fB.msg}` : "No data yet";
-
-    if(sleepScore!=null){
-      document.getElementById("snapSleep").textContent = `Score ${sleepScore}`;
-    } else if(sleepMin!=null){
-      const h = Math.floor(sleepMin/60), m = sleepMin%60;
-      document.getElementById("snapSleep").textContent = `${h}h ${m}m`;
-    } else {
-      document.getElementById("snapSleep").textContent = "—";
-    }
-    let sleepSub = (sPick.scope==="today") ? `Today • ${fS.msg}` : (sPick.scope==="latest") ? `Latest • ${fS.msg}` : "No data yet";
-    if(sleepMin!=null) sleepSub += ` • Total ${Math.floor(sleepMin/60)}h ${sleepMin%60}m`;
-    if(snoreMin!=null) sleepSub += ` • Snore ${Math.floor(snoreMin/60)}h ${snoreMin%60}m`;
-    document.getElementById("snapSleepSub").textContent = sleepSub;
-
-    document.getElementById("snapSpO2").textContent = (spo2Low!=null) ? `${spo2Low}%` : "—";
-    document.getElementById("snapSpO2Sub").textContent = (oPick.scope==="today") ? `Today • ${fO.msg}` : (oPick.scope==="latest") ? `Latest • ${fO.msg}` : "No data yet";
-
-    document.getElementById("snapBMI").textContent = bmi ? bmi : "—";
-    document.getElementById("snapBMISub").textContent = bmi ? bmiCategory(bmi) : "Add height + weight in Profile (optional).";
-
-    document.getElementById("snapKidney").textContent = (egfr!=null) ? `eGFR ${egfr}` : "—";
-    document.getElementById("snapKidneySub").textContent =
-      (egfr!=null || creat!=null) ? `${fR.msg}` + (creat?` • Creat ${creat}`:"") : "No renal labs set";
-
-    document.getElementById("snapBlood").textContent = (hb!=null) ? `Hb ${hb}` : "—";
-    let bloodSub = (hb!=null || mcv!=null || fit!=null) ? "" : "No blood indices set";
-    if(hb!=null) bloodSub += `Hb ${hb} g/dL`;
-    if(mcv!=null) bloodSub += (bloodSub? " • " : "") + `MCV ${mcv} fL`;
-    if(fit!=null) bloodSub += (bloodSub? " • " : "") + `FIT ${fit}`;
-    document.getElementById("snapBloodSub").textContent = bloodSub || "—";
-
-    // alerts list
-    const alerts = [];
-    if(fG.lvl==="bad") alerts.push("Glucose out of range: hydrate, review last meal/timing, consider light walk; if recurrent, discuss meds with clinician.");
-    if(fB.lvl==="bad") alerts.push("BP high: recheck seated after 5–10 minutes; reduce salt/caffeine; if severe symptoms, seek care.");
-    if(fO.lvl==="bad") alerts.push("SpO₂ low: may be artifact, but if repeated consider sleep apnea evaluation.");
-    if(fR.lvl!=="ok") alerts.push("Renal protection: avoid NSAIDs, keep BP controlled, hydrate smart; follow labs with doctor.");
-    if(!alerts.length) alerts.push("No critical flags detected. Maintain routine and log today’s readings.");
-
-    document.getElementById("snapAlertTitle").textContent = (overall==="ok") ? "Stable today" : (overall==="warn") ? "Needs attention" : "High risk flags";
-    document.getElementById("snapAlerts").textContent = alerts.join(" ");
-
-    // header timestamp
-    const lu = new Date().toLocaleString();
-    document.getElementById("lastUpdatedLabel").textContent = lu;
+  if (spo2Low != null){
+    pushLog(p, "spo2", { ts, low: spo2Low });
+    did = true;
   }
 
-  function bmiCategory(bmiStr){
-    const bmi = Number(bmiStr);
-    if(Number.isNaN(bmi)) return "BMI unavailable";
-    if(bmi < 18.5) return "Underweight range";
-    if(bmi < 25) return "Healthy range";
-    if(bmi < 30) return "Overweight range";
-    return "Obesity range";
+  if (!did){
+    alert("Please enter at least one value to save.");
+    return;
   }
 
-  /* ===========================
-     Trends (Canvas)
-  ============================ */
-  function drawTrend(metric, days){
-    const pid = getActive();
-    const canvas = document.getElementById("trendCanvas");
-    const ctx = canvas.getContext("2d");
+  upsertPerson(store, p);
+  saveStore(store);
 
-    // handle high-DPI
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(cssW * dpr);
-    canvas.height = Math.floor(cssH * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+  clearAddFields();
+  closeAddModal();
+  if (refreshAfter) refreshSnapshot();
+  else alert("Saved.");
+}
 
-    // get points by day
-    const end = new Date();
-    const start = new Date(); start.setDate(end.getDate() - (days-1));
-    const dayMap = new Map(); // dateKey -> value
+/* ------------------------------
+   MOVING HbA1c (ESTIMATE)
+   Uses ADAG: A1c (%) = (eAG + 46.7) / 28.7
+   eAG from average glucose (mg/dL)
+------------------------------ */
+function estimateA1cFromGlucose(glucoseLog, days){
+  const cutoff = Date.now() - (days * 24 * 3600 * 1000);
+  const vals = (glucoseLog || [])
+    .filter(x => x && x.value != null && new Date(x.ts).getTime() >= cutoff)
+    .map(x => Number(x.value))
+    .filter(v => isFinite(v) && v > 20 && v < 600);
 
-    function setDayValue(dateKey, value){
-      if(value==null || Number.isNaN(Number(value))) return;
-      // if multiple per day, keep latest (simple approach)
-      dayMap.set(dateKey, Number(value));
-    }
+  if (!vals.length) return null;
+  const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
+  const a1c = (avg + 46.7) / 28.7;
+  return { a1c: Number(a1c.toFixed(2)), avg: Number(avg.toFixed(1)), n: vals.length, days };
+}
 
-    if(metric === "glucose"){
-      loadArr(K.glucose(pid)).forEach(x=>{
-        if(!x.ts) return;
-        const t = new Date(x.ts);
-        if(t < start || t > end) return;
-        setDayValue(dayKey(t), x.value);
-      });
-    }
+/* ------------------------------
+   SNAPSHOT FLAGS
+------------------------------ */
+function flagGlucose(v){
+  if (v == null) return { level:"warn", text:"No recent glucose" };
+  if (v < 70) return { level:"bad", text:"Low glucose" };
+  if (v <= 140) return { level:"ok", text:"In target" };
+  if (v <= 180) return { level:"warn", text:"Above target" };
+  return { level:"bad", text:"High glucose" };
+}
+function flagBP(sys, dia){
+  if (sys == null || dia == null) return { level:"warn", text:"No recent BP" };
+  if (sys >= 140 || dia >= 90) return { level:"bad", text:"High BP" };
+  if (sys >= 130 || dia >= 80) return { level:"warn", text:"Borderline BP" };
+  return { level:"ok", text:"BP OK" };
+}
+function flagSleep(score, totalMinutes){
+  if (score == null && totalMinutes == null) return { level:"warn", text:"No recent sleep" };
+  if (totalMinutes != null && totalMinutes < 360) return { level:"warn", text:"Short sleep" };
+  if (score != null && score < 50) return { level:"warn", text:"Low sleep quality" };
+  return { level:"ok", text:"Sleep OK" };
+}
+function flagSpO2(low){
+  if (low == null) return { level:"warn", text:"No SpO₂ logged" };
+  if (low <= 88) return { level:"bad", text:"Low O₂ (verify)" };
+  if (low <= 92) return { level:"warn", text:"Borderline O₂" };
+  return { level:"ok", text:"O₂ OK" };
+}
+function worstLevel(levels){
+  const rank = { ok:0, warn:1, bad:2 };
+  return levels.reduce((w,l)=> rank[l] > rank[w] ? l : w, "ok");
+}
+function setOverall(level){
+  const dot = document.getElementById("overallDot");
+  const text = document.getElementById("overallText");
+  dot.className = "dot " + level;
+  text.textContent = "Overall: " + (level === "ok" ? "GOOD" : level === "warn" ? "WATCH" : "ALERT");
+}
 
-    if(metric === "bp_sys" || metric === "bp_dia"){
-      loadArr(K.bp(pid)).forEach(x=>{
-        if(!x.ts) return;
-        const t = new Date(x.ts);
-        if(t < start || t > end) return;
-        setDayValue(dayKey(t), metric==="bp_sys" ? x.sys : x.dia);
-      });
-    }
+function refreshSnapshot(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
 
-    if(metric === "sleep_score" || metric === "sleep_minutes"){
-      loadArr(K.sleep(pid)).forEach(x=>{
-        const dk = x.dateKey || x.date || "";
-        if(!dk) return;
-        const t = new Date(dk);
-        if(t < start || t > end) return;
-        setDayValue(dayKey(t), metric==="sleep_score" ? x.score : x.minutes);
-      });
-    }
+  const age = computeAge(p.profile?.dob || "");
+  const sex = p.profile?.sex || "";
+  const nm = (p.profile?.name || "").trim() || (p.label || "Person");
+  document.getElementById("snapPersonLine").textContent =
+    `${nm}${sex ? " • " + sex : ""}${age ? " • Age " + age : ""} • Device time`;
 
-    if(metric === "spo2_low"){
-      loadArr(K.spo2(pid)).forEach(x=>{
-        const dk = x.dateKey || x.date || "";
-        if(!dk) return;
-        const t = new Date(dk);
-        if(t < start || t > end) return;
-        setDayValue(dayKey(t), x.low);
-      });
-    }
+  document.getElementById("snapTs").textContent = "Last refreshed: " + new Date().toLocaleString();
 
-    // build ordered series
-    const labels = [];
-    const values = [];
-    const cursor = new Date(start);
-    while(cursor <= end){
-      const dk = dayKey(cursor);
-      labels.push(dk);
-      values.push(dayMap.has(dk) ? dayMap.get(dk) : null);
-      cursor.setDate(cursor.getDate()+1);
-    }
+  const gPick = getLatestTodayOrLatest(p.logs.glucose);
+  const bPick = getLatestTodayOrLatest(p.logs.bp);
+  const sPick = getLatestTodayOrLatest(p.logs.sleep);
+  const oPick = getLatestTodayOrLatest(p.logs.spo2);
 
-    // compute stats
-    const presentVals = values.filter(v=>v!=null);
-    const avg = presentVals.length ? (presentVals.reduce((a,b)=>a+b,0)/presentVals.length) : null;
-    const min = presentVals.length ? Math.min(...presentVals) : null;
-    const max = presentVals.length ? Math.max(...presentVals) : null;
+  const gVal = gPick.item?.value ?? null;
+  const gArrow = gPick.item?.trend ?? "";
+  const sys = bPick.item?.sys ?? null;
+  const dia = bPick.item?.dia ?? null;
+  const pulse = bPick.item?.pulse ?? null;
+  const sleepScore = sPick.item?.score ?? null;
+  const totalMin = sPick.item?.totalMinutes ?? null;
+  const spo2Low = oPick.item?.low ?? null;
 
-    // draw
-    ctx.clearRect(0,0,cssW,cssH);
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,cssW,cssH);
+  // HbA1c estimate: prefer 14d, fallback 30d
+  const est14 = estimateA1cFromGlucose(p.logs.glucose, 14);
+  const est30 = est14 ? null : estimateA1cFromGlucose(p.logs.glucose, 30);
+  const est = est14 || est30;
 
-    // frame
-    ctx.strokeStyle = "#d6e9f7"; ctx.lineWidth = 1;
-    roundRect(ctx, 0.5,0.5,cssW-1,cssH-1,14); ctx.stroke();
+  // BMI
+  const bmi = computeBMI(p.profile?.heightCm, p.profile?.weightKg);
 
+  // Render metrics
+  document.getElementById("mGlucose").textContent = gVal != null ? `${gVal} mg/dL ${gArrow}`.trim() : "—";
+  document.getElementById("mGlucoseNote").textContent =
+    gPick.scope === "today" ? "Today’s latest reading" :
+    gPick.scope === "latest" ? "No reading today (showing latest)" : "No glucose data yet";
+
+  document.getElementById("mBP").textContent =
+    (sys != null && dia != null) ? `${sys}/${dia} mmHg${pulse ? " (P " + pulse + ")" : ""}` : "—";
+  document.getElementById("mBPNote").textContent =
+    bPick.scope === "today" ? "Today’s latest BP" :
+    bPick.scope === "latest" ? "No BP today (showing latest)" : "No BP data yet";
+
+  let sleepMain = "—";
+  if (sleepScore != null && sleepScore > 0) sleepMain = `Score ${sleepScore}`;
+  else if (totalMin != null && totalMin > 0) sleepMain = `${Math.floor(totalMin/60)}h ${totalMin%60}m`;
+  document.getElementById("mSleep").textContent = sleepMain;
+
+  document.getElementById("mSleepNote").textContent =
+    sPick.scope === "today" ? "Latest sleep entry (today)" :
+    sPick.scope === "latest" ? "No sleep today (showing latest)" : "No sleep data yet";
+
+  document.getElementById("mSpO2").textContent = spo2Low != null ? `${spo2Low}%` : "—";
+  document.getElementById("mSpO2Note").textContent =
+    oPick.scope === "today" ? "Today’s latest SpO₂ entry" :
+    oPick.scope === "latest" ? "No SpO₂ today (showing latest)" : "No SpO₂ data yet";
+
+  document.getElementById("mBMI").textContent = bmi ? `BMI ${bmi}` : "—";
+  document.getElementById("mBMINote").textContent = bmi ? "Computed from profile height/weight" : "Set height + optional weight in Profile";
+
+  if (est){
+    document.getElementById("mA1c").textContent = `${est.a1c}%`;
+    document.getElementById("mA1cNote").textContent = `Avg glucose ${est.avg} mg/dL • ${est.n} points • last ${est.days}d`;
+  } else {
+    document.getElementById("mA1c").textContent = "—";
+    document.getElementById("mA1cNote").textContent = "Needs glucose log data (use Add Reading)";
+  }
+
+  // Alerts + overall
+  const gF = flagGlucose(gVal);
+  const bF = flagBP(sys, dia);
+  const sF = flagSleep(sleepScore, totalMin);
+  const oF = flagSpO2(spo2Low);
+  const overall = worstLevel([gF.level, bF.level, sF.level, oF.level]);
+  setOverall(overall);
+
+  const alerts = [];
+  if (gF.level === "bad") alerts.push("Glucose is out of range. Consider hydration + light walk; review meal timing and medication plan with your clinician.");
+  if (bF.level === "bad") alerts.push("Blood pressure is high. Recheck after 5–10 minutes seated; avoid salt/caffeine right now.");
+  if (oF.level === "bad") alerts.push("Overnight oxygen is low (may be artifact). If repeated, consider evaluation for sleep-disordered breathing.");
+  if (!alerts.length){
+    alerts.push("No critical flags detected. Maintain routine and log today’s readings.");
+  }
+  const ab = document.getElementById("alertsBox");
+  ab.innerHTML = "";
+  alerts.forEach(a=>{
+    const div = document.createElement("div");
+    div.className = "alert";
+    div.textContent = a;
+    ab.appendChild(div);
+  });
+
+  // keep UI consistent
+  renderReports();
+}
+
+/* ------------------------------
+   TRENDS (CANVAS CHARTS)
+------------------------------ */
+function getSeriesForDays(logArr, mapper, days){
+  const cutoff = Date.now() - (days * 24 * 3600 * 1000);
+  return (logArr || [])
+    .map(x=>{
+      const t = new Date(x.ts).getTime();
+      return { t, ...mapper(x) };
+    })
+    .filter(p => p.t && p.t >= cutoff)
+    .sort((a,b)=>a.t-b.t);
+}
+
+function drawLineChart(canvas, series, opts){
+  // opts: { title, yLabel, lines:[{key,label}], yMin, yMax }
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.floor(rect.width));
+  const h = 210;
+  canvas.width = w * devicePixelRatio;
+  canvas.height = h * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+
+  ctx.clearRect(0,0,w,h);
+
+  // background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0,0,w,h);
+
+  const padL = 44, padR = 14, padT = 24, padB = 26;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  // title
+  ctx.fillStyle = "#0c2336";
+  ctx.font = "700 12px -apple-system,Segoe UI,Arial";
+  ctx.fillText(opts.title || "", padL, 16);
+
+  if (!series || series.length < 2){
+    ctx.fillStyle = "#567189";
+    ctx.font = "12px -apple-system,Segoe UI,Arial";
+    ctx.fillText("Not enough data to plot yet. Add readings.", padL, padT + 26);
     // axes
-    const padL=42, padR=14, padT=16, padB=28;
-    const w = cssW - padL - padR;
-    const h = cssH - padT - padB;
+    ctx.strokeStyle = "#d9e8f5";
+    ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+plotH); ctx.lineTo(padL+plotW, padT+plotH); ctx.stroke();
+    return;
+  }
 
-    // y-range
-    let yMin = (min!=null) ? min : 0;
-    let yMax = (max!=null) ? max : 100;
-    if(yMin===yMax){ yMin -= 1; yMax += 1; }
-    // add padding
-    const span = yMax - yMin;
-    yMin -= span*0.12;
-    yMax += span*0.12;
+  const lines = opts.lines || [{key:"v", label:"Value"}];
 
-    // grid
-    ctx.strokeStyle = "#eef7ff"; ctx.lineWidth = 1;
-    for(let i=0;i<=4;i++){
-      const y = padT + (h*(i/4));
-      ctx.beginPath();
-      ctx.moveTo(padL,y);
-      ctx.lineTo(padL+w,y);
-      ctx.stroke();
-    }
+  // compute y range across lines
+  let yMin = (opts.yMin != null) ? opts.yMin : Infinity;
+  let yMax = (opts.yMax != null) ? opts.yMax : -Infinity;
+  series.forEach(p=>{
+    lines.forEach(L=>{
+      const v = Number(p[L.key]);
+      if (isFinite(v)){
+        if (opts.yMin == null) yMin = Math.min(yMin, v);
+        if (opts.yMax == null) yMax = Math.max(yMax, v);
+      }
+    });
+  });
+  if (!isFinite(yMin) || !isFinite(yMax) || yMin === yMax){
+    yMin = yMin - 1;
+    yMax = yMax + 1;
+  }
+  // nice padding
+  const pad = (yMax - yMin) * 0.12;
+  yMin = yMin - pad;
+  yMax = yMax + pad;
 
-    // y labels
-    ctx.fillStyle = "#4b6a84";
-    ctx.font = "12px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial";
-    for(let i=0;i<=4;i++){
-      const val = yMax - (span*(i/4));
-      const y = padT + (h*(i/4));
-      ctx.fillText(val.toFixed(0), 6, y+4);
-    }
+  const tMin = series[0].t;
+  const tMax = series[series.length-1].t;
 
-    // line
-    ctx.strokeStyle = "#0b6aa7"; ctx.lineWidth = 2;
+  const x = (t)=> padL + ( (t - tMin) / (tMax - tMin) ) * plotW;
+  const y = (v)=> padT + (1 - ( (v - yMin) / (yMax - yMin) )) * plotH;
+
+  // grid
+  ctx.strokeStyle = "#eaf3fb";
+  ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++){
+    const yy = padT + (i/4)*plotH;
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL+plotW, yy); ctx.stroke();
+  }
+
+  // axes
+  ctx.strokeStyle = "#d9e8f5";
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+plotH); ctx.lineTo(padL+plotW, padT+plotH); ctx.stroke();
+
+  // y labels
+  ctx.fillStyle = "#567189";
+  ctx.font = "11px -apple-system,Segoe UI,Arial";
+  const ticks = 4;
+  for (let i=0;i<=ticks;i++){
+    const v = yMax - (i/ticks)*(yMax-yMin);
+    const yy = padT + (i/ticks)*plotH;
+    ctx.fillText(v.toFixed(0), 6, yy+4);
+  }
+
+  // lines (use brand colors only)
+  const palette = ["#2b7bb9","#4aa3df","#1f9d55","#f0a202","#d64545"];
+  lines.forEach((L, idx)=>{
+    ctx.strokeStyle = palette[idx % palette.length];
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    let started=false;
-    for(let i=0;i<values.length;i++){
-      const v = values[i];
-      if(v==null) continue;
-      const x = padL + (w*(i/(values.length-1)));
-      const y = padT + (h*(1 - ((v - yMin)/(yMax - yMin))));
-      if(!started){ ctx.moveTo(x,y); started=true; }
-      else ctx.lineTo(x,y);
-    }
+    let started = false;
+    series.forEach(p=>{
+      const v = Number(p[L.key]);
+      if (!isFinite(v)) return;
+      const xx = x(p.t);
+      const yy = y(v);
+      if (!started){ ctx.moveTo(xx,yy); started=true; }
+      else ctx.lineTo(xx,yy);
+    });
     ctx.stroke();
 
     // points
-    ctx.fillStyle = "#2aa3d6";
-    for(let i=0;i<values.length;i++){
-      const v = values[i];
-      if(v==null) continue;
-      const x = padL + (w*(i/(values.length-1)));
-      const y = padT + (h*(1 - ((v - yMin)/(yMax - yMin))));
-      ctx.beginPath();
-      ctx.arc(x,y,3,0,Math.PI*2);
-      ctx.fill();
-    }
+    ctx.fillStyle = palette[idx % palette.length];
+    series.forEach(p=>{
+      const v = Number(p[L.key]);
+      if (!isFinite(v)) return;
+      const xx = x(p.t);
+      const yy = y(v);
+      ctx.beginPath(); ctx.arc(xx,yy,2.5,0,Math.PI*2); ctx.fill();
+    });
+  });
 
-    // title
-    ctx.fillStyle = "#0a2540";
-    ctx.font = "700 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial";
-    ctx.fillText(metricTitle(metric) + ` • Last ${days} days`, padL, 14);
+  // legend
+  let lx = padL, ly = h - 8;
+  ctx.font = "700 11px -apple-system,Segoe UI,Arial";
+  lines.forEach((L, idx)=>{
+    ctx.fillStyle = palette[idx % palette.length];
+    ctx.fillRect(lx, ly-10, 10, 10);
+    ctx.fillStyle = "#567189";
+    ctx.fillText(L.label, lx+14, ly-1);
+    lx += 14 + ctx.measureText(L.label).width + 14;
+  });
+}
 
-    // x labels (sparse)
-    ctx.fillStyle = "#4b6a84";
-    ctx.font = "12px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial";
-    const step = Math.max(1, Math.floor(values.length/6));
-    for(let i=0;i<values.length;i+=step){
-      const x = padL + (w*(i/(values.length-1)));
-      const dk = labels[i].slice(5);
-      ctx.fillText(dk, x-14, padT+h+18);
-    }
+function renderTrends(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
 
-    // stats box
-    const statsEl = document.getElementById("trendStats");
-    if(presentVals.length){
-      statsEl.innerHTML =
-        `<b>Data points:</b> ${presentVals.length}/${values.length} days` +
-        `<br><b>Average:</b> ${avg.toFixed(1)}` +
-        `<br><b>Min / Max:</b> ${min.toFixed(1)} / ${max.toFixed(1)}`;
+  // glucose 14d
+  const gSeries = getSeriesForDays(p.logs.glucose, x => ({ v: Number(x.value) }), 14);
+  drawLineChart(document.getElementById("cGlucose"), gSeries, {
+    title:"Glucose (mg/dL)", lines:[{key:"v", label:"Glucose"}]
+  });
+  document.getElementById("cGlucoseHint").textContent = gSeries.length ? `Plotted ${gSeries.length} points` : "—";
+
+  // BP 30d
+  const bpSeries = getSeriesForDays(p.logs.bp, x => ({ sys:Number(x.sys), dia:Number(x.dia) }), 30);
+  drawLineChart(document.getElementById("cBP"), bpSeries, {
+    title:"Blood Pressure (mmHg)",
+    lines:[{key:"sys", label:"Systolic"},{key:"dia", label:"Diastolic"}]
+  });
+  document.getElementById("cBPHint").textContent = bpSeries.length ? `Plotted ${bpSeries.length} points` : "—";
+
+  // Sleep 14d (score if present else hours)
+  const sleepSeries = getSeriesForDays(p.logs.sleep, x => {
+    const sc = Number(x.score || 0) || null;
+    const tm = Number(x.totalMinutes || 0) || null;
+    const hours = (tm != null && tm>0) ? (tm/60) : null;
+    return { score: sc, hours: hours };
+  }, 14);
+  // choose what to plot: score if many exist else hours
+  const scoreCount = sleepSeries.filter(s=> isFinite(Number(s.score)) && Number(s.score)>0).length;
+  const useScore = scoreCount >= Math.max(2, Math.floor(sleepSeries.length/2));
+  drawLineChart(document.getElementById("cSleep"), sleepSeries, {
+    title: useScore ? "Sleep Score" : "Sleep Hours",
+    lines:[{key: useScore ? "score" : "hours", label: useScore ? "Score" : "Hours"}]
+  });
+  document.getElementById("cSleepHint").textContent = sleepSeries.length ? `Plotted ${sleepSeries.length} points` : "—";
+
+  // SpO2 14d
+  const oSeries = getSeriesForDays(p.logs.spo2, x => ({ low:Number(x.low) }), 14);
+  drawLineChart(document.getElementById("cSpO2"), oSeries, {
+    title:"Overnight SpO₂ low (%)", lines:[{key:"low", label:"Low SpO₂"}], yMin: 70, yMax: 100
+  });
+  document.getElementById("cSpO2Hint").textContent = oSeries.length ? `Plotted ${oSeries.length} points` : "—";
+
+  // A1c trend: compute daily from last 14 days (rolling 14d as of each day)
+  const daysBack = 14;
+  const daily = [];
+  for (let i=daysBack-1; i>=0; i--){
+    const dt = new Date();
+    dt.setDate(dt.getDate() - i);
+    const end = dt.getTime() + 24*3600*1000 - 1;
+    const start = end - (14 * 24 * 3600 * 1000);
+    const vals = (p.logs.glucose||[])
+      .filter(x=>{
+        const t = new Date(x.ts).getTime();
+        return t >= start && t <= end;
+      })
+      .map(x=>Number(x.value))
+      .filter(v=>isFinite(v) && v > 20 && v < 600);
+    if (vals.length){
+      const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+      const a1c = (avg + 46.7) / 28.7;
+      daily.push({ t: new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime(), a1c:Number(a1c.toFixed(2)) });
     } else {
-      statsEl.innerHTML = `<b>No data for this window.</b><br>Log readings in “Add Readings”.`;
+      daily.push({ t: new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime(), a1c: NaN });
     }
   }
+  drawLineChart(document.getElementById("cA1c"), daily, {
+    title:"Moving HbA1c (%) (rolling ~14 days)",
+    lines:[{key:"a1c", label:"HbA1c est"}]
+  });
+  const have = daily.filter(d=>isFinite(d.a1c)).length;
+  document.getElementById("cA1cHint").textContent = have ? `Computed for ${have} of ${daysBack} days` : "Needs glucose readings to compute.";
+}
 
-  function metricTitle(m){
-    const map = {
-      glucose:"Glucose (mg/dL)",
-      bp_sys:"BP Systolic",
-      bp_dia:"BP Diastolic",
-      sleep_score:"Sleep score",
-      sleep_minutes:"Sleep minutes",
-      spo2_low:"SpO₂ lowest (%)"
-    };
-    return map[m] || m;
-  }
+/* ------------------------------
+   PROFILE UI
+------------------------------ */
+function loadProfileToUI(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+  document.getElementById("pName").value = p.profile?.name || "";
+  document.getElementById("pSex").value = p.profile?.sex || "";
+  document.getElementById("pDob").value = p.profile?.dob || "";
+  document.getElementById("pHeightCm").value = (p.profile?.heightCm ?? "") === null ? "" : (p.profile?.heightCm ?? "");
+  document.getElementById("pWeightKg").value = (p.profile?.weightKg ?? "") === null ? "" : (p.profile?.weightKg ?? "");
+  document.getElementById("pConditions").value = p.profile?.conditions || "";
+  document.getElementById("pNotes").value = p.profile?.notes || "";
 
-  function roundRect(ctx, x,y,w,h,r){
-    const rr = Math.min(r, w/2, h/2);
-    ctx.beginPath();
-    ctx.moveTo(x+rr,y);
-    ctx.arcTo(x+w,y,x+w,y+h,rr);
-    ctx.arcTo(x+w,y+h,x,y+h,rr);
-    ctx.arcTo(x,y+h,x,y,rr);
-    ctx.arcTo(x,y,x+w,y,rr);
-    ctx.closePath();
-  }
+  const age = computeAge(p.profile?.dob || "");
+  document.getElementById("pAge").value = age || "";
+  document.getElementById("pBMI").value = computeBMI(p.profile?.heightCm, p.profile?.weightKg) || "";
 
-  /* ===========================
-     Add Readings
-  ============================ */
-  function parseDateTimeLocal(val){
-    if(!val) return nowISO();
-    const d = new Date(val);
-    if(String(d) === "Invalid Date") return nowISO();
-    return d.toISOString();
-  }
+  document.getElementById("profileSavedBadge").textContent = "Loaded";
+}
 
-  function saveGlucose(){
-    const pid = getActive();
-    const v = Number(document.getElementById("inGlucose").value);
-    const trend = document.getElementById("inGlucoseTrend").value || "";
-    if(!v || Number.isNaN(v)){
-      msg("glucoseSavedMsg","Please enter a valid glucose value.", true);
-      return;
-    }
-    const ts = parseDateTimeLocal(document.getElementById("inGlucoseTs").value);
-    const arr = loadArr(K.glucose(pid));
-    arr.push({ts, value:v, trend});
-    saveArr(K.glucose(pid), arr);
-    msg("glucoseSavedMsg",`Saved glucose ${v} mg/dL.`, false);
-    document.getElementById("inGlucose").value = "";
-    document.getElementById("inGlucoseTs").value = "";
-    refreshAll();
-  }
+function saveProfile(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
 
-  function saveBP(){
-    const pid = getActive();
-    const sys = Number(document.getElementById("inSys").value);
-    const dia = Number(document.getElementById("inDia").value);
-    const pulse = Number(document.getElementById("inPulse").value);
-    if(!sys || !dia || Number.isNaN(sys) || Number.isNaN(dia)){
-      msg("bpSavedMsg","Enter valid systolic and diastolic values.", true);
-      return;
-    }
-    const ts = parseDateTimeLocal(document.getElementById("inBPTs").value);
-    const arr = loadArr(K.bp(pid));
-    arr.push({ts, sys, dia, pulse: Number.isNaN(pulse)? null : pulse});
-    saveArr(K.bp(pid), arr);
-    msg("bpSavedMsg",`Saved BP ${sys}/${dia}.`, false);
-    document.getElementById("inSys").value = "";
-    document.getElementById("inDia").value = "";
-    document.getElementById("inPulse").value = "";
-    document.getElementById("inBPTs").value = "";
-    refreshAll();
-  }
+  p.profile.name = document.getElementById("pName").value.trim();
+  p.profile.sex = document.getElementById("pSex").value;
+  p.profile.dob = document.getElementById("pDob").value;
+  const h = Number(document.getElementById("pHeightCm").value || 0);
+  const w = Number(document.getElementById("pWeightKg").value || 0);
+  p.profile.heightCm = h ? h : null;
+  p.profile.weightKg = w ? w : null;
+  p.profile.conditions = document.getElementById("pConditions").value.trim();
+  p.profile.notes = document.getElementById("pNotes").value.trim();
 
-  function saveSleep(){
-    const pid = getActive();
-    const score = Number(document.getElementById("inSleepScore").value);
-    const minutes = Number(document.getElementById("inSleepMin").value);
-    const snoreMinutes = Number(document.getElementById("inSnoreMin").value);
-    const dateKey = document.getElementById("inSleepDate").value || dayKey();
+  upsertPerson(store, p);
+  saveStore(store);
 
-    if((!score && score!==0) && (!minutes && minutes!==0)){
-      msg("sleepSavedMsg","Enter sleep score or total minutes (or both).", true);
-      return;
-    }
-    const arr = loadArr(K.sleep(pid));
-    arr.push({
-      dateKey,
-      score: Number.isNaN(score)? null : score,
-      minutes: Number.isNaN(minutes)? null : minutes,
-      snoreMinutes: Number.isNaN(snoreMinutes)? null : snoreMinutes
-    });
-    saveArr(K.sleep(pid), arr);
-    msg("sleepSavedMsg",`Saved sleep for ${dateKey}.`, false);
-    document.getElementById("inSleepScore").value="";
-    document.getElementById("inSleepMin").value="";
-    document.getElementById("inSnoreMin").value="";
-    document.getElementById("inSleepDate").value="";
-    refreshAll();
-  }
+  // refresh computed
+  document.getElementById("pAge").value = computeAge(p.profile.dob) || "";
+  document.getElementById("pBMI").value = computeBMI(p.profile.heightCm, p.profile.weightKg) || "";
 
-  function saveSpO2(){
-    const pid = getActive();
-    const low = Number(document.getElementById("inSpO2Low").value);
-    const dateKey = document.getElementById("inSpO2Date").value || dayKey();
-    if(!low || Number.isNaN(low)){
-      msg("spo2SavedMsg","Enter a valid SpO₂ lowest value.", true);
-      return;
-    }
-    const arr = loadArr(K.spo2(pid));
-    arr.push({dateKey, low});
-    saveArr(K.spo2(pid), arr);
-    msg("spo2SavedMsg",`Saved SpO₂ low ${low}% for ${dateKey}.`, false);
-    document.getElementById("inSpO2Low").value="";
-    document.getElementById("inSpO2Date").value="";
-    refreshAll();
-  }
+  fillPersonSelect();
+  document.getElementById("profileSavedBadge").textContent = "Saved ✔";
+  refreshSnapshot();
+}
 
-  function saveLabs(){
-    const pid = getActive();
-    const creat = document.getElementById("inCreat").value.trim();
-    const egfr = Number(document.getElementById("inEgfr").value);
-    const urea = document.getElementById("inUrea").value.trim();
-    const hb = Number(document.getElementById("inHb").value);
-    const mcv = Number(document.getElementById("inMcv").value);
-    const fit = document.getElementById("inFit").value || "";
-    const dateKey = document.getElementById("inLabDate").value || dayKey();
+/* ------------------------------
+   SYMPTOM CHECKER (Expanded)
+   - Expanded body parts/systems
+   - Broader symptom library, including neuro/stroke relapse
+------------------------------ */
+const MAX_SYM = 10;
 
-    const labs = {
-      dateKey,
-      creat: creat || null,
-      egfr: Number.isNaN(egfr) ? null : egfr,
-      urea: urea || null,
-      hb: Number.isNaN(hb) ? null : hb,
-      mcv: Number.isNaN(mcv) ? null : mcv,
-      fit: fit || null
-    };
-    saveObj(K.labs(pid), labs);
-    msg("labsSavedMsg",`Saved labs for ${dateKey}.`, false);
+const BODY_AREAS = [
+  "General / Whole body",
+  "Head / Brain",
+  "Eyes / Vision",
+  "Ears / Hearing",
+  "Nose / Sinuses",
+  "Mouth / Teeth",
+  "Throat",
+  "Neck",
+  "Chest / Lungs",
+  "Heart / Circulation",
+  "Upper back",
+  "Lower back",
+  "Shoulder",
+  "Arm / Elbow",
+  "Hand / Fingers",
+  "Abdomen (upper)",
+  "Abdomen (lower)",
+  "Pelvis / Genital / Urinary",
+  "Bowel / Rectal",
+  "Hip",
+  "Leg / Knee",
+  "Foot / Toes",
+  "Skin",
+  "Mental / Mood",
+  "Neurology (weakness/numbness/speech)",
+  "Diabetes (glucose symptoms)"
+];
 
-    document.getElementById("inCreat").value="";
-    document.getElementById("inEgfr").value="";
-    document.getElementById("inUrea").value="";
-    document.getElementById("inHb").value="";
-    document.getElementById("inMcv").value="";
-    document.getElementById("inFit").value="";
-    document.getElementById("inLabDate").value="";
-    refreshAll();
-  }
+const SYMPTOMS = {
+  "General / Whole body": [
+    "Fever", "Chills", "Fatigue", "Unexplained weight loss", "Night sweats", "Body aches"
+  ],
+  "Head / Brain": [
+    "Severe headache", "New headache", "Dizziness / vertigo", "Fainting", "Seizure", "Confusion"
+  ],
+  "Eyes / Vision": [
+    "Blurred vision", "Sudden vision loss", "Double vision", "Eye pain", "Red eye"
+  ],
+  "Ears / Hearing": [
+    "Ear pain", "Ringing (tinnitus)", "Hearing loss", "Ear discharge"
+  ],
+  "Nose / Sinuses": [
+    "Blocked nose", "Runny nose", "Facial pressure", "Nosebleed"
+  ],
+  "Mouth / Teeth": [
+    "Toothache", "Mouth ulcers", "Swollen gums", "Bad breath"
+  ],
+  "Throat": [
+    "Sore throat", "Difficulty swallowing", "Hoarse voice"
+  ],
+  "Neck": [
+    "Neck pain", "Stiff neck", "Swollen glands"
+  ],
+  "Chest / Lungs": [
+    "Shortness of breath", "Wheezing", "Cough", "Cough with blood", "Chest tightness"
+  ],
+  "Heart / Circulation": [
+    "Chest pain (pressure/squeezing)", "Palpitations", "Leg swelling", "Severe breathlessness at rest", "Dizziness with chest symptoms"
+  ],
+  "Upper back": [
+    "Upper back pain", "Burning between shoulder blades"
+  ],
+  "Lower back": [
+    "Lower back pain", "Back stiffness", "Sciatica-like pain"
+  ],
+  "Shoulder": [
+    "Shoulder pain", "Reduced range of motion"
+  ],
+  "Arm / Elbow": [
+    "Arm pain", "Arm weakness", "Elbow pain"
+  ],
+  "Hand / Fingers": [
+    "Hand numbness/tingling", "Weak grip", "Finger joint pain", "Hand swelling"
+  ],
+  "Abdomen (upper)": [
+    "Upper abdominal pain", "Heartburn", "Nausea", "Vomiting", "Vomiting blood"
+  ],
+  "Abdomen (lower)": [
+    "Lower abdominal pain", "Cramping", "Bloating", "Constipation", "Diarrhea"
+  ],
+  "Pelvis / Genital / Urinary": [
+    "Painful urination", "Frequent urination", "Blood in urine", "Pelvic pain", "Genital discharge"
+  ],
+  "Bowel / Rectal": [
+    "Black/tarry stool", "Red blood in stool", "Persistent diarrhea", "Persistent constipation", "Severe abdominal pain with vomiting"
+  ],
+  "Hip": [
+    "Hip pain", "Hip stiffness"
+  ],
+  "Leg / Knee": [
+    "Knee pain", "Leg swelling (one side)", "Calf pain", "Leg weakness"
+  ],
+  "Foot / Toes": [
+    "Foot pain", "Burning feet", "Numb toes", "Foot ulcer / wound not healing"
+  ],
+  "Skin": [
+    "Rash", "Itching", "Skin infection", "New mole / changing lesion", "Wound not healing"
+  ],
+  "Mental / Mood": [
+    "Anxiety/panic", "Low mood", "Insomnia", "Agitation", "Confusion/behavior change"
+  ],
+  "Neurology (weakness/numbness/speech)": [
+    "Face droop", "One-sided weakness", "One-sided numbness", "New difficulty speaking", "New difficulty understanding speech",
+    "Loss of balance/coordination", "Sudden severe dizziness with weakness", "New severe confusion"
+  ],
+  "Diabetes (glucose symptoms)": [
+    "Excessive thirst", "Frequent urination", "Shaking/sweats (possible low sugar)", "Blurred vision with glucose swings", "Extreme fatigue"
+  ]
+};
 
-  function msg(id, text, isError){
-    const el = document.getElementById(id);
-    el.textContent = text;
-    el.style.color = isError ? "#c62828" : "#1b8f5a";
-    setTimeout(()=>{ el.textContent=""; }, 4500);
-  }
+function symptomRowTemplate(){
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  wrap.style.marginTop = "10px";
 
-  /* ===========================
-     Medical report extraction
-     Offline: parse pasted text with regex
-     Backend-ready: if file provided + backend set, POST /api/ocr to get text
-  ============================ */
-  let lastExtracted = null;
+  const bodyOpts = ['<option value="">Body area…</option>']
+    .concat(BODY_AREAS.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`))
+    .join("");
 
-  function normalizeSpaces(t){ return (t||"").replace(/\s+/g," ").trim(); }
-
-  function extractFromText(text){
-    const t = normalizeSpaces(text);
-    const out = {};
-
-    // HbA1c
-    const a1 = t.match(/hba1c[^0-9]{0,10}([0-9]{1,2}\.?[0-9]{0,2})\s*%/i);
-    if(a1) out.hba1c = Number(a1[1]);
-
-    // Creatinine
-    const cr = t.match(/creatinine[^0-9]{0,15}([0-9]{1,4}\.?[0-9]{0,2})\s*(µmol\/l|umol\/l|mg\/dl)?/i);
-    if(cr) out.creatinine = cr[1] + (cr[2] ? ` ${cr[2]}` : "");
-
-    // eGFR
-    const eg = t.match(/eGFR[^0-9]{0,15}([0-9]{1,3})/i);
-    if(eg) out.egfr = Number(eg[1]);
-
-    // Urea
-    const ur = t.match(/urea[^0-9]{0,15}([0-9]{1,3}\.?[0-9]{0,2})/i);
-    if(ur) out.urea = ur[1];
-
-    // Hb / Hemoglobin
-    const hb = t.match(/(hemoglobin|haemoglobin|hb)[^0-9]{0,15}([0-9]{1,2}\.?[0-9]{0,2})\s*g\/dl/i);
-    if(hb) out.hb = Number(hb[2]);
-
-    // MCV
-    const mcv = t.match(/mcv[^0-9]{0,15}([0-9]{1,3}\.?[0-9]{0,2})/i);
-    if(mcv) out.mcv = Number(mcv[1]);
-
-    // PSA
-    const psa = t.match(/psa[^0-9]{0,15}([0-9]{1,2}\.?[0-9]{0,2})/i);
-    if(psa) out.psa = Number(psa[1]);
-
-    // FIT / FOBT
-    if(/(fecal|faecal).{0,15}(occult|fit|fobt).{0,25}positive/i.test(t)) out.fit = "Positive";
-    if(/(fecal|faecal).{0,15}(occult|fit|fobt).{0,25}negative/i.test(t)) out.fit = "Negative";
-
-    return out;
-  }
-
-  function showExtractedPreview(obj){
-    const box = document.getElementById("extractedPreview");
-    if(!obj || !Object.keys(obj).length){
-      box.textContent = "No extracted values found. Paste more of the report text.";
-      return;
-    }
-    const lines = Object.keys(obj).map(k => `${k}: ${obj[k]}`);
-    box.textContent = lines.join("\n");
-  }
-
-  async function extractReport(){
-    const backend = getBackend();
-    const file = document.getElementById("inReportFile").files?.[0] || null;
-    const text = document.getElementById("inReportText").value || "";
-
-    let extracted = null;
-
-    // if text provided, offline parse
-    if(text.trim().length){
-      extracted = extractFromText(text);
-    }
-
-    // if file exists and backend exists, try OCR
-    if(file && backend){
-      try{
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch(backend.replace(/\/$/,"") + "/api/ocr", { method:"POST", body: form });
-        if(res.ok){
-          const data = await res.json();
-          const ocrText = data?.text || "";
-          const ocrExtract = extractFromText(ocrText);
-          extracted = Object.assign({}, extracted || {}, ocrExtract);
-        }
-      } catch(e){
-        // silent; show message below
-      }
-    }
-
-    lastExtracted = extracted || {};
-    showExtractedPreview(lastExtracted);
-
-    const msgEl = document.getElementById("reportExtractMsg");
-    msgEl.style.display = "block";
-    msgEl.className = "alert " + (Object.keys(lastExtracted).length ? "ok" : "warn");
-    msgEl.textContent = Object.keys(lastExtracted).length
-      ? "Extracted values ready. Click Save Report Record to store and update Snapshot/Labs where relevant."
-      : "No values extracted. Paste more report text for offline extraction, or enable backend OCR later.";
-  }
-
-  function saveReportRecord(){
-    const pid = getActive();
-    const file = document.getElementById("inReportFile").files?.[0] || null;
-    const text = document.getElementById("inReportText").value || "";
-    const arr = loadArr(K.attach(pid));
-
-    const record = {
-      ts: nowISO(),
-      fileName: file ? file.name : null,
-      pasted: text ? true : false,
-      extracted: lastExtracted || {}
-    };
-    arr.push(record);
-    saveArr(K.attach(pid), arr);
-
-    // If extracted includes key labs, update labs object
-    if(record.extracted){
-      const curLabs = loadObj(K.labs(pid)) || { dateKey: dayKey() };
-      const ex = record.extracted;
-
-      if(ex.creatinine) curLabs.creat = ex.creatinine;
-      if(ex.egfr!=null) curLabs.egfr = ex.egfr;
-      if(ex.urea) curLabs.urea = ex.urea;
-      if(ex.hb!=null) curLabs.hb = ex.hb;
-      if(ex.mcv!=null) curLabs.mcv = ex.mcv;
-      if(ex.fit) curLabs.fit = ex.fit;
-      saveObj(K.labs(pid), curLabs);
-    }
-
-    document.getElementById("inReportText").value = "";
-    document.getElementById("inReportFile").value = "";
-    lastExtracted = null;
-    showExtractedPreview(null);
-
-    const msgEl = document.getElementById("reportExtractMsg");
-    msgEl.style.display = "block";
-    msgEl.className = "alert ok";
-    msgEl.textContent = "Report record saved. Snapshot/Labs updated where applicable.";
-    setTimeout(()=>{ msgEl.style.display="none"; }, 4500);
-
-    refreshAll();
-  }
-
-  /* ===========================
-     Symptom Engine (Expanded)
-  ============================ */
-  const MAX_SYMPTOMS = 10;
-
-  // Expanded body parts incl. neuro/stroke/relapse coverage
-  const BODY_AREAS = [
-    "General / Whole body",
-    "Head / Scalp",
-    "Eyes / Vision",
-    "Ears / Hearing",
-    "Nose / Sinuses",
-    "Mouth / Teeth",
-    "Throat / Swallowing",
-    "Neck",
-    "Chest",
-    "Heart / Palpitations",
-    "Breathing / Lungs",
-    "Upper back",
-    "Lower back",
-    "Abdomen (upper)",
-    "Abdomen (lower)",
-    "Pelvis / Groin",
-    "Urinary / Genitals",
-    "Left arm",
-    "Right arm",
-    "Left hand / fingers",
-    "Right hand / fingers",
-    "Left leg",
-    "Right leg",
-    "Left foot / toes",
-    "Right foot / toes",
-    "Skin / Wounds",
-    "Neurology (Brain/Nerves)",
-    "Mental / Cognitive",
-    "Mobility / Balance",
-    "Speech / Language"
-  ];
-
-  // symptom library per area (broad, stroke-focused additions)
-  const SYMPTOMS = {
-    "General / Whole body": [
-      "Fever", "Chills", "Fatigue", "General weakness", "Body aches",
-      "Unexplained weight loss", "Night sweats", "Loss of appetite"
-    ],
-    "Head / Scalp": [
-      "Headache", "Severe sudden headache", "Throbbing headache",
-      "Head pressure", "Dizziness", "Lightheadedness", "Fainting"
-    ],
-    "Eyes / Vision": [
-      "Blurred vision", "Double vision", "Sudden vision loss", "Eye pain",
-      "Flashing lights", "Red eye"
-    ],
-    "Ears / Hearing": [
-      "Ear pain", "Hearing loss", "Ringing in ears (tinnitus)", "Vertigo"
-    ],
-    "Nose / Sinuses": [
-      "Blocked nose", "Runny nose", "Facial pressure", "Nosebleed"
-    ],
-    "Mouth / Teeth": [
-      "Toothache", "Mouth ulcers", "Jaw pain"
-    ],
-    "Throat / Swallowing": [
-      "Sore throat", "Difficulty swallowing", "Choking episodes", "Hoarse voice"
-    ],
-    "Neck": [
-      "Neck pain", "Stiff neck", "Swollen glands"
-    ],
-    "Chest": [
-      "Chest discomfort", "Heavy/squeezing chest pain", "Chest tightness",
-      "Chest pain with exertion", "Chest pain at rest"
-    ],
-    "Heart / Palpitations": [
-      "Palpitations", "Irregular heartbeat", "Fast heartbeat", "Slow heartbeat",
-      "Dizziness with palpitations"
-    ],
-    "Breathing / Lungs": [
-      "Shortness of breath", "Shortness of breath at rest", "Wheezing",
-      "Cough", "Cough with blood", "Severe breathlessness"
-    ],
-    "Upper back": [
-      "Upper back pain", "Burning between shoulder blades"
-    ],
-    "Lower back": [
-      "Lower back pain", "Back spasm/locking", "Pain after standing up",
-      "Radiating pain (sciatica-like)"
-    ],
-    "Abdomen (upper)": [
-      "Upper abdominal pain", "Heartburn", "Nausea", "Vomiting", "Vomiting blood",
-      "Bloating"
-    ],
-    "Abdomen (lower)": [
-      "Lower abdominal pain", "Cramping", "Diarrhoea", "Constipation",
-      "Blood in stool", "Black/tarry stool"
-    ],
-    "Pelvis / Groin": [
-      "Pelvic pain", "Groin pain", "Swelling"
-    ],
-    "Urinary / Genitals": [
-      "Burning urination", "Frequent urination", "Blood in urine", "Reduced urine output",
-      "Foamy urine"
-    ],
-    "Left arm": [
-      "Left arm pain", "Left arm weakness", "Left arm numbness/tingling"
-    ],
-    "Right arm": [
-      "Right arm pain", "Right arm weakness", "Right arm numbness/tingling"
-    ],
-    "Left hand / fingers": [
-      "Weak grip (left)", "Finger numbness (left)", "Tremor (left)"
-    ],
-    "Right hand / fingers": [
-      "Weak grip (right)", "Finger numbness (right)", "Tremor (right)"
-    ],
-    "Left leg": [
-      "Left leg weakness", "Left leg numbness", "Swelling (left leg)", "Calf pain (left)"
-    ],
-    "Right leg": [
-      "Right leg weakness", "Right leg numbness", "Swelling (right leg)", "Calf pain (right)"
-    ],
-    "Left foot / toes": [
-      "Foot pain (left)", "Burning feet (left)", "Numb toes (left)", "Wound not healing (left)"
-    ],
-    "Right foot / toes": [
-      "Foot pain (right)", "Burning feet (right)", "Numb toes (right)", "Wound not healing (right)"
-    ],
-    "Skin / Wounds": [
-      "Rash", "Itching", "Skin color change", "Swelling", "Wound not healing", "New bruising"
-    ],
-    "Neurology (Brain/Nerves)": [
-      "One-sided weakness", "Facial droop", "Speech difficulty",
-      "New confusion", "Seizure", "Severe dizziness/vertigo", "Loss of balance",
-      "Numbness/tingling", "Sudden severe headache", "New severe tremor"
-    ],
-    "Mental / Cognitive": [
-      "Confusion", "Memory problems", "Agitation", "Hallucinations", "Low mood"
-    ],
-    "Mobility / Balance": [
-      "Falls", "Unsteady gait", "Difficulty walking", "Coordination problems", "Sudden collapse"
-    ],
-    "Speech / Language": [
-      "Slurred speech", "Cannot find words", "Cannot understand speech", "Difficulty swallowing"
-    ]
-  };
-
-  function symptomRowTemplate(){
-    const id = "sym_" + Date.now() + "_" + Math.floor(Math.random()*10000);
-    const bodyId = id + "_body";
-    const symId = id + "_sym";
-    const sevId = id + "_sev";
-    const durId = id + "_dur";
-    const extraId = id + "_extra";
-
-    const bodyOptions = ['<option value="">Select body area…</option>']
-      .concat(BODY_AREAS.map(a=>`<option>${escapeHtml(a)}</option>`))
-      .join("");
-
-    return `
-      <div class="card symptom-row" data-symrow="1" style="margin-top:10px;">
-        <div class="grid2">
-          <div>
-            <label>Body area</label>
-            <select id="${bodyId}" data-role="body">${bodyOptions}</select>
-          </div>
-          <div>
-            <label>Symptom</label>
-            <select id="${symId}" data-role="sym">
-              <option value="">Select symptom…</option>
-            </select>
-          </div>
-        </div>
-
-        <label>Extra description (optional)</label>
-        <input type="text" id="${extraId}" data-role="extra" placeholder="e.g., started suddenly, worse at night, after a fall, after stroke." />
-
-        <div class="grid2">
-          <div>
-            <label>Severity (1–10)</label>
-            <input type="range" id="${sevId}" data-role="sev" min="1" max="10" value="3" />
-            <div class="small" data-role="sevlabel">3 (mild)</div>
-          </div>
-          <div>
-            <label>Duration</label>
-            <select id="${durId}" data-role="dur">
-              <option value="">Select…</option>
-              <option>&lt; 24 hours</option>
-              <option>1–3 days</option>
-              <option>4–7 days</option>
-              <option>1–2 weeks</option>
-              <option>&gt; 2 weeks</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row">
-          <button class="btn danger" data-role="remove">Remove</button>
-        </div>
+  wrap.innerHTML = `
+    <div class="row">
+      <div class="col-33">
+        <label class="small">Body area</label>
+        <select class="select symBody">${bodyOpts}</select>
       </div>
-    `;
-  }
-
-  function initSymptomsUI(){
-    const list = document.getElementById("symptomList");
-    document.getElementById("btnAddSymptom").addEventListener("click", ()=>{
-      const count = list.querySelectorAll("[data-symrow]").length;
-      if(count >= MAX_SYMPTOMS){
-        alert("Maximum of 10 symptoms reached.");
-        return;
-      }
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = symptomRowTemplate();
-      const row = wrapper.firstElementChild;
-      list.appendChild(row);
-      wireSymptomRow(row);
-    });
-
-    document.getElementById("btnClearSymptoms").addEventListener("click", ()=>{
-      list.innerHTML = "";
-      document.getElementById("symOtherNotes").value = "";
-      document.getElementById("triageResult").innerHTML = "";
-    });
-
-    document.getElementById("btnRunTriage").addEventListener("click", runTriage);
-  }
-
-  function wireSymptomRow(row){
-    const bodySel = row.querySelector('[data-role="body"]');
-    const symSel = row.querySelector('[data-role="sym"]');
-    const sev = row.querySelector('[data-role="sev"]');
-    const sevLabel = row.querySelector('[data-role="sevlabel"]');
-
-    bodySel.addEventListener("change", ()=>{
-      const area = bodySel.value;
-      const options = (SYMPTOMS[area] || []).map(s=>`<option>${escapeHtml(s)}</option>`).join("");
-      symSel.innerHTML = `<option value="">Select symptom…</option>` + options;
-    });
-
-    sev.addEventListener("input", ()=>{
-      const v = Number(sev.value);
-      let tag = "mild";
-      if(v>=4 && v<=6) tag="moderate";
-      if(v>=7) tag="severe";
-      sevLabel.textContent = `${v} (${tag})`;
-    });
-
-    row.querySelector('[data-role="remove"]').addEventListener("click", ()=>{
-      row.remove();
-    });
-  }
-
-  function durationScore(d){
-    if(!d) return 0;
-    if(d.includes("< 24")) return 1;
-    if(d.includes("1–3")) return 2;
-    if(d.includes("4–7")) return 3;
-    if(d.includes("1–2 weeks")) return 4;
-    if(d.includes("> 2 weeks")) return 5;
-    return 0;
-  }
-
-  function profileRiskMultiplier(profile){
-    const age = Number(profile?.age || computeAge(profile?.dob) || 0);
-    const conds = (profile?.conditions || []).map(x => String(x||"").toLowerCase());
-    let mult = 1.0;
-    if(age >= 65) mult += 0.15;
-    if(conds.some(c=>c.includes("stroke") || c.includes("tia"))) mult += 0.2;
-    if(conds.some(c=>c.includes("heart") || c.includes("coronary") || c.includes("failure") || c.includes("atrial"))) mult += 0.2;
-    if(conds.some(c=>c.includes("kidney") || c.includes("ckd"))) mult += 0.15;
-    if(conds.some(c=>c.includes("diabetes"))) mult += 0.1;
-    return mult;
-  }
-
-  function runTriage(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-    const rows = Array.from(document.querySelectorAll("#symptomList [data-symrow]"));
-    const notes = document.getElementById("symOtherNotes").value.trim();
-
-    if(!rows.length){
-      alert("Please add at least one symptom.");
-      return;
-    }
-
-    let maxSev = 0;
-    let maxDur = 0;
-    let chestFlag = false;
-    let strokeFlag = false;
-    let bleedFlag = false;
-    let breathFlag = false;
-    let sepsisFlag = false;
-
-    const items = [];
-
-    rows.forEach(r=>{
-      const area = r.querySelector('[data-role="body"]').value || "";
-      const sym = r.querySelector('[data-role="sym"]').value || "";
-      const extra = (r.querySelector('[data-role="extra"]').value || "").trim();
-      const sev = Number(r.querySelector('[data-role="sev"]').value || 0);
-      const dur = r.querySelector('[data-role="dur"]').value || "";
-
-      const line = `${area}: ${sym || "unspecified"}${extra?` (${extra})`:""} • severity ${sev}/10 • duration ${dur||"n/a"}`;
-      items.push(line);
-
-      if(sev > maxSev) maxSev = sev;
-      const ds = durationScore(dur);
-      if(ds > maxDur) maxDur = ds;
-
-      const lc = (area + " " + sym + " " + extra).toLowerCase();
-
-      // red flags
-      if(lc.includes("heavy/squeezing chest") || lc.includes("chest pain at rest") || lc.includes("chest tightness")){
-        chestFlag = true;
-      }
-      if(lc.includes("one-sided weakness") || lc.includes("facial droop") || lc.includes("speech difficulty") || lc.includes("slurred speech") || lc.includes("new confusion")){
-        strokeFlag = true;
-      }
-      if(lc.includes("black/tarry stool") || lc.includes("vomiting blood") || lc.includes("blood in stool") || lc.includes("cough with blood") || lc.includes("blood in urine")){
-        bleedFlag = true;
-      }
-      if(lc.includes("shortness of breath at rest") || lc.includes("severe breathlessness")){
-        breathFlag = true;
-      }
-      if(lc.includes("fever") && (lc.includes("confusion") || lc.includes("general weakness") || lc.includes("severe breathlessness"))){
-        sepsisFlag = true;
-      }
-    });
-
-    if(notes) items.push("Notes: " + notes);
-
-    // scoring
-    let score = maxSev + maxDur;
-    score = score * profileRiskMultiplier({ ...prof, age: prof.age || computeAge(prof.dob) });
-
-    // decision
-    let severity = "Self-care";
-    let action = "Self-care: hydrate, rest, monitor. Seek routine care if not improving.";
-    let level = "ok";
-
-    if(score >= 10 || maxDur >= 4){
-      severity = "See doctor soon";
-      action = "Book a doctor review within the next few days (earlier if worsening).";
-      level = "warn";
-    }
-    if(score >= 14 || (chestFlag && maxSev >= 7) || strokeFlag || bleedFlag || breathFlag || sepsisFlag){
-      severity = "Urgent";
-      action = "Seek urgent medical attention now (ER/urgent care).";
-      level = "bad";
-    }
-
-    const box = document.getElementById("triageResult");
-    const cls = (level==="ok")?"ok":(level==="warn")?"warn":"bad";
-    box.innerHTML = `
-      <div class="alert ${cls}">
-        <b>Severity:</b> ${escapeHtml(severity)}<br>
-        <b>Recommended action:</b> ${escapeHtml(action)}<br>
-        <b>Summary:</b><br>
-        <div style="margin-top:6px;white-space:pre-wrap">${escapeHtml(items.join("\n"))}</div>
+      <div class="col-33">
+        <label class="small">Symptom</label>
+        <select class="select symSym"><option value="">Select symptom…</option></select>
       </div>
-    `;
+      <div class="col-33">
+        <label class="small">Duration</label>
+        <select class="select symDur">
+          <option value="">Select…</option>
+          <option value="<24h">&lt; 24 hours</option>
+          <option value="1-3d">1–3 days</option>
+          <option value="4-7d">4–7 days</option>
+          <option value="1-2w">1–2 weeks</option>
+          <option value=">2w">&gt; 2 weeks</option>
+        </select>
+      </div>
+      <div class="col-50">
+        <label class="small">Severity (1–10)</label>
+        <input type="range" class="symSev" min="1" max="10" value="3" />
+        <div class="small symSevLabel">3 (mild)</div>
+      </div>
+      <div class="col-50">
+        <label class="small">Extra details (optional)</label>
+        <input type="text" class="symExtra" placeholder="e.g., started suddenly, worse at night, after fall, etc.">
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost symRemove">Remove</button>
+    </div>
+  `;
 
-    // store triage log
-    const tri = loadArr(K.triage(pid));
-    tri.push({ ts: nowISO(), severity, action, summary: items.join("; ") });
-    saveArr(K.triage(pid), tri);
+  // wire body->symptoms
+  const bodySel = wrap.querySelector(".symBody");
+  const symSel = wrap.querySelector(".symSym");
+  const sev = wrap.querySelector(".symSev");
+  const sevLabel = wrap.querySelector(".symSevLabel");
+  const rm = wrap.querySelector(".symRemove");
 
-    refreshAll();
-  }
+  bodySel.addEventListener("change", ()=>{
+    const area = bodySel.value;
+    const list = SYMPTOMS[area] || [];
+    symSel.innerHTML = '<option value="">Select symptom…</option>' + list.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  });
+  sev.addEventListener("input", ()=>{
+    const v = Number(sev.value);
+    let txt = `${v} (mild)`;
+    if (v >= 4 && v <= 6) txt = `${v} (moderate)`;
+    if (v >= 7) txt = `${v} (severe)`;
+    sevLabel.textContent = txt;
+  });
+  rm.addEventListener("click", ()=>{
+    wrap.remove();
+    updateSymCount();
+  });
 
-  function escapeHtml(s){
-    return String(s||"")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
+  return wrap;
+}
 
-  /* ===========================
-     Reports
-  ============================ */
-  function renderReports(){
-    const pid = getActive();
+function updateSymCount(){
+  const n = document.querySelectorAll("#symList .card").length;
+  document.getElementById("symCount").textContent = `${n} / ${MAX_SYM}`;
+}
 
-    const g = loadArr(K.glucose(pid)).slice(-10).reverse();
-    const b = loadArr(K.bp(pid)).slice(-10).reverse();
-    const s = loadArr(K.sleep(pid)).slice(-10).reverse();
-    const o = loadArr(K.spo2(pid)).slice(-10).reverse();
-    const t = loadArr(K.triage(pid)).slice(-10).reverse();
-    const a = loadArr(K.attach(pid)).slice().reverse();
+function addSymptomRow(){
+  const list = document.getElementById("symList");
+  const n = list.querySelectorAll(".card").length;
+  if (n >= MAX_SYM){ alert("Maximum of 10 symptoms reached."); return; }
+  list.appendChild(symptomRowTemplate());
+  updateSymCount();
+}
 
-    let html = `<table class="table">
-      <thead><tr><th>Type</th><th>Time/Date</th><th>Value</th><th>Notes</th></tr></thead><tbody>`;
+function durationScore(d){
+  if (!d) return 0;
+  if (d === "<24h") return 1;
+  if (d === "1-3d") return 2;
+  if (d === "4-7d") return 3;
+  if (d === "1-2w") return 4;
+  if (d === ">2w") return 5;
+  return 0;
+}
 
-    function addRow(type, time, val, note){
-      html += `<tr><td>${escapeHtml(type)}</td><td>${escapeHtml(time)}</td><td>${escapeHtml(val)}</td><td>${escapeHtml(note||"")}</td></tr>`;
+function runSymptomCheck(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+
+  const rows = Array.from(document.querySelectorAll("#symList .card"));
+  if (!rows.length){ alert("Add at least one symptom."); return; }
+
+  let maxSev = 0;
+  let maxDur = 0;
+  let neuroRedFlag = false;
+  let chestRedFlag = false;
+  let bleedRedFlag = false;
+  let breathAtRest = false;
+
+  const items = [];
+
+  rows.forEach(r=>{
+    const body = r.querySelector(".symBody").value;
+    const sym = r.querySelector(".symSym").value;
+    const dur = r.querySelector(".symDur").value;
+    const sev = Number(r.querySelector(".symSev").value || 0);
+    const extra = (r.querySelector(".symExtra").value || "").trim();
+
+    if (!body && !sym && !extra) return;
+
+    items.push(`${body || "Body"}: ${sym || "unspecified"}${extra ? " ("+extra+")" : ""} • sev ${sev}/10 • dur ${dur || "n/a"}`);
+
+    maxSev = Math.max(maxSev, sev);
+    maxDur = Math.max(maxDur, durationScore(dur));
+
+    const lc = (body + " " + sym + " " + extra).toLowerCase();
+
+    // critical red flags
+    if (body === "Neurology (weakness/numbness/speech)" ||
+        lc.includes("face droop") ||
+        lc.includes("one-sided weakness") ||
+        lc.includes("difficulty speaking") ||
+        lc.includes("difficulty understanding") ||
+        lc.includes("loss of balance") ||
+        lc.includes("new severe confusion")) neuroRedFlag = true;
+
+    if (body === "Heart / Circulation" || body === "Chest / Lungs"){
+      if (lc.includes("pressure") || lc.includes("squeezing") || lc.includes("heavy")) chestRedFlag = true;
+      if (lc.includes("at rest")) breathAtRest = true;
     }
 
-    g.forEach(x=> addRow("Glucose", new Date(x.ts).toLocaleString(), `${x.value} mg/dL`, x.trend||""));
-    b.forEach(x=> addRow("BP", new Date(x.ts).toLocaleString(), `${x.sys}/${x.dia}` + (x.pulse?` (P ${x.pulse})`:""), ""));
-    s.forEach(x=> addRow("Sleep", x.dateKey, x.score!=null?`Score ${x.score}`:`${x.minutes} min`, x.snoreMinutes!=null?`Snore ${x.snoreMinutes} min`:""));
-    o.forEach(x=> addRow("SpO₂", x.dateKey, `${x.low}%`, ""));
-    t.forEach(x=> addRow("Triage", new Date(x.ts).toLocaleString(), x.severity, x.action));
+    if (lc.includes("blood") || lc.includes("black/tarry") || lc.includes("vomiting blood")) bleedRedFlag = true;
+  });
 
-    html += `</tbody></table>`;
-    document.getElementById("reportTableWrap").innerHTML = html;
+  const notes = (document.getElementById("symNotes").value || "").trim();
+  if (notes) items.push("Notes: " + notes);
 
-    if(a.length){
-      let ah = `<table class="table"><thead><tr><th>Time</th><th>File</th><th>Pasted</th><th>Extracted</th></tr></thead><tbody>`;
-      a.forEach(x=>{
-        const ex = x.extracted ? Object.keys(x.extracted).map(k=>`${k}:${x.extracted[k]}`).join(", ") : "";
-        ah += `<tr><td>${escapeHtml(new Date(x.ts).toLocaleString())}</td><td>${escapeHtml(x.fileName||"—")}</td><td>${x.pasted?"Yes":"No"}</td><td>${escapeHtml(ex||"—")}</td></tr>`;
-      });
-      ah += `</tbody></table>`;
-      document.getElementById("attachedReportsWrap").innerHTML = ah;
-    } else {
-      document.getElementById("attachedReportsWrap").textContent = "No attached reports yet.";
-    }
+  // weighting: conditions increase risk multiplier
+  const condText = (p.profile?.conditions || "").toLowerCase();
+  let mult = 1.0;
+  if (condText.includes("stroke") || condText.includes("ckd") || condText.includes("kidney") || condText.includes("heart") || condText.includes("coronary")) mult = 1.5;
+  else if (condText.trim()) mult = 1.2;
+
+  let score = (maxSev + maxDur) * mult;
+
+  let severity = "Self-care";
+  let action = "Self-care and monitor. Seek routine care if not improving.";
+  let color = "ok";
+
+  if (score >= 10 || maxDur >= 4){
+    severity = "See doctor soon";
+    action = "Arrange a clinical review within the next few days, especially if symptoms are new or worsening.";
+    color = "warn";
   }
 
-  function buildReportText(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-
-    const g = loadArr(K.glucose(pid)).slice(-30);
-    const b = loadArr(K.bp(pid)).slice(-30);
-    const s = loadArr(K.sleep(pid)).slice(-30);
-    const o = loadArr(K.spo2(pid)).slice(-30);
-    const labs = loadObj(K.labs(pid));
-    const tri = loadArr(K.triage(pid)).slice(-10);
-
-    const roll = rollingGlucoseMean(pid, 14);
-    const a1c = estA1cFromEAG(roll.mean);
-
-    let txt = "";
-    txt += `HealthChecker+ Report (Offline)\n`;
-    txt += `Person: ${labelForPersonId(pid)}\n`;
-    txt += `Name: ${prof.name||"—"}\n`;
-    txt += `Sex: ${prof.sex||"—"}\n`;
-    txt += `DOB: ${prof.dob||"—"}  Age: ${computeAge(prof.dob)||"—"}\n`;
-    txt += `Conditions: ${(prof.conditions||[]).join(", ") || "—"}\n`;
-    txt += `Notes: ${prof.notes||"—"}\n\n`;
-
-    txt += `Rolling glucose mean (14d): ${roll.mean?roll.mean.toFixed(1):"—"} mg/dL from ${roll.n} readings\n`;
-    txt += `Estimated HbA1c: ${a1c?a1c.toFixed(2):"—"}%\n\n`;
-
-    if(labs){
-      txt += `Labs (latest):\n`;
-      txt += `  Date: ${labs.dateKey||"—"}\n`;
-      txt += `  Creatinine: ${labs.creat||"—"}\n`;
-      txt += `  eGFR: ${labs.egfr||"—"}\n`;
-      txt += `  Urea: ${labs.urea||"—"}\n`;
-      txt += `  Hb: ${labs.hb||"—"}\n`;
-      txt += `  MCV: ${labs.mcv||"—"}\n`;
-      txt += `  FIT: ${labs.fit||"—"}\n\n`;
-    }
-
-    txt += `Recent glucose entries:\n`;
-    g.slice().reverse().forEach(x=>{ txt += `  ${new Date(x.ts).toLocaleString()} - ${x.value} ${x.trend||""}\n`; });
-
-    txt += `\nRecent BP entries:\n`;
-    b.slice().reverse().forEach(x=>{ txt += `  ${new Date(x.ts).toLocaleString()} - ${x.sys}/${x.dia} ${x.pulse?`P${x.pulse}`:""}\n`; });
-
-    txt += `\nRecent sleep entries:\n`;
-    s.slice().reverse().forEach(x=>{ txt += `  ${x.dateKey} - score ${x.score ?? "—"} - minutes ${x.minutes ?? "—"} - snore ${x.snoreMinutes ?? "—"}\n`; });
-
-    txt += `\nRecent SpO₂ entries:\n`;
-    o.slice().reverse().forEach(x=>{ txt += `  ${x.dateKey} - low ${x.low}%\n`; });
-
-    txt += `\nRecent triage results:\n`;
-    tri.slice().reverse().forEach(x=>{ txt += `  ${new Date(x.ts).toLocaleString()} - ${x.severity} - ${x.action}\n`; });
-
-    return txt;
+  // Emergency logic
+  if (neuroRedFlag){
+    severity = "URGENT (possible stroke relapse)";
+    action = "Seek urgent emergency care immediately. Do not delay (stroke symptoms are time-critical).";
+    color = "bad";
+  } else if (chestRedFlag && maxSev >= 6){
+    severity = "URGENT (possible cardiac emergency)";
+    action = "Seek urgent emergency care immediately, especially if chest pressure/tightness with breathlessness or sweating.";
+    color = "bad";
+  } else if (bleedRedFlag){
+    severity = "URGENT (possible bleeding)";
+    action = "Seek urgent care now (blood in stool/vomit or black tarry stool can be serious).";
+    color = "bad";
+  } else if (breathAtRest && maxSev >= 6){
+    severity = "URGENT (breathing at rest)";
+    action = "Breathlessness at rest can be serious. Seek urgent medical assessment immediately.";
+    color = "bad";
   }
 
-  function copyReport(){
-    const txt = buildReportText();
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).then(()=>alert("Report copied to clipboard.")).catch(()=>fallbackCopy(txt));
-    } else fallbackCopy(txt);
+  // render result
+  document.getElementById("symResult").innerHTML = `
+    <div class="card" style="border-left:6px solid ${color==="bad" ? "var(--bad)" : color==="warn" ? "var(--warn)" : "var(--ok)"}">
+      <b>Result:</b> ${escapeHtml(severity)}<br>
+      <b>Recommendation:</b> ${escapeHtml(action)}<br>
+      <b>Summary:</b> ${escapeHtml(items.join(" | "))}
+    </div>
+  `;
+
+  // log check
+  p.logs.checks.push({
+    ts: nowISO(),
+    type: "Symptom Checker",
+    severity,
+    action,
+    details: items.join(" | ")
+  });
+  if (p.logs.checks.length > 2000) p.logs.checks = p.logs.checks.slice(-2000);
+
+  upsertPerson(store, p);
+  saveStore(store);
+
+  renderReports();
+}
+
+function clearSymptoms(){
+  document.getElementById("symList").innerHTML = "";
+  document.getElementById("symNotes").value = "";
+  document.getElementById("symResult").innerHTML = "";
+  updateSymCount();
+}
+
+/* ------------------------------
+   REPORTS
+------------------------------ */
+function renderReports(){
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+  const box = document.getElementById("reportBox");
+  const checks = (p.logs.checks || []).slice().sort((a,b)=> new Date(b.ts)-new Date(a.ts)).slice(0,20);
+
+  const latestG = getLatest(p.logs.glucose);
+  const latestBP = getLatest(p.logs.bp);
+  const latestSleep = getLatest(p.logs.sleep);
+  const latestO = getLatest(p.logs.spo2);
+
+  let header = `HealthChecker+ Report (Local)\n`;
+  header += `Person: ${personDisplayName(p)}\n`;
+  const age = computeAge(p.profile?.dob || "");
+  header += `Sex: ${p.profile?.sex || "—"} | Age: ${age || "—"}\n`;
+  header += `Conditions: ${p.profile?.conditions || "—"}\n\n`;
+
+  header += `Latest Readings:\n`;
+  header += `• Glucose: ${latestG?.value != null ? latestG.value + " mg/dL " + (latestG.trend||"") : "—"}\n`;
+  header += `• BP: ${latestBP?.sys != null ? latestBP.sys + "/" + latestBP.dia + " mmHg" : "—"}\n`;
+  header += `• Sleep: ${latestSleep?.score ? "Score " + latestSleep.score : (latestSleep?.totalMinutes ? (Math.floor(latestSleep.totalMinutes/60)+"h "+(latestSleep.totalMinutes%60)+"m") : "—")}\n`;
+  header += `• SpO₂ low: ${latestO?.low != null ? latestO.low + "%" : "—"}\n\n`;
+
+  header += `Recent Checks (last ${checks.length}):\n`;
+  if (!checks.length) header += "— none —\n";
+  checks.forEach(c=>{
+    header += `${new Date(c.ts).toLocaleString()} | ${c.type} | ${c.severity} | ${c.action}\n`;
+  });
+
+  box.textContent = checks.length || latestG || latestBP || latestSleep || latestO ? header : "No activity yet.";
+}
+
+function copyReport(){
+  const txt = document.getElementById("reportBox").textContent || "";
+  if (!txt.trim()){ alert("Nothing to copy."); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>alert("Report copied.")).catch(()=>fallbackCopy(txt));
+  } else fallbackCopy(txt);
+}
+function fallbackCopy(txt){
+  const ta = document.createElement("textarea");
+  ta.value = txt;
+  ta.style.position = "fixed";
+  ta.style.top = "0";
+  ta.style.left = "0";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try{
+    document.execCommand("copy");
+    alert("Report copied.");
+  } catch(e){
+    alert("Copy failed. Please select and copy manually.");
   }
-  function fallbackCopy(txt){
-    const ta = document.createElement("textarea");
-    ta.value = txt;
-    ta.style.position="fixed";
-    ta.style.opacity="0";
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    try{ document.execCommand("copy"); alert("Report copied (fallback)."); } catch(e){ alert("Copy failed. You can manually select text in the report table."); }
-    document.body.removeChild(ta);
+  document.body.removeChild(ta);
+}
+function printReport(){
+  window.print();
+}
+function clearLogs(){
+  if (!confirm("Clear logs for current person? This cannot be undone.")) return;
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+  p.logs.glucose = [];
+  p.logs.bp = [];
+  p.logs.sleep = [];
+  p.logs.spo2 = [];
+  p.logs.checks = [];
+  p.logs.imports = [];
+  upsertPerson(store, p);
+  saveStore(store);
+  refreshSnapshot();
+  renderTrends();
+  renderReports();
+  alert("Cleared.");
+}
+
+/* ------------------------------
+   IMPORT / ATTACH REPORTS
+   - Text extraction: regex patterns
+   - Screenshot attachments: store as DataURL (local) + optional OCR online
+------------------------------ */
+let extracted = null;
+let lastImageDataUrl = null;
+
+function parseReportText(text){
+  const t = (text || "").replace(/\s+/g," ").trim();
+  if (!t) return null;
+
+  const out = { source:"text", ts: nowISO() };
+
+  // HbA1c: examples "HbA1c 6.2%" or "HbA1c: 6.2" or "Glycated hemoglobin 6.2 %"
+  const a1c = t.match(/(hba1c|glycated hemoglobin)\s*[:\-]?\s*([0-9]{1,2}(\.[0-9]{1,2})?)\s*%?/i);
+  if (a1c) out.hba1c = Number(a1c[2]);
+
+  // Creatinine: µmol/L or mg/dL
+  const creatUmol = t.match(/creatinine\s*[:\-]?\s*([0-9]{2,4}(\.[0-9]+)?)\s*(µmol\/l|umol\/l)/i);
+  const creatMg = t.match(/creatinine\s*[:\-]?\s*([0-9]{1,2}(\.[0-9]+)?)\s*(mg\/dl)/i);
+  if (creatUmol) out.creatinine_umol = Number(creatUmol[1]);
+  if (creatMg) out.creatinine_mgdl = Number(creatMg[1]);
+
+  // eGFR
+  const egfr = t.match(/e\s*gfr\s*[:\-]?\s*([0-9]{1,3}(\.[0-9]+)?)/i);
+  if (egfr) out.egfr = Number(egfr[1]);
+
+  // Hemoglobin
+  const hb = t.match(/(hemoglobin|hb)\s*[:\-]?\s*([0-9]{1,2}(\.[0-9]+)?)/i);
+  if (hb) out.hb = Number(hb[2]);
+
+  // MCV
+  const mcv = t.match(/mcv\s*[:\-]?\s*([0-9]{2,3}(\.[0-9]+)?)/i);
+  if (mcv) out.mcv = Number(mcv[1]);
+
+  // PSA
+  const psa = t.match(/psa\s*[:\-]?\s*([0-9]{1,2}(\.[0-9]+)?)/i);
+  if (psa) out.psa = Number(psa[1]);
+
+  // FIT / FOBT
+  const fit = t.match(/(fit|fecal occult blood|faecal occult blood|fobt)\s*[:\-]?\s*(positive|negative)/i);
+  if (fit) out.fit = fit[2].toLowerCase();
+
+  // Basic BP pattern "120/82"
+  const bp = t.match(/([0-9]{2,3})\s*\/\s*([0-9]{2,3})\s*mmhg/i);
+  if (bp) out.bp = { sys:Number(bp[1]), dia:Number(bp[2]) };
+
+  // Glucose "138 mg/dL"
+  const glu = t.match(/(glucose|cgm|blood glucose)\s*[:\-]?\s*([0-9]{2,3})\s*mg\/dl/i);
+  if (glu) out.glucose = Number(glu[2]);
+
+  return out;
+}
+
+function showExtracted(obj){
+  extracted = obj;
+  const box = document.getElementById("extractedBox");
+  if (!obj){
+    box.textContent = "No extracted values yet.";
+    return;
+  }
+  const lines = [];
+  lines.push(`Extracted (${obj.source}) @ ${new Date(obj.ts).toLocaleString()}`);
+  if (obj.hba1c != null) lines.push(`• HbA1c: ${obj.hba1c}%`);
+  if (obj.glucose != null) lines.push(`• Glucose: ${obj.glucose} mg/dL`);
+  if (obj.bp) lines.push(`• BP: ${obj.bp.sys}/${obj.bp.dia} mmHg`);
+  if (obj.creatinine_umol != null) lines.push(`• Creatinine: ${obj.creatinine_umol} µmol/L`);
+  if (obj.creatinine_mgdl != null) lines.push(`• Creatinine: ${obj.creatinine_mgdl} mg/dL`);
+  if (obj.egfr != null) lines.push(`• eGFR: ${obj.egfr}`);
+  if (obj.hb != null) lines.push(`• Hemoglobin: ${obj.hb}`);
+  if (obj.mcv != null) lines.push(`• MCV: ${obj.mcv}`);
+  if (obj.psa != null) lines.push(`• PSA: ${obj.psa}`);
+  if (obj.fit != null) lines.push(`• FIT/FOBT: ${obj.fit}`);
+  box.textContent = lines.join("\n");
+}
+
+function applyExtracted(){
+  if (!extracted){ alert("No extracted values to apply."); return; }
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+  const ts = nowISO();
+
+  // Apply to labs
+  let labsChanged = false;
+  if (extracted.hba1c != null){ p.labs.hbA1c = extracted.hba1c; labsChanged=true; }
+  if (extracted.egfr != null){ p.labs.egfr = extracted.egfr; labsChanged=true; }
+  if (extracted.creatinine_umol != null){ p.labs.creatinine = extracted.creatinine_umol; labsChanged=true; }
+  if (extracted.hb != null){ p.labs.hb = extracted.hb; labsChanged=true; }
+  if (extracted.mcv != null){ p.labs.mcv = extracted.mcv; labsChanged=true; }
+  if (extracted.psa != null){ p.labs.psa = extracted.psa; labsChanged=true; }
+  if (extracted.fit != null){ p.labs.fit = extracted.fit; labsChanged=true; }
+  if (labsChanged) p.labs.updatedAt = ts;
+
+  // Apply to readings (where present)
+  if (extracted.glucose != null){
+    pushLog(p, "glucose", { ts, value: extracted.glucose, trend:"" });
+  }
+  if (extracted.bp){
+    pushLog(p, "bp", { ts, sys: extracted.bp.sys, dia: extracted.bp.dia, pulse:null });
   }
 
-  /* ===========================
-     Profile UI
-  ============================ */
-  function populatePersonSelect(){
-    const sel = document.getElementById("personSelect");
-    sel.innerHTML = "";
-    PERSON_IDS.forEach(pid=>{
-      const prof = getProfile(pid);
-      const opt = document.createElement("option");
-      opt.value = pid;
-      const name = prof?.name ? ` — ${prof.name}` : "";
-      opt.textContent = labelForPersonId(pid) + name;
-      sel.appendChild(opt);
+  // Store import record
+  p.logs.imports.push({ ts, extracted });
+  if (p.logs.imports.length > 200) p.logs.imports = p.logs.imports.slice(-200);
+
+  upsertPerson(store, p);
+  saveStore(store);
+  alert("Applied to this person’s labs/readings.");
+  refreshSnapshot();
+  renderTrends();
+  renderReports();
+}
+
+function handleAttachFiles(){
+  const input = document.getElementById("importFiles");
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+
+  const store = loadStore();
+  const p = getPerson(store, getActiveId());
+
+  // Store up to last 15 images per person
+  const maxImgs = 15;
+  const readerPromises = files.slice(0, maxImgs).map(f => new Promise((resolve)=>{
+    const r = new FileReader();
+    r.onload = () => resolve({ name:f.name, type:f.type, dataUrl:r.result, ts: nowISO() });
+    r.readAsDataURL(f);
+  }));
+
+  Promise.all(readerPromises).then(items=>{
+    p.logs.imports = p.logs.imports || [];
+    items.forEach(it=>{
+      p.logs.imports.push({ ts: it.ts, type:"image", name: it.name, mime: it.type, dataUrl: it.dataUrl });
+      lastImageDataUrl = it.dataUrl; // keep latest for OCR
     });
-    sel.value = getActive();
+    // trim
+    p.logs.imports = p.logs.imports.slice(-200);
+    upsertPerson(store, p);
+    saveStore(store);
+    alert("Attached. (Stored locally in this browser.)");
+  });
+}
+
+/* ------------------------------
+   OPTIONAL OCR (ONLINE)
+   Loads Tesseract.js from CDN when enabled.
+   If offline, user can still paste report text or manually input values.
+------------------------------ */
+async function enableOCR(){
+  localStorage.setItem(HC.ocrEnabledKey, "1");
+  document.getElementById("ocrStatus").textContent = "OCR is ON (internet required).";
+  // Lazy-load script
+  if (!window.Tesseract){
+    await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
   }
+  alert("OCR enabled. Attach an image, then click 'Run OCR on latest image'.");
+}
 
-  function renderProfileForm(){
-    const pid = getActive();
-    const p = getProfile(pid);
-
-    document.getElementById("pName").value = p.name || "";
-    document.getElementById("pSex").value = p.sex || "";
-    document.getElementById("pRel").value = p.rel || ((pid==="primary") ? "Self (Primary)" : "");
-    document.getElementById("pDob").value = p.dob || "";
-    document.getElementById("pAge").value = computeAge(p.dob) || "";
-    document.getElementById("pHeightCm").value = p.heightCm || "";
-    document.getElementById("pWeightKg").value = p.weightKg || "";
-    document.getElementById("pBMI").value = computeBMI(p.heightCm, p.weightKg) || "";
-    document.getElementById("pOtherNotes").value = p.notes || "";
-
-    renderCondPills(p.conditions || []);
+async function runOCR(){
+  const enabled = localStorage.getItem(HC.ocrEnabledKey) === "1";
+  if (!enabled){ alert("Enable OCR first."); return; }
+  if (!lastImageDataUrl){
+    alert("No attached image found yet. Attach at least one screenshot first.");
+    return;
   }
-
-  function renderCondPills(conds){
-    const wrap = document.getElementById("condPills");
-    wrap.innerHTML = "";
-    (conds||[]).forEach((c, idx)=>{
-      const pillEl = document.createElement("span");
-      pillEl.className = "chip";
-      pillEl.style.borderRadius="999px";
-      pillEl.style.display="inline-flex";
-      pillEl.style.alignItems="center";
-      pillEl.style.gap="8px";
-      pillEl.innerHTML = `<b>${escapeHtml(c)}</b> <button class="btn danger" style="padding:6px 10px;border-radius:999px;box-shadow:none" data-i="${idx}">Remove</button>`;
-      wrap.appendChild(pillEl);
-    });
-
-    wrap.querySelectorAll("button[data-i]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const pid = getActive();
-        const prof = getProfile(pid);
-        const i = Number(btn.getAttribute("data-i"));
-        prof.conditions = (prof.conditions||[]).filter((_,ix)=>ix!==i);
-        setProfile(pid, prof);
-        renderProfileForm();
-        refreshAll();
-      });
-    });
+  if (!window.Tesseract){
+    await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
   }
-
-  function saveProfileFromForm(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-
-    prof.name = document.getElementById("pName").value.trim();
-    prof.sex = document.getElementById("pSex").value;
-    prof.rel = document.getElementById("pRel").value || ((pid==="primary") ? "Self (Primary)" : "");
-    prof.dob = document.getElementById("pDob").value;
-    prof.age = computeAge(prof.dob);
-    prof.heightCm = document.getElementById("pHeightCm").value;
-    prof.weightKg = document.getElementById("pWeightKg").value;
-    prof.bmi = computeBMI(prof.heightCm, prof.weightKg);
-    prof.notes = document.getElementById("pOtherNotes").value.trim();
-
-    setProfile(pid, prof);
-
-    document.getElementById("pAge").value = prof.age || "";
-    document.getElementById("pBMI").value = prof.bmi || "";
-
-    populatePersonSelect();
-    updateActiveLabel();
-    refreshAll();
-
-    const msgEl = document.getElementById("profileSavedMsg");
-    msgEl.style.color = "#1b8f5a";
-    msgEl.textContent = "Profile saved.";
-    setTimeout(()=>{ msgEl.textContent=""; }, 4000);
+  document.getElementById("ocrStatus").textContent = "OCR running… (may take 15–60s on phone)";
+  try{
+    const res = await window.Tesseract.recognize(lastImageDataUrl, "eng", {});
+    const text = (res && res.data && res.data.text) ? res.data.text : "";
+    document.getElementById("importText").value = text.trim();
+    document.getElementById("ocrStatus").textContent = "OCR done. Review the text, then Extract Values.";
+    alert("OCR completed. Now click 'Extract Values'.");
+  } catch(e){
+    document.getElementById("ocrStatus").textContent = "OCR failed. Use paste-text extraction or manual entry.";
+    alert("OCR failed on this device/image. Use paste-text extraction or manual entry.");
   }
+}
 
-  function addCondition(){
-    const pid = getActive();
-    const prof = getProfile(pid);
-    const v = document.getElementById("pCondInput").value.trim();
-    if(!v) return;
-    prof.conditions = prof.conditions || [];
-    if(!prof.conditions.some(x=>String(x).toLowerCase()===v.toLowerCase())){
-      prof.conditions.push(v);
-    }
-    setProfile(pid, prof);
-    document.getElementById("pCondInput").value = "";
-    renderProfileForm();
-    refreshAll();
-  }
+function loadScript(url){
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement("script");
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
 
-  function resetPerson(){
-    const pid = getActive();
-    if(!confirm("Reset this person? This clears profile + logs for this person only.")) return;
-    [K.profile, K.glucose, K.bp, K.sleep, K.spo2, K.labs, K.triage, K.attach].forEach(fn=>{
-      localStorage.removeItem(fn(pid));
-    });
-    populatePersonSelect();
-    renderProfileForm();
-    refreshAll();
-  }
+/* ------------------------------
+   BACKUP / RESTORE / RESET
+------------------------------ */
+function backup(){
+  const store = loadStore();
+  document.getElementById("backupBox").value = JSON.stringify(store, null, 2);
+  alert("Backup JSON generated. Copy it and save it somewhere safe.");
+}
+function restore(){
+  const txt = document.getElementById("backupBox").value.trim();
+  if (!txt){ alert("Paste backup JSON first."); return; }
+  const obj = safeParse(txt, null);
+  if (!obj || !obj.people){ alert("Invalid JSON."); return; }
+  localStorage.setItem(HC.rootKey, JSON.stringify(obj));
+  if (!localStorage.getItem(HC.activeIdKey)) localStorage.setItem(HC.activeIdKey, "p1");
+  alert("Restored. Reloading UI.");
+  init();
+}
+function factoryReset(){
+  if (!confirm("Factory reset will remove ALL people and ALL logs on this browser. Continue?")) return;
+  localStorage.removeItem(HC.rootKey);
+  localStorage.removeItem(HC.activeIdKey);
+  alert("Reset complete. Reloading.");
+  init();
+}
 
-  /* ===========================
-     Settings / Export / Clear
-  ============================ */
-  function exportJSON(){
-    const data = {};
-    PERSON_IDS.forEach(pid=>{
-      data[pid] = {
-        profile: loadObj(K.profile(pid)),
-        glucose: loadArr(K.glucose(pid)),
-        bp: loadArr(K.bp(pid)),
-        sleep: loadArr(K.sleep(pid)),
-        spo2: loadArr(K.spo2(pid)),
-        labs: loadObj(K.labs(pid)),
-        triage: loadArr(K.triage(pid)),
-        attachments: loadArr(K.attach(pid))
-      };
-    });
-    data.meta = { version: APP_VERSION, exportedAt: nowISO() };
+/* ------------------------------
+   UTIL
+------------------------------ */
+function escapeHtml(s){
+  return String(s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
-    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `HealthCheckerPlus_v${APP_VERSION}_export_${dayKey()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+/* ------------------------------
+   INIT / WIRES
+------------------------------ */
+function init(){
+  loadStore();
+  fillPersonSelect();
+  loadProfileToUI();
+  refreshSnapshot();
 
-    document.getElementById("settingsMsg").textContent = "Export started (download).";
-    setTimeout(()=>{ document.getElementById("settingsMsg").textContent=""; }, 4000);
-  }
+  // Tabs
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=> showTab(btn.dataset.tab));
+  });
 
-  function clearAll(){
-    if(!confirm("This clears ALL HealthChecker+ data on this device. Continue?")) return;
-    const keys = Object.keys(localStorage);
-    keys.forEach(k=>{
-      if(k.startsWith("hc_") || k.startsWith("HealthChecker") || k.includes("hcplus")){
-        localStorage.removeItem(k);
-      }
-    });
-    localStorage.removeItem(KEY_ACTIVE);
-    localStorage.removeItem(KEY_BACKEND);
-    alert("All local data cleared.");
-    location.reload();
-  }
+  // Person change
+  document.getElementById("personSelect").addEventListener("change", (e)=>{
+    setActiveId(e.target.value);
+    loadProfileToUI();
+    refreshSnapshot();
+    // if on trends/reports, refresh those too
+    renderTrends();
+    renderReports();
+  });
 
-  function saveBackendUI(){
-    const v = document.getElementById("backendUrl").value.trim();
-    setBackend(v);
-    document.getElementById("backendMsg").textContent = "Backend URL saved.";
-    setTimeout(()=>{ document.getElementById("backendMsg").textContent=""; }, 3500);
-  }
+  // Snapshot buttons
+  document.getElementById("btnRefreshSnapshot").addEventListener("click", refreshSnapshot);
+  document.getElementById("btnGoTrends").addEventListener("click", ()=> showTab("trends"));
+  document.getElementById("btnGoSymptom").addEventListener("click", ()=> showTab("symptom"));
 
-  async function testBackend(){
-    const base = getBackend();
-    if(!base){
-      document.getElementById("backendMsg").textContent = "Set backend URL first.";
-      return;
-    }
-    try{
-      const res = await fetch(base.replace(/\/$/,"") + "/api/ping");
-      document.getElementById("backendMsg").textContent = res.ok ? "Backend ping OK." : "Backend ping failed (no /api/ping).";
-    } catch(e){
-      document.getElementById("backendMsg").textContent = "Backend test failed (network or CORS).";
-    }
-    setTimeout(()=>{ document.getElementById("backendMsg").textContent=""; }, 4500);
-  }
+  // Family
+  document.getElementById("btnManageFamily").addEventListener("click", openFamilyModal);
+  document.getElementById("closeFamily").addEventListener("click", closeFamilyModal);
+  document.getElementById("btnAddDependent").addEventListener("click", addOrReplaceDependant);
+  document.getElementById("btnRemoveDependent").addEventListener("click", removeSelectedPerson);
 
-  /* ===========================
-     Tabs / Navigation
-  ============================ */
-  function showView(id){
-    document.querySelectorAll("section.view").forEach(s=>s.classList.remove("active"));
-    document.getElementById("view-" + id).classList.add("active");
-    document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("active"));
-    document.querySelector(`.tabbtn[data-view="${id}"]`).classList.add("active");
+  // Quick Add
+  document.getElementById("btnQuickAdd").addEventListener("click", openAddModal);
+  document.getElementById("closeAdd").addEventListener("click", closeAddModal);
+  document.getElementById("btnSaveReading").addEventListener("click", ()=> saveReading(false));
+  document.getElementById("btnSaveReadingAndSnapshot").addEventListener("click", ()=> saveReading(true));
 
-    // view-specific refresh
-    if(id==="snapshot") renderSnapshot();
-    if(id==="trends") drawTrend(document.getElementById("trendMetric").value, Number(document.getElementById("trendWindow").value));
-    if(id==="profile") { populatePersonSelect(); renderProfileForm(); }
-    if(id==="reports") renderReports();
-    if(id==="settings") document.getElementById("backendUrl").value = getBackend();
-  }
+  // Profile
+  document.getElementById("btnSaveProfile").addEventListener("click", saveProfile);
+  document.getElementById("pDob").addEventListener("change", ()=>{
+    document.getElementById("pAge").value = computeAge(document.getElementById("pDob").value) || "";
+  });
+  document.getElementById("pHeightCm").addEventListener("input", ()=>{
+    const bmi = computeBMI(document.getElementById("pHeightCm").value, document.getElementById("pWeightKg").value);
+    document.getElementById("pBMI").value = bmi || "";
+  });
+  document.getElementById("pWeightKg").addEventListener("input", ()=>{
+    const bmi = computeBMI(document.getElementById("pHeightCm").value, document.getElementById("pWeightKg").value);
+    document.getElementById("pBMI").value = bmi || "";
+  });
 
-  function wireTabs(){
-    document.querySelectorAll(".tabbtn").forEach(btn=>{
-      btn.addEventListener("click", ()=> showView(btn.getAttribute("data-view")));
-    });
+  // Symptom checker
+  document.getElementById("btnAddSymptom").addEventListener("click", addSymptomRow);
+  document.getElementById("btnRunCheck").addEventListener("click", runSymptomCheck);
+  document.getElementById("btnClearSymptoms").addEventListener("click", clearSymptoms);
+  updateSymCount();
 
-    document.getElementById("btnGoSnapshot").addEventListener("click", ()=> showView("snapshot"));
-    document.getElementById("btnQuickRefresh").addEventListener("click", refreshAll);
+  // Reports
+  document.getElementById("btnCopyReport").addEventListener("click", copyReport);
+  document.getElementById("btnPrintReport").addEventListener("click", printReport);
+  document.getElementById("btnClearLogs").addEventListener("click", clearLogs);
 
-    document.getElementById("btnSnapshotAddReading").addEventListener("click", ()=> showView("addreadings"));
-    document.getElementById("btnSnapshotTrends").addEventListener("click", ()=> showView("trends"));
-    document.getElementById("btnSnapshotSymptom").addEventListener("click", ()=> showView("symptom"));
-  }
+  // Import / Attach
+  document.getElementById("btnParseText").addEventListener("click", ()=>{
+    const txt = document.getElementById("importText").value;
+    const obj = parseReportText(txt);
+    showExtracted(obj);
+    if (!obj) alert("No values detected. Ensure you pasted the report text clearly.");
+  });
+  document.getElementById("btnApplyExtracted").addEventListener("click", applyExtracted);
+  document.getElementById("importFiles").addEventListener("change", handleAttachFiles);
 
-  /* ===========================
-     Init wiring
-  ============================ */
-  function refreshAll(){
-    updateActiveLabel();
-    renderSnapshot();
-    // if trends view active, refresh it too
-    if(document.getElementById("view-trends").classList.contains("active")){
-      drawTrend(document.getElementById("trendMetric").value, Number(document.getElementById("trendWindow").value));
-    }
-    if(document.getElementById("view-reports").classList.contains("active")){
-      renderReports();
-    }
-  }
+  document.getElementById("btnEnableOCR").addEventListener("click", enableOCR);
+  document.getElementById("btnRunOCR").addEventListener("click", runOCR);
 
-  function init(){
-    // person select
-    populatePersonSelect();
-    updateActiveLabel();
+  // Settings
+  document.getElementById("btnBackup").addEventListener("click", backup);
+  document.getElementById("btnRestore").addEventListener("click", restore);
+  document.getElementById("btnFactoryReset").addEventListener("click", factoryReset);
 
-    document.getElementById("personSelect").addEventListener("change", (e)=>{
-      setActive(e.target.value);
-      renderProfileForm();
-    });
+  // OCR status
+  const on = localStorage.getItem(HC.ocrEnabledKey) === "1";
+  document.getElementById("ocrStatus").textContent = on ? "OCR is ON (internet required)." : "OCR is OFF.";
 
-    // Profile reactive calculations
-    document.getElementById("pDob").addEventListener("change", ()=>{
-      document.getElementById("pAge").value = computeAge(document.getElementById("pDob").value) || "";
-    });
-    document.getElementById("pHeightCm").addEventListener("input", ()=>{
-      document.getElementById("pBMI").value = computeBMI(document.getElementById("pHeightCm").value, document.getElementById("pWeightKg").value) || "";
-    });
-    document.getElementById("pWeightKg").addEventListener("input", ()=>{
-      document.getElementById("pBMI").value = computeBMI(document.getElementById("pHeightCm").value, document.getElementById("pWeightKg").value) || "";
-    });
+  // Auto-refresh snapshot when returning to foreground
+  document.addEventListener("visibilitychange", ()=>{
+    if (!document.hidden) refreshSnapshot();
+  });
 
-    // Buttons
-    document.getElementById("btnSaveGlucose").addEventListener("click", saveGlucose);
-    document.getElementById("btnSaveBP").addEventListener("click", saveBP);
-    document.getElementById("btnSaveSleep").addEventListener("click", saveSleep);
-    document.getElementById("btnSaveSpO2").addEventListener("click", saveSpO2);
-    document.getElementById("btnSaveLabs").addEventListener("click", saveLabs);
+  // Default home = Snapshot
+  showTab("snapshot");
+  renderFamilyList();
+}
 
-    document.getElementById("btnExtractReport").addEventListener("click", extractReport);
-    document.getElementById("btnSaveReport").addEventListener("click", saveReportRecord);
-
-    document.getElementById("btnAddCond").addEventListener("click", addCondition);
-    document.getElementById("btnSaveProfile").addEventListener("click", saveProfileFromForm);
-    document.getElementById("btnResetPerson").addEventListener("click", resetPerson);
-
-    document.getElementById("btnCopyReport").addEventListener("click", copyReport);
-    document.getElementById("btnPrintReport").addEventListener("click", ()=> window.print());
-
-    document.getElementById("btnExportJSON").addEventListener("click", exportJSON);
-    document.getElementById("btnClearAll").addEventListener("click", clearAll);
-    document.getElementById("btnSaveBackend").addEventListener("click", saveBackendUI);
-    document.getElementById("btnTestBackend").addEventListener("click", testBackend);
-
-    // Trends controls
-    document.getElementById("trendMetric").addEventListener("change", ()=>{
-      drawTrend(document.getElementById("trendMetric").value, Number(document.getElementById("trendWindow").value));
-    });
-    document.getElementById("trendWindow").addEventListener("change", ()=>{
-      drawTrend(document.getElementById("trendMetric").value, Number(document.getElementById("trendWindow").value));
-    });
-
-    // tabs
-    wireTabs();
-
-    // symptom UI
-    initSymptomsUI();
-
-    // initial snapshot
-    renderSnapshot();
-
-    // refresh on foreground
-    document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refreshAll(); });
-
-    // optional service worker (won't break if missing)
-    try{
-      if("serviceWorker" in navigator){
-        navigator.serviceWorker.register("./sw.js").catch(()=>{});
-      }
-    }catch(e){}
-
-    // set backend input
-    document.getElementById("backendUrl").value = getBackend() || "";
-  }
-
-  document.addEventListener("DOMContentLoaded", init);
-
-})();
+// start
+document.addEventListener("DOMContentLoaded", init);
 </script>
 </body>
 </html>
