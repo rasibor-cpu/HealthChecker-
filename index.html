@@ -1,274 +1,2044 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>HealthChecker+ | Medical Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>HealthChecker+ | Snapshot + Symptom Checker</title>
 
-<!-- THEME -->
-<meta name="theme-color" content="#4da3ff">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-<!-- CHARTS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg: #f3f9ff;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --brand: #2563eb;
+      --brand2:#38bdf8;
+      --ok: #16a34a;
+      --warn:#f59e0b;
+      --bad:#dc2626;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+      --radius2: 14px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 500px at 20% 0%, rgba(56,189,248,0.20), transparent 55%),
+        radial-gradient(900px 480px at 90% 10%, rgba(37,99,235,0.15), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      line-height:1.35;
+    }
+    .wrap{ max-width: 980px; margin: 0 auto; padding: 14px 14px 90px 14px; }
+    .topbar{
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(10px);
+      background: rgba(243,249,255,0.75);
+      border-bottom: 1px solid rgba(226,232,240,0.9);
+    }
+    .topbar-inner{
+      max-width: 980px; margin: 0 auto;
+      padding: 10px 14px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; min-width: 0; }
+    .logo{
+      width: 38px; height: 38px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 8px 20px rgba(37,99,235,0.20);
+    }
+    .brand h1{
+      font-size: 16px; margin:0; font-weight: 900;
+      letter-spacing: 0.2px; white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+    }
+    .brand small{ display:block; color: var(--muted); font-weight: 700; }
+    .pill{
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.8);
+      font-weight: 800; font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .card{
+      background: var(--card);
+      border: 1px solid rgba(226,232,240,0.9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .col-12{ grid-column: span 12; }
+    .col-6{ grid-column: span 6; }
+    .col-4{ grid-column: span 4; }
+    .col-3{ grid-column: span 3; }
+    @media (max-width: 720px){
+      .col-6,.col-4,.col-3{ grid-column: span 12; }
+    }
+    .section-title{
+      display:flex; align-items:flex-end; justify-content:space-between;
+      gap:10px; margin: 12px 0 10px;
+    }
+    .section-title h2{ margin:0; font-size: 16px; font-weight: 900; letter-spacing: 0.2px; }
+    .section-title .hint{ color: var(--muted); font-weight: 700; font-size: 12px; }
+    .kpi{
+      border-radius: var(--radius2);
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,1), rgba(255,255,255,0.92));
+      padding: 12px;
+      min-height: 86px;
+      display:flex; flex-direction: column; justify-content: space-between; gap: 6px;
+    }
+    .kpi .label{ color: var(--muted); font-weight: 900; font-size: 12px; }
+    .kpi .value{ font-size: 20px; font-weight: 900; letter-spacing: 0.2px; }
+    .kpi .sub{ color: var(--muted); font-weight: 700; font-size: 12px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    label{ display:block; font-weight: 900; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea{
+      width:100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.98);
+      font-weight: 800; font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(37,99,235,0.45);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+    }
+    .btn{
+      appearance:none; border: 0; border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 900; font-size: 14px;
+      cursor:pointer;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      color: white;
+      box-shadow: 0 10px 22px rgba(37,99,235,0.22);
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{
+      background: white; color: var(--brand);
+      border: 1px solid rgba(37,99,235,0.25);
+      box-shadow: none;
+    }
+    .btn.danger{
+      background: linear-gradient(135deg, #ef4444, #fb7185);
+      box-shadow: 0 10px 22px rgba(239,68,68,0.18);
+    }
+    .btn.small{ padding: 10px 12px; font-size: 13px; border-radius: 12px; }
+    .nav{
+      position: fixed; left:0; right:0; bottom:0;
+      background: rgba(255,255,255,0.86);
+      border-top: 1px solid rgba(226,232,240,0.95);
+      backdrop-filter: blur(10px);
+      z-index: 60;
+    }
+    .nav-inner{
+      max-width: 980px; margin: 0 auto;
+      display:grid; grid-template-columns: repeat(6, 1fr);
+      gap: 8px; padding: 10px 12px;
+    }
+    .nav button{
+      border: 1px solid rgba(226,232,240,0.95);
+      background: rgba(255,255,255,0.95);
+      border-radius: 14px;
+      padding: 10px 8px;
+      font-weight: 900; font-size: 12px;
+      color: var(--muted);
+      cursor:pointer;
+    }
+    .nav button.active{
+      border-color: rgba(37,99,235,0.35);
+      color: var(--brand);
+      box-shadow: 0 8px 20px rgba(37,99,235,0.10);
+    }
+    .note{
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px dashed rgba(37,99,235,0.25);
+      background: rgba(37,99,235,0.06);
+      color: #0b2b6a;
+      font-weight: 800; font-size: 12px;
+    }
+    .divider{ height: 1px; background: var(--line); margin: 12px 0; }
+    .tag{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.9);
+      font-weight: 900; font-size: 12px;
+      color: var(--muted);
+    }
+    .toast{
+      position: fixed;
+      left: 12px; right: 12px; bottom: 86px;
+      max-width: 980px; margin: 0 auto;
+      z-index: 70;
+      display:none;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(15,23,42,0.92);
+      color: white;
+      font-weight: 900;
+      box-shadow: 0 12px 30px rgba(15,23,42,0.22);
+    }
+    .mini{ font-size: 12px; font-weight: 800; color: var(--muted); }
+    canvas{ width:100% !important; height: 260px !important; }
+    .chart-card canvas{ height: 280px !important; }
 
-<style>
-/* ===== MEDICAL CLOUD THEME ===== */
-:root{
-  --bg:#f4f9ff;
-  --card:#ffffff;
-  --primary:#4da3ff;
-  --accent:#1f6fd6;
-  --text:#1b2a3a;
-  --muted:#6b7c93;
-  --border:#dbe7f3;
-}
-
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
-  background:var(--bg);
-  color:var(--text);
-}
-
-header{
-  padding:16px;
-  background:linear-gradient(90deg,#4da3ff,#7bbcff);
-  color:white;
-}
-header h1{margin:0;font-size:20px}
-header small{opacity:.9}
-
-main{padding:14px;max-width:1100px;margin:auto}
-
-.card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:14px;
-  margin-bottom:14px;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:12px;
-}
-
-.metric{
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:10px;
-}
-.metric h4{margin:0;font-size:13px;color:var(--muted)}
-.metric .val{font-size:20px;font-weight:700;margin-top:4px}
-
-label{font-size:13px;color:var(--muted)}
-input,select{
-  width:100%;
-  padding:8px;
-  margin-top:4px;
-  border-radius:8px;
-  border:1px solid var(--border);
-  font-size:14px;
-}
-
-button{
-  padding:10px 14px;
-  border:none;
-  border-radius:10px;
-  background:var(--primary);
-  color:white;
-  font-weight:600;
-  cursor:pointer;
-}
-button.secondary{
-  background:white;
-  color:var(--primary);
-  border:1px solid var(--primary);
-}
-
-.actions{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:12px;
-}
-
-canvas{max-width:100%}
-
-hr{border:none;border-top:1px solid var(--border);margin:14px 0}
-</style>
+    .riskBox{
+      border-radius: 16px;
+      border: 1px solid rgba(226,232,240,0.95);
+      background: rgba(255,255,255,0.95);
+      padding: 12px;
+    }
+    .riskHeader{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-bottom: 10px;
+    }
+    .badge{
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 900; font-size: 12px;
+      color: white;
+      background: var(--warn);
+      white-space: nowrap;
+    }
+    .badge.ok{ background: var(--ok); }
+    .badge.bad{ background: var(--bad); }
+    ul.clean{ margin: 8px 0 0 18px; padding:0; }
+    .chipRow{ display:flex; flex-wrap:wrap; gap:8px; }
+    .chip{
+      border:1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.92);
+      font-weight: 900;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .chip.selected{
+      border-color: rgba(37,99,235,0.35);
+      color: var(--brand);
+      box-shadow: 0 8px 18px rgba(37,99,235,0.10);
+    }
+  </style>
 </head>
 
 <body>
-
-<header>
-  <h1>HealthChecker+</h1>
-  <small>Personal Medical Snapshot & Trends</small>
-</header>
-
-<main>
-
-<!-- PROFILE -->
-<div class="card">
-  <h3>Profile</h3>
-  <div class="grid">
-    <div>
-      <label>Date of Birth</label>
-      <input type="date" id="dob">
-    </div>
-    <div>
-      <label>Age</label>
-      <input type="text" id="age" disabled>
-    </div>
-    <div>
-      <label>Height (cm)</label>
-      <input type="number" id="height">
-    </div>
-    <div>
-      <label>Weight (kg)</label>
-      <input type="number" id="weight">
-    </div>
-    <div>
-      <label>BMI</label>
-      <input type="text" id="bmi" disabled>
-    </div>
-  </div>
-</div>
-
-<!-- SNAPSHOT INPUT -->
-<div class="card">
-  <h3>Add New Health Snapshot</h3>
-  <div class="grid">
-    <div>
-      <label>Glucose (mg/dL)</label>
-      <input type="number" id="glucose">
-    </div>
-    <div>
-      <label>Systolic BP</label>
-      <input type="number" id="sys">
-    </div>
-    <div>
-      <label>Diastolic BP</label>
-      <input type="number" id="dia">
-    </div>
-    <div>
-      <label>Sleep Score</label>
-      <input type="number" id="sleep">
-    </div>
-    <div>
-      <label>Lowest SpO₂ (%)</label>
-      <input type="number" id="spo2">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div style="min-width:0">
+          <h1>HealthChecker+</h1>
+          <small id="subtitle">Snapshot + Symptom Checker</small>
+        </div>
+      </div>
+      <div class="pill" id="overallPill">Overall: —</div>
     </div>
   </div>
 
-  <div class="actions">
-    <button onclick="saveSnapshot()">Save Snapshot</button>
+  <div class="wrap">
+
+    <!-- SNAPSHOT -->
+    <section id="view-dashboard">
+      <div class="section-title">
+        <h2>Health Snapshot</h2>
+        <div class="hint" id="lastUpdated">Last updated: —</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <div class="row" style="align-items:center">
+              <span class="tag" id="tagPerson">Person: —</span>
+              <span class="tag" id="tagAge">Age: —</span>
+              <span class="tag" id="tagBMI">BMI: —</span>
+              <span class="tag" id="tagHbA1c">Est. HbA1c: —</span>
+            </div>
+            <div class="row">
+              <button class="btn secondary small" id="btnRefresh">Refresh</button>
+              <button class="btn danger small" id="btnClearAll" title="Clears ALL saved readings & profiles">Reset</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="grid">
+            <div class="col-4 kpi">
+              <div class="label">Glucose (mg/dL)</div>
+              <div class="value" id="kpiGlucose">—</div>
+              <div class="sub" id="kpiGlucoseSub">No data yet</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">Blood Pressure</div>
+              <div class="value" id="kpiBP">—</div>
+              <div class="sub" id="kpiBPSub">No data yet</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">Sleep</div>
+              <div class="value" id="kpiSleep">—</div>
+              <div class="sub" id="kpiSleepSub">No data yet</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">SpO₂ (Lowest)</div>
+              <div class="value" id="kpiSpO2">—</div>
+              <div class="sub" id="kpiSpO2Sub">No data yet</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">Kidney</div>
+              <div class="value" id="kpiKidney">—</div>
+              <div class="sub" id="kpiKidneySub">Latest labs not set</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">Blood / Anemia</div>
+              <div class="value" id="kpiBlood">—</div>
+              <div class="sub" id="kpiBloodSub">Latest indices not set</div>
+            </div>
+          </div>
+
+          <div class="note" id="summaryNote">
+            Tip: Use “Add” to save readings. Use “Symptom Check” for clinical triage and guidance.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADD -->
+    <section id="view-add" style="display:none">
+      <div class="section-title">
+        <h2>Add New Health Snapshot</h2>
+        <div class="hint">Saved items feed Trends + HbA1c</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="grid">
+            <div class="col-12">
+              <label>Save for which person?</label>
+              <select id="selPersonForSnapshot"></select>
+              <div class="mini" style="margin-top:6px;">Use Dependent Mode to add mummy/sister/child profiles.</div>
+            </div>
+
+            <div class="col-6">
+              <label>Glucose (mg/dL)</label>
+              <input id="inGlucose" inputmode="numeric" placeholder="e.g. 108" />
+            </div>
+            <div class="col-6">
+              <label>Trend (optional)</label>
+              <select id="inTrend">
+                <option value="">Select…</option>
+                <option>Flat</option>
+                <option>Rising</option>
+                <option>Falling</option>
+              </select>
+            </div>
+
+            <div class="col-6">
+              <label>Systolic BP</label>
+              <input id="inSys" inputmode="numeric" placeholder="e.g. 125" />
+            </div>
+            <div class="col-6">
+              <label>Diastolic BP</label>
+              <input id="inDia" inputmode="numeric" placeholder="e.g. 86" />
+            </div>
+
+            <div class="col-12">
+              <label>Pulse (optional)</label>
+              <input id="inPulse" inputmode="numeric" placeholder="e.g. 65" />
+            </div>
+
+            <div class="col-6">
+              <label>Sleep score (optional)</label>
+              <input id="inSleepScore" inputmode="numeric" placeholder="e.g. 82" />
+            </div>
+            <div class="col-6">
+              <label>Total sleep minutes (optional)</label>
+              <input id="inSleepMin" inputmode="numeric" placeholder="e.g. 288" />
+            </div>
+
+            <div class="col-6">
+              <label>Lowest SpO₂ % (optional)</label>
+              <input id="inSpO2" inputmode="numeric" placeholder="e.g. 90" />
+            </div>
+            <div class="col-6">
+              <label>Snore minutes (optional)</label>
+              <input id="inSnore" inputmode="numeric" placeholder="e.g. 35" />
+            </div>
+
+            <div class="col-6">
+              <label>eGFR (optional)</label>
+              <input id="inEgfr" inputmode="numeric" placeholder="e.g. 50" />
+            </div>
+            <div class="col-6">
+              <label>Creatinine (optional)</label>
+              <input id="inCreat" placeholder="e.g. 138 µmol/L or 1.56 mg/dL" />
+            </div>
+
+            <div class="col-6">
+              <label>Hemoglobin (optional)</label>
+              <input id="inHb" inputmode="decimal" placeholder="e.g. 11.0 g/dL" />
+            </div>
+            <div class="col-6">
+              <label>MCV (optional)</label>
+              <input id="inMcv" inputmode="decimal" placeholder="e.g. 79.2 fL" />
+            </div>
+
+            <div class="col-12">
+              <label>FIT (optional)</label>
+              <select id="inFit">
+                <option value="">Select…</option>
+                <option value="Negative">Negative</option>
+                <option value="Positive">Positive</option>
+              </select>
+            </div>
+
+            <div class="col-12 row" style="justify-content:flex-end">
+              <button class="btn" id="btnSave">Save Snapshot</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="section-title" style="margin-top:0">
+            <h2>Latest Snapshot (selected person)</h2>
+            <div class="hint" id="latestMeta">—</div>
+          </div>
+
+          <div class="grid">
+            <div class="col-6 kpi">
+              <div class="label">Glucose</div>
+              <div class="value" id="latestGlucose">—</div>
+              <div class="sub" id="latestGlucoseSub">—</div>
+            </div>
+            <div class="col-6 kpi">
+              <div class="label">BP</div>
+              <div class="value" id="latestBP">—</div>
+              <div class="sub" id="latestBPSub">—</div>
+            </div>
+            <div class="col-6 kpi">
+              <div class="label">Sleep score</div>
+              <div class="value" id="latestSleep">—</div>
+              <div class="sub" id="latestSleepSub">—</div>
+            </div>
+            <div class="col-6 kpi">
+              <div class="label">Lowest SpO₂</div>
+              <div class="value" id="latestSpO2">—</div>
+              <div class="sub" id="latestSpO2Sub">—</div>
+            </div>
+          </div>
+
+          <div class="note">
+            Everything is stored locally on your phone (LocalStorage). No data is sent to any server.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SYMPTOM CHECKER -->
+    <section id="view-symptom" style="display:none">
+      <div class="section-title">
+        <h2>Symptom Checker</h2>
+        <div class="hint">Robust triage + dependent mode</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="grid">
+            <div class="col-12">
+              <label>Run this check for</label>
+              <select id="selPersonForSymptom"></select>
+              <div class="mini" style="margin-top:6px;">
+                If the user is checking for “mummy” after a stroke, ensure you select her profile.
+              </div>
+            </div>
+
+            <div class="col-6">
+              <label>Main body area</label>
+              <select id="selBodyPart"></select>
+            </div>
+
+            <div class="col-6">
+              <label>Duration</label>
+              <select id="selDuration">
+                <option value="minutes">Minutes–hours</option>
+                <option value="1-2days">1–2 days</option>
+                <option value="3-7days">3–7 days</option>
+                <option value="1-4weeks">1–4 weeks</option>
+                <option value=">1month">More than 1 month</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label>Pick symptoms (tap to select)</label>
+              <div class="chipRow" id="symptomChips"></div>
+              <div class="row" style="margin-top:10px;">
+                <input id="customSymptom" placeholder="Add symptom not listed (optional) e.g. 'new confusion'" />
+                <button class="btn secondary small" id="btnAddCustomSymptom" type="button">Add</button>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <label>Severity</label>
+              <select id="selSeverity">
+                <option value="mild">Mild</option>
+                <option value="moderate" selected>Moderate</option>
+                <option value="severe">Severe</option>
+              </select>
+            </div>
+
+            <div class="col-6">
+              <label>Has any of these conditions?</label>
+              <select id="selComorbids">
+                <option value="">Select…</option>
+                <option value="stroke">Stroke / TIA history</option>
+                <option value="heart">Heart disease / chest pain history</option>
+                <option value="diabetes">Diabetes</option>
+                <option value="kidney">Chronic kidney disease</option>
+                <option value="pregnancy">Pregnancy</option>
+                <option value="immuno">Immunosuppressed / chemo / HIV</option>
+                <option value="none">None of the above</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label>Additional notes (optional)</label>
+              <textarea id="notes" rows="3" placeholder="e.g. 'Had stroke last year, now new weakness and slurred speech'"></textarea>
+            </div>
+
+            <div class="col-12 row" style="justify-content:flex-end">
+              <button class="btn" id="btnRunCheck" type="button">Run Symptom Check</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="riskBox" id="resultBox" style="display:none;">
+            <div class="riskHeader">
+              <div>
+                <div style="font-weight:900; font-size:14px;">Triage Result</div>
+                <div class="mini" id="triageSummary">—</div>
+              </div>
+              <div class="badge" id="triageBadge">—</div>
+            </div>
+
+            <div id="redFlagsBlock" style="display:none;">
+              <div style="font-weight:900; margin-top:6px;">Red flags detected</div>
+              <ul class="clean" id="redFlagsList"></ul>
+            </div>
+
+            <div style="font-weight:900; margin-top:10px;">Most likely categories (not a diagnosis)</div>
+            <ul class="clean" id="likelyList"></ul>
+
+            <div style="font-weight:900; margin-top:10px;">Recommended next actions</div>
+            <ul class="clean" id="actionsList"></ul>
+
+            <div class="note" style="margin-top:12px;">
+              This engine prioritizes safety: it escalates stroke/heart/sepsis red flags aggressively.
+              If symptoms are rapidly worsening, do not wait for app guidance.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRENDS -->
+    <section id="view-trends" style="display:none">
+      <div class="section-title">
+        <h2>Trends</h2>
+        <div class="hint">Combined / Separate / Both</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="grid">
+            <div class="col-12">
+              <label>View data for which person?</label>
+              <select id="selPersonForTrends"></select>
+            </div>
+
+            <div class="col-6">
+              <label>View Mode</label>
+              <select id="viewMode">
+                <option value="both">Both</option>
+                <option value="combined">Combined Only</option>
+                <option value="separate">Separate Only</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label>Range</label>
+              <select id="rangeDays">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="60">Last 60 days</option>
+                <option value="180">Last 180 days</option>
+                <option value="365">Last 365 days</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row" style="align-items:center; gap:8px;">
+            <span class="tag">Daily HbA1c: rolling 30d</span>
+            <span class="tag" id="tagA1cStatus">Status: —</span>
+          </div>
+
+          <div class="chart-card" style="margin-top:10px;">
+            <canvas id="chartA1c"></canvas>
+          </div>
+
+          <div class="divider"></div>
+
+          <div id="combinedBlock">
+            <div class="section-title" style="margin-top:0">
+              <h2>Combined Chart</h2>
+              <div class="hint">Toggle metrics</div>
+            </div>
+
+            <div class="row" style="gap:10px; align-items:center;">
+              <label class="tag"><input type="checkbox" class="metricToggle" data-key="glucose" checked /> Glucose</label>
+              <label class="tag"><input type="checkbox" class="metricToggle" data-key="sys" checked /> Systolic</label>
+              <label class="tag"><input type="checkbox" class="metricToggle" data-key="dia" checked /> Diastolic</label>
+              <label class="tag"><input type="checkbox" class="metricToggle" data-key="sleep" checked /> Sleep</label>
+              <label class="tag"><input type="checkbox" class="metricToggle" data-key="spo2" checked /> SpO₂</label>
+            </div>
+
+            <div class="chart-card" style="margin-top:10px;">
+              <canvas id="chartCombined"></canvas>
+            </div>
+          </div>
+
+          <div id="separateBlock" style="margin-top:16px;">
+            <div class="section-title">
+              <h2>Separate Charts</h2>
+              <div class="hint">One per metric</div>
+            </div>
+
+            <div class="grid">
+              <div class="col-12 card chart-card" style="box-shadow:none">
+                <div class="mini">Glucose (mg/dL)</div>
+                <canvas id="chartGlucose"></canvas>
+              </div>
+
+              <div class="col-12 card chart-card" style="box-shadow:none">
+                <div class="mini">Blood Pressure (mmHg)</div>
+                <canvas id="chartBP"></canvas>
+              </div>
+
+              <div class="col-12 card chart-card" style="box-shadow:none">
+                <div class="mini">Sleep score</div>
+                <canvas id="chartSleep"></canvas>
+              </div>
+
+              <div class="col-12 card chart-card" style="box-shadow:none">
+                <div class="mini">Lowest SpO₂ (%)</div>
+                <canvas id="chartSpO2"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="note">
+            Combined chart is best for trend-shape; separate charts preserve unit scales.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORTS / OCR -->
+    <section id="view-reports" style="display:none">
+      <div class="section-title">
+        <h2>Reports & Screenshots</h2>
+        <div class="hint">Attach, extract, apply</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="grid">
+            <div class="col-12">
+              <label>Upload screenshot/photo (image)</label>
+              <input id="fileReport" type="file" accept="image/*" />
+              <div class="mini" style="margin-top:6px;">
+                OCR runs on-device. Verify extracted values before saving.
+              </div>
+            </div>
+
+            <div class="col-12 row" style="justify-content:flex-end;">
+              <button class="btn secondary" id="btnRunOcr" type="button">Extract Values (OCR)</button>
+            </div>
+
+            <div class="col-12">
+              <label>OCR output (raw)</label>
+              <textarea id="ocrRaw" rows="6" placeholder="OCR text will appear here…"></textarea>
+            </div>
+
+            <div class="col-12">
+              <div class="section-title" style="margin-top:0;">
+                <h2>Extracted Values</h2>
+                <div class="hint">Review before applying</div>
+              </div>
+
+              <div class="grid">
+                <div class="col-6">
+                  <label>Glucose</label>
+                  <input id="exGlucose" placeholder="e.g. 108" />
+                </div>
+                <div class="col-6">
+                  <label>BP (sys/dia)</label>
+                  <input id="exBP" placeholder="e.g. 125/86" />
+                </div>
+
+                <div class="col-6">
+                  <label>Sleep score</label>
+                  <input id="exSleep" placeholder="e.g. 82" />
+                </div>
+                <div class="col-6">
+                  <label>Lowest SpO₂</label>
+                  <input id="exSpO2" placeholder="e.g. 90" />
+                </div>
+
+                <div class="col-6">
+                  <label>Creatinine</label>
+                  <input id="exCreat" placeholder="e.g. 138 µmol/L" />
+                </div>
+                <div class="col-6">
+                  <label>eGFR</label>
+                  <input id="exEgfr" placeholder="e.g. 50" />
+                </div>
+
+                <div class="col-6">
+                  <label>Hemoglobin</label>
+                  <input id="exHb" placeholder="e.g. 11.0" />
+                </div>
+                <div class="col-6">
+                  <label>MCV</label>
+                  <input id="exMcv" placeholder="e.g. 79.2" />
+                </div>
+
+                <div class="col-6">
+                  <label>HbA1c % (if present)</label>
+                  <input id="exA1c" placeholder="e.g. 6.2" />
+                </div>
+                <div class="col-6">
+                  <label>FIT</label>
+                  <select id="exFit">
+                    <option value="">Select…</option>
+                    <option value="Negative">Negative</option>
+                    <option value="Positive">Positive</option>
+                  </select>
+                </div>
+
+                <div class="col-12 row" style="justify-content:flex-end;">
+                  <button class="btn" id="btnApplyExtracted" type="button">Apply to “Add Snapshot”</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="note">
+            Next enhancement: add PDF import + specialized lab parsers for common report formats.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILE / DEPENDENTS -->
+    <section id="view-profile" style="display:none">
+      <div class="section-title">
+        <h2>Profiles</h2>
+        <div class="hint">You + Dependents</div>
+      </div>
+
+      <div class="grid">
+        <div class="col-12 card">
+          <div class="grid">
+            <div class="col-12">
+              <label>Select profile to edit</label>
+              <select id="selProfile"></select>
+            </div>
+
+            <div class="col-6">
+              <label>Profile name</label>
+              <input id="pName" placeholder="e.g. Robert, Mum, Sister" />
+            </div>
+
+            <div class="col-6">
+              <label>Relationship</label>
+              <select id="pRelation">
+                <option value="self">Self</option>
+                <option value="parent">Parent</option>
+                <option value="spouse">Spouse</option>
+                <option value="child">Child</option>
+                <option value="sibling">Sibling</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="col-6">
+              <label>Date of Birth</label>
+              <input id="pDob" type="date" />
+            </div>
+
+            <div class="col-6">
+              <label>Sex</label>
+              <select id="pSex">
+                <option value="">Select…</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div class="col-6">
+              <label>Height (cm)</label>
+              <input id="pHeight" inputmode="decimal" placeholder="e.g. 178" />
+            </div>
+            <div class="col-6">
+              <label>Weight (kg) (optional)</label>
+              <input id="pWeight" inputmode="decimal" placeholder="e.g. 95" />
+            </div>
+
+            <div class="col-12">
+              <label>Known conditions (optional)</label>
+              <select id="pKnown" multiple size="5">
+                <option value="stroke">Stroke / TIA</option>
+                <option value="hypertension">Hypertension</option>
+                <option value="diabetes">Diabetes</option>
+                <option value="heart">Heart disease</option>
+                <option value="kidney">CKD</option>
+                <option value="asthma">Asthma/COPD</option>
+                <option value="seizure">Seizure disorder</option>
+                <option value="pregnancy">Pregnancy</option>
+              </select>
+              <div class="mini" style="margin-top:6px;">Hold to select multiple (Android). You can also leave blank.</div>
+            </div>
+
+            <div class="col-12 row" style="justify-content:flex-end;">
+              <button class="btn secondary" id="btnNewProfile" type="button">Add New Dependent</button>
+              <button class="btn danger" id="btnDeleteProfile" type="button">Delete Profile</button>
+              <button class="btn" id="btnSaveProfile" type="button">Save Profile</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="grid">
+            <div class="col-4 kpi">
+              <div class="label">Age</div>
+              <div class="value" id="profAge">—</div>
+              <div class="sub">Computed from DOB</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">BMI</div>
+              <div class="value" id="profBMI">—</div>
+              <div class="sub" id="profBMISub">Needs height + weight</div>
+            </div>
+
+            <div class="col-4 kpi">
+              <div class="label">BMI Class</div>
+              <div class="value" id="profBMIClass">—</div>
+              <div class="sub">Interpretation</div>
+            </div>
+          </div>
+
+          <div class="note">
+            Tip: Add “Mummy” as a dependent with stroke history, then run Symptom Check for her.
+          </div>
+        </div>
+      </div>
+    </section>
+
   </div>
-</div>
 
-<!-- CURRENT SNAPSHOT -->
-<div class="card">
-  <h3>Current Snapshot</h3>
-  <div class="grid">
-    <div class="metric"><h4>Glucose</h4><div class="val" id="v_glucose">—</div></div>
-    <div class="metric"><h4>BP</h4><div class="val" id="v_bp">—</div></div>
-    <div class="metric"><h4>Sleep</h4><div class="val" id="v_sleep">—</div></div>
-    <div class="metric"><h4>SpO₂</h4><div class="val" id="v_spo2">—</div></div>
-    <div class="metric"><h4>Est. HbA1c</h4><div class="val" id="v_hba1c">—</div></div>
+  <div class="nav">
+    <div class="nav-inner">
+      <button data-nav="dashboard" class="active">Snapshot</button>
+      <button data-nav="add">Add</button>
+      <button data-nav="symptom">Symptom Check</button>
+      <button data-nav="trends">Trends</button>
+      <button data-nav="reports">Reports</button>
+      <button data-nav="profile">Profiles</button>
+    </div>
   </div>
-</div>
 
-<!-- TRENDS -->
-<div class="card">
-  <h3>Trends</h3>
-  <canvas id="trendChart"></canvas>
-</div>
-
-<!-- MEDICAL REPORT UPLOAD -->
-<div class="card">
-  <h3>Medical Reports</h3>
-  <label>Attach report (image or PDF)</label>
-  <input type="file" accept="image/*,.pdf">
-  <p style="font-size:12px;color:var(--muted)">
-    Automatic extraction (OCR) will be enabled in next update.
-  </p>
-</div>
-
-</main>
+  <div class="toast" id="toast"></div>
 
 <script>
-/* ===== STORAGE ===== */
-const KEY="hc_snapshots_v1";
-const load=()=>JSON.parse(localStorage.getItem(KEY)||"[]");
-const save=d=>localStorage.setItem(KEY,JSON.stringify(d));
+/* =========================================================
+   STORAGE (multi-person)
+========================================================= */
+const KEY_PROFILES = "hc_profiles_v3";
+const KEY_ACTIVE_PERSON = "hc_active_person_v3";
+const KEY_READINGS = "hc_readings_by_person_v3"; // map personId -> readings[]
+/* ========================================================= */
 
-/* ===== AGE & BMI ===== */
-dob.onchange=()=>{
-  const d=new Date(dob.value);
-  const a=new Date().getFullYear()-d.getFullYear();
-  age.value=a>0?a:"";
+const $ = (id) => document.getElementById(id);
+
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=> t.style.display = "none", 2600);
+}
+
+function safeParseJSON(s, fallback){ try{ return JSON.parse(s); }catch{ return fallback; } }
+function nowISO(){ return new Date().toISOString(); }
+function fmtLocal(iso){ try{ return new Date(iso).toLocaleString(); }catch{ return iso; } }
+function toNum(v){ if(v===null||v===undefined) return null; const s=String(v).trim().replace(/,/g,''); if(!s) return null; const n=Number(s); return Number.isFinite(n)?n:null; }
+
+function uid(){
+  return "p_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+
+function getProfiles(){
+  const arr = safeParseJSON(localStorage.getItem(KEY_PROFILES) || "[]", []);
+  return Array.isArray(arr) ? arr : [];
+}
+
+function setProfiles(arr){ localStorage.setItem(KEY_PROFILES, JSON.stringify(arr)); }
+
+function getActivePersonId(){
+  return localStorage.getItem(KEY_ACTIVE_PERSON) || "";
+}
+
+function setActivePersonId(id){
+  localStorage.setItem(KEY_ACTIVE_PERSON, id);
+}
+
+function ensureDefaultProfile(){
+  let profiles = getProfiles();
+  if(profiles.length === 0){
+    const me = {
+      id: uid(),
+      name: "Me",
+      relation: "self",
+      dob: "",
+      sex: "",
+      heightCm: "",
+      weightKg: "",
+      known: []
+    };
+    profiles = [me];
+    setProfiles(profiles);
+    setActivePersonId(me.id);
+  } else {
+    const a = getActivePersonId();
+    if(!a || !profiles.find(p=>p.id===a)){
+      setActivePersonId(profiles[0].id);
+    }
+  }
+}
+
+function getReadingsMap(){
+  const m = safeParseJSON(localStorage.getItem(KEY_READINGS) || "{}", {});
+  return (m && typeof m === "object") ? m : {};
+}
+
+function setReadingsMap(m){
+  localStorage.setItem(KEY_READINGS, JSON.stringify(m));
+}
+
+function getReadingsFor(personId){
+  const m = getReadingsMap();
+  const arr = m[personId] || [];
+  return Array.isArray(arr) ? arr : [];
+}
+
+function setReadingsFor(personId, arr){
+  const m = getReadingsMap();
+  m[personId] = arr;
+  setReadingsMap(m);
+}
+
+function calcAge(dobISO){
+  if(!dobISO) return null;
+  const dob = new Date(dobISO);
+  if(String(dob) === "Invalid Date") return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if(m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  return (age>=0 && age<130) ? age : null;
+}
+
+function calcBMI(heightCm, weightKg){
+  const h = toNum(heightCm), w = toNum(weightKg);
+  if(!h || !w) return null;
+  const hm = h/100;
+  if(hm<=0) return null;
+  const bmi = w/(hm*hm);
+  return Math.round(bmi*10)/10;
+}
+
+function bmiClass(bmi){
+  if(bmi===null) return null;
+  if(bmi < 18.5) return "Underweight";
+  if(bmi < 25) return "Normal";
+  if(bmi < 30) return "Overweight";
+  return "Obesity";
+}
+
+/* HbA1c estimate from mean glucose:
+   A1c(%) ≈ (avgGlucose + 46.7)/28.7 */
+function estimateA1c(avgGlucose){
+  if(avgGlucose===null) return null;
+  const a=(avgGlucose+46.7)/28.7;
+  return Math.round(a*10)/10;
+}
+
+/* =========================================================
+   NAV
+========================================================= */
+const views = {
+  dashboard: $("view-dashboard"),
+  add: $("view-add"),
+  symptom: $("view-symptom"),
+  trends: $("view-trends"),
+  reports: $("view-reports"),
+  profile: $("view-profile"),
 };
-function calcBMI(){
-  const h=height.value/100,w=weight.value;
-  if(h&&w) bmi.value=(w/(h*h)).toFixed(1);
-}
-height.oninput=weight.oninput=calcBMI;
 
-/* ===== SAVE SNAPSHOT ===== */
-function saveSnapshot(){
-  const data=load();
-  data.push({
-    ts:Date.now(),
-    glucose:+glucose.value||null,
-    sys:+sys.value||null,
-    dia:+dia.value||null,
-    sleep:+sleep.value||null,
-    spo2:+spo2.value||null
+function setActiveView(name){
+  Object.keys(views).forEach(k => views[k].style.display = (k===name ? "" : "none"));
+  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.nav===name));
+  refreshAll();
+}
+
+document.querySelectorAll(".nav button").forEach(btn=>{
+  btn.addEventListener("click", ()=> setActiveView(btn.dataset.nav));
+});
+
+/* =========================================================
+   POPULATE PERSON SELECTS
+========================================================= */
+function populatePersonSelect(selId){
+  const sel = $(selId);
+  const profiles = getProfiles();
+  const active = getActivePersonId();
+  sel.innerHTML = "";
+  profiles.forEach(p=>{
+    const o=document.createElement("option");
+    o.value=p.id;
+    o.textContent = `${p.name}${p.relation && p.relation!=="self" ? " ("+p.relation+")" : ""}`;
+    if(p.id===active) o.selected=true;
+    sel.appendChild(o);
   });
-  save(data);
-  render();
 }
 
-/* ===== HBA1C EST ===== */
-function estA1c(avg){
-  return avg?((avg+46.7)/28.7).toFixed(2):"—";
+function populateAllPersonSelects(){
+  ["selPersonForSnapshot","selPersonForSymptom","selPersonForTrends"].forEach(populatePersonSelect);
+  $("tagPerson").textContent = "Person: " + getPersonName(getActivePersonId());
 }
 
-/* ===== RENDER ===== */
-let chart;
-function render(){
-  const d=load();
-  if(!d.length) return;
+function getPersonById(id){
+  return getProfiles().find(p=>p.id===id) || null;
+}
+function getPersonName(id){
+  const p=getPersonById(id);
+  return p ? p.name : "—";
+}
 
-  const last=d[d.length-1];
-  v_glucose.textContent=last.glucose??"—";
-  v_bp.textContent=last.sys?`${last.sys}/${last.dia}`:"—";
-  v_sleep.textContent=last.sleep??"—";
-  v_spo2.textContent=last.spo2??"—";
+/* Keep a single “active person” for snapshot landing, but allow per-tab selection too */
+function setActiveFromSelect(selectId){
+  const id = $(selectId).value;
+  if(id){
+    setActivePersonId(id);
+    populateAllPersonSelects();
+  }
+}
 
-  const avgG=d.map(x=>x.glucose).filter(Boolean)
-    .reduce((a,b)=>a+b,0)/(d.filter(x=>x.glucose).length||1);
-  v_hba1c.textContent=estA1c(avgG);
+/* =========================================================
+   DASHBOARD / SNAPSHOT RENDER
+========================================================= */
+function sortByTs(arr){
+  return [...arr].sort((a,b)=> Date.parse(a.ts||0) - Date.parse(b.ts||0));
+}
 
-  const labels=d.map(x=>new Date(x.ts).toLocaleDateString());
-  const glucoseData=d.map(x=>x.glucose);
+function groupDailyAvg(readings, key){
+  const map = new Map();
+  readings.forEach(r=>{
+    const t = Date.parse(r.ts||"");
+    if(!Number.isFinite(t)) return;
+    const day = new Date(t).toISOString().slice(0,10);
+    const v = toNum(r[key]);
+    if(v===null) return;
+    const a = map.get(day) || [];
+    a.push(v);
+    map.set(day, a);
+  });
+  const labels = Array.from(map.keys()).sort();
+  const values = labels.map(d=>{
+    const a = map.get(d) || [];
+    const avg = a.reduce((x,y)=>x+y,0)/(a.length||1);
+    return Math.round(avg*10)/10;
+  });
+  return {labels, values};
+}
 
-  if(chart) chart.destroy();
-  chart=new Chart(trendChart,{
+function rolling(values, window){
+  const out=[];
+  for(let i=0;i<values.length;i++){
+    let sum=0,cnt=0;
+    for(let j=Math.max(0,i-window+1); j<=i; j++){
+      const v=values[j];
+      if(v===null||v===undefined) continue;
+      sum+=v; cnt++;
+    }
+    out.push(cnt ? Math.round((sum/cnt)*10)/10 : null);
+  }
+  return out;
+}
+
+function computeOverall(latest){
+  if(!latest) return {label:"—"};
+  const g=toNum(latest.glucose);
+  const sys=toNum(latest.sys);
+  const dia=toNum(latest.dia);
+  const spo2=toNum(latest.spo2);
+
+  let score=0,counted=0;
+
+  if(g!==null){
+    counted++;
+    if(g>=70 && g<=140) score+=2;
+    else if((g>=55 && g<70) || (g>140 && g<=180)) score+=1;
+  }
+  if(sys!==null && dia!==null){
+    counted++;
+    if(sys<130 && dia<80) score+=2;
+    else if(sys<140 && dia<90) score+=1;
+  }
+  if(spo2!==null){
+    counted++;
+    if(spo2>=92) score+=2;
+    else if(spo2>=88) score+=1;
+  }
+  if(counted===0) return {label:"—"};
+  const avg=score/counted;
+  if(avg>=1.6) return {label:"GREEN"};
+  if(avg>=0.9) return {label:"AMBER"};
+  return {label:"RED"};
+}
+
+function renderSnapshot(){
+  const personId = getActivePersonId();
+  $("tagPerson").textContent = "Person: " + getPersonName(personId);
+
+  const readings = sortByTs(getReadingsFor(personId));
+  const latest = readings.length ? readings[readings.length-1] : null;
+
+  $("lastUpdated").textContent = "Last updated: " + (latest ? fmtLocal(latest.ts) : "—");
+
+  const overall = computeOverall(latest);
+  $("overallPill").textContent = "Overall: " + overall.label;
+  $("overallPill").style.color =
+    overall.label==="GREEN" ? "var(--ok)" :
+    (overall.label==="RED" ? "var(--bad)" : "var(--muted)");
+
+  if(!latest){
+    $("kpiGlucose").textContent="—"; $("kpiGlucoseSub").textContent="No data yet";
+    $("kpiBP").textContent="—"; $("kpiBPSub").textContent="No data yet";
+    $("kpiSleep").textContent="—"; $("kpiSleepSub").textContent="No data yet";
+    $("kpiSpO2").textContent="—"; $("kpiSpO2Sub").textContent="No data yet";
+    $("kpiKidney").textContent="—"; $("kpiKidneySub").textContent="Latest labs not set";
+    $("kpiBlood").textContent="—"; $("kpiBloodSub").textContent="Latest indices not set";
+  } else {
+    const g=toNum(latest.glucose);
+    $("kpiGlucose").textContent = g!==null ? String(g) : "—";
+    $("kpiGlucoseSub").textContent = latest.trend ? ("Trend: "+latest.trend) : "Latest logged value";
+
+    const sys=toNum(latest.sys), dia=toNum(latest.dia);
+    $("kpiBP").textContent = (sys!==null && dia!==null) ? `${sys}/${dia}` : "—";
+    $("kpiBPSub").textContent = (sys!==null && dia!==null) ? "Systolic/Diastolic" : "No data yet";
+
+    const sl=toNum(latest.sleepScore);
+    $("kpiSleep").textContent = sl!==null ? String(sl) : "—";
+    $("kpiSleepSub").textContent = toNum(latest.sleepMin) ? `${latest.sleepMin} min` : "No data yet";
+
+    const sp=toNum(latest.spo2);
+    $("kpiSpO2").textContent = sp!==null ? `${sp}%` : "—";
+    $("kpiSpO2Sub").textContent = toNum(latest.snoreMin) ? `Snore: ${latest.snoreMin} min` : "No data yet";
+
+    const egfr=toNum(latest.egfr);
+    const creat=(latest.creatinine||"").trim();
+    $("kpiKidney").textContent = egfr!==null ? `eGFR ${egfr}` : (creat ? "Creatinine" : "—");
+    $("kpiKidneySub").textContent = egfr!==null ? "mL/min/1.73m²" : (creat ? creat : "Latest labs not set");
+
+    const hb=toNum(latest.hb), mcv=toNum(latest.mcv);
+    $("kpiBlood").textContent = hb!==null ? `Hb ${hb}` : "—";
+    $("kpiBloodSub").textContent = mcv!==null ? `MCV ${mcv}` : (latest.fit ? `FIT: ${latest.fit}` : "Latest indices not set");
+  }
+
+  const person = getPersonById(personId);
+  const age = person ? calcAge(person.dob) : null;
+  $("tagAge").textContent = "Age: " + (age!==null ? age : "—");
+
+  const bmi = person ? calcBMI(person.heightCm, person.weightKg) : null;
+  $("tagBMI").textContent = "BMI: " + (bmi!==null ? bmi : "—");
+
+  // HbA1c estimate from rolling 30d daily glucose avg
+  const dG = groupDailyAvg(readings, "glucose");
+  const rolling30 = rolling(dG.values, 30);
+  const lastAvg = rolling30.length ? rolling30[rolling30.length-1] : null;
+  const a1c = estimateA1c(lastAvg);
+  $("tagHbA1c").textContent = "Est. HbA1c: " + (a1c!==null ? (a1c + "%") : "—");
+}
+
+/* =========================================================
+   ADD SNAPSHOT
+========================================================= */
+function buildReadingFromInputs(){
+  return {
+    ts: nowISO(),
+    glucose: toNum($("inGlucose").value),
+    trend: ($("inTrend").value || "").trim(),
+    sys: toNum($("inSys").value),
+    dia: toNum($("inDia").value),
+    pulse: toNum($("inPulse").value),
+    sleepScore: toNum($("inSleepScore").value),
+    sleepMin: toNum($("inSleepMin").value),
+    spo2: toNum($("inSpO2").value),
+    snoreMin: toNum($("inSnore").value),
+    egfr: toNum($("inEgfr").value),
+    creatinine: ($("inCreat").value || "").trim(),
+    hb: toNum($("inHb").value),
+    mcv: toNum($("inMcv").value),
+    fit: ($("inFit").value || "").trim(),
+  };
+}
+function validateReading(r){
+  return [r.glucose,r.sys,r.dia,r.sleepScore,r.spo2,r.egfr,r.hb].some(v=>v!==null && v!==undefined && v!=="");
+}
+
+function clearSnapshotInputs(){
+  ["inGlucose","inSys","inDia","inPulse","inSleepScore","inSleepMin","inSpO2","inSnore","inEgfr","inCreat","inHb","inMcv"].forEach(id=>$(id).value="");
+  $("inTrend").value="";
+  $("inFit").value="";
+}
+
+$("btnSave").addEventListener("click", ()=>{
+  const personId = $("selPersonForSnapshot").value || getActivePersonId();
+  if(!personId){ toast("No profile found. Create one in Profiles."); return; }
+
+  const r = buildReadingFromInputs();
+  if(!validateReading(r)){ toast("Enter at least one reading (glucose/BP/sleep/SpO₂/labs)."); return; }
+
+  const arr = getReadingsFor(personId);
+  arr.push(r);
+  setReadingsFor(personId, arr);
+
+  toast("Snapshot saved.");
+  clearSnapshotInputs();
+
+  // set active person to this one for dashboard
+  setActivePersonId(personId);
+  populateAllPersonSelects();
+  renderSnapshot();
+  renderAddLatest();
+});
+
+function renderAddLatest(){
+  const personId = $("selPersonForSnapshot").value || getActivePersonId();
+  const readings = sortByTs(getReadingsFor(personId));
+  const latest = readings.length ? readings[readings.length-1] : null;
+  $("latestMeta").textContent = latest ? ("Latest: "+fmtLocal(latest.ts)) : "No saved readings yet";
+
+  $("latestGlucose").textContent = latest && toNum(latest.glucose)!==null ? String(toNum(latest.glucose)) : "—";
+  $("latestGlucoseSub").textContent = latest && latest.trend ? ("Trend: "+latest.trend) : "—";
+
+  const sys = latest ? toNum(latest.sys) : null;
+  const dia = latest ? toNum(latest.dia) : null;
+  $("latestBP").textContent = (sys!==null && dia!==null) ? `${sys}/${dia}` : "—";
+  $("latestBPSub").textContent = (latest && toNum(latest.pulse)!==null) ? ("Pulse: "+latest.pulse) : "—";
+
+  $("latestSleep").textContent = latest && toNum(latest.sleepScore)!==null ? String(toNum(latest.sleepScore)) : "—";
+  $("latestSleepSub").textContent = latest && toNum(latest.sleepMin)!==null ? ("Minutes: "+latest.sleepMin) : "—";
+
+  $("latestSpO2").textContent = latest && toNum(latest.spo2)!==null ? (toNum(latest.spo2)+"%") : "—";
+  $("latestSpO2Sub").textContent = latest && toNum(latest.snoreMin)!==null ? ("Snore: "+latest.snoreMin+" min") : "—";
+}
+
+/* When person selection changes */
+$("selPersonForSnapshot").addEventListener("change", ()=>{
+  setActiveFromSelect("selPersonForSnapshot");
+  renderAddLatest();
+  renderSnapshot();
+});
+$("selPersonForTrends").addEventListener("change", ()=> setActiveFromSelect("selPersonForTrends"));
+$("selPersonForSymptom").addEventListener("change", ()=> setActiveFromSelect("selPersonForSymptom"));
+
+/* =========================================================
+   TRENDS (per-person)
+========================================================= */
+let chartCombined=null, chartGlucose=null, chartBP=null, chartSleep=null, chartSpO2=null, chartA1c=null;
+function destroyChart(c){ try{ if(c) c.destroy(); }catch{} }
+
+function filterByRange(readings, days){
+  const d = Number(days);
+  if(!Number.isFinite(d)) return readings;
+  const cutoff = Date.now() - d*24*3600*1000;
+  return readings.filter(r=>{
+    const t = Date.parse(r.ts||"");
+    return Number.isFinite(t) && t>=cutoff;
+  });
+}
+
+function renderTrends(){
+  const mode = $("viewMode").value;
+  const range = $("rangeDays").value;
+  const personId = $("selPersonForTrends").value || getActivePersonId();
+
+  $("combinedBlock").style.display = (mode==="combined") ? "" : (mode==="separate" ? "none" : "");
+  $("separateBlock").style.display = (mode==="separate") ? "" : (mode==="combined" ? "none" : "");
+
+  const all = sortByTs(getReadingsFor(personId));
+  const r = filterByRange(all, range);
+
+  const dG = groupDailyAvg(r, "glucose");
+  const a1cDaily = dG.values.map(v=>estimateA1c(v));
+  const a1cRolling30 = rolling(a1cDaily, 30);
+
+  const lastA = a1cRolling30.length ? a1cRolling30[a1cRolling30.length-1] : null;
+  let aStatus="—";
+  if(lastA!==null){
+    if(lastA<=6.5) aStatus="Good control";
+    else if(lastA<=7.5) aStatus="Moderate";
+    else aStatus="Needs attention";
+  }
+  $("tagA1cStatus").textContent = "Status: " + aStatus;
+
+  destroyChart(chartA1c);
+  chartA1c = new Chart($("chartA1c"), {
     type:"line",
-    data:{labels,datasets:[{
-      label:"Glucose",
-      data:glucoseData,
-      borderColor:"#4da3ff",
-      tension:.3
-    }]},
-    options:{responsive:true}
+    data:{ labels:dG.labels, datasets:[{ label:"Estimated HbA1c (Rolling 30d)", data:a1cRolling30, tension:0.25, borderWidth:2, pointRadius:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
+  });
+
+  const series = {
+    glucose: groupDailyAvg(r, "glucose"),
+    sys: groupDailyAvg(r, "sys"),
+    dia: groupDailyAvg(r, "dia"),
+    sleep: groupDailyAvg(r, "sleepScore"),
+    spo2: groupDailyAvg(r, "spo2"),
+  };
+
+  // union labels
+  const dateSet = new Set();
+  Object.values(series).forEach(s=>s.labels.forEach(l=>dateSet.add(l)));
+  const labels = Array.from(dateSet).sort();
+  const align = (s)=>{
+    const map=new Map(s.labels.map((l,i)=>[l,s.values[i]]));
+    return labels.map(l=>map.has(l)?map.get(l):null);
+  };
+
+  const activeKeys = Array.from(document.querySelectorAll(".metricToggle")).filter(x=>x.checked).map(x=>x.dataset.key);
+  const datasets=[];
+  if(activeKeys.includes("glucose")) datasets.push({label:"Glucose", data:align(series.glucose), borderWidth:2, pointRadius:2, tension:0.25});
+  if(activeKeys.includes("sys")) datasets.push({label:"Systolic", data:align(series.sys), borderWidth:2, pointRadius:2, tension:0.25});
+  if(activeKeys.includes("dia")) datasets.push({label:"Diastolic", data:align(series.dia), borderWidth:2, pointRadius:2, tension:0.25});
+  if(activeKeys.includes("sleep")) datasets.push({label:"Sleep score", data:align(series.sleep), borderWidth:2, pointRadius:2, tension:0.25});
+  if(activeKeys.includes("spo2")) datasets.push({label:"SpO₂", data:align(series.spo2), borderWidth:2, pointRadius:2, tension:0.25});
+
+  destroyChart(chartCombined);
+  chartCombined = new Chart($("chartCombined"), {
+    type:"line",
+    data:{ labels, datasets },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
+  });
+
+  destroyChart(chartGlucose);
+  chartGlucose = new Chart($("chartGlucose"), {
+    type:"line",
+    data:{ labels:series.glucose.labels, datasets:[{ label:"Glucose", data:series.glucose.values, borderWidth:2, pointRadius:2, tension:0.25 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
+  });
+
+  // BP
+  const bpLabels = Array.from(new Set([...series.sys.labels, ...series.dia.labels])).sort();
+  const sysMap=new Map(series.sys.labels.map((l,i)=>[l,series.sys.values[i]]));
+  const diaMap=new Map(series.dia.labels.map((l,i)=>[l,series.dia.values[i]]));
+  const sysVals=bpLabels.map(l=>sysMap.has(l)?sysMap.get(l):null);
+  const diaVals=bpLabels.map(l=>diaMap.has(l)?diaMap.get(l):null);
+
+  destroyChart(chartBP);
+  chartBP = new Chart($("chartBP"), {
+    type:"line",
+    data:{ labels:bpLabels, datasets:[
+      { label:"Systolic", data:sysVals, borderWidth:2, pointRadius:2, tension:0.25 },
+      { label:"Diastolic", data:diaVals, borderWidth:2, pointRadius:2, tension:0.25 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
+  });
+
+  destroyChart(chartSleep);
+  chartSleep = new Chart($("chartSleep"), {
+    type:"line",
+    data:{ labels:series.sleep.labels, datasets:[{ label:"Sleep score", data:series.sleep.values, borderWidth:2, pointRadius:2, tension:0.25 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
+  });
+
+  destroyChart(chartSpO2);
+  chartSpO2 = new Chart($("chartSpO2"), {
+    type:"line",
+    data:{ labels:series.spo2.labels, datasets:[{ label:"Lowest SpO₂", data:series.spo2.values, borderWidth:2, pointRadius:2, tension:0.25 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true } } } }
   });
 }
-render();
-</script>
 
+$("viewMode").addEventListener("change", renderTrends);
+$("rangeDays").addEventListener("change", renderTrends);
+document.querySelectorAll(".metricToggle").forEach(cb=>cb.addEventListener("change", renderTrends));
+
+/* =========================================================
+   OCR EXTRACTION (Reports)
+========================================================= */
+function parseExtracted(text){
+  const t=(text||"").replace(/\u00A0/g," ").replace(/[|]/g," ").replace(/\s+/g," ").trim();
+  let glucose="", bp="", sleep="", spo2="", creat="", egfr="", hb="", mcv="", a1c="", fit="";
+
+  let m=t.match(/glucose[^0-9]{0,12}(\d{2,3})/i);
+  if(m) glucose=m[1];
+  if(!glucose){
+    m=t.match(/(\d{2,3})\s*(mg\/dL|mgdl)/i);
+    if(m) glucose=m[1];
+  }
+
+  m=t.match(/(\d{2,3})\s*\/\s*(\d{2,3})/);
+  if(m) bp=`${m[1]}/${m[2]}`;
+  if(!bp){
+    const s=t.match(/systolic[^0-9]{0,12}(\d{2,3})/i);
+    const d=t.match(/diastolic[^0-9]{0,12}(\d{2,3})/i);
+    if(s && d) bp=`${s[1]}/${d[1]}`;
+  }
+
+  m=t.match(/sleep[^0-9]{0,14}(score[^0-9]{0,10})?(\d{2,3})/i);
+  if(m) sleep=m[m.length-1];
+
+  m=t.match(/spo2[^0-9]{0,12}(\d{2,3})/i);
+  if(m) spo2=m[1];
+
+  m=t.match(/creatinine[^0-9]{0,14}(\d+(\.\d+)?)\s*(umol\/l|µmol\/l|mg\/dl)?/i);
+  if(m) creat=(m[1]||"") + (m[3] ? (" "+m[3]) : "");
+
+  m=t.match(/egfr[^0-9]{0,14}(\d{1,3})/i);
+  if(m) egfr=m[1];
+
+  m=t.match(/(hemoglobin|haemoglobin|hb)[^0-9]{0,14}(\d+(\.\d+)?)/i);
+  if(m) hb=m[2];
+
+  m=t.match(/mcv[^0-9]{0,14}(\d+(\.\d+)?)/i);
+  if(m) mcv=m[1];
+
+  m=t.match(/hba1c[^0-9]{0,14}(\d+(\.\d+)?)/i);
+  if(m) a1c=m[1];
+
+  if(/fecal occult|fit/i.test(t)){
+    if(/positive/i.test(t)) fit="Positive";
+    else if(/negative/i.test(t)) fit="Negative";
+  }
+
+  return {glucose,bp,sleep,spo2,creat,egfr,hb,mcv,a1c,fit};
+}
+
+$("btnRunOcr").addEventListener("click", async ()=>{
+  const file = $("fileReport").files && $("fileReport").files[0];
+  if(!file){ toast("Please choose an image first."); return; }
+
+  toast("Running OCR… keep page open");
+  $("btnRunOcr").disabled=true; $("btnRunOcr").textContent="Extracting…";
+
+  try{
+    const { data } = await Tesseract.recognize(file, "eng");
+    const raw = (data && data.text) ? data.text : "";
+    $("ocrRaw").value = raw;
+
+    const ex = parseExtracted(raw);
+    $("exGlucose").value=ex.glucose||"";
+    $("exBP").value=ex.bp||"";
+    $("exSleep").value=ex.sleep||"";
+    $("exSpO2").value=ex.spo2||"";
+    $("exCreat").value=ex.creat||"";
+    $("exEgfr").value=ex.egfr||"";
+    $("exHb").value=ex.hb||"";
+    $("exMcv").value=ex.mcv||"";
+    $("exA1c").value=ex.a1c||"";
+    $("exFit").value=ex.fit||"";
+
+    toast("OCR complete. Review extracted values.");
+  }catch(e){
+    console.error(e);
+    toast("OCR failed. Try a clearer screenshot.");
+  }finally{
+    $("btnRunOcr").disabled=false; $("btnRunOcr").textContent="Extract Values (OCR)";
+  }
+});
+
+$("btnApplyExtracted").addEventListener("click", ()=>{
+  const g=$("exGlucose").value.trim();
+  const bp=$("exBP").value.trim();
+  const sleep=$("exSleep").value.trim();
+  const sp=$("exSpO2").value.trim();
+  const egfr=$("exEgfr").value.trim();
+  const creat=$("exCreat").value.trim();
+  const hb=$("exHb").value.trim();
+  const mcv=$("exMcv").value.trim();
+  const fit=$("exFit").value.trim();
+
+  if(g) $("inGlucose").value=g;
+  if(bp && bp.includes("/")){
+    const [s,d]=bp.split("/").map(x=>x.trim());
+    if(s) $("inSys").value=s;
+    if(d) $("inDia").value=d;
+  }
+  if(sleep) $("inSleepScore").value=sleep;
+  if(sp) $("inSpO2").value=sp;
+  if(egfr) $("inEgfr").value=egfr;
+  if(creat) $("inCreat").value=creat;
+  if(hb) $("inHb").value=hb;
+  if(mcv) $("inMcv").value=mcv;
+  if(fit) $("inFit").value=fit;
+
+  toast("Applied to Add Snapshot. Tap Save Snapshot.");
+  setActiveView("add");
+});
+
+/* =========================================================
+   PROFILES / DEPENDENTS
+========================================================= */
+function populateProfileSelect(){
+  const sel=$("selProfile");
+  const profiles=getProfiles();
+  const active=getActivePersonId();
+  sel.innerHTML="";
+  profiles.forEach(p=>{
+    const o=document.createElement("option");
+    o.value=p.id;
+    o.textContent = `${p.name}${p.relation && p.relation!=="self" ? " ("+p.relation+")" : ""}`;
+    if(p.id===active) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+
+function readMultiSelectValues(sel){
+  return Array.from(sel.selectedOptions).map(o=>o.value);
+}
+function setMultiSelectValues(sel, values){
+  const set = new Set(values||[]);
+  Array.from(sel.options).forEach(o=>o.selected = set.has(o.value));
+}
+
+function loadProfileEditor(){
+  populateProfileSelect();
+  const id = $("selProfile").value || getActivePersonId();
+  const p = getPersonById(id);
+  if(!p) return;
+
+  $("pName").value=p.name||"";
+  $("pRelation").value=p.relation||"self";
+  $("pDob").value=p.dob||"";
+  $("pSex").value=p.sex||"";
+  $("pHeight").value=p.heightCm||"";
+  $("pWeight").value=p.weightKg||"";
+  setMultiSelectValues($("pKnown"), p.known||[]);
+
+  const age=calcAge(p.dob);
+  $("profAge").textContent = age!==null ? String(age) : "—";
+  const bmi=calcBMI(p.heightCm, p.weightKg);
+  $("profBMI").textContent = bmi!==null ? String(bmi) : "—";
+  $("profBMISub").textContent = bmi!==null ? "Computed from height/weight" : "Needs height + weight";
+  const cls=bmiClass(bmi);
+  $("profBMIClass").textContent = cls || "—";
+}
+
+$("selProfile").addEventListener("change", ()=>{
+  const id=$("selProfile").value;
+  if(id){
+    setActivePersonId(id);
+    populateAllPersonSelects();
+    loadProfileEditor();
+    renderSnapshot();
+  }
+});
+
+$("btnNewProfile").addEventListener("click", ()=>{
+  const profiles=getProfiles();
+  const p={ id:uid(), name:"New Dependent", relation:"parent", dob:"", sex:"", heightCm:"", weightKg:"", known:[] };
+  profiles.push(p);
+  setProfiles(profiles);
+  setActivePersonId(p.id);
+  toast("New profile created. Edit details and save.");
+  populateAllPersonSelects();
+  loadProfileEditor();
+  renderSnapshot();
+});
+
+$("btnDeleteProfile").addEventListener("click", ()=>{
+  const id=$("selProfile").value;
+  const profiles=getProfiles();
+  if(profiles.length<=1){ toast("You must keep at least one profile."); return; }
+  const p=getPersonById(id);
+  const ok=confirm(`Delete profile '${p ? p.name : id}'? This will not auto-delete stored readings unless you reset.`);
+  if(!ok) return;
+  const remaining = profiles.filter(x=>x.id!==id);
+  setProfiles(remaining);
+  setActivePersonId(remaining[0].id);
+  toast("Profile deleted.");
+  populateAllPersonSelects();
+  loadProfileEditor();
+  renderSnapshot();
+});
+
+$("btnSaveProfile").addEventListener("click", ()=>{
+  const id=$("selProfile").value || getActivePersonId();
+  const profiles=getProfiles();
+  const idx=profiles.findIndex(p=>p.id===id);
+  if(idx<0){ toast("Profile not found."); return; }
+
+  profiles[idx] = {
+    ...profiles[idx],
+    name: ($("pName").value||"").trim() || "Unnamed",
+    relation: $("pRelation").value || "self",
+    dob: $("pDob").value || "",
+    sex: $("pSex").value || "",
+    heightCm: $("pHeight").value || "",
+    weightKg: $("pWeight").value || "",
+    known: readMultiSelectValues($("pKnown")),
+  };
+
+  setProfiles(profiles);
+  setActivePersonId(id);
+  toast("Profile saved.");
+  populateAllPersonSelects();
+  loadProfileEditor();
+  renderSnapshot();
+});
+
+/* =========================================================
+   RESET
+========================================================= */
+$("btnClearAll").addEventListener("click", ()=>{
+  const ok = confirm("Reset ALL saved readings and ALL profiles on this device?");
+  if(!ok) return;
+  localStorage.removeItem(KEY_PROFILES);
+  localStorage.removeItem(KEY_ACTIVE_PERSON);
+  localStorage.removeItem(KEY_READINGS);
+  toast("Reset done.");
+  init();
+});
+
+/* =========================================================
+   SYMPTOM CHECKER ENGINE (Expandable library)
+========================================================= */
+
+/* We can keep expanding these lists. This is intentionally structured. */
+const BODY_PARTS = [
+  "Head/Brain", "Eyes/Vision", "Ears", "Nose/Sinuses", "Mouth/Throat",
+  "Neck", "Chest/Breathing", "Heart/Circulation", "Abdomen/Stomach", "Pelvis/Urinary",
+  "Back/Spine", "Arms/Hands", "Legs/Feet", "Skin", "General/Whole Body",
+  "Mental/Neurologic", "Women’s Health", "Men’s Health"
+];
+
+/* Symptom catalog: bodyPart -> symptoms */
+const SYMPTOMS = {
+  "Head/Brain": [
+    "Severe headache (worst ever)","New headache with fever","Headache after fall/trauma",
+    "Dizziness/vertigo","Fainting/blackout","Seizure/convulsions","Confusion/disorientation",
+    "New memory problems","Nausea/vomiting with headache","Neck stiffness",
+    "Facial droop","Slurred speech","Sudden weakness (one side)","Sudden numbness/tingling (one side)",
+    "Loss of balance/coordination","New trouble walking","Sudden vision change"
+  ],
+  "Eyes/Vision": [
+    "Sudden vision loss","Blurred vision","Double vision","Eye pain","Red eye","Flashing lights/floaters",
+    "Vision loss in one eye","Halos around lights","New droopy eyelid"
+  ],
+  "Ears": [
+    "Ear pain","Hearing loss","Ringing in ears (tinnitus)","Ear discharge","Dizziness with ear symptoms"
+  ],
+  "Nose/Sinuses": [
+    "Nasal congestion","Facial pressure/pain","Nosebleed","Loss of smell","Thick nasal discharge","Sinus headache"
+  ],
+  "Mouth/Throat": [
+    "Sore throat","Trouble swallowing","Hoarse voice","Mouth ulcers","Dental pain","Swollen tonsils","Drooling"
+  ],
+  "Neck": [
+    "Neck pain","Neck stiffness","Swollen glands","Neck mass/lump","Pain radiating to arm","Whiplash/trauma"
+  ],
+  "Chest/Breathing": [
+    "Shortness of breath","Wheezing","Cough","Coughing blood","Chest tightness","Rapid breathing",
+    "Low oxygen readings","Breathing worse lying flat","Sudden sharp chest pain with breathing"
+  ],
+  "Heart/Circulation": [
+    "Chest pain/pressure","Pain radiating to jaw/arm","Palpitations","Very fast heart rate",
+    "Fainting with palpitations","Leg swelling","Cold/blue fingers","Claudication (leg pain walking)",
+    "Sudden severe weakness + sweating"
+  ],
+  "Abdomen/Stomach": [
+    "Abdominal pain","Severe abdominal pain","Vomiting","Vomiting blood","Black stools",
+    "Diarrhea","Bloody diarrhea","Constipation","Severe bloating","Heartburn/reflux",
+    "Right lower abdominal pain","Right upper abdominal pain","Jaundice (yellow eyes/skin)"
+  ],
+  "Pelvis/Urinary": [
+    "Painful urination","Blood in urine","Urinary frequency","Urinary retention","Incontinence/new accidents",
+    "Flank pain","Fever with urinary symptoms","Vaginal bleeding","Vaginal discharge","Testicular pain"
+  ],
+  "Back/Spine": [
+    "Low back pain","Back pain with fever","Back pain after fall/trauma","Back pain with leg weakness",
+    "Numbness in groin/saddle area","Loss of bowel/bladder control","Sciatica (shooting leg pain)"
+  ],
+  "Arms/Hands": [
+    "Arm weakness","Hand numbness/tingling","Joint swelling","Severe arm pain","New tremor",
+    "Loss of grip strength","Cold/pale hand","Hand/arm swelling"
+  ],
+  "Legs/Feet": [
+    "Leg weakness","Leg numbness/tingling","Calf pain/swelling","Foot ulcer/wound",
+    "Sudden inability to walk","One-sided leg swelling","Cold/pale foot","Severe leg pain"
+  ],
+  "Skin": [
+    "Rash","Hives","Swelling of face/lips","Severe itching","Skin infection/boil","Red hot swollen area",
+    "Non-healing wound","New mole changing","Purple spots/bruising without reason"
+  ],
+  "General/Whole Body": [
+    "Fever","High fever >39C","Chills/rigors","Severe fatigue","Unintentional weight loss",
+    "Severe body pains","Dehydration","Loss of appetite","Night sweats","New severe weakness",
+    "Low blood sugar symptoms","Very high blood sugar symptoms"
+  ],
+  "Mental/Neurologic": [
+    "New confusion","Sudden personality change","New severe anxiety/panic","Depression with suicidal thoughts",
+    "Hallucinations","New severe agitation","New difficulty speaking","Trouble understanding speech",
+    "One-sided weakness","One-sided numbness","Facial droop","New severe dizziness"
+  ],
+  "Women’s Health": [
+    "Pregnancy","Severe abdominal pain in pregnancy","Vaginal bleeding (pregnant)","Heavy vaginal bleeding",
+    "Severe pelvic pain","Foul vaginal discharge","Postpartum complications"
+  ],
+  "Men’s Health": [
+    "Testicular pain/swelling","Erectile dysfunction (new)","Urinary retention","Blood in semen"
+  ]
+};
+
+/* Red-flag patterns (especially stroke relapse) */
+const RED_FLAGS = [
+  { key:"stroke_FAST", label:"Possible stroke/TIA: facial droop, arm weakness, speech difficulty, sudden imbalance or vision loss.", matchAny:[
+    "Facial droop","Slurred speech","Sudden weakness (one side)","Sudden numbness/tingling (one side)","Loss of balance/coordination","Sudden vision loss","Vision loss in one eye","New difficulty speaking","Trouble understanding speech","Sudden inability to walk"
+  ]},
+  { key:"heart_attack", label:"Possible heart attack: chest pressure with radiation, sweating, breathlessness.", matchAny:[
+    "Chest pain/pressure","Pain radiating to jaw/arm","Sudden severe weakness + sweating","Shortness of breath"
+  ]},
+  { key:"sepsis", label:"Possible severe infection: high fever, chills/rigors, confusion, very fast breathing.", matchAny:[
+    "High fever >39C","Chills/rigors","New confusion","Rapid breathing"
+  ]},
+  { key:"pe", label:"Possible blood clot in lung: sudden shortness of breath, chest pain with breathing, coughing blood.", matchAny:[
+    "Shortness of breath","Sudden sharp chest pain with breathing","Coughing blood"
+  ]},
+  { key:"dvt", label:"Possible DVT: calf pain/swelling or one-sided leg swelling.", matchAny:[
+    "Calf pain/swelling","One-sided leg swelling"
+  ]},
+  { key:"cauda", label:"Possible cauda equina: saddle numbness or loss of bowel/bladder control.", matchAny:[
+    "Numbness in groin/saddle area","Loss of bowel/bladder control","Urinary retention"
+  ]},
+  { key:"anaphylaxis", label:"Possible anaphylaxis: swelling of face/lips, hives, breathing difficulty.", matchAny:[
+    "Swelling of face/lips","Hives","Shortness of breath","Wheezing"
+  ]},
+];
+
+/* Likely categories (rule-based scoring). Expand as we iterate. */
+const CATEGORIES = [
+  {
+    name:"Stroke/TIA relapse or complication",
+    scoreAny:["Facial droop","Slurred speech","Sudden weakness (one side)","Sudden numbness/tingling (one side)","New difficulty speaking","Trouble understanding speech","Loss of balance/coordination","Sudden inability to walk","Sudden vision loss","Vision loss in one eye","New confusion"],
+    bonusIfComorbid:"stroke",
+    actions:[
+      "If ANY sudden one-sided weakness, facial droop, speech trouble, new severe confusion, or sudden vision loss: call emergency services now.",
+      "Note time of symptom onset and bring medication list.",
+      "Do not give food/drink if swallowing is impaired."
+    ]
+  },
+  {
+    name:"Hypertensive emergency / BP-related neuro symptoms",
+    scoreAny:["Severe headache (worst ever)","Sudden vision change","New confusion","Chest pain/pressure","Shortness of breath"],
+    actions:[
+      "Check BP if possible. If very high with chest pain, neuro symptoms, or breathlessness: urgent/emergency evaluation.",
+      "Avoid NSAIDs unless doctor-directed."
+    ]
+  },
+  {
+    name:"Infection (respiratory/urinary/other)",
+    scoreAny:["Fever","High fever >39C","Chills/rigors","Cough","Painful urination","Fever with urinary symptoms","Red hot swollen area","Skin infection/boil"],
+    actions:[
+      "Hydrate and monitor temperature.",
+      "If fever with confusion, rigors, low oxygen, or very fast breathing: urgent/emergency evaluation."
+    ]
+  },
+  {
+    name:"Medication side effects / metabolic issue",
+    scoreAny:["Dizziness/vertigo","Fainting/blackout","Severe fatigue","New severe weakness","Low blood sugar symptoms","Very high blood sugar symptoms","Confusion/disorientation"],
+    actions:[
+      "Check glucose if diabetic; review recent med changes.",
+      "If fainting, persistent confusion, or repeated vomiting: urgent evaluation."
+    ]
+  },
+  {
+    name:"Cardiac/vascular issue",
+    scoreAny:["Chest pain/pressure","Pain radiating to jaw/arm","Palpitations","Fainting with palpitations","Shortness of breath","Leg swelling","Calf pain/swelling"],
+    actions:[
+      "If chest pressure with breathlessness/sweating/radiation: emergency evaluation now.",
+      "If calf swelling/pain with breathlessness: emergency evaluation for clot."
+    ]
+  },
+  {
+    name:"Musculoskeletal / nerve compression",
+    scoreAny:["Low back pain","Sciatica (shooting leg pain)","Back pain after fall/trauma","Arm weakness","Hand numbness/tingling","Leg numbness/tingling"],
+    actions:[
+      "If new bowel/bladder issues or saddle numbness: emergency evaluation.",
+      "Otherwise consider rest, gentle mobility, and clinician review if persistent."
+    ]
+  },
+  {
+    name:"GI issue (gastritis, ulcer, gallbladder, appendicitis, etc.)",
+    scoreAny:["Abdominal pain","Severe abdominal pain","Vomiting","Vomiting blood","Black stools","Right lower abdominal pain","Right upper abdominal pain","Bloody diarrhea"],
+    actions:[
+      "If vomiting blood, black stools, severe persistent pain, or dehydration: urgent/emergency evaluation.",
+      "Hydrate and avoid alcohol/NSAIDs if ulcer symptoms."
+    ]
+  }
+];
+
+function populateBodyParts(){
+  const sel=$("selBodyPart");
+  sel.innerHTML="";
+  BODY_PARTS.forEach(bp=>{
+    const o=document.createElement("option");
+    o.value=bp;
+    o.textContent=bp;
+    sel.appendChild(o);
+  });
+}
+
+let selectedSymptoms = new Set();
+
+function renderSymptomChips(){
+  const body = $("selBodyPart").value;
+  const list = (SYMPTOMS[body] || []).slice();
+  const box = $("symptomChips");
+  box.innerHTML="";
+
+  list.forEach(s=>{
+    const div=document.createElement("div");
+    div.className="chip" + (selectedSymptoms.has(s) ? " selected" : "");
+    div.textContent=s;
+    div.addEventListener("click", ()=>{
+      if(selectedSymptoms.has(s)) selectedSymptoms.delete(s);
+      else selectedSymptoms.add(s);
+      renderSymptomChips();
+    });
+    box.appendChild(div);
+  });
+
+  // preserve custom symptoms that aren’t in this body list
+  Array.from(selectedSymptoms).forEach(s=>{
+    if(!list.includes(s)){
+      const div=document.createElement("div");
+      div.className="chip selected";
+      div.textContent=s + " (custom)";
+      div.addEventListener("click", ()=>{
+        selectedSymptoms.delete(s);
+        renderSymptomChips();
+      });
+      box.appendChild(div);
+    }
+  });
+}
+
+$("selBodyPart").addEventListener("change", ()=>{
+  selectedSymptoms = new Set(); // reset for new body part to reduce noise
+  renderSymptomChips();
+});
+
+$("btnAddCustomSymptom").addEventListener("click", ()=>{
+  const v=($("customSymptom").value||"").trim();
+  if(!v){ toast("Enter a symptom to add."); return; }
+  selectedSymptoms.add(v);
+  $("customSymptom").value="";
+  renderSymptomChips();
+});
+
+function runSymptomEngine(){
+  const personId = $("selPersonForSymptom").value || getActivePersonId();
+  const person = getPersonById(personId);
+
+  const symptoms = Array.from(selectedSymptoms);
+  const severity = $("selSeverity").value;
+  const duration = $("selDuration").value;
+  const comorbid = $("selComorbids").value;
+  const notes = ($("notes").value||"").trim();
+
+  if(symptoms.length===0){
+    toast("Select at least one symptom.");
+    return;
+  }
+
+  // Detect red flags
+  const redHits=[];
+  RED_FLAGS.forEach(rf=>{
+    const hit = rf.matchAny.some(s=>symptoms.includes(s));
+    if(hit) redHits.push(rf);
+  });
+
+  // Score categories
+  const scored = CATEGORIES.map(cat=>{
+    let score=0;
+    cat.scoreAny.forEach(s=>{ if(symptoms.includes(s)) score+=2; });
+    // small boost for severe symptoms
+    if(severity==="severe") score += 1;
+    // comorbid boosts
+    if(cat.bonusIfComorbid && comorbid===cat.bonusIfComorbid) score += 2;
+    if(person && (person.known||[]).includes("stroke") && cat.name.toLowerCase().includes("stroke")) score += 2;
+    // free-text clue
+    if(cat.name.toLowerCase().includes("stroke") && /stroke|tia/i.test(notes)) score += 1;
+    return {name:cat.name, score, actions:cat.actions||[]};
+  }).sort((a,b)=>b.score-a.score);
+
+  const top = scored.filter(x=>x.score>0).slice(0,4);
+
+  // Triage decision
+  let triage = "Routine";
+  let badgeClass = "ok";
+  let summary = "Monitor and consider clinician review if persistent.";
+
+  const hasStrokeRed = redHits.some(x=>x.key==="stroke_FAST");
+  const hasHeartRed  = redHits.some(x=>x.key==="heart_attack");
+  const hasSepsisRed = redHits.some(x=>x.key==="sepsis");
+  const hasPE        = redHits.some(x=>x.key==="pe");
+  const hasAnaph     = redHits.some(x=>x.key==="anaphylaxis");
+  const hasCauda     = redHits.some(x=>x.key==="cauda");
+
+  if(hasStrokeRed || hasHeartRed || hasSepsisRed || hasPE || hasAnaph || hasCauda){
+    triage="EMERGENCY";
+    badgeClass="bad";
+    summary="High-risk red flags detected. Seek emergency care now.";
+  } else if(severity==="severe" || duration==="minutes"){
+    triage="URGENT";
+    badgeClass="";
+    summary="Consider urgent assessment today, especially if worsening or with comorbidities.";
+  } else {
+    triage="ROUTINE";
+    badgeClass="ok";
+    summary="Lower immediate risk signals. If not improving or worsening, seek clinician review.";
+  }
+
+  // If comorbid stroke selected AND any neuro symptom, escalate to urgent/emergency bias
+  if(comorbid==="stroke" && symptoms.some(s=>/weak|speech|facial|vision|confusion|balance/i.test(s))){
+    if(triage!=="EMERGENCY"){
+      triage="URGENT";
+      badgeClass="";
+      summary="Stroke history with neurologic symptoms. Do not delay assessment.";
+    }
+  }
+
+  // Build action list: red flag actions first, then category actions
+  const actions=[];
+  if(triage==="EMERGENCY"){
+    actions.push("Call emergency services immediately or go to the nearest emergency department.");
+    actions.push("Do not wait for symptoms to improve if stroke/heart signs are present.");
+    actions.push("Bring medication list and note symptom start time.");
+  } else if(triage==="URGENT"){
+    actions.push("Arrange urgent clinical assessment (same day if possible).");
+    actions.push("If symptoms worsen, new weakness/speech trouble/chest pain occurs: escalate to emergency care.");
+  } else {
+    actions.push("Supportive care and monitor closely.");
+    actions.push("If symptoms persist beyond 24–72 hours or worsen, book clinician review.");
+  }
+
+  top.forEach(t=>{
+    (t.actions||[]).forEach(a=>{ if(!actions.includes(a)) actions.push(a); });
+  });
+
+  // Render
+  $("resultBox").style.display="";
+  $("triageBadge").textContent = triage;
+  $("triageBadge").className = "badge " + (badgeClass==="ok" ? "ok" : (badgeClass==="bad" ? "bad" : ""));
+  $("triageSummary").textContent = summary + ` (For: ${person ? person.name : "—"}, Duration: ${duration}, Severity: ${severity})`;
+
+  if(redHits.length){
+    $("redFlagsBlock").style.display="";
+    $("redFlagsList").innerHTML = redHits.map(x=>`<li><b>${x.label}</b></li>`).join("");
+  } else {
+    $("redFlagsBlock").style.display="none";
+    $("redFlagsList").innerHTML="";
+  }
+
+  $("likelyList").innerHTML = top.length
+    ? top.map(x=>`<li><b>${x.name}</b> (score ${x.score})</li>`).join("")
+    : "<li>No strong match. Use notes and consider clinician review.</li>";
+
+  $("actionsList").innerHTML = actions.map(a=>`<li>${a}</li>`).join("");
+
+  toast("Symptom check complete.");
+}
+
+$("btnRunCheck").addEventListener("click", runSymptomEngine);
+
+/* =========================================================
+   REFRESH
+========================================================= */
+$("btnRefresh").addEventListener("click", ()=> refreshAll());
+
+function refreshAll(){
+  populateAllPersonSelects();
+  renderSnapshot();
+  renderAddLatest();
+
+  // profile view refresh
+  loadProfileEditor();
+
+  // symptom view refresh
+  populateBodyParts();
+  if(!$("selBodyPart").value) $("selBodyPart").value = BODY_PARTS[0];
+  renderSymptomChips();
+
+  // trends only if visible
+  const trendsVisible = views.trends.style.display !== "none";
+  if(trendsVisible) renderTrends();
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+function init(){
+  ensureDefaultProfile();
+  populateAllPersonSelects();
+  populateProfileSelect();
+  loadProfileEditor();
+  populateBodyParts();
+  $("selBodyPart").value = BODY_PARTS[0];
+  selectedSymptoms = new Set();
+  renderSymptomChips();
+  renderSnapshot();
+  renderAddLatest();
+}
+init();
+</script>
 </body>
 </html>
