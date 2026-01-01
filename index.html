@@ -3,2356 +3,2175 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>HealthChecker+ (HC+)</title>
-  <meta name="theme-color" content="#0ea5e9">
+  <title>HealthChecker+ (One-File Master)</title>
+  <meta name="theme-color" content="#0b5cff" />
+
+  <!--
+    HealthChecker+ v25.0.0 (One-File Master Replacement)
+    Iteration: 25
+    Theme: Medical cloud (sky blue + white)
+    Offline-first + Backend-ready
+  -->
+
   <style>
     :root{
-      --bg1:#f3f8ff;
-      --bg2:#ffffff;
-      --card:#ffffff;
-      --text:#0b1220;
-      --muted:#5b6b84;
-      --line:#d9e6fb;
-      --brand:#0ea5e9;
-      --brand2:#2563eb;
-      --good:#16a34a;
-      --warn:#f59e0b;
-      --alert:#ef4444;
-      --shadow: 0 10px 30px rgba(10, 30, 70, .12);
+      --bg: #f4f8ff;
+      --card: #ffffff;
+      --ink: #0e1a2a;
+      --muted: #5a6b82;
+      --line: #dbe7ff;
+      --brand: #0b5cff;
+      --brand2:#2db7ff;
+      --ok: #14b86a;
+      --warn: #ffb020;
+      --alert:#ff3b30;
+      --shadow: 0 10px 30px rgba(17, 39, 74, .10);
       --radius: 18px;
-      --radius2: 26px;
-      --pad: 14px;
-      --btn: linear-gradient(135deg, var(--brand), var(--brand2));
     }
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      color:var(--text);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background:
-        radial-gradient(1200px 600px at 20% -10%, rgba(14,165,233,.22), transparent 50%),
-        radial-gradient(900px 500px at 90% 10%, rgba(37,99,235,.18), transparent 55%),
-        linear-gradient(180deg, var(--bg1), var(--bg2));
-      -webkit-tap-highlight-color: transparent;
-    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+    a{ color:var(--brand); text-decoration:none; }
+    button, input, select, textarea { font: inherit; }
 
-    .app{
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 10px 12px 90px 12px;
-    }
+    .wrap{ max-width: 980px; margin: 0 auto; padding: 14px 14px 90px; }
 
-    /* Minimal header (logo + name + menu only) */
+    /* Minimal top header */
     .topbar{
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      padding: 10px 0 10px 0;
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(244,248,255,.86);
       backdrop-filter: blur(10px);
-      background: rgba(243,248,255,.70);
-      border-bottom: 1px solid rgba(217,230,251,.7);
+      border-bottom: 1px solid var(--line);
     }
     .topbar-inner{
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
+      max-width: 980px; margin: 0 auto;
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 14px;
       gap: 10px;
-      padding: 8px 10px;
-      border-radius: var(--radius2);
-      background: rgba(255,255,255,.75);
-      box-shadow: 0 6px 18px rgba(10,30,70,.08);
-      border: 1px solid rgba(217,230,251,.9);
     }
     .brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width: 0;
+      display:flex; align-items:center; gap: 10px; min-width: 0;
     }
     .logo{
-      width: 42px; height: 42px;
-      border-radius: 14px;
-      background: var(--btn);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:white;
-      font-weight: 800;
-      letter-spacing:.5px;
-      box-shadow: 0 10px 22px rgba(14,165,233,.28);
+      width: 44px; height:44px; border-radius: 14px;
+      background: linear-gradient(135deg,var(--brand),var(--brand2));
+      display:grid; place-items:center;
+      color:white; font-weight:800; letter-spacing:.3px;
+      box-shadow: var(--shadow);
       flex: 0 0 auto;
     }
     .who{
-      min-width:0;
-      display:flex;
-      flex-direction:column;
-      gap:2px;
+      display:flex; flex-direction:column; min-width:0;
     }
     .who .name{
-      font-weight: 800;
-      font-size: 15px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 55vw;
+      font-weight: 800; font-size: 15px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .who .meta{
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .who .sub{
+      font-size: 12px; color: var(--muted);
+      white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
     }
 
-    .menuBtn{
-      border: 1px solid rgba(217,230,251,.9);
-      background: white;
-      border-radius: 16px;
-      height: 42px;
-      min-width: 48px;
-      padding: 0 12px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      box-shadow: 0 8px 18px rgba(10,30,70,.08);
-      cursor:pointer;
-      font-weight: 800;
-      color: #0b1220;
+    .actions{
+      display:flex; align-items:center; gap: 10px;
+      flex: 0 0 auto;
     }
+    .pill{
+      display:flex; align-items:center; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 10px;
+      box-shadow: 0 6px 18px rgba(17,39,74,.06);
+    }
+    .pill label{ font-size: 12px; color: var(--muted); }
+    .pill select{
+      border: none; outline: none; background: transparent;
+      font-weight: 700; color: var(--ink);
+      max-width: 180px;
+    }
+
+    .btn{
+      border: 0;
+      background: var(--brand);
+      color: white;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+    .btn.secondary{
+      background: #eaf2ff;
+      color: var(--brand);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+    .btn.ghost{
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      box-shadow: none;
+    }
+    .btn:active{ transform: translateY(1px); }
 
     /* Tabs */
     .tabs{
-      display:flex;
-      gap:10px;
-      flex-wrap: wrap;
-      padding: 12px 2px 10px 2px;
+      position: sticky;
+      top: 66px;
+      z-index: 40;
+      padding: 10px 14px 12px;
+      background: rgba(244,248,255,.86);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .tabs-inner{
+      max-width: 980px; margin: 0 auto;
+      display:flex; gap: 10px; flex-wrap: wrap;
     }
     .tab{
-      border: 1px solid rgba(217,230,251,.95);
-      background: rgba(255,255,255,.85);
+      border: 1px solid var(--line);
+      background: var(--card);
+      padding: 10px 12px;
       border-radius: 999px;
-      padding: 10px 14px;
-      cursor:pointer;
       font-weight: 800;
-      color: #0b1220;
-      box-shadow: 0 8px 20px rgba(10,30,70,.06);
+      color: var(--muted);
+      cursor:pointer;
       user-select:none;
     }
     .tab.active{
-      background: rgba(14,165,233,.12);
-      border-color: rgba(14,165,233,.35);
-      color: #0b1220;
+      background: linear-gradient(135deg,#ffffff,#eef6ff);
+      color: var(--ink);
+      border-color: #b8d2ff;
     }
 
-    /* Cards + layout */
+    /* Cards */
     .grid{
       display:grid;
-      grid-template-columns: repeat(12, 1fr);
+      grid-template-columns: 1fr;
       gap: 12px;
+      margin-top: 14px;
+    }
+    @media(min-width: 860px){
+      .grid.cols2{ grid-template-columns: 1fr 1fr; }
+      .grid.cols3{ grid-template-columns: 1fr 1fr 1fr; }
     }
     .card{
-      grid-column: span 12;
-      background: rgba(255,255,255,.90);
-      border: 1px solid rgba(217,230,251,.95);
+      background: var(--card);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 14px;
     }
-    .card h3{
-      margin: 0 0 8px 0;
-      font-size: 15px;
-      letter-spacing:.2px;
-    }
-    .sub{
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 2px;
-    }
-    .kpi{
-      font-size: 30px;
+    .card h3{ margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 900; }
+    .big{
+      font-size: 28px;
       font-weight: 900;
-      line-height: 1.05;
+      letter-spacing: -0.3px;
+      margin: 0;
     }
-    .kpi small{
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--muted);
-    }
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(217,230,251,.95);
-      background: rgba(255,255,255,.80);
-      font-weight: 800;
-      font-size: 12px;
-      color: #0b1220;
-    }
-    .dot{
-      width:10px; height:10px; border-radius:999px;
-      background: var(--warn);
-      box-shadow: 0 0 0 4px rgba(245,158,11,.15);
-    }
-    .dot.good{background: var(--good); box-shadow: 0 0 0 4px rgba(22,163,74,.14);}
-    .dot.warn{background: var(--warn); box-shadow: 0 0 0 4px rgba(245,158,11,.16);}
-    .dot.alert{background: var(--alert); box-shadow: 0 0 0 4px rgba(239,68,68,.16);}
+    .small{ font-size: 12px; color: var(--muted); margin-top: 6px; }
 
     .row{
-      display:flex; flex-wrap: wrap; gap:10px;
-      align-items:center;
+      display:flex; gap: 10px; flex-wrap: wrap;
+      align-items: center;
     }
 
-    .btn{
-      border: none;
-      border-radius: 14px;
-      padding: 12px 14px;
+    .badge{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
       font-weight: 900;
-      color: white;
-      background: var(--btn);
-      cursor:pointer;
-      box-shadow: 0 14px 26px rgba(14,165,233,.22);
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #f8fbff;
+      color: var(--muted);
     }
-    .btn.secondary{
-      color: #0b1220;
-      background: rgba(255,255,255,.85);
-      border: 1px solid rgba(217,230,251,.95);
-      box-shadow: 0 10px 20px rgba(10,30,70,.08);
-    }
-    .btn.danger{
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      box-shadow: 0 14px 26px rgba(239,68,68,.18);
-    }
+    .badge.ok{ background: rgba(20,184,106,.08); color: #0a7f4a; border-color: rgba(20,184,106,.25); }
+    .badge.warn{ background: rgba(255,176,32,.12); color: #9a5b00; border-color: rgba(255,176,32,.30); }
+    .badge.alert{ background: rgba(255,59,48,.12); color: #9c1b14; border-color: rgba(255,59,48,.30); }
 
+    /* Forms */
     .form{
       display:grid;
-      grid-template-columns: 1fr 1fr;
       gap: 10px;
-      margin-top: 10px;
     }
     .field{
-      display:flex;
-      flex-direction:column;
-      gap:6px;
+      display:grid;
+      gap: 6px;
     }
-    label{
-      font-size: 12px;
-      font-weight: 900;
-      color: #0b1220;
+    .field label{
+      font-size: 12px; font-weight: 900; color: var(--muted);
     }
-    input, select, textarea{
-      border: 1px solid rgba(217,230,251,.95);
-      background: rgba(255,255,255,.92);
+    .field input, .field select, .field textarea{
+      border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 12px 12px;
-      font-size: 15px;
-      outline: none;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.45);
-    }
-    textarea{min-height: 90px; resize: vertical}
-    .field.span2{grid-column: span 2;}
-    .hint{
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-
-    canvas{
-      width: 100%;
-      height: 260px;
-      border-radius: 14px;
-      border: 1px solid rgba(217,230,251,.95);
-      background: rgba(255,255,255,.9);
-    }
-
-    /* Drawer */
-    .backdrop{
-      position: fixed;
-      inset: 0;
-      background: rgba(11,18,32,.45);
-      display:none;
-      align-items:flex-end;
-      justify-content:center;
-      z-index: 50;
       padding: 12px;
+      background: #fbfdff;
+      outline: none;
     }
-    .drawer{
-      width: 100%;
-      max-width: 980px;
-      border-radius: 22px;
-      background: rgba(255,255,255,.97);
-      border: 1px solid rgba(217,230,251,.95);
-      box-shadow: 0 30px 80px rgba(10,30,70,.30);
-      padding: 14px;
-      max-height: 82vh;
-      overflow:auto;
-    }
-    .drawerHead{
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-      margin-bottom: 8px;
-    }
-    .drawerHead .title{
-      font-weight: 1000;
-      font-size: 16px;
-    }
-    .x{
-      border: 1px solid rgba(217,230,251,.95);
-      background: white;
-      border-radius: 14px;
-      padding: 10px 12px;
-      cursor:pointer;
-      font-weight: 900;
-    }
-    .sep{height:1px;background: rgba(217,230,251,.95); margin: 12px 0;}
+    .field textarea{ min-height: 84px; resize: vertical; }
 
-    .small{
+    .hint{
       font-size: 12px; color: var(--muted);
     }
 
-    /* Responsive */
-    @media (max-width: 700px){
-      .form{grid-template-columns: 1fr;}
-      .field.span2{grid-column: span 1;}
-      .who .name{max-width: 52vw;}
-      canvas{height: 240px;}
+    /* Charts */
+    .chart{
+      width: 100%;
+      height: 220px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fbfdff;
+      padding: 10px;
+    }
+    canvas{ width: 100%; height: 100%; display:block; }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed; inset: 0;
+      background: rgba(9, 30, 66, .45);
+      display:none; align-items:center; justify-content:center;
+      padding: 16px;
+      z-index: 80;
+    }
+    .modal{
+      width: 100%;
+      max-width: 640px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.25);
+      overflow:hidden;
+    }
+    .modal-head{
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 14px 14px;
+      background: linear-gradient(135deg,#f7fbff,#eef6ff);
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-head strong{
+      font-size: 14px;
+    }
+    .modal-body{ padding: 14px; display:grid; gap: 12px; }
+    .modal-foot{
+      padding: 14px;
+      border-top: 1px solid var(--line);
+      display:flex; gap: 10px; justify-content:flex-end;
+      background: #fbfdff;
+    }
+
+    /* Symptoms list */
+    .symptoms-list{
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfdff;
+      max-height: 220px;
+      overflow:auto;
+      padding: 6px;
+      display:grid;
+      gap: 6px;
+    }
+    .symptom-item{
+      display:flex; align-items:center; justify-content:space-between;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(219,231,255,.9);
+      border-radius: 12px;
+      background: white;
+      cursor:pointer;
+      user-select:none;
+    }
+    .symptom-item:active{ transform: translateY(1px); }
+    .symptom-item .left{
+      display:flex; flex-direction:column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .symptom-item .label{
+      font-weight: 900;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+    .symptom-item .meta{ font-size: 11px; color: var(--muted); }
+
+    .chip-row{ display:flex; flex-wrap:wrap; gap: 8px; }
+    .chip{
+      display:inline-flex; align-items:center; gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #f7fbff;
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .chip .x{
+      width: 18px; height: 18px; border-radius: 9px;
+      display:grid; place-items:center;
+      background: #e8f1ff;
+      color: var(--brand);
+      cursor:pointer;
+    }
+    .rf{
+      color: #9c1b14;
+      background: rgba(255,59,48,.12);
+      border: 1px solid rgba(255,59,48,.28);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    /* Footer quick actions */
+    .bottom-actions{
+      position: fixed;
+      left:0; right:0; bottom:0;
+      background: rgba(244,248,255,.92);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--line);
+      padding: 10px 14px;
+      z-index: 60;
+    }
+    .bottom-actions .inner{
+      max-width: 980px;
+      margin: 0 auto;
+      display:flex;
+      gap: 10px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .note{
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .danger{
+      border-color: rgba(255,59,48,.3);
+      background: rgba(255,59,48,.06);
+      color: #8f1a14;
+      font-weight: 800;
     }
   </style>
 </head>
+
 <body>
-  <!--
-    ============================================================
-    HealthChecker+ (HC+) - Iteration 25 – HealthChecker+ v25.0.0
-    "Snapshot Reconciliation Fix + Unified One-File Master"
-    Offline-first + backend-ready schema, derived Snapshot, Trends, Reports,
-    Symptom Checker, Family Mode (10), Assisted report extraction.
-    ============================================================
-  -->
-  <div class="app">
-    <div class="topbar">
-      <div class="topbar-inner">
-        <div class="brand">
-          <div class="logo">HC+</div>
-          <div class="who">
-            <div class="name" id="hdrName">HealthChecker+</div>
-            <div class="meta" id="hdrMeta">Offline-first · Device time · Unified Master</div>
-          </div>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo">HC+</div>
+        <div class="who">
+          <div class="name" id="activeName">HealthChecker+</div>
+          <div class="sub" id="activeSub">Device time • Offline-first • v25.0.0</div>
         </div>
-        <button class="menuBtn" id="menuBtn">≡</button>
       </div>
 
-      <div class="tabs" id="tabs">
-        <div class="tab active" data-tab="snapshot">Snapshot</div>
-        <div class="tab" data-tab="trends">Trends</div>
-        <div class="tab" data-tab="symptoms">Symptom Checker</div>
-        <div class="tab" data-tab="reports">Reports</div>
-        <div class="tab" data-tab="profile">Profile</div>
-      </div>
-    </div>
-
-    <div id="view"></div>
-  </div>
-
-  <!-- Drawer -->
-  <div class="backdrop" id="backdrop">
-    <div class="drawer">
-      <div class="drawerHead">
-        <div class="title">Menu</div>
-        <button class="x" id="closeDrawer">Close</button>
-      </div>
-      <div class="small">Switch person, add family profiles, import history, export JSON, and other actions.</div>
-
-      <div class="sep"></div>
-
-      <div class="form">
-        <div class="field span2">
-          <label>Current person</label>
+      <div class="actions">
+        <div class="pill">
+          <label for="personSelect">Person</label>
           <select id="personSelect"></select>
-          <div class="hint">Family Mode supports up to 10 people (Primary + 9 dependants).</div>
         </div>
-
-        <div class="field">
-          <button class="btn" id="btnAddReading">Add new reading</button>
-        </div>
-        <div class="field">
-          <button class="btn secondary" id="btnQuickSymptoms">Add symptoms (quick)</button>
-        </div>
-
-        <div class="field span2">
-          <button class="btn secondary" id="btnAddDependent">Add dependant profile (name/DOB/sex)</button>
-          <div class="hint">Dependants help you track mummy/sister/child and support better analysis.</div>
-        </div>
-
-        <div class="field span2">
-          <label>Import historical medical reports / screenshots</label>
-          <input type="file" id="fileImport" accept="image/*,application/pdf,.txt" multiple />
-          <div class="hint">Offline extraction is “assisted”: select files, then paste any copied text (or typed summary). HC+ will parse values and prefill labs/urine/stool where possible.</div>
-          <textarea id="pasteText" placeholder="Paste report text here (optional). HC+ will auto-detect values like Creatinine 272, eGFR 23, HbA1c 10.2, Sodium 132, etc."></textarea>
-          <button class="btn" id="btnParseText">Parse pasted text into fields</button>
-        </div>
-
-        <div class="field">
-          <button class="btn secondary" id="btnExport">Export my data (JSON)</button>
-        </div>
-        <div class="field">
-          <label>Import JSON backup</label>
-          <input type="file" id="jsonImport" accept="application/json" />
-        </div>
-
-        <div class="field span2">
-          <button class="btn danger" id="btnReset">Reset device data (this person only)</button>
-          <div class="hint">Removes this person’s readings/symptoms/reports. Does not delete other people.</div>
-        </div>
+        <button class="btn secondary" id="familyBtn" title="Manage family profiles">Family</button>
       </div>
+    </div>
 
-      <div class="sep"></div>
-
-      <div class="small">
-        Backend-ready note: this build stores locally first. Later, we can sync to an API without changing the UI.
+    <div class="tabs">
+      <div class="tabs-inner">
+        <div class="tab active" data-view="snapshot">Snapshot</div>
+        <div class="tab" data-view="add">Add</div>
+        <div class="tab" data-view="symptoms">Symptom Checker</div>
+        <div class="tab" data-view="trends">Trends</div>
+        <div class="tab" data-view="reports">Reports</div>
+        <div class="tab" data-view="profile">Profile</div>
       </div>
     </div>
   </div>
 
-  <!-- Modal (simple) -->
-  <div class="backdrop" id="modalBackdrop" style="align-items:center;">
-    <div class="drawer" style="max-width:780px;">
-      <div class="drawerHead">
-        <div class="title" id="modalTitle">Modal</div>
-        <button class="x" id="modalClose">Close</button>
+  <div class="wrap">
+    <!-- SNAPSHOT -->
+    <section id="view-snapshot" class="view">
+      <div class="row" style="justify-content:space-between;">
+        <div class="badge" id="overallBadge">Overall: —</div>
+        <div class="badge" id="lastUpdatedBadge">Last refreshed: —</div>
       </div>
-      <div id="modalBody"></div>
-    </div>
-  </div>
 
-  <script>
-    /******************************************************************
-     * 1) Storage + schema (offline-first, backend-ready)
-     ******************************************************************/
-    const STORE_KEY = "HCPLUS_V25_STORE";
-    const MAX_PEOPLE = 10;
-
-    function nowIsoLocal(){
-      // Device time as primary reference (per standing instruction)
-      const d = new Date();
-      const pad = n => String(n).padStart(2,"0");
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    }
-
-    function uid(prefix="id"){
-      return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
-    }
-
-    function loadStore(){
-      try{
-        const raw = localStorage.getItem(STORE_KEY);
-        if(!raw) return createFreshStore();
-        const s = JSON.parse(raw);
-        // Basic migration safety
-        if(!s || !s.people || !Array.isArray(s.people)) return createFreshStore();
-        return s;
-      }catch(e){
-        return createFreshStore();
-      }
-    }
-
-    function saveStore(){
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    }
-
-    function createFreshStore(){
-      const primaryId = uid("p");
-      return {
-        meta:{
-          version: "25.0.0",
-          iteration: "Iteration 25 – HealthChecker+ v25.0.0 (Snapshot Reconciliation Fix + Unified Master)",
-          createdAt: nowIsoLocal(),
-          updatedAt: nowIsoLocal()
-        },
-        ui:{
-          activeTab: "snapshot",
-          activePersonId: primaryId
-        },
-        people:[
-          {
-            id: primaryId,
-            isPrimary: true,
-            name: "Primary user",
-            sex: "unspecified",
-            dob: "",
-            heightCm: "",
-            weightKg: "",
-            knownConditions: [], // user-editable; do not prefill personal conditions
-            notes: ""
-          }
-        ],
-        // All clinical data is timeline-based; snapshot is derived (never stored).
-        readings: [], // {id, personId, type, value(s), takenAt, source}
-        symptoms: [], // {id, personId, takenAt, entries:[...], notes}
-        reports: []   // {id, personId, uploadedAt, files:[{name,type,size}], pastedText, parsed:{...}}
-      };
-    }
-
-    let store = loadStore();
-
-    /******************************************************************
-     * 2) Helpers
-     ******************************************************************/
-    function getActivePerson(){
-      return store.people.find(p => p.id === store.ui.activePersonId) || store.people[0];
-    }
-
-    function setActivePerson(personId){
-      store.ui.activePersonId = personId;
-      store.ui.updatedAt = nowIsoLocal();
-      store.meta.updatedAt = nowIsoLocal();
-      saveStore();
-      refreshHeader();
-      render();
-    }
-
-    function computeAge(dobStr){
-      if(!dobStr) return "";
-      const dob = new Date(dobStr);
-      if(isNaN(dob.getTime())) return "";
-      const today = new Date();
-      let age = today.getFullYear() - dob.getFullYear();
-      const m = today.getMonth() - dob.getMonth();
-      if(m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-      if(age < 0) age = 0;
-      return age;
-    }
-
-    function bmi(heightCm, weightKg){
-      const h = parseFloat(heightCm);
-      const w = parseFloat(weightKg);
-      if(!h || !w) return "";
-      const hm = h / 100;
-      const val = w / (hm*hm);
-      if(!isFinite(val)) return "";
-      return val.toFixed(1);
-    }
-
-    function latestReading(personId, type){
-      const list = store.readings
-        .filter(r => r.personId === personId && r.type === type)
-        .sort((a,b) => (a.takenAt < b.takenAt ? 1 : -1));
-      return list[0] || null;
-    }
-
-    function readingsInDays(personId, type, days){
-      const cutoff = Date.now() - (days*24*60*60*1000);
-      return store.readings
-        .filter(r => r.personId === personId && r.type === type)
-        .filter(r => new Date(r.takenAt).getTime() >= cutoff)
-        .sort((a,b) => (a.takenAt > b.takenAt ? 1 : -1));
-    }
-
-    // Convert average glucose (mg/dL) -> estimated HbA1c using ADAG: A1c = (avg + 46.7) / 28.7
-    function estimateA1cFromAvgGlucose(avgMgDl){
-      const a1c = (avgMgDl + 46.7) / 28.7;
-      return a1c;
-    }
-
-    function deriveSnapshot(person){
-      // Snapshot is derived every render: fixes stale UI & ensures updates
-      const pid = person.id;
-
-      const g = latestReading(pid, "glucose"); // {value}
-      const bp = latestReading(pid, "bp");     // {sys,dia,pulse}
-      const sleep = latestReading(pid, "sleep"); // {score, energy, minutes, rem, deep, awake, spo2Low, snoreMin}
-      const spo2 = latestReading(pid, "spo2"); // {low}
-      const weight = latestReading(pid, "weight"); // {kg}
-      const labs = latestReading(pid, "labs"); // {egfr, creat, sodium, potassium, chloride, bicarb, uric, hba1cLab, hb, mcv, psa, etc}
-      const urine = latestReading(pid, "urine"); // {protein, glucose, blood, ketone, nitrite, leucocytes, sg, ph, rbc, wbc, bacteria}
-      const stool = latestReading(pid, "stool"); // {fit, notes}
-      const sym = store.symptoms
-        .filter(s => s.personId === pid)
-        .sort((a,b) => (a.takenAt < b.takenAt ? 1 : -1))[0] || null;
-
-      // Moving HbA1c from glucose history (default 14d, min 3 points for stronger confidence)
-      const g14 = readingsInDays(pid, "glucose", 14);
-      let movingA1c = null;
-      let avgG = null;
-      if(g14.length >= 1){
-        const avg = g14.reduce((sum, r) => sum + (parseFloat(r.value)||0), 0) / g14.length;
-        avgG = avg;
-        movingA1c = estimateA1cFromAvgGlucose(avg);
-      }
-
-      // Overall classification (simple rules; can be expanded later)
-      const flags = [];
-      if(g && parseFloat(g.value) >= 180) flags.push("high_glucose");
-      if(g && parseFloat(g.value) < 70) flags.push("low_glucose");
-      if(bp && (bp.sys >= 140 || bp.dia >= 90)) flags.push("high_bp");
-      if(sleep && sleep.score !== "" && sleep.score < 50) flags.push("poor_sleep");
-      if(spo2 && parseFloat(spo2.low) < 90) flags.push("low_spo2");
-      if(labs && labs.egfr !== "" && parseFloat(labs.egfr) < 60) flags.push("ckd_risk");
-
-      let overall = "OK";
-      let level = "good";
-      if(flags.length >= 1){ overall = "AMBER"; level="warn"; }
-      if(flags.some(f => ["high_glucose","low_glucose","high_bp","low_spo2"].includes(f)) && flags.length >= 2){
-        overall = "ALERT"; level="alert";
-      }
-
-      return {
-        person,
-        updatedAt: nowIsoLocal(),
-        glucose: g ? { value: g.value, trend: g.trend || "", takenAt: g.takenAt } : null,
-        movingA1c: movingA1c ? { value: movingA1c, avg: avgG, points: g14.length, days: 14 } : null,
-        bp: bp ? { sys: bp.sys, dia: bp.dia, pulse: bp.pulse||"", takenAt: bp.takenAt } : null,
-        sleep: sleep ? {
-          score: sleep.score||"",
-          energy: sleep.energy||"",
-          minutes: sleep.minutes||"",
-          rem: sleep.rem||"",
-          deep: sleep.deep||"",
-          awake: sleep.awake||"",
-          spo2Low: sleep.spo2Low||"",
-          snoreMin: sleep.snoreMin||"",
-          takenAt: sleep.takenAt
-        } : null,
-        spo2: spo2 ? { low: spo2.low||"", takenAt: spo2.takenAt } : null,
-        weight: weight ? { kg: weight.kg||"", takenAt: weight.takenAt } : null,
-        labs: labs ? labs : null,
-        urine: urine ? urine : null,
-        stool: stool ? stool : null,
-        symptomsLatest: sym,
-        overall: { label: overall, level, flags }
-      };
-    }
-
-    /******************************************************************
-     * 3) UI wiring
-     ******************************************************************/
-    const view = document.getElementById("view");
-    const tabs = document.getElementById("tabs");
-    const hdrName = document.getElementById("hdrName");
-    const hdrMeta = document.getElementById("hdrMeta");
-
-    tabs.addEventListener("click", (e)=>{
-      const t = e.target.closest(".tab");
-      if(!t) return;
-      [...tabs.querySelectorAll(".tab")].forEach(x=>x.classList.remove("active"));
-      t.classList.add("active");
-      store.ui.activeTab = t.dataset.tab;
-      store.meta.updatedAt = nowIsoLocal();
-      saveStore();
-      render();
-    });
-
-    function refreshHeader(){
-      const p = getActivePerson();
-      const age = computeAge(p.dob);
-      const bmiVal = bmi(p.heightCm, p.weightKg);
-      const parts = [];
-      if(p.sex && p.sex !== "unspecified") parts.push(p.sex === "male" ? "Male" : (p.sex === "female" ? "Female" : p.sex));
-      if(age !== "") parts.push(`Age ${age}`);
-      if(bmiVal !== "") parts.push(`BMI ${bmiVal}`);
-      hdrName.textContent = (p.name || "Person").toUpperCase();
-      hdrMeta.textContent = parts.length ? `Device time · ${parts.join(" · ")}` : `Offline-first · Device time · Unified Master`;
-    }
-
-    // Drawer logic
-    const backdrop = document.getElementById("backdrop");
-    const menuBtn = document.getElementById("menuBtn");
-    const closeDrawer = document.getElementById("closeDrawer");
-    const personSelect = document.getElementById("personSelect");
-
-    function openDrawer(){
-      rebuildPersonSelect();
-      backdrop.style.display = "flex";
-    }
-    function closeDrawerFn(){
-      backdrop.style.display = "none";
-    }
-    menuBtn.addEventListener("click", openDrawer);
-    closeDrawer.addEventListener("click", closeDrawerFn);
-    backdrop.addEventListener("click", (e)=>{
-      if(e.target === backdrop) closeDrawerFn();
-    });
-
-    personSelect.addEventListener("change", ()=>{
-      setActivePerson(personSelect.value);
-    });
-
-    function rebuildPersonSelect(){
-      const activeId = store.ui.activePersonId;
-      personSelect.innerHTML = "";
-      store.people.forEach(p=>{
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        const age = computeAge(p.dob);
-        const labelParts = [p.name || "Person"];
-        if(p.isPrimary) labelParts.push("(Primary)");
-        if(p.sex && p.sex !== "unspecified") labelParts.push(p.sex === "male" ? "M" : (p.sex === "female" ? "F" : p.sex));
-        if(age !== "") labelParts.push(`Age ${age}`);
-        opt.textContent = labelParts.join(" · ");
-        if(p.id === activeId) opt.selected = true;
-        personSelect.appendChild(opt);
-      });
-    }
-
-    // Modal
-    const modalBackdrop = document.getElementById("modalBackdrop");
-    const modalTitle = document.getElementById("modalTitle");
-    const modalBody = document.getElementById("modalBody");
-    const modalClose = document.getElementById("modalClose");
-
-    function openModal(title, html){
-      modalTitle.textContent = title;
-      modalBody.innerHTML = html;
-      modalBackdrop.style.display = "flex";
-      // Attach closing click
-      attachModalActions();
-    }
-    function closeModal(){
-      modalBackdrop.style.display = "none";
-      modalBody.innerHTML = "";
-    }
-    modalClose.addEventListener("click", closeModal);
-    modalBackdrop.addEventListener("click", (e)=>{
-      if(e.target === modalBackdrop) closeModal();
-    });
-
-    function attachModalActions(){
-      // placeholder; used after modal content is injected
-    }
-
-    /******************************************************************
-     * 4) Data entry: Add reading / labs / urine / stool / weight / spo2
-     ******************************************************************/
-    document.getElementById("btnAddReading").addEventListener("click", ()=>{
-      closeDrawerFn();
-      openAddReadingModal();
-    });
-
-    function openAddReadingModal(prefillParsed=null){
-      const p = getActivePerson();
-      const html = `
-        <div class="small">This saves a new point to history. Snapshot & Trends update instantly after save.</div>
-        <div class="sep"></div>
-
-        <div class="form">
-          <div class="field span2">
-            <label>Timestamp (device time)</label>
-            <input id="r_takenAt" type="datetime-local" />
-            <div class="hint">Default is now. You can backdate for historical entries.</div>
-          </div>
-
-          <div class="field">
-            <label>Glucose (mg/dL)</label>
-            <input id="r_glucose" inputmode="numeric" placeholder="e.g. 122" />
-          </div>
-          <div class="field">
-            <label>Trend (optional)</label>
-            <select id="r_trend">
-              <option value="">Select...</option>
-              <option value="Flat">Flat</option>
-              <option value="Rising">Rising</option>
-              <option value="Falling">Falling</option>
-              <option value="Rapid rise">Rapid rise</option>
-              <option value="Rapid fall">Rapid fall</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Systolic BP</label>
-            <input id="r_sys" inputmode="numeric" placeholder="e.g. 126" />
-          </div>
-          <div class="field">
-            <label>Diastolic BP</label>
-            <input id="r_dia" inputmode="numeric" placeholder="e.g. 84" />
-          </div>
-
-          <div class="field span2">
-            <label>Pulse (optional)</label>
-            <input id="r_pulse" inputmode="numeric" placeholder="e.g. 65" />
-          </div>
-
-          <div class="field">
-            <label>Sleep score (optional)</label>
-            <input id="r_sleepScore" inputmode="numeric" placeholder="e.g. 82" />
-          </div>
-          <div class="field">
-            <label>Energy score (optional)</label>
-            <input id="r_energy" inputmode="numeric" placeholder="e.g. 71" />
-          </div>
-
-          <div class="field">
-            <label>Total sleep minutes (optional)</label>
-            <input id="r_sleepMin" inputmode="numeric" placeholder="e.g. 278" />
-          </div>
-          <div class="field">
-            <label>Lowest SpO₂ (optional)</label>
-            <input id="r_spo2low" inputmode="numeric" placeholder="e.g. 90" />
-          </div>
-
-          <div class="field">
-            <label>REM minutes (optional)</label>
-            <input id="r_rem" inputmode="numeric" placeholder="e.g. 114" />
-          </div>
-          <div class="field">
-            <label>Deep minutes (optional)</label>
-            <input id="r_deep" inputmode="numeric" placeholder="e.g. 49" />
-          </div>
-
-          <div class="field">
-            <label>Awake minutes (optional)</label>
-            <input id="r_awake" inputmode="numeric" placeholder="e.g. 34" />
-          </div>
-          <div class="field">
-            <label>Snore minutes (optional)</label>
-            <input id="r_snore" inputmode="numeric" placeholder="e.g. 148" />
-          </div>
-
-          <div class="field">
-            <label>Weight (kg, optional)</label>
-            <input id="r_weight" inputmode="decimal" placeholder="e.g. 92.5" />
-          </div>
-          <div class="field">
-            <label>SpO₂ low (separate point, optional)</label>
-            <input id="r_spo2Separate" inputmode="numeric" placeholder="e.g. 88" />
-          </div>
-
-          <div class="field span2">
-            <button class="btn" id="r_save">Save reading(s)</button>
-          </div>
-
-          <div class="field span2">
-            <button class="btn secondary" id="r_labs">Add labs (manual) · kidney + blood indices</button>
-          </div>
-
-          <div class="field span2">
-            <button class="btn secondary" id="r_urine">Add urine (manual)</button>
-          </div>
-
-          <div class="field span2">
-            <button class="btn secondary" id="r_stool">Add stool/FIT (manual)</button>
-          </div>
+      <div class="grid cols2" style="margin-top:12px;">
+        <div class="card">
+          <h3>Glucose (latest)</h3>
+          <p class="big" id="snapGlucose">—</p>
+          <div class="small" id="snapGlucoseSub">No glucose data yet</div>
         </div>
-      `;
-      openModal(`Add Reading — ${p.name || "Person"}`, html);
 
-      // Default datetime-local now
-      const dt = new Date();
-      const pad = n => String(n).padStart(2,"0");
-      const local = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      document.getElementById("r_takenAt").value = local;
-
-      // Prefill from parsed text if provided
-      if(prefillParsed){
-        if(prefillParsed.glucose) document.getElementById("r_glucose").value = prefillParsed.glucose;
-        if(prefillParsed.sys) document.getElementById("r_sys").value = prefillParsed.sys;
-        if(prefillParsed.dia) document.getElementById("r_dia").value = prefillParsed.dia;
-        if(prefillParsed.pulse) document.getElementById("r_pulse").value = prefillParsed.pulse;
-        if(prefillParsed.spo2) document.getElementById("r_spo2low").value = prefillParsed.spo2;
-      }
-
-      document.getElementById("r_save").addEventListener("click", ()=>{
-        const takenAtLocal = document.getElementById("r_takenAt").value;
-        const takenAt = takenAtLocal ? new Date(takenAtLocal).toISOString() : new Date().toISOString();
-        const pid = getActivePerson().id;
-
-        const glucose = document.getElementById("r_glucose").value.trim();
-        const trend = document.getElementById("r_trend").value;
-        const sys = document.getElementById("r_sys").value.trim();
-        const dia = document.getElementById("r_dia").value.trim();
-        const pulse = document.getElementById("r_pulse").value.trim();
-
-        const sleepScore = document.getElementById("r_sleepScore").value.trim();
-        const energy = document.getElementById("r_energy").value.trim();
-        const sleepMin = document.getElementById("r_sleepMin").value.trim();
-        const spo2Low = document.getElementById("r_spo2low").value.trim();
-        const rem = document.getElementById("r_rem").value.trim();
-        const deep = document.getElementById("r_deep").value.trim();
-        const awake = document.getElementById("r_awake").value.trim();
-        const snore = document.getElementById("r_snore").value.trim();
-
-        const weight = document.getElementById("r_weight").value.trim();
-        const spo2Separate = document.getElementById("r_spo2Separate").value.trim();
-
-        let savedAny = false;
-
-        if(glucose !== ""){
-          store.readings.push({ id: uid("r"), personId: pid, type:"glucose", value: parseFloat(glucose), trend, takenAt, source:"manual" });
-          savedAny = true;
-        }
-        if(sys !== "" || dia !== ""){
-          store.readings.push({ id: uid("r"), personId: pid, type:"bp", sys: parseInt(sys||"0",10), dia: parseInt(dia||"0",10), pulse: pulse?parseInt(pulse,10):"", takenAt, source:"manual" });
-          savedAny = true;
-        }
-        if(sleepScore !== "" || energy !== "" || sleepMin !== "" || spo2Low !== "" || rem !== "" || deep !== "" || awake !== "" || snore !== ""){
-          store.readings.push({
-            id: uid("r"), personId: pid, type:"sleep",
-            score: sleepScore?parseInt(sleepScore,10):"",
-            energy: energy?parseInt(energy,10):"",
-            minutes: sleepMin?parseInt(sleepMin,10):"",
-            rem: rem?parseInt(rem,10):"",
-            deep: deep?parseInt(deep,10):"",
-            awake: awake?parseInt(awake,10):"",
-            spo2Low: spo2Low?parseInt(spo2Low,10):"",
-            snoreMin: snore?parseInt(snore,10):"",
-            takenAt, source:"manual"
-          });
-          savedAny = true;
-        }
-        if(weight !== ""){
-          store.readings.push({ id: uid("r"), personId: pid, type:"weight", kg: parseFloat(weight), takenAt, source:"manual" });
-          savedAny = true;
-        }
-        if(spo2Separate !== ""){
-          store.readings.push({ id: uid("r"), personId: pid, type:"spo2", low: parseInt(spo2Separate,10), takenAt, source:"manual" });
-          savedAny = true;
-        }
-
-        if(savedAny){
-          store.meta.updatedAt = nowIsoLocal();
-          saveStore();
-          // Snapshot derives from readings, so render updates immediately
-          closeModal();
-          render();
-        }else{
-          alert("No values entered. Add at least one metric, then Save.");
-        }
-      });
-
-      document.getElementById("r_labs").addEventListener("click", ()=>{
-        openLabsModal(prefillParsed);
-      });
-      document.getElementById("r_urine").addEventListener("click", ()=>{
-        openUrineModal(prefillParsed);
-      });
-      document.getElementById("r_stool").addEventListener("click", ()=>{
-        openStoolModal(prefillParsed);
-      });
-    }
-
-    function openLabsModal(prefill=null){
-      const p = getActivePerson();
-      const html = `
-        <div class="small">Manual labs entry (kidney + electrolytes + HbA1c + blood indices). Saved as a dated lab point for this person.</div>
-        <div class="sep"></div>
-        <div class="form">
-          <div class="field span2">
-            <label>Lab date/time (device time)</label>
-            <input id="l_takenAt" type="datetime-local" />
-          </div>
-
-          <div class="field">
-            <label>Creatinine</label>
-            <input id="l_creat" placeholder="e.g. 272 µmol/L or 1.56 mg/dL" />
-          </div>
-          <div class="field">
-            <label>eGFR</label>
-            <input id="l_egfr" inputmode="numeric" placeholder="e.g. 23" />
-          </div>
-
-          <div class="field">
-            <label>Sodium</label>
-            <input id="l_na" inputmode="decimal" placeholder="e.g. 132.1" />
-          </div>
-          <div class="field">
-            <label>Potassium</label>
-            <input id="l_k" inputmode="decimal" placeholder="e.g. 4.74" />
-          </div>
-
-          <div class="field">
-            <label>Chloride</label>
-            <input id="l_cl" inputmode="decimal" placeholder="e.g. 92.3" />
-          </div>
-          <div class="field">
-            <label>Bicarbonate</label>
-            <input id="l_hco3" inputmode="decimal" placeholder="e.g. 13.89" />
-          </div>
-
-          <div class="field">
-            <label>Uric acid</label>
-            <input id="l_uric" inputmode="decimal" placeholder="e.g. 565.5" />
-          </div>
-          <div class="field">
-            <label>HbA1c (lab)</label>
-            <input id="l_hba1c" inputmode="decimal" placeholder="e.g. 10.21" />
-          </div>
-
-          <div class="field">
-            <label>Hemoglobin (Hb)</label>
-            <input id="l_hb" inputmode="decimal" placeholder="e.g. 13.0" />
-          </div>
-          <div class="field">
-            <label>MCV</label>
-            <input id="l_mcv" inputmode="decimal" placeholder="e.g. 87.9" />
-          </div>
-
-          <div class="field span2">
-            <label>Notes (optional)</label>
-            <textarea id="l_notes" placeholder="Any context: lab name, fasting, meds, etc."></textarea>
-          </div>
-
-          <div class="field span2">
-            <button class="btn" id="l_save">Save labs</button>
-          </div>
+        <div class="card">
+          <h3>Estimated HbA1c (moving)</h3>
+          <p class="big" id="snapA1c">—</p>
+          <div class="small" id="snapA1cSub">Add glucose readings to compute</div>
         </div>
-      `;
-      openModal(`Labs — ${p.name || "Person"}`, html);
 
-      const dt = new Date();
-      const pad = n => String(n).padStart(2,"0");
-      const local = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      document.getElementById("l_takenAt").value = local;
-
-      if(prefill){
-        if(prefill.creatinine) document.getElementById("l_creat").value = prefill.creatinine;
-        if(prefill.egfr) document.getElementById("l_egfr").value = prefill.egfr;
-        if(prefill.sodium) document.getElementById("l_na").value = prefill.sodium;
-        if(prefill.potassium) document.getElementById("l_k").value = prefill.potassium;
-        if(prefill.chloride) document.getElementById("l_cl").value = prefill.chloride;
-        if(prefill.bicarbonate) document.getElementById("l_hco3").value = prefill.bicarbonate;
-        if(prefill.uric) document.getElementById("l_uric").value = prefill.uric;
-        if(prefill.hba1c) document.getElementById("l_hba1c").value = prefill.hba1c;
-        if(prefill.hb) document.getElementById("l_hb").value = prefill.hb;
-        if(prefill.mcv) document.getElementById("l_mcv").value = prefill.mcv;
-      }
-
-      document.getElementById("l_save").addEventListener("click", ()=>{
-        const takenAtLocal = document.getElementById("l_takenAt").value;
-        const takenAt = takenAtLocal ? new Date(takenAtLocal).toISOString() : new Date().toISOString();
-        const pid = getActivePerson().id;
-
-        const labsObj = {
-          id: uid("r"), personId: pid, type:"labs", takenAt, source:"manual",
-          creat: document.getElementById("l_creat").value.trim(),
-          egfr: document.getElementById("l_egfr").value.trim(),
-          sodium: document.getElementById("l_na").value.trim(),
-          potassium: document.getElementById("l_k").value.trim(),
-          chloride: document.getElementById("l_cl").value.trim(),
-          bicarb: document.getElementById("l_hco3").value.trim(),
-          uric: document.getElementById("l_uric").value.trim(),
-          hba1cLab: document.getElementById("l_hba1c").value.trim(),
-          hb: document.getElementById("l_hb").value.trim(),
-          mcv: document.getElementById("l_mcv").value.trim(),
-          notes: document.getElementById("l_notes").value.trim()
-        };
-
-        // Save if at least one important field is present
-        if([labsObj.creat,labsObj.egfr,labsObj.sodium,labsObj.hba1cLab,labsObj.hb].some(x=>x!=="")){
-          store.readings.push(labsObj);
-          store.meta.updatedAt = nowIsoLocal();
-          saveStore();
-          closeModal();
-          render();
-        }else{
-          alert("Enter at least Creatinine, eGFR, Sodium, HbA1c, or Hb, then save.");
-        }
-      });
-    }
-
-    function openUrineModal(prefill=null){
-      const p = getActivePerson();
-      const html = `
-        <div class="small">Urinalysis (manual). Saved as a dated urine point for this person.</div>
-        <div class="sep"></div>
-        <div class="form">
-          <div class="field span2">
-            <label>Date/time (device time)</label>
-            <input id="u_takenAt" type="datetime-local" />
-          </div>
-
-          <div class="field"><label>pH</label><input id="u_ph" placeholder="e.g. 6.0" /></div>
-          <div class="field"><label>Specific gravity</label><input id="u_sg" placeholder="e.g. 1.025" /></div>
-
-          <div class="field"><label>Protein</label><input id="u_protein" placeholder="e.g. Trace / + / Neg" /></div>
-          <div class="field"><label>Glucose</label><input id="u_glucose" placeholder="e.g. +++ / Neg" /></div>
-
-          <div class="field"><label>Blood</label><input id="u_blood" placeholder="e.g. Trace / Neg" /></div>
-          <div class="field"><label>Ketones</label><input id="u_ketone" placeholder="e.g. Neg" /></div>
-
-          <div class="field"><label>Leucocytes</label><input id="u_leu" placeholder="e.g. Neg" /></div>
-          <div class="field"><label>Nitrite</label><input id="u_nit" placeholder="e.g. Neg" /></div>
-
-          <div class="field"><label>WBC (HPF)</label><input id="u_wbc" placeholder="e.g. 0-1/HPF" /></div>
-          <div class="field"><label>RBC (HPF)</label><input id="u_rbc" placeholder="e.g. 0-2/HPF" /></div>
-
-          <div class="field span2"><label>Bacteria / Notes</label><textarea id="u_notes" placeholder="e.g. Bacteria +, Culture: no growth, etc."></textarea></div>
-          <div class="field span2"><button class="btn" id="u_save">Save urine</button></div>
+        <div class="card">
+          <h3>Blood Pressure (latest)</h3>
+          <p class="big" id="snapBP">—</p>
+          <div class="small" id="snapBPSub">No BP data yet</div>
         </div>
-      `;
-      openModal(`Urine — ${p.name || "Person"}`, html);
 
-      const dt = new Date();
-      const pad = n => String(n).padStart(2,"0");
-      const local = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      document.getElementById("u_takenAt").value = local;
-
-      if(prefill){
-        if(prefill.urinePh) document.getElementById("u_ph").value = prefill.urinePh;
-        if(prefill.urineSg) document.getElementById("u_sg").value = prefill.urineSg;
-        if(prefill.urineProtein) document.getElementById("u_protein").value = prefill.urineProtein;
-        if(prefill.urineGlucose) document.getElementById("u_glucose").value = prefill.urineGlucose;
-        if(prefill.urineBlood) document.getElementById("u_blood").value = prefill.urineBlood;
-        if(prefill.urineKetone) document.getElementById("u_ketone").value = prefill.urineKetone;
-        if(prefill.urineLeu) document.getElementById("u_leu").value = prefill.urineLeu;
-        if(prefill.urineNit) document.getElementById("u_nit").value = prefill.urineNit;
-        if(prefill.urineWbc) document.getElementById("u_wbc").value = prefill.urineWbc;
-        if(prefill.urineRbc) document.getElementById("u_rbc").value = prefill.urineRbc;
-      }
-
-      document.getElementById("u_save").addEventListener("click", ()=>{
-        const takenAtLocal = document.getElementById("u_takenAt").value;
-        const takenAt = takenAtLocal ? new Date(takenAtLocal).toISOString() : new Date().toISOString();
-        const pid = getActivePerson().id;
-
-        const urineObj = {
-          id: uid("r"), personId: pid, type:"urine", takenAt, source:"manual",
-          ph: document.getElementById("u_ph").value.trim(),
-          sg: document.getElementById("u_sg").value.trim(),
-          protein: document.getElementById("u_protein").value.trim(),
-          glucose: document.getElementById("u_glucose").value.trim(),
-          blood: document.getElementById("u_blood").value.trim(),
-          ketone: document.getElementById("u_ketone").value.trim(),
-          leucocytes: document.getElementById("u_leu").value.trim(),
-          nitrite: document.getElementById("u_nit").value.trim(),
-          wbc: document.getElementById("u_wbc").value.trim(),
-          rbc: document.getElementById("u_rbc").value.trim(),
-          notes: document.getElementById("u_notes").value.trim()
-        };
-
-        if([urineObj.ph, urineObj.sg, urineObj.protein, urineObj.glucose, urineObj.blood, urineObj.notes].some(x=>x!=="")){
-          store.readings.push(urineObj);
-          store.meta.updatedAt = nowIsoLocal();
-          saveStore();
-          closeModal();
-          render();
-        }else{
-          alert("Enter at least one urine field before saving.");
-        }
-      });
-    }
-
-    function openStoolModal(prefill=null){
-      const p = getActivePerson();
-      const html = `
-        <div class="small">Stool / FIT (manual). Saved as a dated stool point for this person.</div>
-        <div class="sep"></div>
-        <div class="form">
-          <div class="field span2">
-            <label>Date/time (device time)</label>
-            <input id="s_takenAt" type="datetime-local" />
-          </div>
-
-          <div class="field span2">
-            <label>FIT result</label>
-            <select id="s_fit">
-              <option value="">Select...</option>
-              <option value="Negative">Negative</option>
-              <option value="Positive">Positive</option>
-              <option value="Not done">Not done</option>
-            </select>
-          </div>
-
-          <div class="field span2">
-            <label>Stool notes (optional)</label>
-            <textarea id="s_notes" placeholder="e.g. Normal, constipation, black/tarry, diarrhea, etc."></textarea>
-          </div>
-
-          <div class="field span2"><button class="btn" id="s_save">Save stool</button></div>
+        <div class="card">
+          <h3>Sleep (latest)</h3>
+          <p class="big" id="snapSleep">—</p>
+          <div class="small" id="snapSleepSub">No sleep data yet</div>
         </div>
-      `;
-      openModal(`Stool/FIT — ${p.name || "Person"}`, html);
 
-      const dt = new Date();
-      const pad = n => String(n).padStart(2,"0");
-      const local = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      document.getElementById("s_takenAt").value = local;
-
-      if(prefill){
-        if(prefill.fit) document.getElementById("s_fit").value = prefill.fit;
-      }
-
-      document.getElementById("s_save").addEventListener("click", ()=>{
-        const takenAtLocal = document.getElementById("s_takenAt").value;
-        const takenAt = takenAtLocal ? new Date(takenAtLocal).toISOString() : new Date().toISOString();
-        const pid = getActivePerson().id;
-
-        const stoolObj = {
-          id: uid("r"), personId: pid, type:"stool", takenAt, source:"manual",
-          fit: document.getElementById("s_fit").value,
-          notes: document.getElementById("s_notes").value.trim()
-        };
-
-        if(stoolObj.fit || stoolObj.notes){
-          store.readings.push(stoolObj);
-          store.meta.updatedAt = nowIsoLocal();
-          saveStore();
-          closeModal();
-          render();
-        }else{
-          alert("Select a FIT value or write a stool note, then save.");
-        }
-      });
-    }
-
-    /******************************************************************
-     * 5) Family: add dependant profiles (name, dob calendar, sex, etc.)
-     ******************************************************************/
-    document.getElementById("btnAddDependent").addEventListener("click", ()=>{
-      closeDrawerFn();
-      openAddDependentModal();
-    });
-
-    function openAddDependentModal(){
-      if(store.people.length >= MAX_PEOPLE){
-        alert(`Family Mode limit reached (${MAX_PEOPLE}).`);
-        return;
-      }
-      const html = `
-        <div class="small">Create a dependant profile (mummy/sister/child). Age is auto-calculated from DOB.</div>
-        <div class="sep"></div>
-        <div class="form">
-          <div class="field span2">
-            <label>Name</label>
-            <input id="d_name" placeholder="e.g. Mummy (Grace)" />
-          </div>
-
-          <div class="field">
-            <label>Sex</label>
-            <select id="d_sex">
-              <option value="unspecified">Select...</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>DOB (calendar)</label>
-            <input id="d_dob" type="date" />
-          </div>
-
-          <div class="field">
-            <label>Height (cm, optional)</label>
-            <input id="d_h" inputmode="decimal" placeholder="e.g. 165" />
-          </div>
-          <div class="field">
-            <label>Weight (kg, optional)</label>
-            <input id="d_w" inputmode="decimal" placeholder="e.g. 70" />
-          </div>
-
-          <div class="field span2">
-            <label>Known conditions (optional)</label>
-            <input id="d_cond" placeholder="e.g. Stroke, Hypertension, Diabetes (comma-separated)" />
-            <div class="hint">Do not prefill — each user enters their own.</div>
-          </div>
-
-          <div class="field span2">
-            <button class="btn" id="d_save">Save dependant</button>
-          </div>
+        <div class="card">
+          <h3>Kidney / Labs (latest)</h3>
+          <p class="big" id="snapLabs">—</p>
+          <div class="small" id="snapLabsSub">No lab data yet</div>
         </div>
-      `;
-      openModal("Add Dependant", html);
 
-      document.getElementById("d_save").addEventListener("click", ()=>{
-        const name = document.getElementById("d_name").value.trim();
-        const sex = document.getElementById("d_sex").value;
-        const dob = document.getElementById("d_dob").value;
-        const heightCm = document.getElementById("d_h").value.trim();
-        const weightKg = document.getElementById("d_w").value.trim();
-        const cond = document.getElementById("d_cond").value.trim();
-
-        if(!name){
-          alert("Please enter a name for this dependant.");
-          return;
-        }
-
-        const person = {
-          id: uid("p"),
-          isPrimary: false,
-          name,
-          sex,
-          dob,
-          heightCm,
-          weightKg,
-          knownConditions: cond ? cond.split(",").map(s=>s.trim()).filter(Boolean) : [],
-          notes: ""
-        };
-        store.people.push(person);
-        store.meta.updatedAt = nowIsoLocal();
-        saveStore();
-        closeModal();
-        setActivePerson(person.id);
-      });
-    }
-
-    /******************************************************************
-     * 6) Assisted report extraction (paste text -> regex parse)
-     ******************************************************************/
-    const btnParseText = document.getElementById("btnParseText");
-    btnParseText.addEventListener("click", ()=>{
-      const text = (document.getElementById("pasteText").value || "").trim();
-      if(!text){
-        alert("Paste report text first (copied text or typed summary).");
-        return;
-      }
-      const parsed = parseReportText(text);
-      // Save report object for audit trail
-      const pid = getActivePerson().id;
-      const files = [...document.getElementById("fileImport").files].map(f=>({name:f.name, type:f.type, size:f.size}));
-      store.reports.push({
-        id: uid("rep"),
-        personId: pid,
-        uploadedAt: new Date().toISOString(),
-        files,
-        pastedText: text,
-        parsed
-      });
-      store.meta.updatedAt = nowIsoLocal();
-      saveStore();
-
-      // Open Add Reading modal prefilled; user can then save as dated points
-      closeDrawerFn();
-      closeModal();
-      openAddReadingModal(parsed);
-    });
-
-    // Regex parser for common lab/report terms
-    function parseReportText(raw){
-      const t = raw.replace(/\s+/g, " ").trim();
-
-      function pick(re){
-        const m = t.match(re);
-        return m ? m[1] : "";
-      }
-
-      // Handle creatinine in µmol/L or mg/dL formats as captured string
-      const creat = pick(/Creatinine[^0-9]*([0-9]+(?:\.[0-9]+)?\s*(?:umol\/L|µmol\/L|mg\/dL)?)/i);
-      const egfr = pick(/eGFR[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const sodium = pick(/Sodium[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const potassium = pick(/Potassium[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const chloride = pick(/Chloride[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const bicarb = pick(/Bicarbonate[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const uric = pick(/Uric\s*Acid[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const hba1c = pick(/HbA1c[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const hb = pick(/Haemoglobin[^0-9]*([0-9]+(?:\.[0-9]+)?)/i) || pick(/\bHb\b[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const mcv = pick(/\bMCV\b[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-
-      // From vitals screenshots (if text is pasted)
-      const glucose = pick(/Glucose[^0-9]*([0-9]{2,3})\s*mg\/dL/i);
-      const sys = pick(/(?:Systolic|Sys)[^0-9]*([0-9]{2,3})/i);
-      const dia = pick(/(?:Diastolic|Dia)[^0-9]*([0-9]{2,3})/i);
-      const pulse = pick(/Pulse[^0-9]*([0-9]{2,3})/i);
-      const spo2 = pick(/SpO2[^0-9]*([0-9]{2,3})/i);
-
-      // Urine hints
-      const urinePh = pick(/Urine\s*P\.?H[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const urineSg = pick(/Specific\s*gravity[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
-      const urineProtein = pick(/Protein[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineGlucose = pick(/Urine\s*Glucose[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i) || pick(/\bGlucose\b[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineBlood = pick(/\bBlood\b[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineKetone = pick(/\bKetone\b[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineLeu = pick(/\bLeucocytes\b[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineNit = pick(/\bNitrite\b[^A-Za-z0-9]*([A-Za-z\+]+|Trace|Negative|NEGATIVE)/i);
-      const urineWbc = pick(/WBC\/?PUS\s*CELL[^0-9]*([0-9\-\+\/A-Za-z]+)\s*HPF/i);
-      const urineRbc = pick(/RBC1?[^0-9]*([0-9\-\+\/A-Za-z]+)\s*HPF/i);
-
-      // FIT
-      const fit = pick(/\bFIT\b[^A-Za-z]*(Negative|Positive|Not done)/i);
-
-      return {
-        creatinine: creat,
-        egfr,
-        sodium, potassium, chloride, bicarbonate: bicarb, uric,
-        hba1c, hb, mcv,
-        glucose, sys, dia, pulse, spo2,
-        urinePh, urineSg, urineProtein, urineGlucose, urineBlood, urineKetone, urineLeu, urineNit, urineWbc, urineRbc,
-        fit
-      };
-    }
-
-    /******************************************************************
-     * 7) JSON export/import
-     ******************************************************************/
-    document.getElementById("btnExport").addEventListener("click", ()=>{
-      const blob = new Blob([JSON.stringify(store, null, 2)], {type:"application/json"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `HCPLUS_v25_backup_${new Date().toISOString().slice(0,10)}.json`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-
-    document.getElementById("jsonImport").addEventListener("change", async (e)=>{
-      const f = e.target.files[0];
-      if(!f) return;
-      try{
-        const txt = await f.text();
-        const imported = JSON.parse(txt);
-        if(!imported || !imported.people || !Array.isArray(imported.people)) throw new Error("Invalid JSON format.");
-        store = imported;
-        // Ensure v25 fields exist
-        if(!store.meta) store.meta = {};
-        store.meta.updatedAt = nowIsoLocal();
-        if(!store.ui) store.ui = {activeTab:"snapshot", activePersonId: store.people[0]?.id || uid("p")};
-        saveStore();
-        refreshHeader();
-        render();
-        alert("Import successful.");
-      }catch(err){
-        alert("Import failed: " + err.message);
-      }
-    });
-
-    /******************************************************************
-     * 8) Reset person data
-     ******************************************************************/
-    document.getElementById("btnReset").addEventListener("click", ()=>{
-      const p = getActivePerson();
-      if(!confirm(`Reset all readings/symptoms/reports for ${p.name}?`)) return;
-      store.readings = store.readings.filter(r => r.personId !== p.id);
-      store.symptoms = store.symptoms.filter(s => s.personId !== p.id);
-      store.reports = store.reports.filter(r => r.personId !== p.id);
-      store.meta.updatedAt = nowIsoLocal();
-      saveStore();
-      closeDrawerFn();
-      render();
-    });
-
-    /******************************************************************
-     * 9) Symptom checker (simple "no medical knowledge" flow)
-     *    Goal: user shouldn't need to know body systems.
-     *    Flow: Choose "Where does it affect you?" (plain terms) -> symptom list
-     ******************************************************************/
-    const SIMPLE_AREAS = [
-      { key:"head", label:"Head / Face", hints:["Headache","Dizziness","Vision changes","Facial droop","Speech changes"] },
-      { key:"chest", label:"Chest / Breathing", hints:["Chest pain","Shortness of breath","Palpitations","Cough"] },
-      { key:"stomach", label:"Stomach / Digestion", hints:["Nausea","Vomiting","Abdominal pain","Diarrhea","Constipation"] },
-      { key:"arms", label:"Arms / Hands", hints:["Weakness","Numbness","Tingling","Pain","Tremor"] },
-      { key:"legs", label:"Legs / Feet", hints:["Weakness","Numbness","Swelling","Pain","Balance issues"] },
-      { key:"urine", label:"Urine / Private area", hints:["Burning urination","Frequent urination","Blood in urine","Reduced urine"] },
-      { key:"sleep", label:"Sleep / Energy", hints:["Poor sleep","Daytime fatigue","Snoring","Low oxygen"] },
-      { key:"mind", label:"Memory / Mood", hints:["Confusion","Memory loss","Anxiety","Low mood"] },
-      { key:"whole", label:"Whole body", hints:["Fever","Weight loss","Severe weakness","Body pains"] },
-      { key:"stroke", label:"Stroke / Relapse check", hints:["New weakness","New facial droop","Slurred speech","Vision loss","Severe headache"] }
-    ];
-
-    // Expanded symptom keywords including stroke relapse
-    const SYMPTOM_LIBRARY = [
-      // Stroke / neuro
-      { name:"New one-sided weakness", tags:["stroke","neuro","arms","legs"], red:true },
-      { name:"Facial droop", tags:["stroke","neuro","head"], red:true },
-      { name:"Slurred speech", tags:["stroke","neuro","head"], red:true },
-      { name:"Sudden vision loss", tags:["stroke","neuro","head"], red:true },
-      { name:"Severe sudden headache", tags:["stroke","neuro","head"], red:true },
-      { name:"Confusion / altered consciousness", tags:["stroke","neuro","mind"], red:true },
-      { name:"Numbness/tingling", tags:["neuro","arms","legs"], red:false },
-      { name:"Dizziness / vertigo", tags:["neuro","head"], red:false },
-
-      // Cardio/resp
-      { name:"Chest pain/pressure", tags:["cardio","chest"], red:true },
-      { name:"Shortness of breath", tags:["resp","chest"], red:true },
-      { name:"Palpitations", tags:["cardio","chest"], red:false },
-      { name:"Leg swelling", tags:["cardio","legs"], red:false },
-
-      // Metabolic
-      { name:"Very high glucose symptoms (thirst/urination)", tags:["metabolic","whole"], red:false },
-      { name:"Low glucose symptoms (shaking/sweating)", tags:["metabolic","whole"], red:true },
-
-      // GI
-      { name:"Severe abdominal pain", tags:["gi","stomach"], red:true },
-      { name:"Persistent vomiting", tags:["gi","stomach"], red:true },
-      { name:"Diarrhea", tags:["gi","stomach"], red:false },
-      { name:"Constipation", tags:["gi","stomach"], red:false },
-
-      // Urine
-      { name:"Burning urination", tags:["urine","urine"], red:false },
-      { name:"Blood in urine", tags:["urine","urine"], red:true },
-      { name:"Reduced urine output", tags:["urine","urine"], red:true },
-
-      // Sleep
-      { name:"Severe sleep deprivation", tags:["sleep","sleep"], red:false },
-      { name:"Low oxygen overnight", tags:["sleep","sleep"], red:true },
-
-      // General
-      { name:"Fever", tags:["whole","whole"], red:true },
-      { name:"Unexplained weight loss", tags:["whole","whole"], red:true },
-      { name:"Severe weakness", tags:["whole","whole"], red:true },
-    ];
-
-    function analyzeSymptoms(entries){
-      // Very conservative: highlight red flags and suggest next steps
-      const picked = entries.map(e=>e.symptom);
-      const reds = entries.filter(e=>e.redFlag).map(e=>e.symptom);
-
-      const actions = [];
-      if(reds.length){
-        actions.push("Red-flag symptoms detected. Consider urgent medical assessment or emergency services if sudden/severe.");
-      }
-      if(picked.some(s=>s.toLowerCase().includes("stroke") || s.toLowerCase().includes("facial") || s.toLowerCase().includes("slurred") || s.toLowerCase().includes("one-sided"))){
-        actions.push("Stroke relapse pattern: time-sensitive. Seek urgent evaluation if symptoms are new/worsening.");
-      }
-      if(picked.some(s=>s.toLowerCase().includes("chest pain") || s.toLowerCase().includes("shortness"))){
-        actions.push("Cardio/resp concern: check BP, pulse, oxygen; seek urgent care if persistent or severe.");
-      }
-      if(!actions.length){
-        actions.push("No immediate red flags detected from selected symptoms. Monitor, hydrate, rest, and consider clinician review if symptoms persist.");
-      }
-
-      return { reds, actions };
-    }
-
-    function openQuickSymptomsModal(){
-      const p = getActivePerson();
-      const html = `
-        <div class="small">Quick symptom capture (simple, no medical knowledge required). Select area, then choose symptoms. Saved symptoms trigger instant analysis.</div>
-        <div class="sep"></div>
-
-        <div class="form">
-          <div class="field span2">
-            <label>Where does it affect?</label>
-            <select id="qs_area">
-              ${SIMPLE_AREAS.map(a=>`<option value="${a.key}">${a.label}</option>`).join("")}
-            </select>
-          </div>
-
-          <div class="field span2">
-            <label>Search symptoms (optional)</label>
-            <input id="qs_search" placeholder="Type: weakness, stroke, headache, urine..." />
-          </div>
-
-          <div class="field span2">
-            <label>Symptoms (tap to add)</label>
-            <div id="qs_list" class="card" style="box-shadow:none;border-radius:14px;"></div>
-          </div>
-
-          <div class="field span2">
-            <label>Selected</label>
-            <div id="qs_selected" class="card" style="box-shadow:none;border-radius:14px; min-height:60px;"></div>
-          </div>
-
-          <div class="field span2">
-            <label>Notes (optional)</label>
-            <textarea id="qs_notes" placeholder="Any context: when it started, severity, meds, etc."></textarea>
-          </div>
-
-          <div class="field span2">
-            <button class="btn" id="qs_save">Save symptoms</button>
-          </div>
+        <div class="card">
+          <h3>Urine / Stool (latest)</h3>
+          <p class="big" id="snapUrineStool">—</p>
+          <div class="small" id="snapUrineStoolSub">No urine/stool data yet</div>
         </div>
-      `;
-      openModal(`Add Symptoms — ${p.name || "Person"}`, html);
+      </div>
 
-      const selected = [];
-      const qsArea = document.getElementById("qs_area");
-      const qsSearch = document.getElementById("qs_search");
-      const qsList = document.getElementById("qs_list");
-      const qsSel = document.getElementById("qs_selected");
-
-      function renderList(){
-        const areaKey = qsArea.value;
-        const search = (qsSearch.value||"").toLowerCase().trim();
-
-        const matches = SYMPTOM_LIBRARY.filter(s=>{
-          const inArea = (areaKey === "whole") ? true :
-                         (areaKey === "stroke") ? s.tags.includes("stroke") || s.name.toLowerCase().includes("stroke") :
-                         s.tags.includes(areaKey) || s.tags.includes("whole");
-          const inSearch = !search ? true : s.name.toLowerCase().includes(search);
-          return inArea && inSearch;
-        });
-
-        qsList.innerHTML = `
-          <div class="small">Tap symptom to add. Red-flag items are marked.</div>
-          <div class="sep"></div>
+      <div class="grid" style="margin-top:12px;">
+        <div class="card">
+          <h3>Quick actions</h3>
           <div class="row">
-            ${matches.map(s=>{
-              const badge = s.red ? `<span class="pill"><span class="dot alert"></span> Red flag</span>` : `<span class="pill"><span class="dot good"></span> Common</span>`;
-              return `
-                <div class="card" style="box-shadow:none;border-radius:14px;border:1px solid rgba(217,230,251,.95);padding:10px;cursor:pointer;flex:1;min-width:220px"
-                     data-sym="${encodeURIComponent(s.name)}" data-red="${s.red?'1':'0'}">
-                  <div style="font-weight:900">${s.name}</div>
-                  <div style="margin-top:6px">${badge}</div>
+            <button class="btn" id="quickAddReading">Add new reading</button>
+            <button class="btn secondary" id="quickAddSymptoms">Add symptoms (quick)</button>
+            <button class="btn ghost" id="quickViewTrends">View trends</button>
+          </div>
+          <div class="note" id="snapshotAutoAdvice" style="margin-top:10px;">
+            Tip: You can add readings manually or attach screenshots/reports. All data merges into one timeline per person.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Latest symptom analysis</h3>
+          <div class="note" id="symptomAnalysisBox">No symptoms saved yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADD -->
+    <section id="view-add" class="view" style="display:none;">
+      <div class="card">
+        <h3>Add new data (manual or screenshot)</h3>
+        <div class="note">
+          Any entry you add here updates the same database used by Snapshot and Trends.
+          If you attach an image, we store it with a timestamp (file timestamp; you can override if needed).
+        </div>
+      </div>
+
+      <div class="grid cols2">
+        <div class="card">
+          <h3>Manual entry</h3>
+          <form class="form" id="addForm">
+            <div class="field">
+              <label>Entry date/time (optional override)</label>
+              <input type="datetime-local" id="manualDateTime" />
+              <div class="hint">Leave blank to use device time now.</div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Glucose (mg/dL)</label>
+                <input inputmode="numeric" placeholder="e.g. 122" id="inGlucose" />
+              </div>
+              <div class="field">
+                <label>Trend (optional)</label>
+                <select id="inTrend">
+                  <option value="">—</option>
+                  <option value="flat">Flat</option>
+                  <option value="rising">Rising</option>
+                  <option value="falling">Falling</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Systolic BP</label>
+                <input inputmode="numeric" placeholder="e.g. 129" id="inSys" />
+              </div>
+              <div class="field">
+                <label>Diastolic BP</label>
+                <input inputmode="numeric" placeholder="e.g. 87" id="inDia" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Pulse (optional)</label>
+              <input inputmode="numeric" placeholder="e.g. 68" id="inPulse" />
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Sleep score (optional)</label>
+                <input inputmode="numeric" placeholder="e.g. 36" id="inSleepScore" />
+              </div>
+              <div class="field">
+                <label>Energy score (optional)</label>
+                <input inputmode="numeric" placeholder="e.g. 71" id="inEnergy" />
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Total sleep minutes (optional)</label>
+                <input inputmode="numeric" placeholder="e.g. 278" id="inSleepMin" />
+              </div>
+              <div class="field">
+                <label>Lowest SpO₂ (%) (optional)</label>
+                <input inputmode="numeric" placeholder="e.g. 85" id="inSpo2" />
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>eGFR (optional)</label>
+                <input inputmode="numeric" placeholder="e.g. 50" id="inEgfr" />
+              </div>
+              <div class="field">
+                <label>Creatinine (optional)</label>
+                <input placeholder="e.g. 1.56 mg/dL or 138 µmol/L" id="inCr" />
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>HbA1c lab (optional)</label>
+                <input inputmode="decimal" placeholder="e.g. 6.2" id="inA1cLab" />
+              </div>
+              <div class="field">
+                <label>Uric Acid (optional)</label>
+                <input placeholder="e.g. 565 µmol/L" id="inUric" />
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Hemoglobin (optional)</label>
+                <input placeholder="e.g. 13 g/dL" id="inHb" />
+              </div>
+              <div class="field">
+                <label>MCV (optional)</label>
+                <input placeholder="e.g. 87.9 fL" id="inMcv" />
+              </div>
+            </div>
+
+            <div class="card" style="box-shadow:none; background:#fbfdff;">
+              <h3 style="margin-bottom:6px;">Urine / Stool (manual)</h3>
+              <div class="grid cols2">
+                <div class="field">
+                  <label>Urine: Protein</label>
+                  <select id="inUrProtein">
+                    <option value="">—</option>
+                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
+                  </select>
                 </div>
-              `;
-            }).join("")}
-          </div>
-        `;
-      }
+                <div class="field">
+                  <label>Urine: Glucose</label>
+                  <select id="inUrGlucose">
+                    <option value="">—</option>
+                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid cols2">
+                <div class="field">
+                  <label>Urine: Blood</label>
+                  <select id="inUrBlood">
+                    <option value="">—</option>
+                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Urine: Ketones</label>
+                  <select id="inUrKet">
+                    <option value="">—</option>
+                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid cols2">
+                <div class="field">
+                  <label>FIT (stool) (optional)</label>
+                  <select id="inFit">
+                    <option value="">—</option>
+                    <option>Negative</option>
+                    <option>Positive</option>
+                    <option>Not done</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Stool notes (optional)</label>
+                  <input id="inStoolNote" placeholder="e.g. Normal / constipation / diarrhea" />
+                </div>
+              </div>
+            </div>
 
-      function renderSelected(){
-        if(!selected.length){
-          qsSel.innerHTML = `<div class="small">No symptoms selected yet.</div>`;
-          return;
-        }
-        qsSel.innerHTML = `
+            <div class="field">
+              <label>Notes (optional)</label>
+              <textarea id="inNote" placeholder="Context: fasting, after meal, after walk, meds, etc."></textarea>
+            </div>
+
+            <button class="btn" type="submit">Save manual entry</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>Attach screenshot / medical report (offline import)</h3>
+
+          <div class="form">
+            <div class="field">
+              <label>Image file</label>
+              <input type="file" id="imgFile" accept="image/*" />
+              <div class="hint">You can select from Gallery or take a new photo.</div>
+            </div>
+
+            <div class="field">
+              <label>What does this image represent? (optional)</label>
+              <select id="imgTypeHint">
+                <option value="">—</option>
+                <option value="glucose">Glucose</option>
+                <option value="bp">Blood Pressure</option>
+                <option value="sleep">Sleep</option>
+                <option value="spo2">SpO₂</option>
+                <option value="lab">Lab report</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Timestamp override (optional)</label>
+              <input type="datetime-local" id="imgDateTime" />
+              <div class="hint">If blank, we use the file timestamp. (EXIF parsing can be added later.)</div>
+            </div>
+
+            <div class="field">
+              <label>Notes (optional)</label>
+              <textarea id="imgNote" placeholder="What should we remember about this image?"></textarea>
+            </div>
+
+            <button class="btn" id="saveImageBtn" type="button">Save image to timeline</button>
+
+            <div class="note" id="imgSavedMsg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SYMPTOMS -->
+    <section id="view-symptoms" class="view" style="display:none;">
+      <div class="card">
+        <h3>Symptom Checker (simple, no medical knowledge required)</h3>
+        <div class="note">
+          Select a body area you understand (e.g., “Head/Face”, “Arm/Hand”, “Chest”), then tap symptoms to add.
+          Red-flag symptoms are marked and will trigger urgent guidance.
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="openSymptomsModal">Add symptoms now</button>
+          <button class="btn secondary" id="viewLatestSymptomAnalysis">View latest analysis</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Saved symptom entries</h3>
+        <div id="symptomLogList" class="note">No symptom entries yet.</div>
+      </div>
+    </section>
+
+    <!-- TRENDS -->
+    <section id="view-trends" class="view" style="display:none;">
+      <div class="card">
+        <h3>Trends (from your saved timeline)</h3>
+        <div class="note">
+          Graphs use timestamps to order readings. If you imported images, the file timestamp is used unless you override it.
+        </div>
+      </div>
+
+      <div class="grid cols2">
+        <div class="card">
+          <h3>Glucose (mg/dL)</h3>
+          <div class="chart"><canvas id="cGlucose"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Blood Pressure (mmHg)</h3>
+          <div class="chart"><canvas id="cBP"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Sleep score</h3>
+          <div class="chart"><canvas id="cSleep"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Lowest SpO₂ (%)</h3>
+          <div class="chart"><canvas id="cSpo2"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Data tools</h3>
+        <div class="row">
+          <button class="btn secondary" id="exportJsonBtn">Export all data (JSON backup)</button>
+          <input type="file" id="importJsonFile" accept="application/json" style="display:none;" />
+          <button class="btn ghost" id="importJsonBtn">Import JSON backup</button>
+          <button class="btn ghost" id="clearPersonBtn">Clear active person data</button>
+        </div>
+        <div class="note danger" style="margin-top:10px;">
+          Clearing data deletes the active person’s readings/symptoms locally on this device only. Use Export first if unsure.
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section id="view-reports" class="view" style="display:none;">
+      <div class="card">
+        <h3>Reports (choose time range)</h3>
+        <div class="form">
+          <div class="grid cols2">
+            <div class="field">
+              <label>Preset</label>
+              <select id="reportPreset">
+                <option value="week">Last 7 days</option>
+                <option value="month">Last 30 days</option>
+                <option value="year">Last 365 days</option>
+                <option value="custom">Custom (up to 5 years)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Max range</label>
+              <input value="Up to 5 years" disabled />
+            </div>
+          </div>
+
+          <div class="grid cols2" id="customReportDates" style="display:none;">
+            <div class="field">
+              <label>From</label>
+              <input type="date" id="reportFrom" />
+            </div>
+            <div class="field">
+              <label>To</label>
+              <input type="date" id="reportTo" />
+            </div>
+          </div>
+
           <div class="row">
-            ${selected.map((x, idx)=>`
-              <span class="pill">
-                <span class="dot ${x.redFlag?'alert':'good'}"></span>
-                ${x.symptom}
-                <span style="cursor:pointer;font-weight:1000" data-remove="${idx}">×</span>
-              </span>
-            `).join("")}
+            <button class="btn" id="generateReportBtn" type="button">Generate report</button>
+            <button class="btn secondary" id="printReportBtn" type="button">Print / Save as PDF</button>
           </div>
-        `;
-      }
+        </div>
+      </div>
 
-      qsArea.addEventListener("change", renderList);
-      qsSearch.addEventListener("input", renderList);
+      <div class="card" id="reportOutputCard">
+        <h3>Report output</h3>
+        <div id="reportOutput" class="note">No report generated yet.</div>
+      </div>
+    </section>
 
-      qsList.addEventListener("click", (e)=>{
-        const el = e.target.closest("[data-sym]");
-        if(!el) return;
-        const symptom = decodeURIComponent(el.getAttribute("data-sym"));
-        const redFlag = el.getAttribute("data-red") === "1";
-        if(selected.some(s=>s.symptom === symptom)) return;
-        selected.push({symptom, redFlag});
-        renderSelected();
-      });
+    <!-- PROFILE -->
+    <section id="view-profile" class="view" style="display:none;">
+      <div class="card">
+        <h3>Profile (active person)</h3>
+        <form class="form" id="profileForm">
+          <div class="grid cols2">
+            <div class="field">
+              <label>Full name</label>
+              <input id="pName" placeholder="e.g. Robert Asibor" />
+            </div>
+            <div class="field">
+              <label>Sex</label>
+              <select id="pSex">
+                <option value="">—</option>
+                <option>Male</option>
+                <option>Female</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
 
-      qsSel.addEventListener("click", (e)=>{
-        const r = e.target.closest("[data-remove]");
-        if(!r) return;
-        const idx = parseInt(r.getAttribute("data-remove"),10);
-        selected.splice(idx,1);
-        renderSelected();
-      });
+          <div class="grid cols2">
+            <div class="field">
+              <label>Date of birth (calendar picker)</label>
+              <input type="date" id="pDob" />
+              <div class="hint">Age is calculated automatically.</div>
+            </div>
+            <div class="field">
+              <label>Age (auto)</label>
+              <input id="pAge" disabled />
+            </div>
+          </div>
 
-      document.getElementById("qs_save").addEventListener("click", ()=>{
-        if(!selected.length){
-          alert("Select at least one symptom.");
-          return;
-        }
-        const pid = getActivePerson().id;
-        const symObj = {
-          id: uid("s"),
-          personId: pid,
-          takenAt: new Date().toISOString(),
-          entries: selected,
-          notes: (document.getElementById("qs_notes").value||"").trim()
-        };
-        store.symptoms.push(symObj);
-        store.meta.updatedAt = nowIsoLocal();
-        saveStore();
-        closeModal();
-        render();
-      });
+          <div class="grid cols2">
+            <div class="field">
+              <label>Height (cm)</label>
+              <input inputmode="numeric" id="pHeight" placeholder="e.g. 175" />
+            </div>
+            <div class="field">
+              <label>Weight (kg) (optional)</label>
+              <input inputmode="decimal" id="pWeight" placeholder="e.g. 92.0" />
+            </div>
+          </div>
 
-      renderList();
-      renderSelected();
-    }
+          <div class="field">
+            <label>BMI (auto)</label>
+            <input id="pBmi" disabled />
+          </div>
 
-    document.getElementById("btnQuickSymptoms").addEventListener("click", ()=>{
-      closeDrawerFn();
-      openQuickSymptomsModal();
+          <div class="field">
+            <label>Known conditions (user-entered)</label>
+            <textarea id="pConditions" placeholder="Type your conditions (one per line or comma-separated)."></textarea>
+          </div>
+
+          <button class="btn" type="submit">Save profile</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>About this build</h3>
+        <div class="note" id="aboutBox"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Bottom quick actions -->
+  <div class="bottom-actions">
+    <div class="inner">
+      <button class="btn" id="bottomAdd">Add reading</button>
+      <button class="btn secondary" id="bottomSymptoms">Add symptoms</button>
+      <button class="btn ghost" id="bottomReport">Report</button>
+    </div>
+  </div>
+
+  <!-- Symptoms Modal -->
+  <div class="modal-backdrop" id="symModalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <strong id="symModalTitle">Add Symptoms</strong>
+        <button class="btn ghost" id="closeSymModal">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="note">
+          Quick symptom capture. Select an area, then tap symptoms to add.
+          Red-flag items are marked and will trigger urgent guidance.
+        </div>
+
+        <div class="field">
+          <label>Where does it affect?</label>
+          <select id="symArea"></select>
+        </div>
+
+        <div class="field">
+          <label>Search symptoms (optional)</label>
+          <input id="symSearch" placeholder="Type to filter… e.g. weakness, numbness, speech" />
+        </div>
+
+        <div class="field">
+          <label>Symptoms (tap to add)</label>
+          <div class="symptoms-list" id="symList"></div>
+          <div class="hint" id="symListHint"></div>
+        </div>
+
+        <div class="field">
+          <label>Selected</label>
+          <div class="chip-row" id="symSelected"></div>
+          <div class="hint" id="symSelectedHint">No symptoms selected yet.</div>
+        </div>
+
+        <div class="field">
+          <label>Notes (optional)</label>
+          <textarea id="symNotes" placeholder="Context: when it started, severity, meds taken, etc."></textarea>
+        </div>
+
+        <div class="note danger" id="symRedFlagBox" style="display:none;"></div>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn secondary" id="symClear">Clear</button>
+        <button class="btn" id="symSave">Save symptoms</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ==============================
+   ITERATION / CHANGELOG
+============================== */
+const BUILD = {
+  app: "HealthChecker+",
+  iteration: 25,
+  version: "v25.0.0",
+  label: "Iteration 25 – One-File Master (Medical Cloud, Unified Timeline)",
+  changelog: [
+    "Minimalist header (logo + person name only), top tabs fixed",
+    "Family mode up to 10 (Primary + 9 dependants), name/sex/DOB + auto age",
+    "Profile: height/weight + BMI auto, user-entered known conditions",
+    "Unified timeline database (manual entries + imported images + symptoms)",
+    "Moving HbA1c from glucose (default rolling 14 days)",
+    "Trends graphs: glucose, BP, sleep score, lowest SpO₂ (timestamp-sorted)",
+    "Symptom modal fixed: body area → symptom list renders; tap-to-add works; search; chips; red-flag warnings",
+    "Expanded neuro/stroke relapse symptom coverage + red flags",
+    "Urine + stool fields re-included (UA + FIT)",
+    "Reports: last week/month/year/custom up to 5 years; print/save PDF via browser print",
+    "Offline-first localStorage schema + JSON export/import; backend-ready hooks"
+  ]
+};
+
+/* ==============================
+   STORAGE / DATA MODEL
+============================== */
+const LS_KEY = "HCPLUS_ONEFILE_V25";
+const MAX_FAMILY = 10;
+
+function nowEpoch(){ return Date.now(); }
+function dtLocalToEpoch(dtLocalStr){
+  // dtLocalStr: "YYYY-MM-DDTHH:mm"
+  if(!dtLocalStr) return null;
+  const d = new Date(dtLocalStr);
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : null;
+}
+function dateToEpoch(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : null;
+}
+function epochToNice(ts){
+  const d = new Date(ts);
+  const pad = (n)=> String(n).padStart(2,"0");
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function calcAgeFromDob(dobEpoch){
+  if(!dobEpoch) return "";
+  const dob = new Date(dobEpoch);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if(m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age >= 0 ? String(age) : "";
+}
+function calcBMI(heightCm, weightKg){
+  const h = parseFloat(heightCm);
+  const w = parseFloat(weightKg);
+  if(!h || !w) return "";
+  const hm = h / 100;
+  const bmi = w / (hm*hm);
+  if(!Number.isFinite(bmi)) return "";
+  return bmi.toFixed(1);
+}
+function uuid(){
+  if(crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "id-" + Math.random().toString(16).slice(2) + "-" + Date.now();
+}
+
+const DEFAULT_STATE = {
+  meta: {
+    iteration: BUILD.iteration,
+    version: BUILD.version,
+    createdAt: nowEpoch(),
+    updatedAt: nowEpoch()
+  },
+  people: [],
+  activePersonId: null
+};
+
+function makeDefaultPeople(){
+  const primary = {
+    id: uuid(),
+    role: "Primary",
+    name: "Primary user",
+    sex: "",
+    dob: null,     // epoch
+    heightCm: "",
+    weightKg: "",
+    conditions: "",
+    readings: [],       // unified timeline readings
+    symptomsLog: []     // symptom entries
+  };
+  const people = [primary];
+  // Create placeholders (Dependants 1..9) but empty names; user can rename in Family/Profile
+  for(let i=1;i<MAX_FAMILY;i++){
+    people.push({
+      id: uuid(),
+      role: "Dependant",
+      name: `Dependant ${i}`,
+      sex: "",
+      dob: null,
+      heightCm: "",
+      weightKg: "",
+      conditions: "",
+      readings: [],
+      symptomsLog: []
     });
+  }
+  return people;
+}
 
-    /******************************************************************
-     * 10) Render views
-     ******************************************************************/
-    function render(){
-      refreshHeader();
-      const tab = store.ui.activeTab || "snapshot";
-      if(tab === "snapshot") renderSnapshot();
-      else if(tab === "trends") renderTrends();
-      else if(tab === "profile") renderProfile();
-      else if(tab === "symptoms") renderSymptoms();
-      else if(tab === "reports") renderReports();
-      else renderSnapshot();
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw){
+      const s = structuredClone(DEFAULT_STATE);
+      s.people = makeDefaultPeople();
+      s.activePersonId = s.people[0].id;
+      saveState(s);
+      return s;
     }
+    const parsed = JSON.parse(raw);
+    // Minimal migration safety
+    if(!parsed.people || !Array.isArray(parsed.people) || parsed.people.length === 0){
+      parsed.people = makeDefaultPeople();
+      parsed.activePersonId = parsed.people[0].id;
+    }
+    if(!parsed.activePersonId) parsed.activePersonId = parsed.people[0].id;
+    return parsed;
+  }catch(e){
+    const s = structuredClone(DEFAULT_STATE);
+    s.people = makeDefaultPeople();
+    s.activePersonId = s.people[0].id;
+    saveState(s);
+    return s;
+  }
+}
 
-    function renderSnapshot(){
-      const p = getActivePerson();
-      const snap = deriveSnapshot(p);
+function saveState(s=state){
+  s.meta = s.meta || {};
+  s.meta.iteration = BUILD.iteration;
+  s.meta.version = BUILD.version;
+  s.meta.updatedAt = nowEpoch();
+  localStorage.setItem(LS_KEY, JSON.stringify(s));
+}
 
-      const dotClass = snap.overall.level === "good" ? "good" : (snap.overall.level === "warn" ? "warn" : "alert");
-      const overallText = snap.overall.label;
+function getActivePerson(){
+  return state.people.find(p => p.id === state.activePersonId) || state.people[0];
+}
 
-      const g = snap.glucose ? `${snap.glucose.value} <small>mg/dL</small>` : `— <small>No data</small>`;
-      const gSub = snap.glucose ? `Trend: ${snap.glucose.trend || "—"} · ${fmtWhen(snap.glucose.takenAt)}` : "Add a glucose reading to begin.";
+function setActivePerson(id){
+  state.activePersonId = id;
+  saveState();
+  renderAll();
+}
 
-      const a1c = snap.movingA1c
-        ? `${snap.movingA1c.value.toFixed(2)}<small>%</small>`
-        : `— <small>No data</small>`;
-      const a1cSub = snap.movingA1c
-        ? `Avg glucose ${Math.round(snap.movingA1c.avg)} mg/dL · ${snap.movingA1c.points} points · last ${snap.movingA1c.days}d`
-        : "Moving HbA1c appears after you add glucose points.";
+/* ==============================
+   SYMPTOM LIBRARY (Expanded, incl. stroke relapse)
+============================== */
+const SYMPTOMS_BY_AREA = {
+  "Head / Face": [
+    {id:"headache", label:"Headache", red:false},
+    {id:"sudden_severe_headache", label:"Sudden severe headache (worst ever)", red:true},
+    {id:"dizziness_vertigo", label:"Dizziness / vertigo", red:false},
+    {id:"vision_change", label:"Sudden vision change", red:true},
+    {id:"facial_droop", label:"Facial droop", red:true},
+    {id:"confusion", label:"Confusion", red:true},
+    {id:"seizure", label:"Seizure activity", red:true},
+    {id:"speech_slurred", label:"Slurred speech", red:true},
+    {id:"difficulty_speaking", label:"Difficulty speaking / finding words", red:true},
+    {id:"difficulty_swallowing", label:"Difficulty swallowing", red:true},
+    {id:"numbness_face", label:"Numbness/tingling in face", red:true},
+  ],
+  "Neck / Throat": [
+    {id:"neck_pain", label:"Neck pain / stiffness", red:false},
+    {id:"stiff_neck_fever", label:"Stiff neck with fever", red:true},
+    {id:"sore_throat", label:"Sore throat", red:false},
+    {id:"hoarseness", label:"Hoarseness", red:false},
+  ],
+  "Chest": [
+    {id:"chest_pain", label:"Chest pain/pressure", red:true},
+    {id:"shortness_of_breath", label:"Shortness of breath", red:true},
+    {id:"palpitations", label:"Palpitations", red:false},
+    {id:"fainting", label:"Fainting / blackouts", red:true},
+    {id:"leg_swelling", label:"Leg swelling", red:false},
+  ],
+  "Back": [
+    {id:"upper_back_pain", label:"Upper back pain", red:false},
+    {id:"lower_back_pain", label:"Lower back pain", red:false},
+    {id:"sudden_back_pain_weakness", label:"Back pain with leg weakness/numbness", red:true},
+    {id:"loss_bladder_bowel", label:"Loss of bladder/bowel control", red:true},
+  ],
+  "Stomach / Abdomen": [
+    {id:"abdominal_pain", label:"Stomach/abdominal pain", red:false},
+    {id:"severe_abdominal_pain", label:"Severe abdominal pain", red:true},
+    {id:"nausea", label:"Nausea", red:false},
+    {id:"vomiting", label:"Vomiting", red:false},
+    {id:"vomiting_blood", label:"Vomiting blood", red:true},
+    {id:"black_stools", label:"Black/tarry stools", red:true},
+    {id:"diarrhea", label:"Diarrhea", red:false},
+    {id:"constipation", label:"Constipation", red:false},
+  ],
+  "Arm / Hand": [
+    {id:"arm_weakness", label:"Arm weakness", red:true},
+    {id:"arm_numbness", label:"Arm numbness/tingling", red:true},
+    {id:"hand_clumsiness", label:"Hand clumsiness / dropping objects", red:true},
+    {id:"arm_pain", label:"Arm pain", red:false},
+  ],
+  "Leg / Foot": [
+    {id:"leg_weakness", label:"Leg weakness", red:true},
+    {id:"leg_numbness", label:"Leg numbness/tingling", red:true},
+    {id:"unsteady_gait", label:"Unsteady walking / balance problems", red:true},
+    {id:"foot_ulcer", label:"Foot sore/ulcer", red:true},
+    {id:"calf_pain_swelling", label:"Calf pain/swelling (possible clot)", red:true},
+  ],
+  "Whole body": [
+    {id:"fever", label:"Fever", red:false},
+    {id:"high_fever", label:"High fever > 39°C / 102°F", red:true},
+    {id:"fatigue", label:"Unusual fatigue", red:false},
+    {id:"weight_loss", label:"Unintentional weight loss", red:true},
+    {id:"low_bp_symptoms", label:"Dizziness on standing / faintness", red:true},
+    {id:"high_sugar_symptoms", label:"Extreme thirst + frequent urination", red:true},
+    {id:"low_sugar_symptoms", label:"Shaking/sweating/confusion (low sugar)", red:true},
+  ],
+  "Urine / Stool": [
+    {id:"pain_urinating", label:"Pain/burning urination", red:false},
+    {id:"blood_in_urine", label:"Blood in urine", red:true},
+    {id:"reduced_urine", label:"Reduced urine output", red:true},
+    {id:"swelling_face_legs", label:"Swelling (face/legs)", red:true},
+    {id:"persistent_diarrhea", label:"Persistent diarrhea", red:true},
+  ]
+};
 
-      const bp = snap.bp ? `${snap.bp.sys}/${snap.bp.dia} <small>mmHg</small> ${snap.bp.pulse?`<small>(P ${snap.bp.pulse})</small>`:""}`
-                        : `— <small>No data</small>`;
-      const bpSub = snap.bp ? `${fmtWhen(snap.bp.takenAt)}` : "Add a BP reading to begin.";
+const BODY_AREAS = Object.keys(SYMPTOMS_BY_AREA);
 
-      const sleep = snap.sleep
-        ? `Score ${snap.sleep.score || "—"} · Energy ${snap.sleep.energy || "—"} · ${minsToHm(snap.sleep.minutes)} · REM ${minsToHm(snap.sleep.rem)} · Deep ${minsToHm(snap.sleep.deep)} · Awake ${minsToHm(snap.sleep.awake)}`
-        : `— <small>No data</small>`;
-      const sleepSub = snap.sleep ? `${fmtWhen(snap.sleep.takenAt)}${snap.sleep.spo2Low?` · Lowest SpO₂ ${snap.sleep.spo2Low}%`:""}${snap.sleep.snoreMin?` · Snore ${snap.sleep.snoreMin} min`:""}`
-                                 : "Add sleep metrics to begin.";
+/* ==============================
+   UI REFERENCES
+============================== */
+const el = (id)=> document.getElementById(id);
+const views = {
+  snapshot: el("view-snapshot"),
+  add: el("view-add"),
+  symptoms: el("view-symptoms"),
+  trends: el("view-trends"),
+  reports: el("view-reports"),
+  profile: el("view-profile")
+};
 
-      const kidney = snap.labs
-        ? `<div class="kpi">${(snap.labs.egfr||"—")} <small>eGFR</small></div>
-           <div class="sub">Cr: ${(snap.labs.creat||snap.labs.creat||snap.labs.creat||snap.labs.creat||snap.labs.creat)|| (snap.labs.creat||snap.labs.creat) || (snap.labs.creat||"") || (snap.labs.creat||"")}</div>`
-        : `<div class="kpi">— <small>Labs not set</small></div><div class="sub">Add labs to populate kidney metrics.</div>`;
+/* ==============================
+   RENDER: TOPBAR / PERSON
+============================== */
+function renderPersonSelect(){
+  const sel = el("personSelect");
+  sel.innerHTML = "";
+  state.people.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.role === "Primary" ? `${p.name} (Primary)` : p.name;
+    sel.appendChild(opt);
+  });
+  sel.value = state.activePersonId;
+  sel.onchange = () => setActivePerson(sel.value);
+}
 
-      // fix creat display: snap.labs.creat stored as "creat"
-      const kidneyCard = snap.labs
-        ? `<div class="kpi">${(snap.labs.egfr || "—")} <small>eGFR</small></div>
-           <div class="sub">Creatinine: ${(snap.labs.creat || "—")} · HbA1c (lab): ${(snap.labs.hba1cLab || "—")}</div>`
-        : `<div class="kpi">— <small>Labs not set</small></div><div class="sub">Add labs to populate kidney metrics.</div>`;
+function renderHeader(){
+  const p = getActivePerson();
+  const age = p.dob ? calcAgeFromDob(p.dob) : "";
+  const bmi = calcBMI(p.heightCm, p.weightKg);
+  const sex = p.sex || "";
+  const parts = [];
+  if(sex) parts.push(sex);
+  if(age) parts.push(`Age ${age}`);
+  if(bmi) parts.push(`BMI ${bmi}`);
+  el("activeName").textContent = (p.role === "Primary" ? p.name : p.name) || "HealthChecker+";
+  el("activeSub").textContent = `Device time • ${parts.join(" • ") || "Profile not set"} • ${BUILD.version}`;
+}
 
-      const urineStool = `
-        <div class="row" style="justify-content:space-between">
-          <div style="flex:1;min-width:220px">
-            <div style="font-weight:900;margin-bottom:6px">Urine (latest)</div>
-            <div class="sub">${snap.urine ? `Protein ${snap.urine.protein||"—"} · Glucose ${snap.urine.glucose||"—"} · Blood ${snap.urine.blood||"—"} · ${fmtWhen(snap.urine.takenAt)}` : "No urine data yet."}</div>
-          </div>
-          <div style="flex:1;min-width:220px">
-            <div style="font-weight:900;margin-bottom:6px">Stool/FIT (latest)</div>
-            <div class="sub">${snap.stool ? `FIT ${snap.stool.fit||"—"} · ${fmtWhen(snap.stool.takenAt)} · ${snap.stool.notes?`Notes: ${escapeHtml(snap.stool.notes)}`:""}` : "No stool/FIT data yet."}</div>
-          </div>
-        </div>
-      `;
+/* ==============================
+   READINGS: UNIFIED TIMELINE
+============================== */
+function getPersonReadingsSorted(p){
+  const arr = Array.isArray(p.readings) ? p.readings.slice() : [];
+  arr.sort((a,b)=> (a.timestamp||0) - (b.timestamp||0));
+  return arr;
+}
+function latestByType(p, type){
+  const arr = getPersonReadingsSorted(p).filter(r => r.type === type);
+  return arr.length ? arr[arr.length-1] : null;
+}
+function latestBP(p){
+  const arr = getPersonReadingsSorted(p).filter(r => r.type === "bp");
+  return arr.length ? arr[arr.length-1] : null;
+}
+function latestSleep(p){
+  const arr = getPersonReadingsSorted(p).filter(r => r.type === "sleep");
+  return arr.length ? arr[arr.length-1] : null;
+}
+function latestLabs(p){
+  const arr = getPersonReadingsSorted(p).filter(r => r.type === "lab");
+  return arr.length ? arr[arr.length-1] : null;
+}
+function latestUrineStool(p){
+  const arr = getPersonReadingsSorted(p).filter(r => r.type === "urine_stool");
+  return arr.length ? arr[arr.length-1] : null;
+}
 
-      // Quick symptom analysis
-      let symBlock = `<div class="small">No symptoms logged yet.</div>`;
-      if(snap.symptomsLatest){
-        const analysis = analyzeSymptoms(snap.symptomsLatest.entries);
-        symBlock = `
-          <div class="small"><b>Latest symptoms (${fmtWhen(snap.symptomsLatest.takenAt)})</b></div>
-          <div class="row" style="margin-top:10px">
-            ${snap.symptomsLatest.entries.map(e=>`
-              <span class="pill"><span class="dot ${e.redFlag?'alert':'good'}"></span>${escapeHtml(e.symptom)}</span>
-            `).join("")}
-          </div>
-          <div class="sep"></div>
-          <div class="small"><b>Auto-analysis</b></div>
-          <ul class="small">
-            ${analysis.actions.map(a=>`<li>${escapeHtml(a)}</li>`).join("")}
-          </ul>
-          ${snap.symptomsLatest.notes ? `<div class="small"><b>Notes:</b> ${escapeHtml(snap.symptomsLatest.notes)}</div>` : ``}
-        `;
+/* ==============================
+   MOVING HbA1c (default 14 days)
+   Formula: HbA1c = (avg_glucose + 46.7) / 28.7
+============================== */
+function computeMovingA1c(p, days=14){
+  const cutoff = nowEpoch() - days*24*60*60*1000;
+  const gluc = getPersonReadingsSorted(p)
+    .filter(r => r.type === "glucose" && typeof r.value === "number" && r.timestamp >= cutoff);
+
+  if(gluc.length < 1) return null;
+
+  const avg = gluc.reduce((s,r)=> s + r.value, 0) / gluc.length;
+  const a1c = (avg + 46.7)/28.7;
+  return { a1c, avg, points: gluc.length, days };
+}
+
+/* ==============================
+   OVERALL STATUS (simple heuristic)
+============================== */
+function computeOverall(p){
+  // Minimal, non-diagnostic: highlights if missing data or red flags exist
+  const a1c = computeMovingA1c(p, 14);
+  const bp = latestBP(p);
+  const spo2 = latestByType(p,"spo2");
+  const sleep = latestSleep(p);
+  const latestSym = (p.symptomsLog && p.symptomsLog.length) ? p.symptomsLog[p.symptomsLog.length-1] : null;
+
+  let score = 0;
+  let flags = [];
+
+  if(!a1c) score += 1; else {
+    if(a1c.a1c >= 7.5) { score += 3; flags.push("High glucose pattern"); }
+    else if(a1c.a1c >= 6.5) { score += 2; flags.push("Borderline glucose pattern"); }
+    else score += 0;
+  }
+
+  if(bp && bp.systolic && bp.diastolic){
+    if(bp.systolic >= 160 || bp.diastolic >= 100){ score += 3; flags.push("High BP"); }
+    else if(bp.systolic >= 140 || bp.diastolic >= 90){ score += 2; flags.push("Elevated BP"); }
+  } else score += 1;
+
+  if(spo2 && typeof spo2.value === "number"){
+    if(spo2.value < 88){ score += 3; flags.push("Low SpO₂"); }
+    else if(spo2.value < 92){ score += 2; flags.push("Borderline SpO₂"); }
+  }
+
+  if(sleep && typeof sleep.score === "number"){
+    if(sleep.score < 40){ score += 2; flags.push("Low sleep score"); }
+  }
+
+  if(latestSym && latestSym.redFlags && latestSym.redFlags.length){
+    score += 4;
+    flags.push("Red-flag symptoms");
+  }
+
+  let label = "OK";
+  let cls = "ok";
+  if(score >= 6){ label = "ALERT"; cls = "alert"; }
+  else if(score >= 3){ label = "AMBER"; cls = "warn"; }
+
+  return { label, cls, flags };
+}
+
+/* ==============================
+   SNAPSHOT RENDER
+============================== */
+function renderSnapshot(){
+  const p = getActivePerson();
+  const overall = computeOverall(p);
+
+  const ob = el("overallBadge");
+  ob.className = `badge ${overall.cls}`;
+  ob.textContent = `Overall: ${overall.label}`;
+
+  const lb = el("lastUpdatedBadge");
+  lb.textContent = `Last refreshed: ${epochToNice(nowEpoch())}`;
+
+  // Glucose
+  const g = latestByType(p,"glucose");
+  el("snapGlucose").textContent = g ? `${g.value} mg/dL` : "—";
+  el("snapGlucoseSub").textContent = g ? `${g.note ? g.note + " • " : ""}${epochToNice(g.timestamp)}` : "No glucose data yet";
+
+  // HbA1c moving
+  const a = computeMovingA1c(p,14);
+  el("snapA1c").textContent = a ? `${a.a1c.toFixed(2)}%` : "—";
+  el("snapA1cSub").textContent = a ? `Avg glucose ${Math.round(a.avg)} mg/dL • ${a.points} point(s) • last ${a.days}d` : "Add glucose readings to compute";
+
+  // BP
+  const b = latestBP(p);
+  el("snapBP").textContent = b ? `${b.systolic}/${b.diastolic} mmHg${b.pulse?` (P ${b.pulse})`:""}` : "—";
+  el("snapBPSub").textContent = b ? `${b.note ? b.note + " • " : ""}${epochToNice(b.timestamp)}` : "No BP data yet";
+
+  // Sleep
+  const s = latestSleep(p);
+  if(s){
+    const bits = [];
+    if(typeof s.score === "number") bits.push(`Score ${s.score}`);
+    if(typeof s.energy === "number") bits.push(`Energy ${s.energy}`);
+    if(typeof s.minutes === "number") bits.push(`${s.minutes} min`);
+    if(typeof s.rem === "number") bits.push(`REM ${s.rem}m`);
+    if(typeof s.deep === "number") bits.push(`Deep ${s.deep}m`);
+    if(typeof s.awake === "number") bits.push(`Awake ${s.awake}m`);
+    el("snapSleep").textContent = bits.join(" • ");
+    el("snapSleepSub").textContent = `${s.note ? s.note + " • " : ""}${epochToNice(s.timestamp)}`;
+  } else {
+    el("snapSleep").textContent = "—";
+    el("snapSleepSub").textContent = "No sleep data yet";
+  }
+
+  // Labs
+  const lab = latestLabs(p);
+  if(lab){
+    const lines = [];
+    if(lab.egfr) lines.push(`eGFR ${lab.egfr}`);
+    if(lab.creatinine) lines.push(`Cr ${lab.creatinine}`);
+    if(lab.a1cLab) lines.push(`HbA1c ${lab.a1cLab}%`);
+    if(lab.uric) lines.push(`Uric ${lab.uric}`);
+    el("snapLabs").textContent = lines.length ? lines.join(" • ") : "Available";
+    el("snapLabsSub").textContent = `${lab.note ? lab.note + " • " : ""}${epochToNice(lab.timestamp)}`;
+  } else {
+    el("snapLabs").textContent = "—";
+    el("snapLabsSub").textContent = "No lab data yet";
+  }
+
+  // Urine/Stool
+  const us = latestUrineStool(p);
+  if(us){
+    const pieces = [];
+    if(us.urProtein) pieces.push(`Protein ${us.urProtein}`);
+    if(us.urGlucose) pieces.push(`Ur Glu ${us.urGlucose}`);
+    if(us.urBlood) pieces.push(`Blood ${us.urBlood}`);
+    if(us.fit) pieces.push(`FIT ${us.fit}`);
+    if(us.stoolNote) pieces.push(`Stool ${us.stoolNote}`);
+    el("snapUrineStool").textContent = pieces.length ? pieces.join(" • ") : "Available";
+    el("snapUrineStoolSub").textContent = `${us.note ? us.note + " • " : ""}${epochToNice(us.timestamp)}`;
+  } else {
+    el("snapUrineStool").textContent = "—";
+    el("snapUrineStoolSub").textContent = "No urine/stool data yet";
+  }
+
+  // Advice
+  const advice = [];
+  if(overall.flags.length) advice.push(`Signals: ${overall.flags.join(", ")}.`);
+  advice.push("Kidney protection: avoid NSAIDs where possible; prioritize hydration and BP control (as advised by your clinician).");
+  el("snapshotAutoAdvice").textContent = advice.join(" ");
+
+  // Latest symptom analysis box
+  renderLatestSymptomAnalysis();
+}
+
+/* ==============================
+   SYMPTOMS: MODAL LOGIC (FIXED)
+============================== */
+const symModal = {
+  selected: [],
+  area: BODY_AREAS[0],
+  search: "",
+  notes: ""
+};
+
+function openSymModal(){
+  const p = getActivePerson();
+  el("symModalTitle").textContent = `Add Symptoms — ${p.name || "Person"}`;
+  el("symModalBackdrop").style.display = "flex";
+  // populate areas
+  const areaSel = el("symArea");
+  if(areaSel.options.length === 0){
+    BODY_AREAS.forEach(a=>{
+      const opt = document.createElement("option");
+      opt.value = a; opt.textContent = a;
+      areaSel.appendChild(opt);
+    });
+  }
+  areaSel.value = symModal.area;
+  el("symSearch").value = symModal.search;
+  el("symNotes").value = symModal.notes;
+  renderSymptomList();
+  renderSelectedSymptoms();
+}
+
+function closeSymModal(){
+  el("symModalBackdrop").style.display = "none";
+}
+
+function renderSymptomList(){
+  const list = el("symList");
+  list.innerHTML = "";
+
+  const area = symModal.area;
+  const base = SYMPTOMS_BY_AREA[area] || [];
+  const q = (symModal.search || "").trim().toLowerCase();
+
+  const filtered = q
+    ? base.filter(s => s.label.toLowerCase().includes(q))
+    : base;
+
+  el("symListHint").textContent = filtered.length ? "" : "No symptoms found for this area/search. Try clearing search or changing area.";
+
+  filtered.forEach(s=>{
+    const item = document.createElement("div");
+    item.className = "symptom-item";
+    item.innerHTML = `
+      <div class="left">
+        <div class="label">${escapeHtml(s.label)}</div>
+        <div class="meta">${escapeHtml(area)}</div>
+      </div>
+      ${s.red ? `<div class="rf">RED FLAG</div>` : `<div class="badge" style="padding:4px 8px;font-size:11px;">Tap</div>`}
+    `;
+    item.onclick = ()=> addSelectedSymptom(s);
+    list.appendChild(item);
+  });
+}
+
+function addSelectedSymptom(s){
+  if(!symModal.selected.some(x => x.id === s.id)){
+    symModal.selected.push(s);
+    renderSelectedSymptoms();
+  }
+}
+
+function removeSelectedSymptom(id){
+  symModal.selected = symModal.selected.filter(x => x.id !== id);
+  renderSelectedSymptoms();
+}
+
+function renderSelectedSymptoms(){
+  const wrap = el("symSelected");
+  wrap.innerHTML = "";
+
+  if(symModal.selected.length === 0){
+    el("symSelectedHint").textContent = "No symptoms selected yet.";
+  } else {
+    el("symSelectedHint").textContent = "";
+  }
+
+  symModal.selected.forEach(s=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.innerHTML = `
+      ${escapeHtml(s.label)}
+      ${s.red ? `<span class="rf" style="margin-left:6px;">RED</span>` : ""}
+      <span class="x" title="Remove">×</span>
+    `;
+    chip.querySelector(".x").onclick = ()=> removeSelectedSymptom(s.id);
+    wrap.appendChild(chip);
+  });
+
+  const redFlags = symModal.selected.filter(x=>x.red).map(x=>x.label);
+  const box = el("symRedFlagBox");
+  if(redFlags.length){
+    box.style.display = "block";
+    box.textContent = `Red-flag symptoms selected: ${redFlags.join(", ")}. If these are new/sudden/worsening, seek urgent medical evaluation or emergency services.`;
+  } else {
+    box.style.display = "none";
+  }
+}
+
+function saveSymptoms(){
+  const p = getActivePerson();
+  if(symModal.selected.length === 0){
+    alert("Please select at least one symptom.");
+    return;
+  }
+  const ts = nowEpoch();
+  const entry = {
+    id: uuid(),
+    timestamp: ts,
+    area: symModal.area,
+    symptoms: symModal.selected.map(s=>({id:s.id,label:s.label,red:s.red})),
+    notes: (el("symNotes").value || "").trim(),
+    redFlags: symModal.selected.filter(s=>s.red).map(s=>s.label)
+  };
+  p.symptomsLog = p.symptomsLog || [];
+  p.symptomsLog.push(entry);
+  saveState();
+  closeSymModal();
+  // Reset modal state lightly
+  symModal.selected = [];
+  symModal.search = "";
+  el("symSearch").value = "";
+  el("symNotes").value = "";
+  renderAll();
+}
+
+function renderSymptomLog(){
+  const p = getActivePerson();
+  const box = el("symptomLogList");
+  const log = (p.symptomsLog || []).slice().sort((a,b)=>a.timestamp-b.timestamp);
+  if(!log.length){
+    box.textContent = "No symptom entries yet.";
+    return;
+  }
+  const html = log.slice(-12).reverse().map(e=>{
+    const names = e.symptoms.map(s=> s.label + (s.red ? " (RED)" : "")).join(", ");
+    return `<div style="margin-bottom:10px;">
+      <strong>${epochToNice(e.timestamp)}</strong><br/>
+      <span style="color:#5a6b82;">Area:</span> ${escapeHtml(e.area)}<br/>
+      <span style="color:#5a6b82;">Symptoms:</span> ${escapeHtml(names)}<br/>
+      ${e.notes ? `<span style="color:#5a6b82;">Notes:</span> ${escapeHtml(e.notes)}` : ""}
+    </div>`;
+  }).join("");
+  box.innerHTML = html;
+}
+
+function renderLatestSymptomAnalysis(){
+  const p = getActivePerson();
+  const box = el("symptomAnalysisBox");
+  const log = (p.symptomsLog || []).slice().sort((a,b)=>a.timestamp-b.timestamp);
+  if(!log.length){
+    box.textContent = "No symptoms saved yet.";
+    return;
+  }
+  const last = log[log.length-1];
+  const reds = last.redFlags || [];
+  const summary = [];
+  summary.push(`Latest entry: ${epochToNice(last.timestamp)}.`);
+  summary.push(`Area: ${last.area}.`);
+  summary.push(`Symptoms: ${last.symptoms.map(s=>s.label).join(", ")}.`);
+  if(reds.length){
+    summary.push(`URGENT FLAGS: ${reds.join(", ")}. Seek urgent evaluation if new/sudden/worsening.`);
+  } else {
+    summary.push("No red-flag symptoms detected in the last entry.");
+  }
+  if(last.notes) summary.push(`Notes: ${last.notes}`);
+  box.className = reds.length ? "note danger" : "note";
+  box.textContent = summary.join(" ");
+}
+
+/* ==============================
+   ADD: MANUAL SAVE (writes unified timeline)
+============================== */
+function addReading(reading){
+  const p = getActivePerson();
+  p.readings = p.readings || [];
+  p.readings.push(reading);
+  saveState();
+}
+
+function saveManualEntry(evt){
+  evt.preventDefault();
+  const p = getActivePerson();
+
+  const tsOverride = dtLocalToEpoch(el("manualDateTime").value);
+  const ts = tsOverride || nowEpoch();
+
+  const note = (el("inNote").value || "").trim();
+  const trend = el("inTrend").value || "";
+
+  // Glucose
+  const glucoseVal = parseFloat(el("inGlucose").value);
+  if(Number.isFinite(glucoseVal)){
+    addReading({
+      id: uuid(),
+      type: "glucose",
+      value: Math.round(glucoseVal),
+      unit: "mg/dL",
+      trend,
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // BP
+  const sys = parseFloat(el("inSys").value);
+  const dia = parseFloat(el("inDia").value);
+  const pulse = parseFloat(el("inPulse").value);
+  if(Number.isFinite(sys) && Number.isFinite(dia)){
+    addReading({
+      id: uuid(),
+      type: "bp",
+      systolic: Math.round(sys),
+      diastolic: Math.round(dia),
+      pulse: Number.isFinite(pulse) ? Math.round(pulse) : null,
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // Sleep
+  const sleepScore = parseFloat(el("inSleepScore").value);
+  const energy = parseFloat(el("inEnergy").value);
+  const sleepMin = parseFloat(el("inSleepMin").value);
+  if(Number.isFinite(sleepScore) || Number.isFinite(energy) || Number.isFinite(sleepMin)){
+    addReading({
+      id: uuid(),
+      type: "sleep",
+      score: Number.isFinite(sleepScore) ? Math.round(sleepScore) : null,
+      energy: Number.isFinite(energy) ? Math.round(energy) : null,
+      minutes: Number.isFinite(sleepMin) ? Math.round(sleepMin) : null,
+      // optional detailed stages can be added later
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // SpO2
+  const spo2 = parseFloat(el("inSpo2").value);
+  if(Number.isFinite(spo2)){
+    addReading({
+      id: uuid(),
+      type: "spo2",
+      value: Math.round(spo2),
+      unit: "%",
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // Labs
+  const egfr = (el("inEgfr").value || "").trim();
+  const cr = (el("inCr").value || "").trim();
+  const a1cLab = parseFloat(el("inA1cLab").value);
+  const uric = (el("inUric").value || "").trim();
+  const hb = (el("inHb").value || "").trim();
+  const mcv = (el("inMcv").value || "").trim();
+
+  if(egfr || cr || Number.isFinite(a1cLab) || uric || hb || mcv){
+    addReading({
+      id: uuid(),
+      type: "lab",
+      egfr: egfr || null,
+      creatinine: cr || null,
+      a1cLab: Number.isFinite(a1cLab) ? a1cLab : null,
+      uric: uric || null,
+      hb: hb || null,
+      mcv: mcv || null,
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // Urine/Stool
+  const urProtein = el("inUrProtein").value || "";
+  const urGlucose = el("inUrGlucose").value || "";
+  const urBlood = el("inUrBlood").value || "";
+  const urKet = el("inUrKet").value || "";
+  const fit = el("inFit").value || "";
+  const stoolNote = (el("inStoolNote").value || "").trim();
+
+  if(urProtein || urGlucose || urBlood || urKet || fit || stoolNote){
+    addReading({
+      id: uuid(),
+      type: "urine_stool",
+      urProtein: urProtein || null,
+      urGlucose: urGlucose || null,
+      urBlood: urBlood || null,
+      urKet: urKet || null,
+      fit: fit || null,
+      stoolNote: stoolNote || null,
+      note,
+      source: "manual",
+      timestamp: ts
+    });
+  }
+
+  // clear form
+  el("addForm").reset();
+  el("manualDateTime").value = "";
+  alert("Saved. Snapshot and trends will update now.");
+  renderAll();
+}
+
+/* ==============================
+   ADD: IMAGE SAVE (stores image + timestamp)
+   Note: OCR/extraction can be added later.
+============================== */
+function fileToDataUrl(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=> res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function saveImageToTimeline(){
+  const file = el("imgFile").files && el("imgFile").files[0];
+  if(!file){ alert("Please choose an image file."); return; }
+
+  const hint = el("imgTypeHint").value || "other";
+  const note = (el("imgNote").value || "").trim();
+
+  const overrideTs = dtLocalToEpoch(el("imgDateTime").value);
+  const ts = overrideTs || (file.lastModified ? file.lastModified : nowEpoch());
+
+  const dataUrl = await fileToDataUrl(file);
+
+  // store as a reading entry with image attached
+  addReading({
+    id: uuid(),
+    type: "image_import",
+    hint,
+    note,
+    source: "screenshot",
+    timestamp: ts,
+    image: {
+      name: file.name,
+      mime: file.type,
+      dataUrl
+    }
+  });
+
+  el("imgSavedMsg").style.display = "block";
+  el("imgSavedMsg").textContent = `Saved image to timeline at ${epochToNice(ts)}.`;
+  el("imgFile").value = "";
+  el("imgDateTime").value = "";
+  el("imgNote").value = "";
+  renderAll();
+}
+
+/* ==============================
+   PROFILE SAVE
+============================== */
+function renderProfile(){
+  const p = getActivePerson();
+  el("pName").value = p.name || "";
+  el("pSex").value = p.sex || "";
+  el("pDob").value = p.dob ? new Date(p.dob).toISOString().slice(0,10) : "";
+  el("pHeight").value = p.heightCm || "";
+  el("pWeight").value = p.weightKg || "";
+  el("pConditions").value = p.conditions || "";
+
+  el("pAge").value = p.dob ? calcAgeFromDob(p.dob) : "";
+  el("pBmi").value = calcBMI(p.heightCm, p.weightKg);
+
+  el("aboutBox").innerHTML = `
+    <strong>${BUILD.label}</strong><br/>
+    ${BUILD.app} ${BUILD.version} • Offline-first • GitHub Pages<br/><br/>
+    <strong>Iteration changelog:</strong><br/>
+    <ul style="margin:8px 0 0 18px;">
+      ${BUILD.changelog.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function saveProfile(evt){
+  evt.preventDefault();
+  const p = getActivePerson();
+  p.name = (el("pName").value || "").trim() || p.name;
+  p.sex = el("pSex").value || "";
+  const dobEpoch = dateToEpoch(el("pDob").value);
+  p.dob = dobEpoch || null;
+  p.heightCm = (el("pHeight").value || "").trim();
+  p.weightKg = (el("pWeight").value || "").trim();
+  p.conditions = (el("pConditions").value || "").trim();
+
+  saveState();
+  renderAll();
+  alert("Profile saved.");
+}
+
+/* ==============================
+   SIMPLE CHARTS (Canvas)
+============================== */
+function drawLineChart(canvas, series, opts){
+  const ctx = canvas.getContext("2d");
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  canvas.width = Math.floor(W * devicePixelRatio);
+  canvas.height = Math.floor(H * devicePixelRatio);
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  ctx.clearRect(0,0,W,H);
+
+  // background
+  ctx.fillStyle = "#fbfdff";
+  ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle = "rgba(219,231,255,.9)";
+  ctx.lineWidth = 1;
+  const pad = 28;
+  const gx = 4, gy = 4;
+  for(let i=0;i<=gx;i++){
+    const x = pad + i*(W-2*pad)/gx;
+    ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,H-pad); ctx.stroke();
+  }
+  for(let j=0;j<=gy;j++){
+    const y = pad + j*(H-2*pad)/gy;
+    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke();
+  }
+
+  if(!series || series.length < 2){
+    ctx.fillStyle = "#5a6b82";
+    ctx.font = "12px system-ui";
+    ctx.fillText("Not enough data points to plot.", pad, H/2);
+    return;
+  }
+
+  const values = series.map(p=>p.y).filter(v=>Number.isFinite(v));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = (max-min) || 1;
+
+  const xMin = series[0].x;
+  const xMax = series[series.length-1].x;
+  const xSpan = (xMax-xMin) || 1;
+
+  const toX = (x)=> pad + ((x - xMin)/xSpan)*(W-2*pad);
+  const toY = (y)=> (H-pad) - ((y - min)/span)*(H-2*pad);
+
+  // line
+  ctx.strokeStyle = opts && opts.color ? opts.color : "#0b5cff";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(toX(series[0].x), toY(series[0].y));
+  for(let i=1;i<series.length;i++){
+    ctx.lineTo(toX(series[i].x), toY(series[i].y));
+  }
+  ctx.stroke();
+
+  // points
+  ctx.fillStyle = ctx.strokeStyle;
+  for(const p of series){
+    ctx.beginPath();
+    ctx.arc(toX(p.x), toY(p.y), 3, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // labels
+  ctx.fillStyle = "#0e1a2a";
+  ctx.font = "12px system-ui";
+  ctx.fillText(`min ${min.toFixed(1)} • max ${max.toFixed(1)}`, pad, 18);
+}
+
+function renderTrends(){
+  const p = getActivePerson();
+  const r = getPersonReadingsSorted(p);
+
+  const glucose = r.filter(x=>x.type==="glucose" && typeof x.value==="number").map(x=>({x:x.timestamp,y:x.value}));
+  const sys = r.filter(x=>x.type==="bp" && typeof x.systolic==="number").map(x=>({x:x.timestamp,y:x.systolic}));
+  const dia = r.filter(x=>x.type==="bp" && typeof x.diastolic==="number").map(x=>({x:x.timestamp,y:x.diastolic}));
+  const sleep = r.filter(x=>x.type==="sleep" && typeof x.score==="number").map(x=>({x:x.timestamp,y:x.score}));
+  const spo2 = r.filter(x=>x.type==="spo2" && typeof x.value==="number").map(x=>({x:x.timestamp,y:x.value}));
+
+  drawLineChart(el("cGlucose"), glucose, {color:"#0b5cff"});
+
+  // BP chart: draw systolic then diastolic on same canvas (simple overlay)
+  const bpCanvas = el("cBP");
+  // Draw systolic first, then add diastolic
+  drawLineChart(bpCanvas, sys, {color:"#0b5cff"});
+  // overlay diastolic
+  if(dia.length >= 2){
+    const ctx = bpCanvas.getContext("2d");
+    const W = bpCanvas.clientWidth;
+    const H = bpCanvas.clientHeight;
+    const pad = 28;
+
+    const values = sys.concat(dia).map(p=>p.y);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = (max-min) || 1;
+
+    const xMin = Math.min(sys[0]?.x||dia[0]?.x, dia[0]?.x||sys[0]?.x);
+    const xMax = Math.max(sys[sys.length-1]?.x||dia[dia.length-1]?.x, dia[dia.length-1]?.x||sys[sys.length-1]?.x);
+    const xSpan = (xMax-xMin) || 1;
+
+    const toX = (x)=> pad + ((x - xMin)/xSpan)*(W-2*pad);
+    const toY = (y)=> (H-pad) - ((y - min)/span)*(H-2*pad);
+
+    ctx.save();
+    ctx.strokeStyle = "#2db7ff";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(toX(dia[0].x), toY(dia[0].y));
+    for(let i=1;i<dia.length;i++) ctx.lineTo(toX(dia[i].x), toY(dia[i].y));
+    ctx.stroke();
+    ctx.fillStyle = "#2db7ff";
+    for(const pnt of dia){
+      ctx.beginPath(); ctx.arc(toX(pnt.x), toY(pnt.y), 3, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = "#5a6b82";
+    ctx.font = "12px system-ui";
+    ctx.fillText("Systolic (dark) / Diastolic (light)", pad, H-10);
+    ctx.restore();
+  }
+
+  drawLineChart(el("cSleep"), sleep, {color:"#0b5cff"});
+  drawLineChart(el("cSpo2"), spo2, {color:"#0b5cff"});
+}
+
+/* ==============================
+   REPORTS
+============================== */
+function clampTo5Years(fromTs, toTs){
+  const maxSpan = 5 * 365 * 24 * 60 * 60 * 1000;
+  if(toTs - fromTs > maxSpan){
+    return {fromTs: toTs - maxSpan, toTs};
+  }
+  return {fromTs, toTs};
+}
+
+function generateReport(){
+  const p = getActivePerson();
+  const preset = el("reportPreset").value;
+  const toTs = nowEpoch();
+  let fromTs = toTs - 7*24*60*60*1000;
+
+  if(preset === "month") fromTs = toTs - 30*24*60*60*1000;
+  if(preset === "year") fromTs = toTs - 365*24*60*60*1000;
+  if(preset === "custom"){
+    const f = dateToEpoch(el("reportFrom").value);
+    const t = dateToEpoch(el("reportTo").value);
+    if(!f || !t){ alert("Please set custom From and To dates."); return; }
+    const clamped = clampTo5Years(f, t + 24*60*60*1000 - 1);
+    fromTs = clamped.fromTs;
+    // Keep toTs = clamped.toTs for inclusion
+    // (Use toTs variable for output)
+    // eslint: we reuse toTs below via local variable
+    var toTsLocal = clamped.toTs;
+  }
+
+  const endTs = (preset==="custom") ? (toTsLocal || toTs) : toTs;
+
+  const r = getPersonReadingsSorted(p).filter(x => x.timestamp >= fromTs && x.timestamp <= endTs);
+  const sym = (p.symptomsLog || []).filter(x => x.timestamp >= fromTs && x.timestamp <= endTs);
+
+  const glucose = r.filter(x=>x.type==="glucose" && typeof x.value==="number").map(x=>x.value);
+  const bp = r.filter(x=>x.type==="bp" && typeof x.systolic==="number" && typeof x.diastolic==="number");
+  const sleep = r.filter(x=>x.type==="sleep" && typeof x.score==="number").map(x=>x.score);
+  const spo2 = r.filter(x=>x.type==="spo2" && typeof x.value==="number").map(x=>x.value);
+
+  const avg = arr => arr.length ? (arr.reduce((s,v)=>s+v,0)/arr.length) : null;
+  const min = arr => arr.length ? Math.min(...arr) : null;
+  const max = arr => arr.length ? Math.max(...arr) : null;
+
+  const a1c = computeMovingA1c(p,14);
+
+  const lines = [];
+  lines.push(`<strong>${escapeHtml(p.name || "Person")}</strong> • ${escapeHtml(p.sex||"")} ${p.dob?`• Age ${escapeHtml(calcAgeFromDob(p.dob))}`:""}`);
+  lines.push(`<strong>Report period:</strong> ${escapeHtml(new Date(fromTs).toDateString())} → ${escapeHtml(new Date(endTs).toDateString())}`);
+  lines.push(`<hr style="border:none;border-top:1px solid #dbe7ff;margin:10px 0;">`);
+
+  lines.push(`<strong>Glucose</strong><br/>Points: ${glucose.length} • Avg: ${fmt(avg(glucose))} • Min: ${fmt(min(glucose))} • Max: ${fmt(max(glucose))}`);
+  if(a1c) lines.push(`<br/><strong>Moving HbA1c (last 14d):</strong> ${a1c.a1c.toFixed(2)}% (avg ${Math.round(a1c.avg)} mg/dL)`);
+  lines.push(`<br/><br/>`);
+
+  lines.push(`<strong>Blood Pressure</strong><br/>Points: ${bp.length}`);
+  if(bp.length){
+    const sysArr = bp.map(x=>x.systolic);
+    const diaArr = bp.map(x=>x.diastolic);
+    lines.push(`<br/>Systolic Avg: ${fmt(avg(sysArr))} • Min: ${fmt(min(sysArr))} • Max: ${fmt(max(sysArr))}`);
+    lines.push(`<br/>Diastolic Avg: ${fmt(avg(diaArr))} • Min: ${fmt(min(diaArr))} • Max: ${fmt(max(diaArr))}`);
+  }
+  lines.push(`<br/><br/>`);
+
+  lines.push(`<strong>Sleep</strong><br/>Points: ${sleep.length} • Avg score: ${fmt(avg(sleep))} • Min: ${fmt(min(sleep))} • Max: ${fmt(max(sleep))}`);
+  lines.push(`<br/><br/>`);
+
+  lines.push(`<strong>SpO₂</strong><br/>Points: ${spo2.length} • Avg: ${fmt(avg(spo2))} • Min: ${fmt(min(spo2))} • Max: ${fmt(max(spo2))}`);
+  lines.push(`<br/><br/>`);
+
+  lines.push(`<strong>Symptoms</strong><br/>Entries: ${sym.length}`);
+  if(sym.length){
+    const last = sym.slice().sort((a,b)=>a.timestamp-b.timestamp).pop();
+    lines.push(`<br/>Latest: ${escapeHtml(epochToNice(last.timestamp))} • ${escapeHtml(last.symptoms.map(s=>s.label).join(", "))}`);
+    if(last.redFlags && last.redFlags.length) lines.push(`<br/><span style="color:#8f1a14;font-weight:900;">Red flags: ${escapeHtml(last.redFlags.join(", "))}</span>`);
+  }
+  lines.push(`<br/><br/>`);
+
+  lines.push(`<div class="note danger" style="margin-top:10px;">This report is an informational summary of your inputs, not a medical diagnosis. Seek clinical advice for urgent or worsening symptoms.</div>`);
+
+  el("reportOutput").innerHTML = lines.join("");
+}
+
+function fmt(v){
+  if(v === null || v === undefined) return "—";
+  if(!Number.isFinite(v)) return String(v);
+  return v.toFixed(1);
+}
+
+/* ==============================
+   JSON EXPORT/IMPORT
+============================== */
+function exportJson(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `HCPLUS_backup_${BUILD.version}_iter${BUILD.iteration}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJsonFile(){
+  el("importJsonFile").click();
+}
+
+function handleImportFile(){
+  const f = el("importJsonFile").files && el("importJsonFile").files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const parsed = JSON.parse(r.result);
+      if(!parsed.people || !Array.isArray(parsed.people)) throw new Error("Invalid file");
+      state = parsed;
+      // Ensure active person exists
+      if(!state.activePersonId || !state.people.some(p=>p.id===state.activePersonId)){
+        state.activePersonId = state.people[0].id;
       }
-
-      view.innerHTML = `
-        <div class="grid">
-          <div class="card">
-            <div class="row" style="justify-content:space-between">
-              <span class="pill"><span class="dot ${dotClass}"></span> Overall: <b>${overallText}</b></span>
-              <span class="pill">Last refreshed: ${escapeHtml(formatLocalDateTime(new Date()))}</span>
-            </div>
-            <div class="hint">Snapshot is derived from history. New readings update immediately.</div>
-          </div>
-
-          <div class="card">
-            <h3>Glucose (latest)</h3>
-            <div class="kpi">${g}</div>
-            <div class="sub">${escapeHtml(gSub)}</div>
-          </div>
-
-          <div class="card">
-            <h3>Estimated HbA1c (moving)</h3>
-            <div class="kpi">${a1c}</div>
-            <div class="sub">${escapeHtml(a1cSub)}</div>
-          </div>
-
-          <div class="card">
-            <h3>Blood Pressure (latest)</h3>
-            <div class="kpi">${bp}</div>
-            <div class="sub">${escapeHtml(bpSub)}</div>
-          </div>
-
-          <div class="card">
-            <h3>Sleep (latest)</h3>
-            <div class="kpi" style="font-size:22px">${sleep}</div>
-            <div class="sub">${escapeHtml(sleepSub)}</div>
-          </div>
-
-          <div class="card">
-            <h3>Kidney / Labs (latest)</h3>
-            ${kidneyCard}
-          </div>
-
-          <div class="card">
-            <h3>Urine / Stool (latest)</h3>
-            ${urineStool}
-          </div>
-
-          <div class="card">
-            <h3>Quick actions</h3>
-            <div class="row">
-              <button class="btn" id="snapAddReading">Add new reading</button>
-              <button class="btn secondary" id="snapQuickSym">Add symptoms (quick)</button>
-              <button class="btn secondary" id="snapTrends">View trends</button>
-            </div>
-            <div class="sep"></div>
-            ${symBlock}
-          </div>
-        </div>
-      `;
-
-      document.getElementById("snapAddReading").addEventListener("click", openAddReadingModal);
-      document.getElementById("snapQuickSym").addEventListener("click", openQuickSymptomsModal);
-      document.getElementById("snapTrends").addEventListener("click", ()=>{
-        setTab("trends");
-      });
+      saveState();
+      renderAll();
+      alert("Import completed.");
+    }catch(e){
+      alert("Import failed. Please select a valid HC+ JSON backup.");
     }
-
-    function renderTrends(){
-      const p = getActivePerson();
-      const pid = p.id;
-
-      const html = `
-        <div class="grid">
-          <div class="card">
-            <h3>Trends</h3>
-            <div class="small">Select a metric and a time range. Graphs are offline (device-only).</div>
-            <div class="sep"></div>
-
-            <div class="form">
-              <div class="field">
-                <label>Metric</label>
-                <select id="t_metric">
-                  <option value="glucose">Glucose (mg/dL)</option>
-                  <option value="bp_sys">Systolic BP</option>
-                  <option value="bp_dia">Diastolic BP</option>
-                  <option value="sleep_score">Sleep score</option>
-                  <option value="sleep_energy">Energy score</option>
-                  <option value="spo2_low">SpO₂ low</option>
-                  <option value="weight">Weight (kg)</option>
-                  <option value="egfr">eGFR</option>
-                  <option value="creat_numeric">Creatinine (numeric)</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Range</label>
-                <select id="t_range">
-                  <option value="7">Last 7 days</option>
-                  <option value="14">Last 14 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="90">Last 90 days</option>
-                  <option value="365">Last 1 year</option>
-                </select>
-              </div>
-              <div class="field span2">
-                <button class="btn" id="t_draw">Draw trend</button>
-              </div>
-            </div>
-
-            <div class="sep"></div>
-            <canvas id="t_canvas" width="980" height="300"></canvas>
-            <div class="hint" id="t_hint"></div>
-          </div>
-        </div>
-      `;
-      view.innerHTML = html;
-
-      const metricEl = document.getElementById("t_metric");
-      const rangeEl = document.getElementById("t_range");
-      const drawBtn = document.getElementById("t_draw");
-      const c = document.getElementById("t_canvas");
-      const hint = document.getElementById("t_hint");
-
-      function buildSeries(metric, days){
-        const cutoff = Date.now() - (days*24*60*60*1000);
-
-        function addPoint(arr, takenAt, value){
-          const ts = new Date(takenAt).getTime();
-          if(ts < cutoff) return;
-          if(value === "" || value === null || value === undefined) return;
-          const num = parseFloat(value);
-          if(!isFinite(num)) return;
-          arr.push({ts, value:num});
-        }
-
-        const points = [];
-
-        if(metric === "glucose"){
-          store.readings.filter(r=>r.personId===pid && r.type==="glucose").forEach(r=> addPoint(points, r.takenAt, r.value));
-        }
-        else if(metric === "bp_sys"){
-          store.readings.filter(r=>r.personId===pid && r.type==="bp").forEach(r=> addPoint(points, r.takenAt, r.sys));
-        }
-        else if(metric === "bp_dia"){
-          store.readings.filter(r=>r.personId===pid && r.type==="bp").forEach(r=> addPoint(points, r.takenAt, r.dia));
-        }
-        else if(metric === "sleep_score"){
-          store.readings.filter(r=>r.personId===pid && r.type==="sleep").forEach(r=> addPoint(points, r.takenAt, r.score));
-        }
-        else if(metric === "sleep_energy"){
-          store.readings.filter(r=>r.personId===pid && r.type==="sleep").forEach(r=> addPoint(points, r.takenAt, r.energy));
-        }
-        else if(metric === "spo2_low"){
-          // prefer sleep.spo2Low, then spo2 points
-          store.readings.filter(r=>r.personId===pid && r.type==="sleep").forEach(r=> addPoint(points, r.takenAt, r.spo2Low));
-          store.readings.filter(r=>r.personId===pid && r.type==="spo2").forEach(r=> addPoint(points, r.takenAt, r.low));
-        }
-        else if(metric === "weight"){
-          store.readings.filter(r=>r.personId===pid && r.type==="weight").forEach(r=> addPoint(points, r.takenAt, r.kg));
-        }
-        else if(metric === "egfr"){
-          store.readings.filter(r=>r.personId===pid && r.type==="labs").forEach(r=> addPoint(points, r.takenAt, r.egfr));
-        }
-        else if(metric === "creat_numeric"){
-          // attempt to extract first numeric from creat string
-          store.readings.filter(r=>r.personId===pid && r.type==="labs").forEach(r=>{
-            const m = (r.creat||"").match(/([0-9]+(?:\.[0-9]+)?)/);
-            addPoint(points, r.takenAt, m ? m[1] : "");
-          });
-        }
-
-        points.sort((a,b)=>a.ts-b.ts);
-        return points;
-      }
-
-      function drawLine(points, label){
-        const ctx = c.getContext("2d");
-        ctx.clearRect(0,0,c.width,c.height);
-
-        // frame
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(217,230,251,1)";
-        ctx.strokeRect(0.5,0.5,c.width-1,c.height-1);
-
-        if(points.length < 2){
-          hint.textContent = "Not enough data points to plot. Add more readings or widen range.";
-          return;
-        }
-
-        const minX = points[0].ts;
-        const maxX = points[points.length-1].ts;
-        const minY = Math.min(...points.map(p=>p.value));
-        const maxY = Math.max(...points.map(p=>p.value));
-        const padY = (maxY - minY) === 0 ? 1 : (maxY - minY) * 0.1;
-
-        const plot = {x0: 50, y0: 20, w: c.width-70, h: c.height-60};
-
-        function x(ts){ return plot.x0 + ((ts - minX) / (maxX - minX)) * plot.w; }
-        function y(v){ return plot.y0 + (1 - ((v - (minY - padY)) / ((maxY+padY) - (minY-padY)))) * plot.h; }
-
-        // axes
-        ctx.strokeStyle = "rgba(91,107,132,.45)";
-        ctx.beginPath();
-        ctx.moveTo(plot.x0, plot.y0);
-        ctx.lineTo(plot.x0, plot.y0 + plot.h);
-        ctx.lineTo(plot.x0 + plot.w, plot.y0 + plot.h);
-        ctx.stroke();
-
-        // labels
-        ctx.fillStyle = "rgba(11,18,32,.8)";
-        ctx.font = "12px system-ui";
-        ctx.fillText(label, plot.x0, plot.y0 - 4);
-
-        // y labels
-        ctx.fillStyle = "rgba(91,107,132,.9)";
-        ctx.fillText(`${maxY.toFixed(1)}`, 8, plot.y0 + 8);
-        ctx.fillText(`${minY.toFixed(1)}`, 8, plot.y0 + plot.h);
-
-        // line
-        ctx.strokeStyle = "rgba(14,165,233,.95)";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        points.forEach((p,i)=>{
-          const px = x(p.ts), py = y(p.value);
-          if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-        });
-        ctx.stroke();
-
-        // points
-        ctx.fillStyle = "rgba(37,99,235,.95)";
-        points.forEach(p=>{
-          const px = x(p.ts), py = y(p.value);
-          ctx.beginPath();
-          ctx.arc(px,py,3.5,0,Math.PI*2);
-          ctx.fill();
-        });
-
-        const latest = points[points.length-1];
-        hint.textContent = `Points: ${points.length} · Latest: ${latest.value} · ${new Date(latest.ts).toLocaleString()}`;
-      }
-
-      drawBtn.addEventListener("click", ()=>{
-        const metric = metricEl.value;
-        const days = parseInt(rangeEl.value,10);
-        const series = buildSeries(metric, days);
-
-        const labelMap = {
-          glucose:"Glucose (mg/dL)",
-          bp_sys:"Systolic BP",
-          bp_dia:"Diastolic BP",
-          sleep_score:"Sleep score",
-          sleep_energy:"Energy score",
-          spo2_low:"SpO₂ low (%)",
-          weight:"Weight (kg)",
-          egfr:"eGFR",
-          creat_numeric:"Creatinine (numeric)"
-        };
-        drawLine(series, labelMap[metric] || "Trend");
-      });
-
-      // initial plot
-      drawBtn.click();
-    }
-
-    function renderProfile(){
-      const p = getActivePerson();
-      const age = computeAge(p.dob);
-      const bmiVal = bmi(p.heightCm, p.weightKg);
-
-      view.innerHTML = `
-        <div class="grid">
-          <div class="card">
-            <h3>Profile</h3>
-            <div class="small">Edit person details (DOB uses calendar picker). BMI auto-computed.</div>
-            <div class="sep"></div>
-
-            <div class="form">
-              <div class="field span2">
-                <label>Name</label>
-                <input id="pf_name" value="${escapeAttr(p.name||"")}" />
-              </div>
-
-              <div class="field">
-                <label>Sex</label>
-                <select id="pf_sex">
-                  <option value="unspecified" ${p.sex==="unspecified"?"selected":""}>Select...</option>
-                  <option value="female" ${p.sex==="female"?"selected":""}>Female</option>
-                  <option value="male" ${p.sex==="male"?"selected":""}>Male</option>
-                  <option value="other" ${p.sex==="other"?"selected":""}>Other</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label>DOB (calendar)</label>
-                <input id="pf_dob" type="date" value="${escapeAttr(p.dob||"")}" />
-                <div class="hint">Age: <b>${age!==""?age:"—"}</b></div>
-              </div>
-
-              <div class="field">
-                <label>Height (cm)</label>
-                <input id="pf_h" inputmode="decimal" value="${escapeAttr(p.heightCm||"")}" placeholder="e.g. 175" />
-              </div>
-              <div class="field">
-                <label>Weight (kg)</label>
-                <input id="pf_w" inputmode="decimal" value="${escapeAttr(p.weightKg||"")}" placeholder="e.g. 92.5" />
-                <div class="hint">BMI: <b>${bmiVal!==""?bmiVal:"—"}</b></div>
-              </div>
-
-              <div class="field span2">
-                <label>Known conditions (comma-separated)</label>
-                <input id="pf_cond" value="${escapeAttr((p.knownConditions||[]).join(", "))}" placeholder="e.g. Hypertension, Diabetes, Stroke" />
-                <div class="hint">This field must remain user-entered (no prefilled personal conditions).</div>
-              </div>
-
-              <div class="field span2">
-                <label>Notes</label>
-                <textarea id="pf_notes" placeholder="Any notes...">${escapeHtml(p.notes||"")}</textarea>
-              </div>
-
-              <div class="field span2">
-                <button class="btn" id="pf_save">Save profile</button>
-              </div>
-            </div>
-
-            <div class="sep"></div>
-            <div class="small"><b>Tip:</b> If you want weight tracked historically, add Weight entries via “Add new reading”. Profile weight is your baseline.</div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById("pf_save").addEventListener("click", ()=>{
-        p.name = document.getElementById("pf_name").value.trim() || p.name;
-        p.sex = document.getElementById("pf_sex").value;
-        p.dob = document.getElementById("pf_dob").value;
-        p.heightCm = document.getElementById("pf_h").value.trim();
-        p.weightKg = document.getElementById("pf_w").value.trim();
-        const cond = document.getElementById("pf_cond").value.trim();
-        p.knownConditions = cond ? cond.split(",").map(s=>s.trim()).filter(Boolean) : [];
-        p.notes = document.getElementById("pf_notes").value.trim();
-
-        store.meta.updatedAt = nowIsoLocal();
-        saveStore();
-        refreshHeader();
-        alert("Profile saved.");
-        render();
-      });
-    }
-
-    function renderSymptoms(){
-      const p = getActivePerson();
-      const pid = p.id;
-      const list = store.symptoms.filter(s=>s.personId===pid).sort((a,b)=> (a.takenAt < b.takenAt ? 1 : -1)).slice(0, 20);
-
-      view.innerHTML = `
-        <div class="grid">
-          <div class="card">
-            <h3>Symptom Checker</h3>
-            <div class="small">Use quick capture. The app is designed for people without medical knowledge.</div>
-            <div class="sep"></div>
-            <div class="row">
-              <button class="btn" id="symAdd">Add symptoms (quick)</button>
-              <button class="btn secondary" id="symBackToSnap">Back to Snapshot</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Recent symptom sessions</h3>
-            ${list.length ? `
-              <div class="small">Showing latest 20 sessions.</div>
-              <div class="sep"></div>
-              ${list.map(s=>{
-                const analysis = analyzeSymptoms(s.entries);
-                return `
-                  <div class="card" style="box-shadow:none;border-radius:14px;margin-bottom:10px;">
-                    <div class="row" style="justify-content:space-between">
-                      <div style="font-weight:900">${fmtWhen(s.takenAt)}</div>
-                      <span class="pill"><span class="dot ${analysis.reds.length?'alert':'good'}"></span>${analysis.reds.length?'Red flags present':'No red flags'}</span>
-                    </div>
-                    <div class="row" style="margin-top:10px">
-                      ${s.entries.map(e=>`<span class="pill"><span class="dot ${e.redFlag?'alert':'good'}"></span>${escapeHtml(e.symptom)}</span>`).join("")}
-                    </div>
-                    <div class="sep"></div>
-                    <ul class="small">
-                      ${analysis.actions.map(a=>`<li>${escapeHtml(a)}</li>`).join("")}
-                    </ul>
-                    ${s.notes?`<div class="small"><b>Notes:</b> ${escapeHtml(s.notes)}</div>`:""}
-                  </div>
-                `;
-              }).join("")}
-            ` : `<div class="small">No symptom sessions yet. Tap “Add symptoms”.</div>`}
-          </div>
-        </div>
-      `;
-
-      document.getElementById("symAdd").addEventListener("click", openQuickSymptomsModal);
-      document.getElementById("symBackToSnap").addEventListener("click", ()=> setTab("snapshot"));
-    }
-
-    function renderReports(){
-      const p = getActivePerson();
-      const pid = p.id;
-
-      view.innerHTML = `
-        <div class="grid">
-          <div class="card">
-            <h3>Reports</h3>
-            <div class="small">Generate a report for a selected time period (up to the preceding 5 years).</div>
-            <div class="sep"></div>
-
-            <div class="form">
-              <div class="field">
-                <label>Preset</label>
-                <select id="rp_preset">
-                  <option value="7">Last week</option>
-                  <option value="30">Last month</option>
-                  <option value="365">Last year</option>
-                  <option value="custom">Choose period</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Custom start</label>
-                <input id="rp_start" type="date" />
-              </div>
-              <div class="field">
-                <label>Custom end</label>
-                <input id="rp_end" type="date" />
-              </div>
-              <div class="field">
-                <label>Format</label>
-                <select id="rp_format">
-                  <option value="html">On-screen (HTML)</option>
-                  <option value="print">Print/PDF (browser print)</option>
-                </select>
-              </div>
-
-              <div class="field span2">
-                <button class="btn" id="rp_gen">Generate report</button>
-              </div>
-            </div>
-
-            <div class="sep"></div>
-            <div id="rp_out" class="card" style="box-shadow:none;border-radius:14px;"></div>
-          </div>
-        </div>
-      `;
-
-      const preset = document.getElementById("rp_preset");
-      const start = document.getElementById("rp_start");
-      const end = document.getElementById("rp_end");
-      const out = document.getElementById("rp_out");
-
-      function setDatesFromPreset(){
-        const v = preset.value;
-        const today = new Date();
-        const msDay = 24*60*60*1000;
-        let s = null, e = today;
-
-        if(v === "7") s = new Date(today.getTime() - 7*msDay);
-        else if(v === "30") s = new Date(today.getTime() - 30*msDay);
-        else if(v === "365") s = new Date(today.getTime() - 365*msDay);
-
-        if(v !== "custom"){
-          start.value = toDateInput(s);
-          end.value = toDateInput(e);
-        }
-      }
-
-      preset.addEventListener("change", setDatesFromPreset);
-      setDatesFromPreset();
-
-      document.getElementById("rp_gen").addEventListener("click", ()=>{
-        const sDate = start.value ? new Date(start.value) : null;
-        const eDate = end.value ? new Date(end.value) : null;
-        if(!sDate || !eDate){ alert("Select start and end dates."); return; }
-
-        // Cap to preceding 5 years
-        const fiveYearsAgo = new Date();
-        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-        if(sDate < fiveYearsAgo){
-          alert("Start date cannot be older than 5 years.");
-          return;
-        }
-
-        const sTs = sDate.getTime();
-        const eTs = eDate.getTime() + (24*60*60*1000 - 1);
-
-        const inRange = store.readings
-          .filter(r => r.personId === pid)
-          .filter(r => {
-            const ts = new Date(r.takenAt).getTime();
-            return ts >= sTs && ts <= eTs;
-          })
-          .sort((a,b)=> (a.takenAt > b.takenAt ? 1 : -1));
-
-        const snapNow = deriveSnapshot(p);
-
-        const summary = buildReportSummary(inRange, snapNow, sDate, eDate, p);
-        out.innerHTML = summary;
-
-        const fmt = document.getElementById("rp_format").value;
-        if(fmt === "print"){
-          setTimeout(()=> window.print(), 50);
-        }
-      });
-    }
-
-    function buildReportSummary(readings, snapNow, sDate, eDate, person){
-      const groups = {};
-      readings.forEach(r=>{
-        if(!groups[r.type]) groups[r.type] = [];
-        groups[r.type].push(r);
-      });
-
-      function stat(values){
-        const nums = values.map(v=>parseFloat(v)).filter(n=>isFinite(n));
-        if(!nums.length) return null;
-        const avg = nums.reduce((a,b)=>a+b,0)/nums.length;
-        const min = Math.min(...nums);
-        const max = Math.max(...nums);
-        return {count: nums.length, avg, min, max};
-      }
-
-      const gStat = stat((groups.glucose||[]).map(r=>r.value));
-      const sysStat = stat((groups.bp||[]).map(r=>r.sys));
-      const diaStat = stat((groups.bp||[]).map(r=>r.dia));
-      const sleepStat = stat((groups.sleep||[]).map(r=>r.score));
-      const spo2Stat = stat([...(groups.sleep||[]).map(r=>r.spo2Low), ...(groups.spo2||[]).map(r=>r.low)].filter(Boolean));
-
-      return `
-        <div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div class="logo" style="width:36px;height:36px;border-radius:12px;">HC+</div>
-            <div>
-              <div style="font-weight:1000;font-size:16px;">HealthChecker+ Report</div>
-              <div class="small">${escapeHtml(person.name || "Person")} · ${escapeHtml(sDate.toDateString())} → ${escapeHtml(eDate.toDateString())} · Device time</div>
-            </div>
-          </div>
-
-          <div class="sep"></div>
-
-          <div class="small"><b>Current snapshot (latest available)</b></div>
-          <ul class="small">
-            <li>Overall: <b>${escapeHtml(snapNow.overall.label)}</b></li>
-            <li>Glucose latest: <b>${snapNow.glucose ? snapNow.glucose.value : "—"}</b> mg/dL</li>
-            <li>Moving HbA1c: <b>${snapNow.movingA1c ? snapNow.movingA1c.value.toFixed(2) : "—"}</b>%</li>
-            <li>BP latest: <b>${snapNow.bp ? (snapNow.bp.sys + "/" + snapNow.bp.dia) : "—"}</b> mmHg</li>
-            <li>Sleep latest: <b>${snapNow.sleep ? ("Score " + (snapNow.sleep.score||"—") + ", Energy " + (snapNow.sleep.energy||"—")) : "—"}</b></li>
-            <li>Kidney labs latest: <b>${snapNow.labs ? ("eGFR " + (snapNow.labs.egfr||"—") + ", Cr " + (snapNow.labs.creat||"—")) : "—"}</b></li>
-          </ul>
-
-          <div class="sep"></div>
-
-          <div class="small"><b>Period statistics</b></div>
-          <ul class="small">
-            <li>Glucose: ${gStat ? `${gStat.count} pts · avg ${gStat.avg.toFixed(0)} · min ${gStat.min.toFixed(0)} · max ${gStat.max.toFixed(0)} (mg/dL)` : "No data"}</li>
-            <li>BP systolic: ${sysStat ? `${sysStat.count} pts · avg ${sysStat.avg.toFixed(0)} · min ${sysStat.min.toFixed(0)} · max ${sysStat.max.toFixed(0)}` : "No data"}</li>
-            <li>BP diastolic: ${diaStat ? `${diaStat.count} pts · avg ${diaStat.avg.toFixed(0)} · min ${diaStat.min.toFixed(0)} · max ${diaStat.max.toFixed(0)}` : "No data"}</li>
-            <li>Sleep score: ${sleepStat ? `${sleepStat.count} pts · avg ${sleepStat.avg.toFixed(0)} · min ${sleepStat.min.toFixed(0)} · max ${sleepStat.max.toFixed(0)}` : "No data"}</li>
-            <li>SpO₂ low: ${spo2Stat ? `${spo2Stat.count} pts · avg ${spo2Stat.avg.toFixed(0)} · min ${spo2Stat.min.toFixed(0)} · max ${spo2Stat.max.toFixed(0)} (%)` : "No data"}</li>
-          </ul>
-
-          <div class="sep"></div>
-          <div class="small"><b>Notes</b></div>
-          <div class="small">This report is informational and supports discussion with a clinician. For emergencies, seek urgent care.</div>
-        </div>
-      `;
-    }
-
-    /******************************************************************
-     * 11) Utilities
-     ******************************************************************/
-    function setTab(tabName){
-      store.ui.activeTab = tabName;
-      saveStore();
-      [...tabs.querySelectorAll(".tab")].forEach(x=>{
-        x.classList.toggle("active", x.dataset.tab === tabName);
-      });
-      render();
-    }
-
-    function fmtWhen(iso){
-      if(!iso) return "";
-      const d = new Date(iso);
-      if(isNaN(d.getTime())) return iso;
-      return d.toLocaleString();
-    }
-
-    function minsToHm(mins){
-      const n = parseInt(mins||"0",10);
-      if(!n) return "—";
-      const h = Math.floor(n/60);
-      const m = n%60;
-      return `${h}h ${m}m`;
-    }
-
-    function toDateInput(d){
-      if(!d) return "";
-      const pad = n => String(n).padStart(2,"0");
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    }
-
-    function formatLocalDateTime(d){
-      return d.toLocaleString();
-    }
-
-    function escapeHtml(s){
-      return String(s??"").replace(/[&<>"']/g, (c)=>({
-        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-      }[c]));
-    }
-    function escapeAttr(s){
-      return escapeHtml(s).replace(/"/g,"&quot;");
-    }
-
-    /******************************************************************
-     * 12) Boot
-     ******************************************************************/
-    // Ensure active person exists
-    if(!store.ui.activePersonId || !store.people.some(p=>p.id===store.ui.activePersonId)){
-      store.ui.activePersonId = store.people[0]?.id || uid("p");
-      saveStore();
-    }
-
-    refreshHeader();
-    render();
-  </script>
+  };
+  r.readAsText(f);
+}
+
+function clearActivePersonData(){
+  if(!confirm("Clear ALL readings and symptoms for the active person? This cannot be undone unless you exported a backup.")) return;
+  const p = getActivePerson();
+  p.readings = [];
+  p.symptomsLog = [];
+  saveState();
+  renderAll();
+}
+
+/* ==============================
+   NAV / VIEW SWITCH
+============================== */
+function showView(name){
+  Object.keys(views).forEach(k=>{
+    views[k].style.display = (k===name) ? "block" : "none";
+  });
+  document.querySelectorAll(".tab").forEach(t=>{
+    t.classList.toggle("active", t.dataset.view === name);
+  });
+
+  // view-specific renders
+  if(name === "trends") renderTrends();
+  if(name === "profile") renderProfile();
+  if(name === "symptoms") renderSymptomLog();
+}
+
+function wireTabs(){
+  document.querySelectorAll(".tab").forEach(t=>{
+    t.onclick = ()=> showView(t.dataset.view);
+  });
+}
+
+/* ==============================
+   FAMILY BUTTON (simple helper)
+============================== */
+function familyManage(){
+  // To keep one-file and minimal, we direct user to Profile + switch person
+  alert("To manage Family (up to 10): use the Person dropdown to select a dependant, then open Profile tab to set name/sex/DOB/height/weight/conditions.");
+}
+
+/* ==============================
+   QUICK ACTION BUTTONS
+============================== */
+function wireQuickActions(){
+  el("quickAddReading").onclick = ()=> showView("add");
+  el("quickAddSymptoms").onclick = ()=> openSymModal();
+  el("quickViewTrends").onclick = ()=> showView("trends");
+
+  el("bottomAdd").onclick = ()=> showView("add");
+  el("bottomSymptoms").onclick = ()=> openSymModal();
+  el("bottomReport").onclick = ()=> showView("reports");
+}
+
+/* ==============================
+   HELPERS
+============================== */
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[m]);
+}
+
+/* ==============================
+   EVENT WIRING
+============================== */
+function wireEvents(){
+  el("addForm").addEventListener("submit", saveManualEntry);
+  el("saveImageBtn").onclick = saveImageToTimeline;
+
+  el("profileForm").addEventListener("submit", saveProfile);
+
+  el("openSymptomsModal").onclick = openSymModal;
+  el("viewLatestSymptomAnalysis").onclick = ()=> { showView("snapshot"); window.scrollTo({top:0,behavior:"smooth"}); };
+
+  el("symArea").onchange = ()=>{
+    symModal.area = el("symArea").value;
+    renderSymptomList();
+  };
+  el("symSearch").oninput = ()=>{
+    symModal.search = el("symSearch").value || "";
+    renderSymptomList();
+  };
+  el("symClear").onclick = ()=>{
+    symModal.selected = [];
+    el("symNotes").value = "";
+    renderSelectedSymptoms();
+  };
+  el("symSave").onclick = saveSymptoms;
+  el("closeSymModal").onclick = closeSymModal;
+  el("symModalBackdrop").onclick = (e)=> { if(e.target.id === "symModalBackdrop") closeSymModal(); };
+
+  el("familyBtn").onclick = familyManage;
+
+  el("reportPreset").onchange = ()=>{
+    el("customReportDates").style.display = (el("reportPreset").value === "custom") ? "grid" : "none";
+  };
+  el("generateReportBtn").onclick = generateReport;
+  el("printReportBtn").onclick = ()=> window.print();
+
+  el("exportJsonBtn").onclick = exportJson;
+  el("importJsonBtn").onclick = importJsonFile;
+  el("importJsonFile").onchange = handleImportFile;
+  el("clearPersonBtn").onclick = clearActivePersonData;
+}
+
+/* ==============================
+   FIX: Readings not updating
+   Ensure all views render after any save.
+============================== */
+function renderAll(){
+  renderPersonSelect();
+  renderHeader();
+  renderSnapshot();
+  // If current view is trends/profile/symptoms, refresh them too
+  const activeTab = document.querySelector(".tab.active")?.dataset.view || "snapshot";
+  if(activeTab === "trends") renderTrends();
+  if(activeTab === "profile") renderProfile();
+  if(activeTab === "symptoms") renderSymptomLog();
+}
+
+function init(){
+  wireTabs();
+  wireQuickActions();
+  wireEvents();
+
+  // Seed the symptom area select once (modal)
+  const symAreaSel = el("symArea");
+  symAreaSel.innerHTML = "";
+  BODY_AREAS.forEach(a=>{
+    const opt = document.createElement("option");
+    opt.value = a; opt.textContent = a;
+    symAreaSel.appendChild(opt);
+  });
+
+  // Default modal area
+  symModal.area = BODY_AREAS[0];
+
+  renderAll();
+  showView("snapshot");
+}
+
+init();
+</script>
 </body>
 </html>
