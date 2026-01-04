@@ -4,7 +4,151 @@
 ============================================================ */
 
 window.addEventListener("DOMContentLoaded", () => {
-    /* ---------------- TAB HANDLING ---------------- */
+ /* =========================================================
+     GI / SLEEP / KIDNEY MODULES — v1
+     - GI Stability (simple stool types + score)
+     - Sleep × Glucose coupling insight
+     - Kidney Load score (diet/BP/glucose aware)
+     ========================================================= */
+
+  const HCX = {
+    nowISO() {
+      try { return new Date().toISOString(); } catch(e) { return ""; }
+    },
+    // ---- storage helpers ----
+    load(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    },
+    save(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    },
+
+    // ---- GI mapping (user-friendly -> Bristol-ish category) ----
+    GI_OPTIONS: [
+      { id: "pellets", label: "Very hard, pellet-like", desc: "Constipated", bristol: 1, baseScore: 45 },
+      { id: "lumpy", label: "Hard sausage, lumpy", desc: "Mild constipation", bristol: 2, baseScore: 75 },
+      { id: "cracked", label: "Normal sausage with cracks", desc: "Normal", bristol: 3, baseScore: 92 },
+      { id: "smooth", label: "Smooth, soft sausage", desc: "Ideal", bristol: 4, baseScore: 98 },
+      { id: "blobs", label: "Very soft blobs", desc: "Borderline loose", bristol: 5, baseScore: 80 },
+      { id: "mushy", label: "Mushy, ragged", desc: "Diarrhea", bristol: 6, baseScore: 55 },
+      { id: "watery", label: "Watery", desc: "Severe diarrhea", bristol: 7, baseScore: 35 }
+    ],
+
+    computeGIScore(entry) {
+      if (!entry || !entry.typeId) return null;
+      const opt = this.GI_OPTIONS.find(o => o.id === entry.typeId);
+      if (!opt) return null;
+
+      let score = opt.baseScore;
+
+      // Modifiers
+      if (entry.noBloating === true) score += 5;
+      if (entry.noUrgency === true) score += 5;
+      if (entry.straining === true) score -= 10;
+      if (typeof entry.bmCount === "number" && entry.bmCount > 1) score -= 10;
+
+      // clamp
+      score = Math.max(0, Math.min(100, score));
+
+      let status = "Unstable";
+      if (score >= 86) status = "Stable";
+      else if (score >= 70) status = "Borderline";
+
+      return { score, status, bristol: opt.bristol, label: opt.label };
+    },
+
+    // ---- Sleep × Glucose insight (simple rules, transparent) ----
+    computeSleepGlucoseInsight({ sleepScore, energyScore, latestGlucose, giStatus }) {
+      const g = Number(latestGlucose);
+      const s = Number(sleepScore);
+      const e = Number(energyScore);
+
+      // Fallback strings
+      let headline = "Sleep–Metabolic Coupling";
+      let insight = "Add more sleep/glucose data to unlock deeper insights.";
+      let flag = "Neutral";
+
+      const hasSleep = !Number.isNaN(s) || !Number.isNaN(e);
+      const hasGlucose = !Number.isNaN(g);
+
+      if (hasSleep && hasGlucose) {
+        const sleepLow = (!Number.isNaN(s) && s < 55) || (!Number.isNaN(e) && e < 55);
+        const glucoseHigh = g >= 160;
+        const glucoseMid = g >= 125 && g < 160;
+
+        if (sleepLow && glucoseHigh) {
+          insight = "Pattern suggests stress/poor sleep may be amplifying glucose. Focus on earlier dinner + sleep consolidation.";
+          flag = "High likelihood";
+        } else if (sleepLow && glucoseMid) {
+          insight = "Sleep looks suboptimal and glucose is moderately elevated. Stabilize sleep to reduce overnight variability.";
+          flag = "Moderate likelihood";
+        } else if (!sleepLow && glucoseHigh) {
+          insight = "Sleep appears reasonable but glucose is high. Review dinner composition, timing, and post-meal activity.";
+          flag = "Action needed";
+        } else if (!sleepLow && glucoseMid) {
+          insight = "Sleep is adequate and glucose is in mid-range. Incremental gains will come from meal timing and GI stability.";
+          flag = "On track";
+        } else {
+          insight = "Sleep and glucose look aligned. Maintain the routine; avoid late-night refined carbs.";
+          flag = "Good";
+        }
+
+        if (giStatus === "Unstable" || giStatus === "Borderline") {
+          insight += " GI stability may be contributing to volatility.";
+        }
+      }
+
+      return { headline, insight, flag };
+    },
+
+    // ---- Kidney Load score (0–100), conservative heuristic ----
+    computeKidneyLoad({ sodiumFlag, proteinFlag, hydrationFlag, bpSys, bpDia, glucose }) {
+      // Higher score = higher load (worse)
+      let load = 25;
+
+      const sys = Number(bpSys);
+      const dia = Number(bpDia);
+      const g = Number(glucose);
+
+      if (sodiumFlag) load += 15;
+      if (proteinFlag) load += 15;
+      if (hydrationFlag === "low") load += 15;
+      if (hydrationFlag === "good") load -= 5;
+
+      if (!Number.isNaN(sys) && sys >= 140) load += 15;
+      if (!Number.isNaN(dia) && dia >= 90) load += 10;
+
+      if (!Number.isNaN(g) && g >= 180) load += 15;
+      else if (!Number.isNaN(g) && g >= 140) load += 8;
+
+      load = Math.max(0, Math.min(100, load));
+
+      let label = "Low";
+      if (load >= 60) label = "Elevated";
+      else if (load >= 40) label = "Moderate";
+
+      return { load, label };
+    },
+
+    // ---- UI card builder (safe, minimal) ----
+    cardHTML(title, main, sub) {
+      const safeTitle = title || "";
+      const safeMain = main || "";
+      const safeSub = sub || "";
+      return `
+        <div class="card">
+          <div class="card-title">${safeTitle}</div>
+          <div class="card-main">${safeMain}</div>
+          <div class="card-sub">${safeSub}</div>
+        </div>
+      `;
+    }
+  };   /* ---------------- TAB HANDLING ---------------- */
     const tabButtons = document.querySelectorAll(".tab-btn");
     const screens = document.querySelectorAll(".screen");
 
@@ -236,3 +380,4 @@ function renderReports() {
         </div>
     `).join("");
 }
+
