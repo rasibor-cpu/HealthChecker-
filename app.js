@@ -1,73 +1,43 @@
 /* =========================================================
-   HealthChecker+ — Master Controller (app.js)
-   Build: GI–Sleep–Kidney Stack v1 (Phone-safe / GitHub Pages)
-   - Tabs / Screens
-   - Snapshot cards
-   - GI Stability scoring + simplified stool descriptions
-   - Sleep × Glucose coupling insight card
-   - Kidney Load score (heuristic)
-   - LocalStorage-first persistence
+   HealthChecker+ — app.js (FULL REPLACEMENT)
+   Build: GI–Sleep–Kidney Wired v1
+   - ID-based screens: #snapshot, #add, #symptomChecker (and fallbacks)
+   - Snapshot cards + GI/Sleep×Glucose/Kidney cards
+   - GI Stability button inside Add Symptoms
+   - LocalStorage-first
    ========================================================= */
 
 (function () {
   "use strict";
 
-  // -----------------------------
-  // Utilities
-  // -----------------------------
+  // ---------- Utilities ----------
   const U = {
-    qs(sel, root = document) {
-      try { return root.querySelector(sel); } catch (e) { return null; }
-    },
-    qsa(sel, root = document) {
-      try { return Array.from(root.querySelectorAll(sel)); } catch (e) { return []; }
-    },
-    nowISO() {
-      try { return new Date().toISOString(); } catch (e) { return ""; }
-    },
-    fmtDateTime(iso) {
+    qs(sel, root = document) { try { return root.querySelector(sel); } catch { return null; } },
+    qsa(sel, root = document) { try { return Array.from(root.querySelectorAll(sel)); } catch { return []; } },
+    nowISO() { try { return new Date().toISOString(); } catch { return ""; } },
+    fmt(iso) {
       if (!iso) return "";
-      try {
-        const d = new Date(iso);
-        return d.toLocaleString();
-      } catch (e) {
-        return iso;
-      }
+      try { return new Date(iso).toLocaleString(); } catch { return iso; }
     },
-    toNum(x) {
-      const n = Number(x);
-      return Number.isFinite(n) ? n : null;
-    },
-    clamp(n, lo, hi) {
-      return Math.max(lo, Math.min(hi, n));
-    },
+    num(x) { const n = Number(x); return Number.isFinite(n) ? n : null; },
+    clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); },
     load(key, fallback) {
-      try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
-      } catch (e) {
-        return fallback;
-      }
+      try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+      catch { return fallback; }
     },
-    save(key, value) {
-      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
-    }
+    save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
   };
 
-  // -----------------------------
-  // Storage keys
-  // -----------------------------
+  // ---------- Storage Keys ----------
   const K = {
     ACTIVE_PERSON: "hc_active_person",
     PEOPLE: "hc_people",
-    READINGS: "hc_readings", // { personId: { glucose:[], bp:[], sleep:[], labs:[] } }
-    GI_LATEST: "hc_gi_latest", // single latest GI entry (current person)
-    KIDNEY_FLAGS: "hc_kidney_flags" // simple flags for kidney load
+    READINGS: "hc_readings",           // { personId: { glucose:[], bp:[], sleep:[] } }
+    GI_LATEST: "hc_gi_latest",         // { personId: entry }
+    KIDNEY_FLAGS: "hc_kidney_flags"    // { personId: flags }
   };
 
-  // -----------------------------
-  // Domain: GI
-  // -----------------------------
+  // ---------- GI Options ----------
   const GI_OPTIONS = [
     { id: "pellets", label: "Very hard, pellet-like", desc: "Constipated", bristol: 1, baseScore: 45 },
     { id: "lumpy", label: "Hard sausage, lumpy", desc: "Mild constipation", bristol: 2, baseScore: 75 },
@@ -95,22 +65,20 @@
     if (score >= 86) status = "Stable";
     else if (score >= 70) status = "Borderline";
 
-    return { score, status, bristol: opt.bristol, label: opt.label };
+    return { score, status, label: opt.label, bristol: opt.bristol };
   }
 
-  // -----------------------------
-  // Domain: Sleep × Glucose insight
-  // -----------------------------
-  function computeSleepGlucoseInsight({ sleepScore, energyScore, latestGlucose, giStatus }) {
-    const g = U.toNum(latestGlucose);
-    const s = U.toNum(sleepScore);
-    const e = U.toNum(energyScore);
+  // ---------- Sleep × Glucose Insight ----------
+  function computeSleepGlucoseInsight({ sleepScore, energyScore, glucose, giStatus }) {
+    const s = U.num(sleepScore);
+    const e = U.num(energyScore);
+    const g = U.num(glucose);
 
     let flag = "Neutral";
-    let insight = "Add more sleep and glucose entries to unlock deeper insights.";
+    let insight = "Add more sleep and glucose data to unlock deeper insights.";
 
-    const hasSleep = s !== null || e !== null;
-    const hasGlucose = g !== null;
+    const hasSleep = (s !== null) || (e !== null);
+    const hasGlucose = (g !== null);
 
     if (hasSleep && hasGlucose) {
       const sleepLow = (s !== null && s < 55) || (e !== null && e < 55);
@@ -119,7 +87,7 @@
 
       if (sleepLow && glucoseHigh) {
         flag = "High likelihood";
-        insight = "Pattern suggests poor sleep/stress may be amplifying glucose. Focus on earlier dinner, wind-down routine, and sleep consolidation.";
+        insight = "Poor sleep/stress may be amplifying glucose. Prioritize earlier dinner, wind-down routine, and sleep consolidation.";
       } else if (sleepLow && glucoseMid) {
         flag = "Moderate likelihood";
         insight = "Sleep looks suboptimal and glucose is moderately elevated. Stabilize sleep to reduce overnight variability.";
@@ -142,16 +110,13 @@
     return { flag, insight };
   }
 
-  // -----------------------------
-  // Domain: Kidney Load score (heuristic)
-  // Higher score = higher load (worse)
-  // -----------------------------
+  // ---------- Kidney Load (heuristic) ----------
   function computeKidneyLoad({ sodiumFlag, proteinFlag, hydrationFlag, bpSys, bpDia, glucose }) {
     let load = 25;
 
-    const sys = U.toNum(bpSys);
-    const dia = U.toNum(bpDia);
-    const g = U.toNum(glucose);
+    const sys = U.num(bpSys);
+    const dia = U.num(bpDia);
+    const g = U.num(glucose);
 
     if (sodiumFlag) load += 15;
     if (proteinFlag) load += 15;
@@ -174,29 +139,21 @@
     return { load, label };
   }
 
-  // -----------------------------
-  // UI: Card template
-  // -----------------------------
+  // ---------- UI: Card ----------
   function cardHTML(title, main, sub) {
-    const t = title || "";
-    const m = main || "";
-    const s = sub || "";
     return `
       <div class="card">
-        <div class="card-title">${t}</div>
-        <div class="card-main">${m}</div>
-        <div class="card-sub">${s}</div>
+        <div class="card-title">${title || ""}</div>
+        <div class="card-main">${main || ""}</div>
+        <div class="card-sub">${sub || ""}</div>
       </div>
     `;
   }
 
-  // -----------------------------
-  // Data model: People + Readings
-  // -----------------------------
+  // ---------- People + Readings ----------
   function initPeople() {
-    // If you already have people stored, keep them.
     let people = U.load(K.PEOPLE, null);
-    if (!people || !Array.isArray(people) || people.length === 0) {
+    if (!Array.isArray(people) || people.length === 0) {
       people = [{ id: "primary", name: "Robert (Primary)" }];
       U.save(K.PEOPLE, people);
     }
@@ -208,69 +165,84 @@
     return { people, active };
   }
 
-  function getReadingsStore() {
-    return U.load(K.READINGS, {});
-  }
+  function getStore() { return U.load(K.READINGS, {}); }
+  function setStore(s) { U.save(K.READINGS, s || {}); }
 
-  function setReadingsStore(store) {
-    U.save(K.READINGS, store || {});
-  }
-
-  function ensurePersonStore(store, personId) {
-    store[personId] = store[personId] || {};
-    store[personId].glucose = store[personId].glucose || [];
-    store[personId].bp = store[personId].bp || [];
-    store[personId].sleep = store[personId].sleep || [];
-    store[personId].labs = store[personId].labs || [];
+  function ensurePerson(store, pid) {
+    store[pid] = store[pid] || {};
+    store[pid].glucose = store[pid].glucose || [];
+    store[pid].bp = store[pid].bp || [];
+    store[pid].sleep = store[pid].sleep || [];
     return store;
   }
 
   function latestOf(arr) {
     if (!Array.isArray(arr) || arr.length === 0) return null;
-    // assume entries have ts; choose most recent
     return arr.slice().sort((a, b) => (b.ts || "").localeCompare(a.ts || ""))[0];
   }
 
-  // -----------------------------
-  // UI: Screens / Tabs
-  // -----------------------------
-  function setupTabs() {
-    const tabButtons = U.qsa("[data-target], .tab-btn, button[data-tab]");
-    const screens = U.qsa(".screen, [data-screen], section[id]");
+  function lastNGlucose(arr, n) {
+    if (!Array.isArray(arr) || arr.length === 0) return [];
+    return arr.slice().sort((a, b) => (b.ts || "").localeCompare(a.ts || "")).slice(0, n);
+  }
 
-    // Fallback: if your HTML uses IDs like snapshotScreen, addScreen, etc.
-    function showScreen(targetId) {
-      screens.forEach(s => {
-        const sid = s.getAttribute("data-screen") || s.id || "";
-        // show if matches target or contains it
-        const match = sid === targetId || sid === `${targetId}Screen` || sid.toLowerCase() === targetId.toLowerCase();
-        s.style.display = match ? "" : "none";
-      });
-    }
+  // ---------- Screens (ID-first) ----------
+  function detectScreens() {
+    // Common IDs from your repo; includes fallbacks
+    const screens = [
+      U.qs("#snapshot"),
+      U.qs("#add"),
+      U.qs("#symptomChecker"),
+      U.qs("#trends"),
+      U.qs("#reports"),
+      U.qs("#profile")
+    ].filter(Boolean);
 
-    tabButtons.forEach(btn => {
-      btn.addEventListener("click", () => {
-        const t = btn.getAttribute("data-target") || btn.getAttribute("data-tab") || btn.getAttribute("data-screen");
-        if (t) {
-          tabButtons.forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-          showScreen(t);
-          if (t.toLowerCase().includes("snap")) renderSnapshot();
+    // Include any elements marked as screen-like
+    const extra = U.qsa("[data-screen], .screen, section[id]").filter(el => el && el.id);
+    extra.forEach(el => { if (!screens.includes(el)) screens.push(el); });
+
+    return screens;
+  }
+
+  function showScreen(screenId) {
+    const screens = detectScreens();
+    screens.forEach(el => {
+      const id = el.id || el.getAttribute("data-screen") || "";
+      el.style.display = (id === screenId) ? "" : "none";
+    });
+
+    // Render Snapshot when it’s shown
+    if (screenId === "snapshot") renderSnapshot();
+    if (screenId === "symptomChecker") wireGIArea();
+  }
+
+  function setupTabClicks() {
+    // Support buttons/links that target screens by:
+    // - data-target="snapshot"
+    // - data-screen="snapshot"
+    // - href="#snapshot"
+    const clickables = U.qsa("[data-target], [data-screen], a[href^='#'], button");
+    clickables.forEach(el => {
+      el.addEventListener("click", (ev) => {
+        const dt = el.getAttribute("data-target") || el.getAttribute("data-screen") || "";
+        const href = (el.tagName === "A") ? (el.getAttribute("href") || "") : "";
+        const id = (dt || (href.startsWith("#") ? href.slice(1) : "")).trim();
+
+        // Only intercept if it matches a known screen id
+        if (id && U.qs(`#${CSS.escape(id)}`)) {
+          ev.preventDefault();
+          showScreen(id);
         }
       });
     });
-
-    // Default to Snapshot if present
-    showScreen("snapshot");
   }
 
-  // -----------------------------
-  // Render: Snapshot
-  // -----------------------------
+  // ---------- Snapshot Render ----------
   function renderSnapshot() {
     const { active } = initPeople();
-    let store = getReadingsStore();
-    store = ensurePersonStore(store, active);
+    let store = getStore();
+    store = ensurePerson(store, active);
 
     const gLatest = latestOf(store[active].glucose);
     const bpLatest = latestOf(store[active].bp);
@@ -279,80 +251,62 @@
     const glucoseVal = gLatest ? gLatest.value : null;
     const glucoseTs = gLatest ? gLatest.ts : null;
 
-    // Moving HbA1c estimate from recent glucose (simple, conservative)
-    // If you have your own implementation elsewhere, you can refine later.
-    const last14 = store[active].glucose
-      .slice()
-      .sort((a, b) => (b.ts || "").localeCompare(a.ts || ""))
-      .slice(0, 14)
-      .map(x => U.toNum(x.value))
+    const last14 = lastNGlucose(store[active].glucose, 14)
+      .map(x => U.num(x.value))
       .filter(x => x !== null);
 
     const avgG = last14.length ? Math.round(last14.reduce((a, b) => a + b, 0) / last14.length) : null;
-    const estA1c = avgG !== null ? ((avgG + 46.7) / 28.7) : null; // standard eAG conversion
+    const estA1c = (avgG !== null) ? ((avgG + 46.7) / 28.7) : null;
 
     const bpMain = bpLatest ? `${bpLatest.sys}/${bpLatest.dia} mmHg (P ${bpLatest.pulse ?? "—"})` : "Not recorded";
-    const bpSub = bpLatest ? (bpLatest.note || U.fmtDateTime(bpLatest.ts)) : "Add BP reading";
+    const bpSub = bpLatest ? (bpLatest.note || U.fmt(bpLatest.ts)) : "Add BP reading";
 
     const sleepMain = sLatest ? `Score ${sLatest.score ?? "—"} • Energy ${sLatest.energy ?? "—"}` : "Not recorded";
-    const sleepSub = sLatest ? (sLatest.note || U.fmtDateTime(sLatest.ts)) : "Add sleep data";
+    const sleepSub = sLatest ? (sLatest.note || U.fmt(sLatest.ts)) : "Add sleep data";
 
-    // Where to render:
-    // Prefer explicit containers if present, else fallback to first visible screen.
-    const snapRoot =
-      U.qs("#snapshot") ||
-      U.qs("[data-screen='snapshot']") ||
-      U.qs("#snapshotScreen") ||
-      U.qs(".snapshot") ||
-      null;
-
+    const snapRoot = U.qs("#snapshot") || U.qs("#snapshotScreen") || U.qs("[data-screen='snapshot']");
     if (!snapRoot) return;
 
-    // Ensure a dedicated cards container exists (so we can append safely)
     let cards = U.qs("#snapshotCards", snapRoot);
     if (!cards) {
       cards = document.createElement("div");
       cards.id = "snapshotCards";
-      snapRoot.innerHTML = ""; // clean render
+      // Do not wipe whole snapshot if you have header elements; append cards container
       snapRoot.appendChild(cards);
-    } else {
-      cards.innerHTML = "";
     }
-
-    // Expose latest values for other modules (optional)
-    window.latestGlucoseValue = glucoseVal;
-    window.latestSleepScore = sLatest ? sLatest.score : null;
-    window.latestEnergyScore = sLatest ? sLatest.energy : null;
-    window.latestBP = bpLatest ? `${bpLatest.sys}/${bpLatest.dia}` : null;
+    cards.innerHTML = "";
 
     // Core cards
     cards.insertAdjacentHTML("beforeend",
-      cardHTML("Glucose (latest)", glucoseVal !== null ? `${glucoseVal} mg/dL` : "Not recorded", glucoseTs ? U.fmtDateTime(glucoseTs) : "Add glucose reading") +
-      cardHTML("Estimated HbA1c (moving)", (estA1c !== null ? `${estA1c.toFixed(2)}%` : "Insufficient data"), (avgG !== null ? `Avg glucose ${avgG} mg/dL • ${last14.length} point(s) • last 14d` : "Add more glucose readings")) +
+      cardHTML("Glucose (latest)", glucoseVal !== null ? `${glucoseVal} mg/dL` : "Not recorded", glucoseTs ? U.fmt(glucoseTs) : "Add glucose reading") +
+      cardHTML("Estimated HbA1c (moving)", (estA1c !== null ? `${estA1c.toFixed(2)}%` : "Insufficient data"), (avgG !== null ? `Avg glucose ${avgG} mg/dL • ${last14.length} point(s) • last 14` : "Add more glucose readings")) +
       cardHTML("Blood Pressure (latest)", bpMain, bpSub) +
       cardHTML("Sleep (latest)", sleepMain, sleepSub)
     );
 
-    // NEW: GI / Sleep×Glucose / Kidney
-    const giLatest = U.load(`${K.GI_LATEST}:${active}`, null);
+    // GI card
+    const giAll = U.load(K.GI_LATEST, {});
+    const giLatest = giAll[active] || null;
     const giComputed = computeGIScore(giLatest);
 
     const giMain = giComputed ? `${giComputed.status} • ${giComputed.score}/100` : "Not recorded";
-    const giSub  = giComputed ? `Selected: ${giComputed.label}` : "Add GI status via Add → Symptoms";
+    const giSub  = giComputed ? `Selected: ${giComputed.label}` : "Open Add Symptoms → GI Stability";
 
+    // Sleep × Glucose
     const sgi = computeSleepGlucoseInsight({
       sleepScore: sLatest ? sLatest.score : null,
       energyScore: sLatest ? sLatest.energy : null,
-      latestGlucose: glucoseVal,
+      glucose: glucoseVal,
       giStatus: giComputed ? giComputed.status : null
     });
 
-    const kidneyFlags = U.load(`${K.KIDNEY_FLAGS}:${active}`, { sodiumFlag: false, proteinFlag: false, hydrationFlag: "unknown" });
-
+    // Kidney load
+    const kFlagsAll = U.load(K.KIDNEY_FLAGS, {});
+    const flags = kFlagsAll[active] || { sodiumFlag: false, proteinFlag: false, hydrationFlag: "unknown" };
     const kidney = computeKidneyLoad({
-      sodiumFlag: !!kidneyFlags.sodiumFlag,
-      proteinFlag: !!kidneyFlags.proteinFlag,
-      hydrationFlag: kidneyFlags.hydrationFlag,
+      sodiumFlag: !!flags.sodiumFlag,
+      proteinFlag: !!flags.proteinFlag,
+      hydrationFlag: flags.hydrationFlag,
       bpSys: bpLatest ? bpLatest.sys : null,
       bpDia: bpLatest ? bpLatest.dia : null,
       glucose: glucoseVal
@@ -365,82 +319,115 @@
     );
   }
 
-  // -----------------------------
-  // Add: simple handlers (optional)
-  // If your UI already has its own forms, these won’t interfere.
-  // -----------------------------
-  function wireQuickButtons() {
-    // Buttons on your screenshot: Add reading / Add symptoms / Report
-    const btnAddReading = U.qs("button#addReading, button[data-action='add-reading'], .btn-add-reading");
-    const btnAddSymptoms = U.qs("button#addSymptoms, button[data-action='add-symptoms'], .btn-add-symptoms");
+  // Make callable from UI if needed
+  window.renderSnapshot = renderSnapshot;
 
-    // If your HTML uses bottom bar buttons without IDs, try match by text
-    const allButtons = U.qsa("button");
-    const byText = (txt) => allButtons.find(b => (b.textContent || "").trim().toLowerCase() === txt);
+  // ---------- GI Button inside Add Symptoms ----------
+  function wireGIArea() {
+    const { active } = initPeople();
 
-    const addReadingBtn = btnAddReading || byText("add reading");
-    const addSymptomsBtn = btnAddSymptoms || byText("add symptoms");
+    const symptomRoot =
+      U.qs("#symptomChecker") ||
+      U.qs("#symptoms") ||
+      U.qs("[data-screen='symptomChecker']") ||
+      U.qs("[data-screen='symptoms']");
 
-    if (addReadingBtn) {
-      addReadingBtn.addEventListener("click", () => {
-        // Minimal prompt-based entry (works on phone). Later you can replace with form UI.
+    if (!symptomRoot) return;
+
+    if (U.qs("#btnGIStability", symptomRoot)) return;
+
+    const bar = document.createElement("div");
+    bar.style.display = "flex";
+    bar.style.gap = "10px";
+    bar.style.alignItems = "center";
+    bar.style.margin = "10px 0 14px 0";
+    bar.style.flexWrap = "wrap";
+
+    const btn = document.createElement("button");
+    btn.id = "btnGIStability";
+    btn.textContent = "GI Stability";
+    btn.style.padding = "10px 12px";
+    btn.style.borderRadius = "12px";
+    btn.style.border = "1px solid rgba(0,0,0,0.15)";
+    btn.style.background = "#fff";
+    btn.style.fontWeight = "700";
+
+    const note = document.createElement("div");
+    note.style.fontSize = "12px";
+    note.style.opacity = "0.75";
+    note.textContent = "Log stool type + bloating/urgency/straining (simple).";
+
+    bar.appendChild(btn);
+    bar.appendChild(note);
+    symptomRoot.prepend(bar);
+
+    btn.addEventListener("click", () => {
+      const menu = GI_OPTIONS.map((o, i) => `${i + 1}. ${o.label} (${o.desc})`).join("\n");
+      const pick = prompt(`GI Status — pick one:\n\n${menu}\n\nEnter number (1-${GI_OPTIONS.length}):`);
+      const idx = Number(pick);
+
+      if (!Number.isFinite(idx) || idx < 1 || idx > GI_OPTIONS.length) return;
+
+      const typeId = GI_OPTIONS[idx - 1].id;
+      const noBloating = (prompt("No bloating today? (y/n)") || "").toLowerCase().startsWith("y");
+      const noUrgency = (prompt("No urgency today? (y/n)") || "").toLowerCase().startsWith("y");
+      const straining = (prompt("Straining? (y/n)") || "").toLowerCase().startsWith("y");
+      const bmCountRaw = prompt("How many bowel movements today? (Enter 1 if unsure)");
+      const bmCount = Number(bmCountRaw) || 1;
+
+      const entry = { typeId, noBloating, noUrgency, straining, bmCount, ts: U.nowISO() };
+
+      const giAll = U.load(K.GI_LATEST, {});
+      giAll[active] = entry;
+      U.save(K.GI_LATEST, giAll);
+
+      const computed = computeGIScore(entry);
+      alert(computed ? `Saved. GI is ${computed.status} (${computed.score}/100).` : "Saved GI entry.");
+
+      // Refresh snapshot so card updates
+      renderSnapshot();
+    });
+  }
+
+  // ---------- Optional: Quick add buttons if they exist ----------
+  function wireQuickAdd() {
+    const { active } = initPeople();
+
+    const btnAddReading =
+      U.qs("#addReading") ||
+      U.qs("button[data-action='add-reading']") ||
+      U.qsa("button").find(b => (b.textContent || "").trim().toLowerCase() === "add reading");
+
+    if (btnAddReading) {
+      btnAddReading.addEventListener("click", () => {
         const val = prompt("Enter glucose (mg/dL):");
-        const g = U.toNum(val);
+        const g = U.num(val);
         if (g === null) return;
 
-        const { active } = initPeople();
-        let store = getReadingsStore();
-        store = ensurePersonStore(store, active);
+        let store = getStore();
+        store = ensurePerson(store, active);
         store[active].glucose.push({ value: g, ts: U.nowISO(), source: "manual" });
-        setReadingsStore(store);
+        setStore(store);
 
-        renderSnapshot();
         alert("Glucose saved.");
-      });
-    }
-
-    if (addSymptomsBtn) {
-      addSymptomsBtn.addEventListener("click", () => {
-        const { active } = initPeople();
-
-        // Choose GI type
-        const menu = GI_OPTIONS.map((o, idx) => `${idx + 1}. ${o.label} (${o.desc})`).join("\n");
-        const pick = prompt(`GI Status — pick one:\n\n${menu}\n\nEnter number (1-${GI_OPTIONS.length}):`);
-        const idx = U.toNum(pick);
-        if (idx === null || idx < 1 || idx > GI_OPTIONS.length) return;
-
-        const typeId = GI_OPTIONS[idx - 1].id;
-
-        const noBloating = (prompt("No bloating today? (y/n)") || "").toLowerCase().startsWith("y");
-        const noUrgency = (prompt("No urgency today? (y/n)") || "").toLowerCase().startsWith("y");
-        const straining = (prompt("Straining? (y/n)") || "").toLowerCase().startsWith("y");
-        const bmCountRaw = prompt("How many bowel movements today? (Enter 1 if unsure)");
-        const bmCount = U.toNum(bmCountRaw) || 1;
-
-        const entry = { typeId, noBloating, noUrgency, straining, bmCount, ts: U.nowISO() };
-        U.save(`${K.GI_LATEST}:${active}`, entry);
-
         renderSnapshot();
-        alert("GI status saved.");
       });
     }
   }
 
-  // -----------------------------
-  // Init
-  // -----------------------------
+  // ---------- Init ----------
   window.addEventListener("DOMContentLoaded", () => {
-    // Maintain existing UI where possible
-    try { initPeople(); } catch (e) {}
+    initPeople();
+    setupTabClicks();
 
-    // Basic tabs (non-destructive)
-    try { setupTabs(); } catch (e) {}
+    // Default screen: snapshot if present
+    if (U.qs("#snapshot")) showScreen("snapshot");
+    else renderSnapshot();
 
-    // Render Snapshot on load
-    try { renderSnapshot(); } catch (e) {}
+    // Wire GI when symptom screen is opened, but also attempt once on load
+    wireGIArea();
 
-    // Wire quick buttons (if present)
-    try { wireQuickButtons(); } catch (e) {}
+    wireQuickAdd();
   });
 
 })();
