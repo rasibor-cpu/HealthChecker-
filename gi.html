@@ -31,11 +31,11 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-ser
 </style>
 </head>
 
-<body>
-<div id="app"></div>
-
-<script>
+<body><script>
 const app = document.getElementById("app");
+
+// --- Simple tab state (baseline wiring) ---
+let state = { tab: "SNAPSHOT" };
 
 function badge(t){
   return "badge " + (
@@ -45,6 +45,48 @@ function badge(t){
   );
 }
 
+function viewSnapshot(){
+  return `
+    <div class="wrap">
+      <div class="grid">
+        <div class="card">
+          <div class="h">GI Stability</div>
+          <div class="${badge("STABLE")}">STABLE</div>
+
+          <div class="kvs">
+            <div class="kv"><div class="label">Score</div><div>—</div></div>
+            <div class="kv"><div class="label">Latest Entry</div><div>None</div></div>
+          </div>
+
+          <div class="hr"></div>
+          <button class="btn btnPrimary" id="goAddBtn">Add First GI Entry</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function viewAdd(){
+  return `
+    <div class="wrap">
+      <div class="grid">
+        <div class="card">
+          <div class="h">Add Entry (Baseline)</div>
+          <div class="label">This is the wired Add screen. Next step is to paste the full form + scoring.</div>
+
+          <div class="hr"></div>
+          <button class="btn" id="backToSnapshotBtn">Back to Snapshot</button>
+        </div>
+
+        <div class="card">
+          <div class="h">Status</div>
+          <div>Tabs and buttons are now active.</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function render(){
   app.innerHTML = `
     <div class="topbar">
@@ -52,32 +94,57 @@ function render(){
         <strong>HealthChecker+ — GI</strong>
         <a href="./index.html" style="margin-left:auto;color:#e9eef5">Back to Dashboard</a>
       </div>
+
       <div class="tabs row" style="margin-top:10px">
-        <button class="active">Snapshot</button>
-        <button disabled>Add Entry</button>
-        <button disabled>Trends</button>
-        <button disabled>History</button>
+        <button data-tab="SNAPSHOT" class="${state.tab==="SNAPSHOT" ? "active" : ""}">Snapshot</button>
+        <button data-tab="ADD" class="${state.tab==="ADD" ? "active" : ""}">Add Entry</button>
+        <button data-tab="TRENDS" class="${state.tab==="TRENDS" ? "active" : ""}">Trends</button>
+        <button data-tab="HISTORY" class="${state.tab==="HISTORY" ? "active" : ""}">History</button>
       </div>
     </div>
 
-    <div class="wrap">
-      <div class="grid">
-        <div class="card">
-          <div class="h">GI Stability</div>
-          <div class="badge stable">STABLE</div>
-          <div class="kvs">
-            <div class="kv"><div class="label">Score</div><div>—</div></div>
-            <div class="kv"><div class="label">Latest Entry</div><div>None</div></div>
-          </div>
-          <div class="hr"></div>
-          <button class="btn btnPrimary">Add First GI Entry</button>
-        </div>
-      </div>
-    </div>
+    ${
+      state.tab==="SNAPSHOT" ? viewSnapshot()
+      : state.tab==="ADD" ? viewAdd()
+      : `<div class="wrap"><div class="card"><div class="h">${state.tab}</div><div class="label">Next step: wire ${state.tab.toLowerCase()} view.</div></div></div>`
+    }
   `;
+
+  wireEvents();
+}
+
+function wireEvents(){
+  // Tabs
+  document.querySelectorAll(".tabs button[data-tab]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.tab = btn.getAttribute("data-tab");
+      render();
+    });
+  });
+
+  // Snapshot button -> Add
+  const goAdd = document.getElementById("goAddBtn");
+  if(goAdd){
+    goAdd.addEventListener("click", ()=>{
+      state.tab = "ADD";
+      render();
+    });
+  }
+
+  // Add screen -> back
+  const backBtn = document.getElementById("backToSnapshotBtn");
+  if(backBtn){
+    backBtn.addEventListener("click", ()=>{
+      state.tab = "SNAPSHOT";
+      render();
+    });
+  }
 }
 
 render();
 </script>
+
+<div id="app"></div>
+
 </body>
 </html>
