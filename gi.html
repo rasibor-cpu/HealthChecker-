@@ -297,58 +297,7 @@
         wireEvents();
       }
 
-      function viewSnapshot(user, latest){
-        return `
-          <div class="grid">
-            <div class="card">
-              <div class="h">GI Stability (Latest)</div>
-              ${!latest ? `
-                <div>No GI entries for ${escapeHtml(user.name)} yet.</div>
-                <div class="hr"></div>
-                <button class="btn btnPrimary" id="goAddFromSnapshot">Add first GI entry</button>
-              ` : `
-                <div class="kvs">
-                  <div class="kv"><div class="label">Timestamp</div><div class="val">${fmtDateTime(latest.ts)}</div></div>
-                  <div class="kv"><div class="label">Bristol</div><div class="val">${latest.bristol}</div></div>
-                  <div class="kv"><div class="label">Frequency</div><div class="val">${latest.frequency}/day</div></div>
-                </div>
-
-                <div class="${triageStyle(latest.computed.triage)}">${latest.computed.triage}</div>
-
-                <div class="kvs">
-                  <div class="kv"><div class="label">Score</div><div class="val">${latest.computed.score}/100</div></div>
-                  <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(latest.computed.band)}</div></div>
-                  <div class="kv"><div class="label">Red flags</div><div class="val">${latest.computed.anyRedFlag ? "Yes":"No"}</div></div>
-                </div>
-
-                <div class="hr"></div>
-                <div class="label">Summary</div>
-                <div>${escapeHtml(latest.computed.summary)}</div>
-
-                <div class="hr"></div>
-                <div class="label">Recommended actions</div>
-                <ul>${(latest.computed.actionPlan||[]).map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
-              `}
-            </div>
-            <div class="card">
-  <div class="h">Bristol Stool Types (Reference)</div>
-  <div>Types 3–4 are usually the target.</div>
-  <ul>
-    <li>Type 1: Hard separate pellets — constipation</li>
-    <li>Type 2: Lumpy sausage — constipation tendency</li>
-    <li>Type 3: Sausage with cracks — generally OK</li>
-    <li>Type 4: Smooth, soft, snake-like — ideal</li>
-    <li>Type 5: Soft blobs — mild looseness</li>
-    <li>Type 6: Mushy, ragged — diarrhea tendency</li>
-    <li>Type 7: Watery — significant diarrhea</li>
-  </ul>
-</div>
-
-
-           
-        `;
-      }
-
+      
       function viewAdd(){
         return `
           <div class="grid">
