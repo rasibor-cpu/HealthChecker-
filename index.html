@@ -2,2164 +2,691 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>HealthChecker+ (One-File Master)</title>
-  <meta name="theme-color" content="#0b5cff" />
-
-  <!--
-    HealthChecker+ v25.0.0 (One-File Master Replacement)
-    Iteration: 25
-    Theme: Medical cloud (sky blue + white)
-    Offline-first + Backend-ready
-
-    PATCH (Jan 2026):
-    - Removed accidental GI link that was placed BEFORE <html> (invalid HTML and caused “GI first screen” feel).
-    - Added GI as a separate page link INSIDE the tab row (opens gi.html).
-    - Updated tab wiring so external links do NOT break tab switching.
-  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>HealthChecker+ — One-File GI Dashboard</title>
 
   <style>
-    :root{
-      --bg: #f4f8ff;
-      --card: #ffffff;
-      --ink: #0e1a2a;
-      --muted: #5a6b82;
-      --line: #dbe7ff;
-      --brand: #0b5cff;
-      --brand2:#2db7ff;
-      --ok: #14b86a;
-      --warn: #ffb020;
-      --alert:#ff3b30;
-      --shadow: 0 10px 30px rgba(17, 39, 74, .10);
-      --radius: 18px;
-    }
-
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
-    a{ color:var(--brand); text-decoration:none; }
-    button, input, select, textarea { font: inherit; }
-
-    .wrap{ max-width: 980px; margin: 0 auto; padding: 14px 14px 90px; }
-
-    /* Minimal top header */
-    .topbar{
-      position: sticky; top: 0; z-index: 50;
-      background: rgba(244,248,255,.86);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--line);
-    }
-    .topbar-inner{
-      max-width: 980px; margin: 0 auto;
-      display:flex; align-items:center; justify-content:space-between;
-      padding: 10px 14px;
-      gap: 10px;
-    }
-    .brand{
-      display:flex; align-items:center; gap: 10px; min-width: 0;
-    }
-    .logo{
-      width: 44px; height:44px; border-radius: 14px;
-      background: linear-gradient(135deg,var(--brand),var(--brand2));
-      display:grid; place-items:center;
-      color:white; font-weight:800; letter-spacing:.3px;
-      box-shadow: var(--shadow);
-      flex: 0 0 auto;
-    }
-    .who{
-      display:flex; flex-direction:column; min-width:0;
-    }
-    .who .name{
-      font-weight: 800; font-size: 15px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .who .sub{
-      font-size: 12px; color: var(--muted);
-      white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
-    }
-
-    .actions{
-      display:flex; align-items:center; gap: 10px;
-      flex: 0 0 auto;
-    }
-    .pill{
-      display:flex; align-items:center; gap: 8px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 8px 10px;
-      box-shadow: 0 6px 18px rgba(17,39,74,.06);
-    }
-    .pill label{ font-size: 12px; color: var(--muted); }
-    .pill select{
-      border: none; outline: none; background: transparent;
-      font-weight: 700; color: var(--ink);
-      max-width: 180px;
-    }
-
-    .btn{
-      border: 0;
-      background: var(--brand);
-      color: white;
-      padding: 10px 12px;
-      border-radius: 12px;
-      font-weight: 800;
-      box-shadow: var(--shadow);
-      cursor: pointer;
-    }
-    .btn.secondary{
-      background: #eaf2ff;
-      color: var(--brand);
-      border: 1px solid var(--line);
-      box-shadow: none;
-    }
-    .btn.ghost{
-      background: transparent;
-      border: 1px solid var(--line);
-      color: var(--ink);
-      box-shadow: none;
-    }
-    .btn:active{ transform: translateY(1px); }
-
-    /* Tabs */
-    .tabs{
-      position: sticky;
-      top: 66px;
-      z-index: 40;
-      padding: 10px 14px 12px;
-      background: rgba(244,248,255,.86);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--line);
-    }
-    .tabs-inner{
-      max-width: 980px; margin: 0 auto;
-      display:flex; gap: 10px; flex-wrap: wrap;
-    }
-    .tab{
-      border: 1px solid var(--line);
-      background: var(--card);
-      padding: 10px 12px;
-      border-radius: 999px;
-      font-weight: 800;
-      color: var(--muted);
-      cursor:pointer;
-      user-select:none;
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-    }
-    .tab.active{
-      background: linear-gradient(135deg,#ffffff,#eef6ff);
-      color: var(--ink);
-      border-color: #b8d2ff;
-    }
-
-    /* Cards */
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      margin-top: 14px;
-    }
-    @media(min-width: 860px){
-      .grid.cols2{ grid-template-columns: 1fr 1fr; }
-      .grid.cols3{ grid-template-columns: 1fr 1fr 1fr; }
-    }
-    .card{
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 14px;
-    }
-    .card h3{ margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 900; }
-    .big{
-      font-size: 28px;
-      font-weight: 900;
-      letter-spacing: -0.3px;
-      margin: 0;
-    }
-    .small{ font-size: 12px; color: var(--muted); margin-top: 6px; }
-
-    .row{
-      display:flex; gap: 10px; flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .badge{
-      display:inline-flex; align-items:center; gap:6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-weight: 900;
-      font-size: 12px;
-      border: 1px solid var(--line);
-      background: #f8fbff;
-      color: var(--muted);
-    }
-    .badge.ok{ background: rgba(20,184,106,.08); color: #0a7f4a; border-color: rgba(20,184,106,.25); }
-    .badge.warn{ background: rgba(255,176,32,.12); color: #9a5b00; border-color: rgba(255,176,32,.30); }
-    .badge.alert{ background: rgba(255,59,48,.12); color: #9c1b14; border-color: rgba(255,59,48,.30); }
-
-    /* Forms */
-    .form{
-      display:grid;
-      gap: 10px;
-    }
-    .field{
-      display:grid;
-      gap: 6px;
-    }
-    .field label{
-      font-size: 12px; font-weight: 900; color: var(--muted);
-    }
-    .field input, .field select, .field textarea{
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-      background: #fbfdff;
-      outline: none;
-    }
-    .field textarea{ min-height: 84px; resize: vertical; }
-
-    .hint{
-      font-size: 12px; color: var(--muted);
-    }
-
-    /* Charts */
-    .chart{
-      width: 100%;
-      height: 220px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: #fbfdff;
-      padding: 10px;
-    }
-    canvas{ width: 100%; height: 100%; display:block; }
-
-    /* Modal */
-    .modal-backdrop{
-      position: fixed; inset: 0;
-      background: rgba(9, 30, 66, .45);
-      display:none; align-items:center; justify-content:center;
-      padding: 16px;
-      z-index: 80;
-    }
-    .modal{
-      width: 100%;
-      max-width: 640px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      box-shadow: 0 30px 80px rgba(0,0,0,.25);
-      overflow:hidden;
-    }
-    .modal-head{
-      display:flex; align-items:center; justify-content:space-between;
-      padding: 14px 14px;
-      background: linear-gradient(135deg,#f7fbff,#eef6ff);
-      border-bottom: 1px solid var(--line);
-    }
-    .modal-head strong{
-      font-size: 14px;
-    }
-    .modal-body{ padding: 14px; display:grid; gap: 12px; }
-    .modal-foot{
-      padding: 14px;
-      border-top: 1px solid var(--line);
-      display:flex; gap: 10px; justify-content:flex-end;
-      background: #fbfdff;
-    }
-
-    /* Symptoms list */
-    .symptoms-list{
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #fbfdff;
-      max-height: 220px;
-      overflow:auto;
-      padding: 6px;
-      display:grid;
-      gap: 6px;
-    }
-    .symptom-item{
-      display:flex; align-items:center; justify-content:space-between;
-      gap: 8px;
-      padding: 10px;
-      border: 1px solid rgba(219,231,255,.9);
-      border-radius: 12px;
-      background: white;
-      cursor:pointer;
-      user-select:none;
-    }
-    .symptom-item:active{ transform: translateY(1px); }
-    .symptom-item .left{
-      display:flex; flex-direction:column;
-      gap: 2px;
-      min-width: 0;
-    }
-    .symptom-item .label{
-      font-weight: 900;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-    .symptom-item .meta{ font-size: 11px; color: var(--muted); }
-
-    .chip-row{ display:flex; flex-wrap:wrap; gap: 8px; }
-    .chip{
-      display:inline-flex; align-items:center; gap: 8px;
-      padding: 8px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: #f7fbff;
-      font-weight: 900;
-      font-size: 12px;
-    }
-    .chip .x{
-      width: 18px; height: 18px; border-radius: 9px;
-      display:grid; place-items:center;
-      background: #e8f1ff;
-      color: var(--brand);
-      cursor:pointer;
-    }
-    .rf{
-      color: #9c1b14;
-      background: rgba(255,59,48,.12);
-      border: 1px solid rgba(255,59,48,.28);
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 900;
-      white-space: nowrap;
-    }
-
-    /* Footer quick actions */
-    .bottom-actions{
-      position: fixed;
-      left:0; right:0; bottom:0;
-      background: rgba(244,248,255,.92);
-      backdrop-filter: blur(10px);
-      border-top: 1px solid var(--line);
-      padding: 10px 14px;
-      z-index: 60;
-    }
-    .bottom-actions .inner{
-      max-width: 980px;
-      margin: 0 auto;
-      display:flex;
-      gap: 10px;
-      justify-content: space-between;
-      flex-wrap: wrap;
-    }
-
-    .note{
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: #fbfdff;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .danger{
-      border-color: rgba(255,59,48,.3);
-      background: rgba(255,59,48,.06);
-      color: #8f1a14;
-      font-weight: 800;
-    }
+    :root{ color-scheme: dark; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#0b0f14; color:#e9eef5; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:16px; }
+    .topbar{ position:sticky; top:0; z-index:10; background:#0b0f14; border-bottom:1px solid #1b2430; padding:14px 16px; }
+    .title{ font-weight:800; font-size:18px; }
+    .sub{ opacity:.75; font-size:12px; margin-top:2px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .tabs button{ border:1px solid #223043; background:#0f1620; color:#e9eef5; padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; }
+    .tabs button.active{ border-color:#6a4d00; background:#16120a; }
+    select, input, textarea{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; border-radius:10px; padding:10px; font-size:13px; outline:none; }
+    textarea{ min-height:90px; width:100%; }
+    .btn{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; padding:10px 12px; border-radius:10px; cursor:pointer; font-size:13px; }
+    .btn:disabled{ opacity:.5; cursor:not-allowed; }
+    .btnPrimary{ border:1px solid #6a4d00; background:#16120a; color:#fff; font-weight:800; }
+    .card{ border:1px solid #1b2430; background:#0f1620; border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+    .h{ font-weight:800; margin-bottom:10px; }
+    .label{ opacity:.8; font-size:12px; margin-bottom:4px; }
+    .val{ font-weight:800; }
+    .hr{ height:1px; background:#1b2430; margin:12px 0; }
+    .badge{ display:inline-block; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:900; letter-spacing:.4px; margin:8px 0; }
+    .badge.urgent{ background:#5c1a1a; }
+    .badge.soon{ background:#6b4d00; }
+    .badge.routine{ background:#143b5a; }
+    .badge.stable{ background:#1f5a2a; }
+    .kvs{ display:flex; gap:12px; flex-wrap:wrap; }
+    .kv{ min-width:140px; }
+    .check{ display:flex; gap:10px; align-items:center; padding:10px; border:1px solid #223043; border-radius:10px; background:#0b0f14; }
+    .checkgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; }
+    ul{ margin:8px 0 0 18px; }
+    li{ margin-bottom:6px; }
+    .entry{ border:1px solid #223043; background:#0b0f14; border-radius:12px; padding:12px; }
+    .mono{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; opacity:.9; }
+    a.link{ color:#e9eef5; text-decoration:none; border-bottom:1px dashed #6a4d00; }
+    a.link:hover{ opacity:.85; }
+    .footer{ padding-bottom:30px; }
   </style>
 </head>
 
 <body>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="logo">HC+</div>
-        <div class="who">
-          <div class="name" id="activeName">HealthChecker+</div>
-          <div class="sub" id="activeSub">Device time • Offline-first • v25.0.0</div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <div class="pill">
-          <label for="personSelect">Person</label>
-          <select id="personSelect"></select>
-        </div>
-        <button class="btn secondary" id="familyBtn" title="Manage family profiles">Family</button>
-      </div>
-    </div>
-
-    <div class="tabs">
-      <div class="tabs-inner">
-        <div class="tab active" data-view="snapshot">Snapshot</div>
-        <div class="tab" data-view="add">Add</div>
-        <div class="tab" data-view="symptoms">Symptom Checker</div>
-        <div class="tab" data-view="trends">Trends</div>
-        <div class="tab" data-view="reports">Reports</div>
-        <div class="tab" data-view="profile">Profile</div>
-
-        <!-- GI is a SEPARATE PAGE; this link does not change the current view -->
-        <a class="tab" href="./gi.html" data-external="1" title="Open GI Stability / Stool page">GI / Stool</a>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <!-- SNAPSHOT -->
-    <section id="view-snapshot" class="view">
-      <div class="row" style="justify-content:space-between;">
-        <div class="badge" id="overallBadge">Overall: —</div>
-        <div class="badge" id="lastUpdatedBadge">Last refreshed: —</div>
-      </div>
-
-      <div class="grid cols2" style="margin-top:12px;">
-        <div class="card">
-          <h3>Glucose (latest)</h3>
-          <p class="big" id="snapGlucose">—</p>
-          <div class="small" id="snapGlucoseSub">No glucose data yet</div>
-        </div>
-
-        <div class="card">
-          <h3>Estimated HbA1c (moving)</h3>
-          <p class="big" id="snapA1c">—</p>
-          <div class="small" id="snapA1cSub">Add glucose readings to compute</div>
-        </div>
-
-        <div class="card">
-          <h3>Blood Pressure (latest)</h3>
-          <p class="big" id="snapBP">—</p>
-          <div class="small" id="snapBPSub">No BP data yet</div>
-        </div>
-
-        <div class="card">
-          <h3>Sleep (latest)</h3>
-          <p class="big" id="snapSleep">—</p>
-          <div class="small" id="snapSleepSub">No sleep data yet</div>
-        </div>
-
-        <div class="card">
-          <h3>Kidney / Labs (latest)</h3>
-          <p class="big" id="snapLabs">—</p>
-          <div class="small" id="snapLabsSub">No lab data yet</div>
-        </div>
-
-        <div class="card">
-          <h3>Urine / Stool (latest)</h3>
-          <p class="big" id="snapUrineStool">—</p>
-          <div class="small" id="snapUrineStoolSub">No urine/stool data yet</div>
-        </div>
-      </div>
-
-      <div class="grid" style="margin-top:12px;">
-        <div class="card">
-          <h3>Quick actions</h3>
-          <div class="row">
-            <button class="btn" id="quickAddReading">Add new reading</button>
-            <button class="btn secondary" id="quickAddSymptoms">Add symptoms (quick)</button>
-            <button class="btn ghost" id="quickViewTrends">View trends</button>
-          </div>
-          <div class="note" id="snapshotAutoAdvice" style="margin-top:10px;">
-            Tip: You can add readings manually or attach screenshots/reports. All data merges into one timeline per person.
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Latest symptom analysis</h3>
-          <div class="note" id="symptomAnalysisBox">No symptoms saved yet.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ADD -->
-    <section id="view-add" class="view" style="display:none;">
-      <div class="card">
-        <h3>Add new data (manual or screenshot)</h3>
-        <div class="note">
-          Any entry you add here updates the same database used by Snapshot and Trends.
-          If you attach an image, we store it with a timestamp (file timestamp; you can override if needed).
-        </div>
-      </div>
-
-      <div class="grid cols2">
-        <div class="card">
-          <h3>Manual entry</h3>
-          <form class="form" id="addForm">
-            <div class="field">
-              <label>Entry date/time (optional override)</label>
-              <input type="datetime-local" id="manualDateTime" />
-              <div class="hint">Leave blank to use device time now.</div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>Glucose (mg/dL)</label>
-                <input inputmode="numeric" placeholder="e.g. 122" id="inGlucose" />
-              </div>
-              <div class="field">
-                <label>Trend (optional)</label>
-                <select id="inTrend">
-                  <option value="">—</option>
-                  <option value="flat">Flat</option>
-                  <option value="rising">Rising</option>
-                  <option value="falling">Falling</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>Systolic BP</label>
-                <input inputmode="numeric" placeholder="e.g. 129" id="inSys" />
-              </div>
-              <div class="field">
-                <label>Diastolic BP</label>
-                <input inputmode="numeric" placeholder="e.g. 87" id="inDia" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Pulse (optional)</label>
-              <input inputmode="numeric" placeholder="e.g. 68" id="inPulse" />
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>Sleep score (optional)</label>
-                <input inputmode="numeric" placeholder="e.g. 36" id="inSleepScore" />
-              </div>
-              <div class="field">
-                <label>Energy score (optional)</label>
-                <input inputmode="numeric" placeholder="e.g. 71" id="inEnergy" />
-              </div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>Total sleep minutes (optional)</label>
-                <input inputmode="numeric" placeholder="e.g. 278" id="inSleepMin" />
-              </div>
-              <div class="field">
-                <label>Lowest SpO₂ (%) (optional)</label>
-                <input inputmode="numeric" placeholder="e.g. 85" id="inSpo2" />
-              </div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>eGFR (optional)</label>
-                <input inputmode="numeric" placeholder="e.g. 50" id="inEgfr" />
-              </div>
-              <div class="field">
-                <label>Creatinine (optional)</label>
-                <input placeholder="e.g. 1.56 mg/dL or 138 µmol/L" id="inCr" />
-              </div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>HbA1c lab (optional)</label>
-                <input inputmode="decimal" placeholder="e.g. 6.2" id="inA1cLab" />
-              </div>
-              <div class="field">
-                <label>Uric Acid (optional)</label>
-                <input placeholder="e.g. 565 µmol/L" id="inUric" />
-              </div>
-            </div>
-
-            <div class="grid cols2">
-              <div class="field">
-                <label>Hemoglobin (optional)</label>
-                <input placeholder="e.g. 13 g/dL" id="inHb" />
-              </div>
-              <div class="field">
-                <label>MCV (optional)</label>
-                <input placeholder="e.g. 87.9 fL" id="inMcv" />
-              </div>
-            </div>
-
-            <div class="card" style="box-shadow:none; background:#fbfdff;">
-              <h3 style="margin-bottom:6px;">Urine / Stool (manual)</h3>
-              <div class="grid cols2">
-                <div class="field">
-                  <label>Urine: Protein</label>
-                  <select id="inUrProtein">
-                    <option value="">—</option>
-                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Urine: Glucose</label>
-                  <select id="inUrGlucose">
-                    <option value="">—</option>
-                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
-                  </select>
-                </div>
-              </div>
-              <div class="grid cols2">
-                <div class="field">
-                  <label>Urine: Blood</label>
-                  <select id="inUrBlood">
-                    <option value="">—</option>
-                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Urine: Ketones</label>
-                  <select id="inUrKet">
-                    <option value="">—</option>
-                    <option>Negative</option><option>Trace</option><option>+</option><option>++</option><option>+++</option>
-                  </select>
-                </div>
-              </div>
-              <div class="grid cols2">
-                <div class="field">
-                  <label>FIT (stool) (optional)</label>
-                  <select id="inFit">
-                    <option value="">—</option>
-                    <option>Negative</option>
-                    <option>Positive</option>
-                    <option>Not done</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Stool notes (optional)</label>
-                  <input id="inStoolNote" placeholder="e.g. Normal / constipation / diarrhea" />
-                </div>
-              </div>
-            </div>
-
-            <div class="field">
-              <label>Notes (optional)</label>
-              <textarea id="inNote" placeholder="Context: fasting, after meal, after walk, meds, etc."></textarea>
-            </div>
-
-            <button class="btn" type="submit">Save manual entry</button>
-          </form>
-        </div>
-
-        <div class="card">
-          <h3>Attach screenshot / medical report (offline import)</h3>
-
-          <div class="form">
-            <div class="field">
-              <label>Image file</label>
-              <input type="file" id="imgFile" accept="image/*" />
-              <div class="hint">You can select from Gallery or take a new photo.</div>
-            </div>
-
-            <div class="field">
-              <label>What does this image represent? (optional)</label>
-              <select id="imgTypeHint">
-                <option value="">—</option>
-                <option value="glucose">Glucose</option>
-                <option value="bp">Blood Pressure</option>
-                <option value="sleep">Sleep</option>
-                <option value="spo2">SpO₂</option>
-                <option value="lab">Lab report</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label>Timestamp override (optional)</label>
-              <input type="datetime-local" id="imgDateTime" />
-              <div class="hint">If blank, we use the file timestamp. (EXIF parsing can be added later.)</div>
-            </div>
-
-            <div class="field">
-              <label>Notes (optional)</label>
-              <textarea id="imgNote" placeholder="What should we remember about this image?"></textarea>
-            </div>
-
-            <button class="btn" id="saveImageBtn" type="button">Save image to timeline</button>
-
-            <div class="note" id="imgSavedMsg" style="display:none;"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- SYMPTOMS -->
-    <section id="view-symptoms" class="view" style="display:none;">
-      <div class="card">
-        <h3>Symptom Checker (simple, no medical knowledge required)</h3>
-        <div class="note">
-          Select a body area you understand (e.g., “Head/Face”, “Arm/Hand”, “Chest”), then tap symptoms to add.
-          Red-flag symptoms are marked and will trigger urgent guidance.
-        </div>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn" id="openSymptomsModal">Add symptoms now</button>
-          <button class="btn secondary" id="viewLatestSymptomAnalysis">View latest analysis</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Saved symptom entries</h3>
-        <div id="symptomLogList" class="note">No symptom entries yet.</div>
-      </div>
-    </section>
-
-    <!-- TRENDS -->
-    <section id="view-trends" class="view" style="display:none;">
-      <div class="card">
-        <h3>Trends (from your saved timeline)</h3>
-        <div class="note">
-          Graphs use timestamps to order readings. If you imported images, the file timestamp is used unless you override it.
-        </div>
-      </div>
-
-      <div class="grid cols2">
-        <div class="card">
-          <h3>Glucose (mg/dL)</h3>
-          <div class="chart"><canvas id="cGlucose"></canvas></div>
-        </div>
-        <div class="card">
-          <h3>Blood Pressure (mmHg)</h3>
-          <div class="chart"><canvas id="cBP"></canvas></div>
-        </div>
-        <div class="card">
-          <h3>Sleep score</h3>
-          <div class="chart"><canvas id="cSleep"></canvas></div>
-        </div>
-        <div class="card">
-          <h3>Lowest SpO₂ (%)</h3>
-          <div class="chart"><canvas id="cSpo2"></canvas></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Data tools</h3>
-        <div class="row">
-          <button class="btn secondary" id="exportJsonBtn">Export all data (JSON backup)</button>
-          <input type="file" id="importJsonFile" accept="application/json" style="display:none;" />
-          <button class="btn ghost" id="importJsonBtn">Import JSON backup</button>
-          <button class="btn ghost" id="clearPersonBtn">Clear active person data</button>
-        </div>
-        <div class="note danger" style="margin-top:10px;">
-          Clearing data deletes the active person’s readings/symptoms locally on this device only. Use Export first if unsure.
-        </div>
-      </div>
-    </section>
-
-    <!-- REPORTS -->
-    <section id="view-reports" class="view" style="display:none;">
-      <div class="card">
-        <h3>Reports (choose time range)</h3>
-        <div class="form">
-          <div class="grid cols2">
-            <div class="field">
-              <label>Preset</label>
-              <select id="reportPreset">
-                <option value="week">Last 7 days</option>
-                <option value="month">Last 30 days</option>
-                <option value="year">Last 365 days</option>
-                <option value="custom">Custom (up to 5 years)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Max range</label>
-              <input value="Up to 5 years" disabled />
-            </div>
-          </div>
-
-          <div class="grid cols2" id="customReportDates" style="display:none;">
-            <div class="field">
-              <label>From</label>
-              <input type="date" id="reportFrom" />
-            </div>
-            <div class="field">
-              <label>To</label>
-              <input type="date" id="reportTo" />
-            </div>
-          </div>
-
-          <div class="row">
-            <button class="btn" id="generateReportBtn" type="button">Generate report</button>
-            <button class="btn secondary" id="printReportBtn" type="button">Print / Save as PDF</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" id="reportOutputCard">
-        <h3>Report output</h3>
-        <div id="reportOutput" class="note">No report generated yet.</div>
-      </div>
-    </section>
-
-    <!-- PROFILE -->
-    <section id="view-profile" class="view" style="display:none;">
-      <div class="card">
-        <h3>Profile (active person)</h3>
-        <form class="form" id="profileForm">
-          <div class="grid cols2">
-            <div class="field">
-              <label>Full name</label>
-              <input id="pName" placeholder="e.g. Robert Asibor" />
-            </div>
-            <div class="field">
-              <label>Sex</label>
-              <select id="pSex">
-                <option value="">—</option>
-                <option>Male</option>
-                <option>Female</option>
-                <option>Other</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid cols2">
-            <div class="field">
-              <label>Date of birth (calendar picker)</label>
-              <input type="date" id="pDob" />
-              <div class="hint">Age is calculated automatically.</div>
-            </div>
-            <div class="field">
-              <label>Age (auto)</label>
-              <input id="pAge" disabled />
-            </div>
-          </div>
-
-          <div class="grid cols2">
-            <div class="field">
-              <label>Height (cm)</label>
-              <input inputmode="numeric" id="pHeight" placeholder="e.g. 175" />
-            </div>
-            <div class="field">
-              <label>Weight (kg) (optional)</label>
-              <input inputmode="decimal" id="pWeight" placeholder="e.g. 92.0" />
-            </div>
-          </div>
-
-          <div class="field">
-            <label>BMI (auto)</label>
-            <input id="pBmi" disabled />
-          </div>
-
-          <div class="field">
-            <label>Known conditions (user-entered)</label>
-            <textarea id="pConditions" placeholder="Type your conditions (one per line or comma-separated)."></textarea>
-          </div>
-
-          <button class="btn" type="submit">Save profile</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h3>About this build</h3>
-        <div class="note" id="aboutBox"></div>
-      </div>
-    </section>
-  </div>
-
-  <!-- Bottom quick actions -->
-  <div class="bottom-actions">
-    <div class="inner">
-      <button class="btn" id="bottomAdd">Add reading</button>
-      <button class="btn secondary" id="bottomSymptoms">Add symptoms</button>
-      <button class="btn ghost" id="bottomReport">Report</button>
-    </div>
-  </div>
-
-  <!-- Symptoms Modal -->
-  <div class="modal-backdrop" id="symModalBackdrop">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <strong id="symModalTitle">Add Symptoms</strong>
-        <button class="btn ghost" id="closeSymModal">Close</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="note">
-          Quick symptom capture. Select an area, then tap symptoms to add.
-          Red-flag items are marked and will trigger urgent guidance.
-        </div>
-
-        <div class="field">
-          <label>Where does it affect?</label>
-          <select id="symArea"></select>
-        </div>
-
-        <div class="field">
-          <label>Search symptoms (optional)</label>
-          <input id="symSearch" placeholder="Type to filter… e.g. weakness, numbness, speech" />
-        </div>
-
-        <div class="field">
-          <label>Symptoms (tap to add)</label>
-          <div class="symptoms-list" id="symList"></div>
-          <div class="hint" id="symListHint"></div>
-        </div>
-
-        <div class="field">
-          <label>Selected</label>
-          <div class="chip-row" id="symSelected"></div>
-          <div class="hint" id="symSelectedHint">No symptoms selected yet.</div>
-        </div>
-
-        <div class="field">
-          <label>Notes (optional)</label>
-          <textarea id="symNotes" placeholder="Context: when it started, severity, meds taken, etc."></textarea>
-        </div>
-
-        <div class="note danger" id="symRedFlagBox" style="display:none;"></div>
-      </div>
-
-      <div class="modal-foot">
-        <button class="btn secondary" id="symClear">Clear</button>
-        <button class="btn" id="symSave">Save symptoms</button>
-      </div>
-    </div>
-  </div>
-
-<script>
-/* ==============================
-   ITERATION / CHANGELOG
-============================== */
-const BUILD = {
-  app: "HealthChecker+",
-  iteration: 25,
-  version: "v25.0.0",
-  label: "Iteration 25 – One-File Master (Medical Cloud, Unified Timeline)",
-  changelog: [
-    "Minimalist header (logo + person name only), top tabs fixed",
-    "Family mode up to 10 (Primary + 9 dependants), name/sex/DOB + auto age",
-    "Profile: height/weight + BMI auto, user-entered known conditions",
-    "Unified timeline database (manual entries + imported images + symptoms)",
-    "Moving HbA1c from glucose (default rolling 14 days)",
-    "Trends graphs: glucose, BP, sleep score, lowest SpO₂ (timestamp-sorted)",
-    "Symptom modal fixed: body area → symptom list renders; tap-to-add works; search; chips; red-flag warnings",
-    "Expanded neuro/stroke relapse symptom coverage + red flags",
-    "Urine + stool fields re-included (UA + FIT)",
-    "Reports: last week/month/year/custom up to 5 years; print/save PDF via browser print",
-    "Offline-first localStorage schema + JSON export/import; backend-ready hooks",
-    "PATCH: GI link moved into tabs as external page (gi.html) without breaking tabs"
-  ]
-};
-
-/* ==============================
-   STORAGE / DATA MODEL
-============================== */
-const LS_KEY = "HCPLUS_ONEFILE_V25";
-const MAX_FAMILY = 10;
-
-function nowEpoch(){ return Date.now(); }
-function dtLocalToEpoch(dtLocalStr){
-  if(!dtLocalStr) return null;
-  const d = new Date(dtLocalStr);
-  const t = d.getTime();
-  return Number.isFinite(t) ? t : null;
-}
-function dateToEpoch(dateStr){
-  if(!dateStr) return null;
-  const d = new Date(dateStr + "T00:00:00");
-  const t = d.getTime();
-  return Number.isFinite(t) ? t : null;
-}
-function epochToNice(ts){
-  const d = new Date(ts);
-  const pad = (n)=> String(n).padStart(2,"0");
-  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-function calcAgeFromDob(dobEpoch){
-  if(!dobEpoch) return "";
-  const dob = new Date(dobEpoch);
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const m = today.getMonth() - dob.getMonth();
-  if(m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-  return age >= 0 ? String(age) : "";
-}
-function calcBMI(heightCm, weightKg){
-  const h = parseFloat(heightCm);
-  const w = parseFloat(weightKg);
-  if(!h || !w) return "";
-  const hm = h / 100;
-  const bmi = w / (hm*hm);
-  if(!Number.isFinite(bmi)) return "";
-  return bmi.toFixed(1);
-}
-function uuid(){
-  if(crypto && crypto.randomUUID) return crypto.randomUUID();
-  return "id-" + Math.random().toString(16).slice(2) + "-" + Date.now();
-}
-
-const DEFAULT_STATE = {
-  meta: {
-    iteration: BUILD.iteration,
-    version: BUILD.version,
-    createdAt: nowEpoch(),
-    updatedAt: nowEpoch()
-  },
-  people: [],
-  activePersonId: null
-};
-
-function makeDefaultPeople(){
-  const primary = {
-    id: uuid(),
-    role: "Primary",
-    name: "Primary user",
-    sex: "",
-    dob: null,
-    heightCm: "",
-    weightKg: "",
-    conditions: "",
-    readings: [],
-    symptomsLog: []
-  };
-  const people = [primary];
-  for(let i=1;i<MAX_FAMILY;i++){
-    people.push({
-      id: uuid(),
-      role: "Dependant",
-      name: `Dependant ${i}`,
-      sex: "",
-      dob: null,
-      heightCm: "",
-      weightKg: "",
-      conditions: "",
-      readings: [],
-      symptomsLog: []
-    });
-  }
-  return people;
-}
-
-let state = loadState();
-
-function loadState(){
-  try{
-    const raw = localStorage.getItem(LS_KEY);
-    if(!raw){
-      const s = structuredClone(DEFAULT_STATE);
-      s.people = makeDefaultPeople();
-      s.activePersonId = s.people[0].id;
-      saveState(s);
-      return s;
-    }
-    const parsed = JSON.parse(raw);
-    if(!parsed.people || !Array.isArray(parsed.people) || parsed.people.length === 0){
-      parsed.people = makeDefaultPeople();
-      parsed.activePersonId = parsed.people[0].id;
-    }
-    if(!parsed.activePersonId) parsed.activePersonId = parsed.people[0].id;
-    return parsed;
-  }catch(e){
-    const s = structuredClone(DEFAULT_STATE);
-    s.people = makeDefaultPeople();
-    s.activePersonId = s.people[0].id;
-    saveState(s);
-    return s;
-  }
-}
-
-function saveState(s=state){
-  s.meta = s.meta || {};
-  s.meta.iteration = BUILD.iteration;
-  s.meta.version = BUILD.version;
-  s.meta.updatedAt = nowEpoch();
-  localStorage.setItem(LS_KEY, JSON.stringify(s));
-}
-
-function getActivePerson(){
-  return state.people.find(p => p.id === state.activePersonId) || state.people[0];
-}
-
-function setActivePerson(id){
-  state.activePersonId = id;
-  saveState();
-  renderAll();
-}
-
-/* ==============================
-   SYMPTOM LIBRARY (Expanded, incl. stroke relapse)
-============================== */
-const SYMPTOMS_BY_AREA = {
-  "Head / Face": [
-    {id:"headache", label:"Headache", red:false},
-    {id:"sudden_severe_headache", label:"Sudden severe headache (worst ever)", red:true},
-    {id:"dizziness_vertigo", label:"Dizziness / vertigo", red:false},
-    {id:"vision_change", label:"Sudden vision change", red:true},
-    {id:"facial_droop", label:"Facial droop", red:true},
-    {id:"confusion", label:"Confusion", red:true},
-    {id:"seizure", label:"Seizure activity", red:true},
-    {id:"speech_slurred", label:"Slurred speech", red:true},
-    {id:"difficulty_speaking", label:"Difficulty speaking / finding words", red:true},
-    {id:"difficulty_swallowing", label:"Difficulty swallowing", red:true},
-    {id:"numbness_face", label:"Numbness/tingling in face", red:true},
-  ],
-  "Neck / Throat": [
-    {id:"neck_pain", label:"Neck pain / stiffness", red:false},
-    {id:"stiff_neck_fever", label:"Stiff neck with fever", red:true},
-    {id:"sore_throat", label:"Sore throat", red:false},
-    {id:"hoarseness", label:"Hoarseness", red:false},
-  ],
-  "Chest": [
-    {id:"chest_pain", label:"Chest pain/pressure", red:true},
-    {id:"shortness_of_breath", label:"Shortness of breath", red:true},
-    {id:"palpitations", label:"Palpitations", red:false},
-    {id:"fainting", label:"Fainting / blackouts", red:true},
-    {id:"leg_swelling", label:"Leg swelling", red:false},
-  ],
-  "Back": [
-    {id:"upper_back_pain", label:"Upper back pain", red:false},
-    {id:"lower_back_pain", label:"Lower back pain", red:false},
-    {id:"sudden_back_pain_weakness", label:"Back pain with leg weakness/numbness", red:true},
-    {id:"loss_bladder_bowel", label:"Loss of bladder/bowel control", red:true},
-  ],
-  "Stomach / Abdomen": [
-    {id:"abdominal_pain", label:"Stomach/abdominal pain", red:false},
-    {id:"severe_abdominal_pain", label:"Severe abdominal pain", red:true},
-    {id:"nausea", label:"Nausea", red:false},
-    {id:"vomiting", label:"Vomiting", red:false},
-    {id:"vomiting_blood", label:"Vomiting blood", red:true},
-    {id:"black_stools", label:"Black/tarry stools", red:true},
-    {id:"diarrhea", label:"Diarrhea", red:false},
-    {id:"constipation", label:"Constipation", red:false},
-  ],
-  "Arm / Hand": [
-    {id:"arm_weakness", label:"Arm weakness", red:true},
-    {id:"arm_numbness", label:"Arm numbness/tingling", red:true},
-    {id:"hand_clumsiness", label:"Hand clumsiness / dropping objects", red:true},
-    {id:"arm_pain", label:"Arm pain", red:false},
-  ],
-  "Leg / Foot": [
-    {id:"leg_weakness", label:"Leg weakness", red:true},
-    {id:"leg_numbness", label:"Leg numbness/tingling", red:true},
-    {id:"unsteady_gait", label:"Unsteady walking / balance problems", red:true},
-    {id:"foot_ulcer", label:"Foot sore/ulcer", red:true},
-    {id:"calf_pain_swelling", label:"Calf pain/swelling (possible clot)", red:true},
-  ],
-  "Whole body": [
-    {id:"fever", label:"Fever", red:false},
-    {id:"high_fever", label:"High fever > 39°C / 102°F", red:true},
-    {id:"fatigue", label:"Unusual fatigue", red:false},
-    {id:"weight_loss", label:"Unintentional weight loss", red:true},
-    {id:"low_bp_symptoms", label:"Dizziness on standing / faintness", red:true},
-    {id:"high_sugar_symptoms", label:"Extreme thirst + frequent urination", red:true},
-    {id:"low_sugar_symptoms", label:"Shaking/sweating/confusion (low sugar)", red:true},
-  ],
-  "Urine / Stool": [
-    {id:"pain_urinating", label:"Pain/burning urination", red:false},
-    {id:"blood_in_urine", label:"Blood in urine", red:true},
-    {id:"reduced_urine", label:"Reduced urine output", red:true},
-    {id:"swelling_face_legs", label:"Swelling (face/legs)", red:true},
-    {id:"persistent_diarrhea", label:"Persistent diarrhea", red:true},
-  ]
-};
-
-const BODY_AREAS = Object.keys(SYMPTOMS_BY_AREA);
-
-/* ==============================
-   UI REFERENCES
-============================== */
-const el = (id)=> document.getElementById(id);
-const views = {
-  snapshot: el("view-snapshot"),
-  add: el("view-add"),
-  symptoms: el("view-symptoms"),
-  trends: el("view-trends"),
-  reports: el("view-reports"),
-  profile: el("view-profile")
-};
-
-/* ==============================
-   RENDER: TOPBAR / PERSON
-============================== */
-function renderPersonSelect(){
-  const sel = el("personSelect");
-  sel.innerHTML = "";
-  state.people.forEach(p => {
-    const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.role === "Primary" ? `${p.name} (Primary)` : p.name;
-    sel.appendChild(opt);
-  });
-  sel.value = state.activePersonId;
-  sel.onchange = () => setActivePerson(sel.value);
-}
-
-function renderHeader(){
-  const p = getActivePerson();
-  const age = p.dob ? calcAgeFromDob(p.dob) : "";
-  const bmi = calcBMI(p.heightCm, p.weightKg);
-  const sex = p.sex || "";
-  const parts = [];
-  if(sex) parts.push(sex);
-  if(age) parts.push(`Age ${age}`);
-  if(bmi) parts.push(`BMI ${bmi}`);
-  el("activeName").textContent = (p.role === "Primary" ? p.name : p.name) || "HealthChecker+";
-  el("activeSub").textContent = `Device time • ${parts.join(" • ") || "Profile not set"} • ${BUILD.version}`;
-}
-
-/* ==============================
-   READINGS: UNIFIED TIMELINE
-============================== */
-function getPersonReadingsSorted(p){
-  const arr = Array.isArray(p.readings) ? p.readings.slice() : [];
-  arr.sort((a,b)=> (a.timestamp||0) - (b.timestamp||0));
-  return arr;
-}
-function latestByType(p, type){
-  const arr = getPersonReadingsSorted(p).filter(r => r.type === type);
-  return arr.length ? arr[arr.length-1] : null;
-}
-function latestBP(p){
-  const arr = getPersonReadingsSorted(p).filter(r => r.type === "bp");
-  return arr.length ? arr[arr.length-1] : null;
-}
-function latestSleep(p){
-  const arr = getPersonReadingsSorted(p).filter(r => r.type === "sleep");
-  return arr.length ? arr[arr.length-1] : null;
-}
-function latestLabs(p){
-  const arr = getPersonReadingsSorted(p).filter(r => r.type === "lab");
-  return arr.length ? arr[arr.length-1] : null;
-}
-function latestUrineStool(p){
-  const arr = getPersonReadingsSorted(p).filter(r => r.type === "urine_stool");
-  return arr.length ? arr[arr.length-1] : null;
-}
-
-/* ==============================
-   MOVING HbA1c (default 14 days)
-   Formula: HbA1c = (avg_glucose + 46.7) / 28.7
-============================== */
-function computeMovingA1c(p, days=14){
-  const cutoff = nowEpoch() - days*24*60*60*1000;
-  const gluc = getPersonReadingsSorted(p)
-    .filter(r => r.type === "glucose" && typeof r.value === "number" && r.timestamp >= cutoff);
-
-  if(gluc.length < 1) return null;
-
-  const avg = gluc.reduce((s,r)=> s + r.value, 0) / gluc.length;
-  const a1c = (avg + 46.7)/28.7;
-  return { a1c, avg, points: gluc.length, days };
-}
-
-/* ==============================
-   OVERALL STATUS (simple heuristic)
-============================== */
-function computeOverall(p){
-  const a1c = computeMovingA1c(p, 14);
-  const bp = latestBP(p);
-  const spo2 = latestByType(p,"spo2");
-  const sleep = latestSleep(p);
-  const latestSym = (p.symptomsLog && p.symptomsLog.length) ? p.symptomsLog[p.symptomsLog.length-1] : null;
-
-  let score = 0;
-  let flags = [];
-
-  if(!a1c) score += 1; else {
-    if(a1c.a1c >= 7.5) { score += 3; flags.push("High glucose pattern"); }
-    else if(a1c.a1c >= 6.5) { score += 2; flags.push("Borderline glucose pattern"); }
-  }
-
-  if(bp && bp.systolic && bp.diastolic){
-    if(bp.systolic >= 160 || bp.diastolic >= 100){ score += 3; flags.push("High BP"); }
-    else if(bp.systolic >= 140 || bp.diastolic >= 90){ score += 2; flags.push("Elevated BP"); }
-  } else score += 1;
-
-  if(spo2 && typeof spo2.value === "number"){
-    if(spo2.value < 88){ score += 3; flags.push("Low SpO₂"); }
-    else if(spo2.value < 92){ score += 2; flags.push("Borderline SpO₂"); }
-  }
-
-  if(sleep && typeof sleep.score === "number"){
-    if(sleep.score < 40){ score += 2; flags.push("Low sleep score"); }
-  }
-
-  if(latestSym && latestSym.redFlags && latestSym.redFlags.length){
-    score += 4;
-    flags.push("Red-flag symptoms");
-  }
-
-  let label = "OK";
-  let cls = "ok";
-  if(score >= 6){ label = "ALERT"; cls = "alert"; }
-  else if(score >= 3){ label = "AMBER"; cls = "warn"; }
-
-  return { label, cls, flags };
-}
-
-/* ==============================
-   SNAPSHOT RENDER
-============================== */
-function renderSnapshot(){
-  const p = getActivePerson();
-  const overall = computeOverall(p);
-
-  const ob = el("overallBadge");
-  ob.className = `badge ${overall.cls}`;
-  ob.textContent = `Overall: ${overall.label}`;
-
-  const lb = el("lastUpdatedBadge");
-  lb.textContent = `Last refreshed: ${epochToNice(nowEpoch())}`;
-
-  // Glucose
-  const g = latestByType(p,"glucose");
-  el("snapGlucose").textContent = g ? `${g.value} mg/dL` : "—";
-  el("snapGlucoseSub").textContent = g ? `${g.note ? g.note + " • " : ""}${epochToNice(g.timestamp)}` : "No glucose data yet";
-
-  // HbA1c moving
-  const a = computeMovingA1c(p,14);
-  el("snapA1c").textContent = a ? `${a.a1c.toFixed(2)}%` : "—";
-  el("snapA1cSub").textContent = a ? `Avg glucose ${Math.round(a.avg)} mg/dL • ${a.points} point(s) • last ${a.days}d` : "Add glucose readings to compute";
-
-  // BP
-  const b = latestBP(p);
-  el("snapBP").textContent = b ? `${b.systolic}/${b.diastolic} mmHg${b.pulse?` (P ${b.pulse})`:""}` : "—";
-  el("snapBPSub").textContent = b ? `${b.note ? b.note + " • " : ""}${epochToNice(b.timestamp)}` : "No BP data yet";
-
-  // Sleep
-  const s = latestSleep(p);
-  if(s){
-    const bits = [];
-    if(typeof s.score === "number") bits.push(`Score ${s.score}`);
-    if(typeof s.energy === "number") bits.push(`Energy ${s.energy}`);
-    if(typeof s.minutes === "number") bits.push(`${s.minutes} min`);
-    if(typeof s.rem === "number") bits.push(`REM ${s.rem}m`);
-    if(typeof s.deep === "number") bits.push(`Deep ${s.deep}m`);
-    if(typeof s.awake === "number") bits.push(`Awake ${s.awake}m`);
-    el("snapSleep").textContent = bits.join(" • ");
-    el("snapSleepSub").textContent = `${s.note ? s.note + " • " : ""}${epochToNice(s.timestamp)}`;
-  } else {
-    el("snapSleep").textContent = "—";
-    el("snapSleepSub").textContent = "No sleep data yet";
-  }
-
-  // Labs
-  const lab = latestLabs(p);
-  if(lab){
-    const lines = [];
-    if(lab.egfr) lines.push(`eGFR ${lab.egfr}`);
-    if(lab.creatinine) lines.push(`Cr ${lab.creatinine}`);
-    if(lab.a1cLab) lines.push(`HbA1c ${lab.a1cLab}%`);
-    if(lab.uric) lines.push(`Uric ${lab.uric}`);
-    el("snapLabs").textContent = lines.length ? lines.join(" • ") : "Available";
-    el("snapLabsSub").textContent = `${lab.note ? lab.note + " • " : ""}${epochToNice(lab.timestamp)}`;
-  } else {
-    el("snapLabs").textContent = "—";
-    el("snapLabsSub").textContent = "No lab data yet";
-  }
-
-  // Urine/Stool
-  const us = latestUrineStool(p);
-  if(us){
-    const pieces = [];
-    if(us.urProtein) pieces.push(`Protein ${us.urProtein}`);
-    if(us.urGlucose) pieces.push(`Ur Glu ${us.urGlucose}`);
-    if(us.urBlood) pieces.push(`Blood ${us.urBlood}`);
-    if(us.fit) pieces.push(`FIT ${us.fit}`);
-    if(us.stoolNote) pieces.push(`Stool ${us.stoolNote}`);
-    el("snapUrineStool").textContent = pieces.length ? pieces.join(" • ") : "Available";
-    el("snapUrineStoolSub").textContent = `${us.note ? us.note + " • " : ""}${epochToNice(us.timestamp)}`;
-  } else {
-    el("snapUrineStool").textContent = "—";
-    el("snapUrineStoolSub").textContent = "No urine/stool data yet";
-  }
-
-  // Advice
-  const advice = [];
-  if(overall.flags.length) advice.push(`Signals: ${overall.flags.join(", ")}.`);
-  advice.push("Kidney protection: avoid NSAIDs where possible; prioritize hydration and BP control (as advised by your clinician).");
-  el("snapshotAutoAdvice").textContent = advice.join(" ");
-
-  // Latest symptom analysis box
-  renderLatestSymptomAnalysis();
-}
-
-/* ==============================
-   SYMPTOMS: MODAL LOGIC (FIXED)
-============================== */
-const symModal = {
-  selected: [],
-  area: BODY_AREAS[0],
-  search: "",
-  notes: ""
-};
-
-function openSymModal(){
-  const p = getActivePerson();
-  el("symModalTitle").textContent = `Add Symptoms — ${p.name || "Person"}`;
-  el("symModalBackdrop").style.display = "flex";
-  const areaSel = el("symArea");
-  if(areaSel.options.length === 0){
-    BODY_AREAS.forEach(a=>{
-      const opt = document.createElement("option");
-      opt.value = a; opt.textContent = a;
-      areaSel.appendChild(opt);
-    });
-  }
-  areaSel.value = symModal.area;
-  el("symSearch").value = symModal.search;
-  el("symNotes").value = symModal.notes;
-  renderSymptomList();
-  renderSelectedSymptoms();
-}
-
-function closeSymModal(){
-  el("symModalBackdrop").style.display = "none";
-}
-
-function renderSymptomList(){
-  const list = el("symList");
-  list.innerHTML = "";
-
-  const area = symModal.area;
-  const base = SYMPTOMS_BY_AREA[area] || [];
-  const q = (symModal.search || "").trim().toLowerCase();
-
-  const filtered = q
-    ? base.filter(s => s.label.toLowerCase().includes(q))
-    : base;
-
-  el("symListHint").textContent = filtered.length ? "" : "No symptoms found for this area/search. Try clearing search or changing area.";
-
-  filtered.forEach(s=>{
-    const item = document.createElement("div");
-    item.className = "symptom-item";
-    item.innerHTML = `
-      <div class="left">
-        <div class="label">${escapeHtml(s.label)}</div>
-        <div class="meta">${escapeHtml(area)}</div>
-      </div>
-      ${s.red ? `<div class="rf">RED FLAG</div>` : `<div class="badge" style="padding:4px 8px;font-size:11px;">Tap</div>`}
-    `;
-    item.onclick = ()=> addSelectedSymptom(s);
-    list.appendChild(item);
-  });
-}
-
-function addSelectedSymptom(s){
-  if(!symModal.selected.some(x => x.id === s.id)){
-    symModal.selected.push(s);
-    renderSelectedSymptoms();
-  }
-}
-
-function removeSelectedSymptom(id){
-  symModal.selected = symModal.selected.filter(x => x.id !== id);
-  renderSelectedSymptoms();
-}
-
-function renderSelectedSymptoms(){
-  const wrap = el("symSelected");
-  wrap.innerHTML = "";
-
-  if(symModal.selected.length === 0){
-    el("symSelectedHint").textContent = "No symptoms selected yet.";
-  } else {
-    el("symSelectedHint").textContent = "";
-  }
-
-  symModal.selected.forEach(s=>{
-    const chip = document.createElement("div");
-    chip.className = "chip";
-    chip.innerHTML = `
-      ${escapeHtml(s.label)}
-      ${s.red ? `<span class="rf" style="margin-left:6px;">RED</span>` : ""}
-      <span class="x" title="Remove">×</span>
-    `;
-    chip.querySelector(".x").onclick = ()=> removeSelectedSymptom(s.id);
-    wrap.appendChild(chip);
-  });
-
-  const redFlags = symModal.selected.filter(x=>x.red).map(x=>x.label);
-  const box = el("symRedFlagBox");
-  if(redFlags.length){
-    box.style.display = "block";
-    box.textContent = `Red-flag symptoms selected: ${redFlags.join(", ")}. If these are new/sudden/worsening, seek urgent medical evaluation or emergency services.`;
-  } else {
-    box.style.display = "none";
-  }
-}
-
-function saveSymptoms(){
-  const p = getActivePerson();
-  if(symModal.selected.length === 0){
-    alert("Please select at least one symptom.");
-    return;
-  }
-  const ts = nowEpoch();
-  const entry = {
-    id: uuid(),
-    timestamp: ts,
-    area: symModal.area,
-    symptoms: symModal.selected.map(s=>({id:s.id,label:s.label,red:s.red})),
-    notes: (el("symNotes").value || "").trim(),
-    redFlags: symModal.selected.filter(s=>s.red).map(s=>s.label)
-  };
-  p.symptomsLog = p.symptomsLog || [];
-  p.symptomsLog.push(entry);
-  saveState();
-  closeSymModal();
-  symModal.selected = [];
-  symModal.search = "";
-  el("symSearch").value = "";
-  el("symNotes").value = "";
-  renderAll();
-}
-
-function renderSymptomLog(){
-  const p = getActivePerson();
-  const box = el("symptomLogList");
-  const log = (p.symptomsLog || []).slice().sort((a,b)=>a.timestamp-b.timestamp);
-  if(!log.length){
-    box.textContent = "No symptom entries yet.";
-    return;
-  }
-  const html = log.slice(-12).reverse().map(e=>{
-    const names = e.symptoms.map(s=> s.label + (s.red ? " (RED)" : "")).join(", ");
-    return `<div style="margin-bottom:10px;">
-      <strong>${epochToNice(e.timestamp)}</strong><br/>
-      <span style="color:#5a6b82;">Area:</span> ${escapeHtml(e.area)}<br/>
-      <span style="color:#5a6b82;">Symptoms:</span> ${escapeHtml(names)}<br/>
-      ${e.notes ? `<span style="color:#5a6b82;">Notes:</span> ${escapeHtml(e.notes)}` : ""}
-    </div>`;
-  }).join("");
-  box.innerHTML = html;
-}
-
-function renderLatestSymptomAnalysis(){
-  const p = getActivePerson();
-  const box = el("symptomAnalysisBox");
-  const log = (p.symptomsLog || []).slice().sort((a,b)=>a.timestamp-b.timestamp);
-  if(!log.length){
-    box.textContent = "No symptoms saved yet.";
-    box.className = "note";
-    return;
-  }
-  const last = log[log.length-1];
-  const reds = last.redFlags || [];
-  const summary = [];
-  summary.push(`Latest entry: ${epochToNice(last.timestamp)}.`);
-  summary.push(`Area: ${last.area}.`);
-  summary.push(`Symptoms: ${last.symptoms.map(s=>s.label).join(", ")}.`);
-  if(reds.length){
-    summary.push(`URGENT FLAGS: ${reds.join(", ")}. Seek urgent evaluation if new/sudden/worsening.`);
-  } else {
-    summary.push("No red-flag symptoms detected in the last entry.");
-  }
-  if(last.notes) summary.push(`Notes: ${last.notes}`);
-  box.className = reds.length ? "note danger" : "note";
-  box.textContent = summary.join(" ");
-}
-
-/* ==============================
-   ADD: MANUAL SAVE (writes unified timeline)
-============================== */
-function addReading(reading){
-  const p = getActivePerson();
-  p.readings = p.readings || [];
-  p.readings.push(reading);
-  saveState();
-}
-
-function saveManualEntry(evt){
-  evt.preventDefault();
-
-  const tsOverride = dtLocalToEpoch(el("manualDateTime").value);
-  const ts = tsOverride || nowEpoch();
-
-  const note = (el("inNote").value || "").trim();
-  const trend = el("inTrend").value || "";
-
-  const glucoseVal = parseFloat(el("inGlucose").value);
-  if(Number.isFinite(glucoseVal)){
-    addReading({
-      id: uuid(),
-      type: "glucose",
-      value: Math.round(glucoseVal),
-      unit: "mg/dL",
-      trend,
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  const sys = parseFloat(el("inSys").value);
-  const dia = parseFloat(el("inDia").value);
-  const pulse = parseFloat(el("inPulse").value);
-  if(Number.isFinite(sys) && Number.isFinite(dia)){
-    addReading({
-      id: uuid(),
-      type: "bp",
-      systolic: Math.round(sys),
-      diastolic: Math.round(dia),
-      pulse: Number.isFinite(pulse) ? Math.round(pulse) : null,
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  const sleepScore = parseFloat(el("inSleepScore").value);
-  const energy = parseFloat(el("inEnergy").value);
-  const sleepMin = parseFloat(el("inSleepMin").value);
-  if(Number.isFinite(sleepScore) || Number.isFinite(energy) || Number.isFinite(sleepMin)){
-    addReading({
-      id: uuid(),
-      type: "sleep",
-      score: Number.isFinite(sleepScore) ? Math.round(sleepScore) : null,
-      energy: Number.isFinite(energy) ? Math.round(energy) : null,
-      minutes: Number.isFinite(sleepMin) ? Math.round(sleepMin) : null,
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  const spo2 = parseFloat(el("inSpo2").value);
-  if(Number.isFinite(spo2)){
-    addReading({
-      id: uuid(),
-      type: "spo2",
-      value: Math.round(spo2),
-      unit: "%",
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  const egfr = (el("inEgfr").value || "").trim();
-  const cr = (el("inCr").value || "").trim();
-  const a1cLab = parseFloat(el("inA1cLab").value);
-  const uric = (el("inUric").value || "").trim();
-  const hb = (el("inHb").value || "").trim();
-  const mcv = (el("inMcv").value || "").trim();
-
-  if(egfr || cr || Number.isFinite(a1cLab) || uric || hb || mcv){
-    addReading({
-      id: uuid(),
-      type: "lab",
-      egfr: egfr || null,
-      creatinine: cr || null,
-      a1cLab: Number.isFinite(a1cLab) ? a1cLab : null,
-      uric: uric || null,
-      hb: hb || null,
-      mcv: mcv || null,
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  const urProtein = el("inUrProtein").value || "";
-  const urGlucose = el("inUrGlucose").value || "";
-  const urBlood = el("inUrBlood").value || "";
-  const urKet = el("inUrKet").value || "";
-  const fit = el("inFit").value || "";
-  const stoolNote = (el("inStoolNote").value || "").trim();
-
-  if(urProtein || urGlucose || urBlood || urKet || fit || stoolNote){
-    addReading({
-      id: uuid(),
-      type: "urine_stool",
-      urProtein: urProtein || null,
-      urGlucose: urGlucose || null,
-      urBlood: urBlood || null,
-      urKet: urKet || null,
-      fit: fit || null,
-      stoolNote: stoolNote || null,
-      note,
-      source: "manual",
-      timestamp: ts
-    });
-  }
-
-  el("addForm").reset();
-  el("manualDateTime").value = "";
-  alert("Saved. Snapshot and trends will update now.");
-  renderAll();
-}
-
-/* ==============================
-   ADD: IMAGE SAVE (stores image + timestamp)
-============================== */
-function fileToDataUrl(file){
-  return new Promise((res,rej)=>{
-    const r = new FileReader();
-    r.onload = ()=> res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-async function saveImageToTimeline(){
-  const file = el("imgFile").files && el("imgFile").files[0];
-  if(!file){ alert("Please choose an image file."); return; }
-
-  const hint = el("imgTypeHint").value || "other";
-  const note = (el("imgNote").value || "").trim();
-
-  const overrideTs = dtLocalToEpoch(el("imgDateTime").value);
-  const ts = overrideTs || (file.lastModified ? file.lastModified : nowEpoch());
-
-  const dataUrl = await fileToDataUrl(file);
-
-  addReading({
-    id: uuid(),
-    type: "image_import",
-    hint,
-    note,
-    source: "screenshot",
-    timestamp: ts,
-    image: {
-      name: file.name,
-      mime: file.type,
-      dataUrl
-    }
-  });
-
-  el("imgSavedMsg").style.display = "block";
-  el("imgSavedMsg").textContent = `Saved image to timeline at ${epochToNice(ts)}.`;
-  el("imgFile").value = "";
-  el("imgDateTime").value = "";
-  el("imgNote").value = "";
-  renderAll();
-}
-
-/* ==============================
-   PROFILE SAVE
-============================== */
-function renderProfile(){
-  const p = getActivePerson();
-  el("pName").value = p.name || "";
-  el("pSex").value = p.sex || "";
-  el("pDob").value = p.dob ? new Date(p.dob).toISOString().slice(0,10) : "";
-  el("pHeight").value = p.heightCm || "";
-  el("pWeight").value = p.weightKg || "";
-  el("pConditions").value = p.conditions || "";
-
-  el("pAge").value = p.dob ? calcAgeFromDob(p.dob) : "";
-  el("pBmi").value = calcBMI(p.heightCm, p.weightKg);
-
-  el("aboutBox").innerHTML = `
-    <strong>${BUILD.label}</strong><br/>
-    ${BUILD.app} ${BUILD.version} • Offline-first • GitHub Pages<br/><br/>
-    <strong>Iteration changelog:</strong><br/>
-    <ul style="margin:8px 0 0 18px;">
-      ${BUILD.changelog.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}
-    </ul>
-  `;
-}
-
-function saveProfile(evt){
-  evt.preventDefault();
-  const p = getActivePerson();
-  p.name = (el("pName").value || "").trim() || p.name;
-  p.sex = el("pSex").value || "";
-  const dobEpoch = dateToEpoch(el("pDob").value);
-  p.dob = dobEpoch || null;
-  p.heightCm = (el("pHeight").value || "").trim();
-  p.weightKg = (el("pWeight").value || "").trim();
-  p.conditions = (el("pConditions").value || "").trim();
-
-  saveState();
-  renderAll();
-  alert("Profile saved.");
-}
-
-/* ==============================
-   SIMPLE CHARTS (Canvas)
-============================== */
-function drawLineChart(canvas, series, opts){
-  const ctx = canvas.getContext("2d");
-  const W = canvas.clientWidth;
-  const H = canvas.clientHeight;
-  canvas.width = Math.floor(W * devicePixelRatio);
-  canvas.height = Math.floor(H * devicePixelRatio);
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-
-  ctx.clearRect(0,0,W,H);
-
-  ctx.fillStyle = "#fbfdff";
-  ctx.fillRect(0,0,W,H);
-
-  ctx.strokeStyle = "rgba(219,231,255,.9)";
-  ctx.lineWidth = 1;
-  const pad = 28;
-  const gx = 4, gy = 4;
-  for(let i=0;i<=gx;i++){
-    const x = pad + i*(W-2*pad)/gx;
-    ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,H-pad); ctx.stroke();
-  }
-  for(let j=0;j<=gy;j++){
-    const y = pad + j*(H-2*pad)/gy;
-    ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke();
-  }
-
-  if(!series || series.length < 2){
-    ctx.fillStyle = "#5a6b82";
-    ctx.font = "12px system-ui";
-    ctx.fillText("Not enough data points to plot.", pad, H/2);
-    return;
-  }
-
-  const values = series.map(p=>p.y).filter(v=>Number.isFinite(v));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = (max-min) || 1;
-
-  const xMin = series[0].x;
-  const xMax = series[series.length-1].x;
-  const xSpan = (xMax-xMin) || 1;
-
-  const toX = (x)=> pad + ((x - xMin)/xSpan)*(W-2*pad);
-  const toY = (y)=> (H-pad) - ((y - min)/span)*(H-2*pad);
-
-  ctx.strokeStyle = (opts && opts.color) ? opts.color : "#0b5cff";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(toX(series[0].x), toY(series[0].y));
-  for(let i=1;i<series.length;i++){
-    ctx.lineTo(toX(series[i].x), toY(series[i].y));
-  }
-  ctx.stroke();
-
-  ctx.fillStyle = ctx.strokeStyle;
-  for(const p of series){
-    ctx.beginPath();
-    ctx.arc(toX(p.x), toY(p.y), 3, 0, Math.PI*2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = "#0e1a2a";
-  ctx.font = "12px system-ui";
-  ctx.fillText(`min ${min.toFixed(1)} • max ${max.toFixed(1)}`, pad, 18);
-}
-
-function renderTrends(){
-  const p = getActivePerson();
-  const r = getPersonReadingsSorted(p);
-
-  const glucose = r.filter(x=>x.type==="glucose" && typeof x.value==="number").map(x=>({x:x.timestamp,y:x.value}));
-  const sys = r.filter(x=>x.type==="bp" && typeof x.systolic==="number").map(x=>({x:x.timestamp,y:x.systolic}));
-  const dia = r.filter(x=>x.type==="bp" && typeof x.diastolic==="number").map(x=>({x:x.timestamp,y:x.diastolic}));
-  const sleep = r.filter(x=>x.type==="sleep" && typeof x.score==="number").map(x=>({x:x.timestamp,y:x.score}));
-  const spo2 = r.filter(x=>x.type==="spo2" && typeof x.value==="number").map(x=>({x:x.timestamp,y:x.value}));
-
-  drawLineChart(el("cGlucose"), glucose, {color:"#0b5cff"});
-
-  const bpCanvas = el("cBP");
-  drawLineChart(bpCanvas, sys, {color:"#0b5cff"});
-  if(dia.length >= 2){
-    const ctx = bpCanvas.getContext("2d");
-    const W = bpCanvas.clientWidth;
-    const H = bpCanvas.clientHeight;
-    const pad = 28;
-
-    const values = sys.concat(dia).map(p=>p.y);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = (max-min) || 1;
-
-    const xMin = Math.min(sys[0]?.x||dia[0]?.x, dia[0]?.x||sys[0]?.x);
-    const xMax = Math.max(sys[sys.length-1]?.x||dia[dia.length-1]?.x, dia[dia.length-1]?.x||sys[sys.length-1]?.x);
-    const xSpan = (xMax-xMin) || 1;
-
-    const toX = (x)=> pad + ((x - xMin)/xSpan)*(W-2*pad);
-    const toY = (y)=> (H-pad) - ((y - min)/span)*(H-2*pad);
-
-    ctx.save();
-    ctx.strokeStyle = "#2db7ff";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(toX(dia[0].x), toY(dia[0].y));
-    for(let i=1;i<dia.length;i++) ctx.lineTo(toX(dia[i].x), toY(dia[i].y));
-    ctx.stroke();
-    ctx.fillStyle = "#2db7ff";
-    for(const pnt of dia){
-      ctx.beginPath(); ctx.arc(toX(pnt.x), toY(pnt.y), 3, 0, Math.PI*2); ctx.fill();
-    }
-    ctx.fillStyle = "#5a6b82";
-    ctx.font = "12px system-ui";
-    ctx.fillText("Systolic (dark) / Diastolic (light)", pad, H-10);
-    ctx.restore();
-  }
-
-  drawLineChart(el("cSleep"), sleep, {color:"#0b5cff"});
-  drawLineChart(el("cSpo2"), spo2, {color:"#0b5cff"});
-}
-
-/* ==============================
-   REPORTS
-============================== */
-function clampTo5Years(fromTs, toTs){
-  const maxSpan = 5 * 365 * 24 * 60 * 60 * 1000;
-  if(toTs - fromTs > maxSpan){
-    return {fromTs: toTs - maxSpan, toTs};
-  }
-  return {fromTs, toTs};
-}
-
-function generateReport(){
-  const p = getActivePerson();
-  const preset = el("reportPreset").value;
-  const toTs = nowEpoch();
-  let fromTs = toTs - 7*24*60*60*1000;
-
-  if(preset === "month") fromTs = toTs - 30*24*60*60*1000;
-  if(preset === "year") fromTs = toTs - 365*24*60*60*1000;
-  if(preset === "custom"){
-    const f = dateToEpoch(el("reportFrom").value);
-    const t = dateToEpoch(el("reportTo").value);
-    if(!f || !t){ alert("Please set custom From and To dates."); return; }
-    const clamped = clampTo5Years(f, t + 24*60*60*1000 - 1);
-    fromTs = clamped.fromTs;
-    var toTsLocal = clamped.toTs;
-  }
-
-  const endTs = (preset==="custom") ? (toTsLocal || toTs) : toTs;
-
-  const r = getPersonReadingsSorted(p).filter(x => x.timestamp >= fromTs && x.timestamp <= endTs);
-  const sym = (p.symptomsLog || []).filter(x => x.timestamp >= fromTs && x.timestamp <= endTs);
-
-  const glucose = r.filter(x=>x.type==="glucose" && typeof x.value==="number").map(x=>x.value);
-  const bp = r.filter(x=>x.type==="bp" && typeof x.systolic==="number" && typeof x.diastolic==="number");
-  const sleep = r.filter(x=>x.type==="sleep" && typeof x.score==="number").map(x=>x.score);
-  const spo2 = r.filter(x=>x.type==="spo2" && typeof x.value==="number").map(x=>x.value);
-
-  const avg = arr => arr.length ? (arr.reduce((s,v)=>s+v,0)/arr.length) : null;
-  const min = arr => arr.length ? Math.min(...arr) : null;
-  const max = arr => arr.length ? Math.max(...arr) : null;
-
-  const a1c = computeMovingA1c(p,14);
-
-  const lines = [];
-  lines.push(`<strong>${escapeHtml(p.name || "Person")}</strong> • ${escapeHtml(p.sex||"")} ${p.dob?`• Age ${escapeHtml(calcAgeFromDob(p.dob))}`:""}`);
-  lines.push(`<strong>Report period:</strong> ${escapeHtml(new Date(fromTs).toDateString())} → ${escapeHtml(new Date(endTs).toDateString())}`);
-  lines.push(`<hr style="border:none;border-top:1px solid #dbe7ff;margin:10px 0;">`);
-
-  lines.push(`<strong>Glucose</strong><br/>Points: ${glucose.length} • Avg: ${fmt(avg(glucose))} • Min: ${fmt(min(glucose))} • Max: ${fmt(max(glucose))}`);
-  if(a1c) lines.push(`<br/><strong>Moving HbA1c (last 14d):</strong> ${a1c.a1c.toFixed(2)}% (avg ${Math.round(a1c.avg)} mg/dL)`);
-  lines.push(`<br/><br/>`);
-
-  lines.push(`<strong>Blood Pressure</strong><br/>Points: ${bp.length}`);
-  if(bp.length){
-    const sysArr = bp.map(x=>x.systolic);
-    const diaArr = bp.map(x=>x.diastolic);
-    lines.push(`<br/>Systolic Avg: ${fmt(avg(sysArr))} • Min: ${fmt(min(sysArr))} • Max: ${fmt(max(sysArr))}`);
-    lines.push(`<br/>Diastolic Avg: ${fmt(avg(diaArr))} • Min: ${fmt(min(diaArr))} • Max: ${fmt(max(diaArr))}`);
-  }
-  lines.push(`<br/><br/>`);
-
-  lines.push(`<strong>Sleep</strong><br/>Points: ${sleep.length} • Avg score: ${fmt(avg(sleep))} • Min: ${fmt(min(sleep))} • Max: ${fmt(max(sleep))}`);
-  lines.push(`<br/><br/>`);
-
-  lines.push(`<strong>SpO₂</strong><br/>Points: ${spo2.length} • Avg: ${fmt(avg(spo2))} • Min: ${fmt(min(spo2))} • Max: ${fmt(max(spo2))}`);
-  lines.push(`<br/><br/>`);
-
-  lines.push(`<strong>Symptoms</strong><br/>Entries: ${sym.length}`);
-  if(sym.length){
-    const last = sym.slice().sort((a,b)=>a.timestamp-b.timestamp).pop();
-    lines.push(`<br/>Latest: ${escapeHtml(epochToNice(last.timestamp))} • ${escapeHtml(last.symptoms.map(s=>s.label).join(", "))}`);
-    if(last.redFlags && last.redFlags.length) lines.push(`<br/><span style="color:#8f1a14;font-weight:900;">Red flags: ${escapeHtml(last.redFlags.join(", "))}</span>`);
-  }
-  lines.push(`<br/><br/>`);
-
-  lines.push(`<div class="note danger" style="margin-top:10px;">This report is an informational summary of your inputs, not a medical diagnosis. Seek clinical advice for urgent or worsening symptoms.</div>`);
-
-  el("reportOutput").innerHTML = lines.join("");
-}
-
-function fmt(v){
-  if(v === null || v === undefined) return "—";
-  if(!Number.isFinite(v)) return String(v);
-  return v.toFixed(1);
-}
-
-/* ==============================
-   JSON EXPORT/IMPORT
-============================== */
-function exportJson(){
-  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `HCPLUS_backup_${BUILD.version}_iter${BUILD.iteration}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function importJsonFile(){
-  el("importJsonFile").click();
-}
-
-function handleImportFile(){
-  const f = el("importJsonFile").files && el("importJsonFile").files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = ()=>{
-    try{
-      const parsed = JSON.parse(r.result);
-      if(!parsed.people || !Array.isArray(parsed.people)) throw new Error("Invalid file");
-      state = parsed;
-      if(!state.activePersonId || !state.people.some(p=>p.id===state.activePersonId)){
-        state.activePersonId = state.people[0].id;
+  <div id="app"></div>
+
+  <script>
+    (function () {
+      const APP_NAME = "HealthChecker+";
+      const APP_VERSION = "One-File GI Dashboard v1.0.0";
+
+      // LocalStorage keys
+      const LS = {
+        USERS: "hc_users_v1",
+        ACTIVE_USER: "hc_active_user_v1",
+        GI_PREFIX: "hc_gi_entries_v1_", // + userId
+      };
+
+      const DEFAULT_USERS = [{ id: "me", name: "Me" }];
+
+      const DEFAULT_RED_FLAGS = {
+        blood: false,
+        blackTarry: false,
+        fever: false,
+        severePain: false,
+        vomiting: false,
+        weightLoss: false,
+        wateryOver48h: false,
+      };
+
+      function uid() { return `${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+      function clampInt(v, min, max) {
+        const n = Number.isFinite(+v) ? Math.floor(+v) : min;
+        return Math.max(min, Math.min(max, n));
       }
-      saveState();
-      renderAll();
-      alert("Import completed.");
-    }catch(e){
-      alert("Import failed. Please select a valid HC+ JSON backup.");
-    }
-  };
-  r.readAsText(f);
-}
+      function safeParse(json, fallback) { try { return JSON.parse(json) ?? fallback; } catch { return fallback; } }
+      function fmtDateTime(iso) { try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+      function qs(sel, root=document){ return root.querySelector(sel); }
+      function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+      function setHTML(el, html){ el.innerHTML = html; }
+      function escapeHtml(s){
+        return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+      }
 
-function clearActivePersonData(){
-  if(!confirm("Clear ALL readings and symptoms for the active person? This cannot be undone unless you exported a backup.")) return;
-  const p = getActivePerson();
-  p.readings = [];
-  p.symptomsLog = [];
-  saveState();
-  renderAll();
-}
+      function triageStyle(triage){
+        if (triage === "URGENT") return "badge urgent";
+        if (triage === "SOON") return "badge soon";
+        if (triage === "ROUTINE") return "badge routine";
+        return "badge stable";
+      }
 
-/* ==============================
-   NAV / VIEW SWITCH
-============================== */
-function showView(name){
-  Object.keys(views).forEach(k=>{
-    views[k].style.display = (k===name) ? "block" : "none";
-  });
-  document.querySelectorAll(".tab").forEach(t=>{
-    // Only set active for internal tabs
-    if(t.dataset && t.dataset.view){
-      t.classList.toggle("active", t.dataset.view === name);
-    }
-  });
+      function computeGiStability(entry){
+        const bristol = clampInt(entry.bristol, 1, 7);
+        const frequency = clampInt(entry.frequency, 0, 20);
+        const urgency = entry.urgency || "none";
+        const pain = entry.pain || "none";
+        const durationDays = clampInt(entry.durationDays, 0, 365);
+        const urineColor = clampInt(entry.urineColor || 0, 0, 8);
+        const rf = entry.redFlags || DEFAULT_RED_FLAGS;
 
-  if(name === "trends") renderTrends();
-  if(name === "profile") renderProfile();
-  if(name === "symptoms") renderSymptomLog();
-}
+        const anyRedFlag = Object.values(rf).some(Boolean);
 
-function wireTabs(){
-  document.querySelectorAll(".tab").forEach(t=>{
-    // External link tab (GI) should not run tab switching logic
-    if(t.dataset && t.dataset.external === "1"){
-      t.addEventListener("click", (e)=>{
-        // Let the browser navigate normally to gi.html
+        let triageOverride = null;
+        if (anyRedFlag) {
+          if (rf.blackTarry || rf.blood || rf.severePain || rf.vomiting) triageOverride = "URGENT";
+          else if (rf.fever || rf.wateryOver48h || rf.weightLoss) triageOverride = "SOON";
+          else triageOverride = "SOON";
+        }
+
+        let score = 100;
+        const bristolPenalty = { 4:0, 3:5, 5:10, 2:15, 6:20, 1:25, 7:30 };
+        score -= (bristolPenalty[bristol] ?? 15);
+
+        // frequency / day (simple heuristic)
+        if (frequency === 0) score -= 15;
+        else if (frequency === 3) score -= 5;
+        else if (frequency >= 4 && frequency <= 5) score -= 10;
+        else if (frequency >= 6) score -= 20;
+
+        if (urgency === "sometimes") score -= 5;
+        else if (urgency === "often") score -= 15;
+
+        if (pain === "mild") score -= 5;
+        else if (pain === "moderate") score -= 10;
+        else if (pain === "severe") score -= 20;
+
+        if (durationDays >= 2 && durationDays <= 3) score -= 5;
+        else if (durationDays >= 4 && durationDays <= 7) score -= 10;
+        else if (durationDays > 7) score -= 15;
+
+        // hydration proxy
+        if (urineColor >= 4 && urineColor <= 5) score -= 5;
+        else if (urineColor >= 6 && urineColor <= 8) score -= 10;
+
+        score = clampInt(score, 0, 100);
+
+        let band = "Stable";
+        if (score < 40) band = "Highly unstable";
+        else if (score < 60) band = "Unstable";
+        else if (score < 80) band = "Mildly unstable";
+
+        let triage = "ROUTINE";
+        if (triageOverride) triage = triageOverride;
+        else {
+          if (score < 40) triage = "SOON";
+          else if (score < 60 && durationDays >= 4) triage = "SOON";
+          else if (score >= 80) triage = "STABLE";
+          else triage = "ROUTINE";
+        }
+
+        const summary = `Bristol ${bristol}, ${frequency}/day, urgency: ${urgency}, pain: ${pain}, red flags: ${anyRedFlag ? "yes" : "no"}.`;
+        return { score, band, triage, summary, anyRedFlag };
+      }
+
+      function buildActionPlan(entry, computed){
+        const bristol = clampInt(entry.bristol, 1, 7);
+
+        if (computed.triage === "URGENT") {
+          return [
+            "Urgent pattern detected (red flags). Seek urgent medical assessment.",
+            "Hydrate in small frequent sips while arranging care if safe.",
+            "Avoid NSAIDs (ibuprofen/naproxen) unless clinician-approved (kidney safety).",
+          ];
+        }
+        if (computed.triage === "SOON") {
+          return [
+            "Concerning or persistent pattern. Arrange prompt clinical review (24–72h).",
+            "Prioritize hydration; consider oral rehydration solution if stools are loose.",
+            "Avoid heavy/fatty meals and alcohol until stable.",
+          ];
+        }
+        if (bristol === 1 || bristol === 2) {
+          return [
+            "Constipation tendency: increase water and add fiber gradually (vegetables; psyllium if tolerated).",
+            "Gentle daily activity (10–20 minutes walking).",
+            "Escalate if pain, bleeding, or no stool >3 days.",
+          ];
+        }
+        if (bristol === 6 || bristol === 7) {
+          return [
+            "Diarrhea tendency: prioritize hydration; consider electrolytes.",
+            "Reduce greasy/high-fat foods, very spicy meals, excess caffeine temporarily.",
+            "Escalate if watery diarrhea >48h (or >24h with dehydration/CKD risk).",
+          ];
+        }
+        return [
+          "Maintain: Types 3–4 are typically the target range.",
+          "If urgency/pain persists, review trigger foods and hydration.",
+          "Reassess if new red flags appear.",
+        ];
+      }
+
+      function loadUsers(){
+        const stored = safeParse(localStorage.getItem(LS.USERS), null);
+        if (Array.isArray(stored) && stored.length) return stored;
+        localStorage.setItem(LS.USERS, JSON.stringify(DEFAULT_USERS));
+        localStorage.setItem(LS.ACTIVE_USER, "me");
+        return DEFAULT_USERS;
+      }
+      function saveUsers(users){ localStorage.setItem(LS.USERS, JSON.stringify(users)); }
+      function loadActiveUserId(){ return localStorage.getItem(LS.ACTIVE_USER) || "me"; }
+      function setActiveUserId(id){ localStorage.setItem(LS.ACTIVE_USER, id); }
+      function giKey(userId){ return LS.GI_PREFIX + userId; }
+      function loadEntries(userId){
+        const arr = safeParse(localStorage.getItem(giKey(userId)), []);
+        return Array.isArray(arr) ? arr : [];
+      }
+      function saveEntries(userId, entries){
+        localStorage.setItem(giKey(userId), JSON.stringify(entries));
+      }
+
+      let state = {
+        tab: "SNAPSHOT",
+        users: loadUsers(),
+        activeUserId: loadActiveUserId(),
+        entries: [],
+      };
+      state.entries = loadEntries(state.activeUserId);
+
+      // enrich older entries if needed
+      state.entries = state.entries.map(e=>{
+        if (e.computed && typeof e.computed.score === "number") return e;
+        const computed = computeGiStability(e);
+        computed.actionPlan = buildActionPlan(e, computed);
+        return { ...e, computed };
       });
-      return;
-    }
-    if(!t.dataset || !t.dataset.view) return;
-    t.onclick = ()=> showView(t.dataset.view);
-  });
-}
+      saveEntries(state.activeUserId, state.entries);
 
-/* ==============================
-   FAMILY BUTTON (simple helper)
-============================== */
-function familyManage(){
-  alert("To manage Family (up to 10): use the Person dropdown to select a dependant, then open Profile tab to set name/sex/DOB/height/weight/conditions.");
-}
+      const root = document.getElementById("app");
 
-/* ==============================
-   QUICK ACTION BUTTONS
-============================== */
-function wireQuickActions(){
-  el("quickAddReading").onclick = ()=> showView("add");
-  el("quickAddSymptoms").onclick = ()=> openSymModal();
-  el("quickViewTrends").onclick = ()=> showView("trends");
+      function tabBtn(tab, active, label){
+        const text = label || tab[0] + tab.slice(1).toLowerCase();
+        return `<button type="button" data-tab="${tab}" class="${tab === active ? "active" : ""}">${text}</button>`;
+      }
 
-  el("bottomAdd").onclick = ()=> showView("add");
-  el("bottomSymptoms").onclick = ()=> openSymModal();
-  el("bottomReport").onclick = ()=> showView("reports");
-}
+      function render(){
+        const activeUser = state.users.find(u => u.id === state.activeUserId) || state.users[0];
+        const latest = state.entries[0] || null;
 
-/* ==============================
-   HELPERS
-============================== */
-function escapeHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  })[m]);
-}
+        setHTML(root, `
+          <div class="topbar">
+            <div class="row" style="justify-content:space-between;">
+              <div>
+                <div class="title">${APP_NAME} — GI / Stool</div>
+                <div class="sub">${APP_VERSION}</div>
+              </div>
+              <div class="row">
+                <span class="sub">Local-only storage</span>
+              </div>
+            </div>
 
-/* ==============================
-   EVENT WIRING
-============================== */
-function wireEvents(){
-  el("addForm").addEventListener("submit", saveManualEntry);
-  el("saveImageBtn").onclick = saveImageToTimeline;
+            <div class="row" style="margin-top:10px;">
+              <div>
+                <div class="label">Active person</div>
+                <div class="row">
+                  <select id="personSelect">
+                    ${state.users.map(u => `<option value="${u.id}" ${u.id===state.activeUserId?"selected":""}>${escapeHtml(u.name)}</option>`).join("")}
+                  </select>
+                  <input id="newPersonName" placeholder="Add person name" />
+                  <button class="btn" type="button" id="addPersonBtn">Add</button>
+                  <button class="btn" type="button" id="delPersonBtn" ${state.activeUserId==="me"?"disabled":""}>Delete person</button>
+                </div>
+              </div>
 
-  el("profileForm").addEventListener("submit", saveProfile);
+              <div class="tabs row" style="margin-left:auto;">
+                ${tabBtn("SNAPSHOT", state.tab)}
+                ${tabBtn("ADD", state.tab, "Add GI Entry")}
+                ${tabBtn("TRENDS", state.tab)}
+                ${tabBtn("HISTORY", state.tab)}
+              </div>
+            </div>
+          </div>
 
-  el("openSymptomsModal").onclick = openSymModal;
-  el("viewLatestSymptomAnalysis").onclick = ()=> { showView("snapshot"); window.scrollTo({top:0,behavior:"smooth"}); };
+          <div class="wrap">
+            ${state.tab==="SNAPSHOT" ? viewSnapshot(activeUser, latest) : ""}
+            ${state.tab==="ADD" ? viewAdd() : ""}
+            ${state.tab==="TRENDS" ? viewTrends(activeUser) : ""}
+            ${state.tab==="HISTORY" ? viewHistory(activeUser) : ""}
+          </div>
 
-  el("symArea").onchange = ()=>{
-    symModal.area = el("symArea").value;
-    renderSymptomList();
-  };
-  el("symSearch").oninput = ()=>{
-    symModal.search = el("symSearch").value || "";
-    renderSymptomList();
-  };
-  el("symClear").onclick = ()=>{
-    symModal.selected = [];
-    el("symNotes").value = "";
-    renderSelectedSymptoms();
-  };
-  el("symSave").onclick = saveSymptoms;
-  el("closeSymModal").onclick = closeSymModal;
-  el("symModalBackdrop").onclick = (e)=> { if(e.target.id === "symModalBackdrop") closeSymModal(); };
+          <div class="footer wrap">
+            <div class="sub">GI records are stored locally on this device (LocalStorage). Clearing browser data clears history.</div>
+          </div>
+        `);
 
-  el("familyBtn").onclick = familyManage;
+        wireEvents();
+      }
 
-  el("reportPreset").onchange = ()=>{
-    el("customReportDates").style.display = (el("reportPreset").value === "custom") ? "grid" : "none";
-  };
-  el("generateReportBtn").onclick = generateReport;
-  el("printReportBtn").onclick = ()=> window.print();
+      function viewSnapshot(user, latest){
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">GI Stability (Latest)</div>
+              ${!latest ? `
+                <div>No GI entries for ${escapeHtml(user.name)} yet.</div>
+                <div class="hr"></div>
+                <button class="btn btnPrimary" type="button" id="goAddFromSnapshot">Add first GI entry</button>
+              ` : `
+                <div class="kvs">
+                  <div class="kv"><div class="label">Timestamp</div><div class="val">${fmtDateTime(latest.ts)}</div></div>
+                  <div class="kv"><div class="label">Bristol</div><div class="val">${latest.bristol}</div></div>
+                  <div class="kv"><div class="label">Frequency</div><div class="val">${latest.frequency}/day</div></div>
+                </div>
 
-  el("exportJsonBtn").onclick = exportJson;
-  el("importJsonBtn").onclick = importJsonFile;
-  el("importJsonFile").onchange = handleImportFile;
-  el("clearPersonBtn").onclick = clearActivePersonData;
-}
+                <div class="${triageStyle(latest.computed.triage)}">${latest.computed.triage}</div>
 
-/* ==============================
-   RENDER ALL
-============================== */
-function renderAll(){
-  renderPersonSelect();
-  renderHeader();
-  renderSnapshot();
-  const activeTab = document.querySelector(".tab.active")?.dataset.view || "snapshot";
-  if(activeTab === "trends") renderTrends();
-  if(activeTab === "profile") renderProfile();
-  if(activeTab === "symptoms") renderSymptomLog();
-}
+                <div class="kvs">
+                  <div class="kv"><div class="label">Score</div><div class="val">${latest.computed.score}/100</div></div>
+                  <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(latest.computed.band)}</div></div>
+                  <div class="kv"><div class="label">Red flags</div><div class="val">${latest.computed.anyRedFlag ? "Yes":"No"}</div></div>
+                </div>
 
-function init(){
-  wireTabs();
-  wireQuickActions();
-  wireEvents();
+                <div class="hr"></div>
+                <div class="label">Summary</div>
+                <div>${escapeHtml(latest.computed.summary)}</div>
 
-  const symAreaSel = el("symArea");
-  symAreaSel.innerHTML = "";
-  BODY_AREAS.forEach(a=>{
-    const opt = document.createElement("option");
-    opt.value = a; opt.textContent = a;
-    symAreaSel.appendChild(opt);
-  });
+                <div class="hr"></div>
+                <div class="label">Recommended actions</div>
+                <ul>${(latest.computed.actionPlan||[]).map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
+              `}
+            </div>
 
-  symModal.area = BODY_AREAS[0];
+            <div class="card">
+              <div class="h">Bristol Stool Types (Reference)</div>
+              <div>Types 3–4 are usually the target.</div>
+              <ul>
+                <li>Type 1: Hard separate pellets — constipation</li>
+                <li>Type 2: Lumpy sausage — constipation tendency</li>
+                <li>Type 3: Sausage with cracks — generally OK</li>
+                <li>Type 4: Smooth, soft, snake-like — ideal</li>
+                <li>Type 5: Soft blobs — mild looseness</li>
+                <li>Type 6: Mushy, ragged — diarrhea tendency</li>
+                <li>Type 7: Watery — significant diarrhea</li>
+              </ul>
+              <div class="hr"></div>
+              <div class="sub">Note: This is a self-tracking aid, not a diagnosis tool.</div>
+            </div>
+          </div>
+        `;
+      }
 
-  renderAll();
-  showView("snapshot");
-}
+      function viewAdd(){
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">Add GI Entry (Stool Analysis)</div>
 
-init();
-</script>
+              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+                ${fieldSelect("Bristol stool type (1–7)", "bristol", [1,2,3,4,5,6,7], 4)}
+                ${fieldNumber("Frequency (stools/day)", "frequency", 1, 0, 20)}
+                ${fieldSelect("Urgency", "urgency", ["none","sometimes","often"], "none")}
+                ${fieldSelect("Pain with stool", "pain", ["none","mild","moderate","severe"], "none")}
+                ${fieldNumber("How many days has this pattern persisted?", "durationDays", 1, 0, 365)}
+                ${fieldNumber("Hydration proxy: urine color (1–8) (optional)", "urineColor", 3, 0, 8)}
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Red flags (check any that apply)</div>
+              <div class="checkgrid">
+                ${check("blood", "Visible blood in stool")}
+                ${check("blackTarry", "Black/tarry stool")}
+                ${check("fever", "Fever")}
+                ${check("severePain", "Severe abdominal pain")}
+                ${check("vomiting", "Persistent vomiting")}
+                ${check("weightLoss", "Unintentional weight loss")}
+                ${check("wateryOver48h", "Watery diarrhea >48 hours")}
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Notes (optional)</div>
+              <textarea id="notes" placeholder="e.g., spicy meal, new medication, travel, stress, etc."></textarea>
+
+              <div class="row" style="margin-top:10px;">
+                <button class="btn btnPrimary" type="button" id="saveGiBtn">Save GI Entry</button>
+                <button class="btn" type="button" id="resetGiBtn">Reset</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h">Live Preview (Score + Triage)</div>
+              <div id="previewBox"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewTrends(user){
+        const last14 = state.entries.slice(0,14).reverse(); // older -> newer for display
+        if (!last14.length){
+          return `<div class="grid"><div class="card"><div class="h">Trends</div><div>No entries yet for ${escapeHtml(user.name)}.</div></div></div>`;
+        }
+
+        const scores = last14.map(e=>e.computed.score);
+        const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+
+        const counts = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
+        last14.forEach(e=>{ counts[e.bristol]=(counts[e.bristol]||0)+1; });
+
+        const triageCounts = {URGENT:0, SOON:0, ROUTINE:0, STABLE:0};
+        last14.forEach(e=>{
+          const t = (e.computed?.triage || "ROUTINE").toUpperCase();
+          triageCounts[t] = (triageCounts[t] || 0) + 1;
+        });
+
+        const last = last14[last14.length-1];
+        const first = last14[0];
+
+        const delta = (last?.computed?.score ?? 0) - (first?.computed?.score ?? 0);
+
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">Trends (Last 14 entries)</div>
+
+              <div class="kvs">
+                <div class="kv"><div class="label">Entries</div><div class="val">${last14.length}</div></div>
+                <div class="kv"><div class="label">Average score</div><div class="val">${avg}/100</div></div>
+                <div class="kv"><div class="label">Latest score</div><div class="val">${scores[scores.length-1]}/100</div></div>
+                <div class="kv"><div class="label">Change (first→latest)</div><div class="val">${delta >= 0 ? "+" : ""}${delta}</div></div>
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Score trend (older → newer)</div>
+              <div class="mono">${scores.map(s=>`<span style="margin-right:10px;">${s}</span>`).join("")}</div>
+
+              <div class="hr"></div>
+              <div class="label">Bristol distribution (count)</div>
+              <div class="kvs">
+                ${Object.keys(counts).map(k=>`<div class="kv"><div class="label">T${k}</div><div class="val">${counts[k]}</div></div>`).join("")}
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Triage distribution (count)</div>
+              <div class="kvs">
+                ${Object.keys(triageCounts).map(k=>`<div class="kv"><div class="label">${k}</div><div class="val">${triageCounts[k] || 0}</div></div>`).join("")}
+              </div>
+
+              <div class="hr"></div>
+              <button class="btn" type="button" id="clearAllBtn">Clear all GI entries</button>
+            </div>
+
+            <div class="card">
+              <div class="h">Kidney-aware note</div>
+              <ul>
+                <li>Loose stools (Types 6–7) can increase dehydration risk, which may worsen BP and kidney markers temporarily.</li>
+                <li>Constipation (Types 1–2) often improves with water + gradual fiber; avoid aggressive laxatives unless clinician-approved.</li>
+                <li>Blood or black/tarry stool, or severe pain/vomiting = urgent evaluation.</li>
+              </ul>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewHistory(user){
+        if (!state.entries.length){
+          return `<div class="grid"><div class="card"><div class="h">GI History (${escapeHtml(user.name)})</div><div>No entries yet.</div></div></div>`;
+        }
+
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">GI History (${escapeHtml(user.name)})</div>
+              <div class="row" style="margin-bottom:10px;">
+                <button class="btn" type="button" id="clearAllBtn">Clear all</button>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                ${state.entries.map(e=>{
+                  const c=e.computed || {};
+                  return `
+                    <div class="entry">
+                      <div class="row">
+                        <div class="${triageStyle((c.triage||"ROUTINE").toUpperCase())}" style="margin:0;">
+                          ${(c.triage||"ROUTINE").toUpperCase()}
+                        </div>
+                        <div class="sub">${e.ts ? fmtDateTime(e.ts) : ""}</div>
+                      </div>
+
+                      <div style="margin-top:8px;">
+                        <b>Score:</b> ${typeof c.score==="number" ? c.score : "—"}/100
+                        — <b>Band:</b> ${escapeHtml(c.band || "—")}
+                      </div>
+
+                      <div style="margin-top:6px;">${escapeHtml(c.summary || "")}</div>
+                      ${e.notes ? `<div style="margin-top:6px;"><b>Notes:</b> ${escapeHtml(e.notes)}</div>` : ""}
+
+                      <div class="row" style="margin-top:10px;">
+                        <button class="btn" type="button" data-remove="${e.id}">Remove</button>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function fieldSelect(label, id, options, defaultValue){
+        const opts = options.map(o=>{
+          const v=String(o); const sel=(v===String(defaultValue))?"selected":"";
+          return `<option value="${escapeHtml(v)}" ${sel}>${escapeHtml(v)}</option>`;
+        }).join("");
+        return `<div><div class="label">${escapeHtml(label)}</div><select id="${escapeHtml(id)}">${opts}</select></div>`;
+      }
+      function fieldNumber(label, id, defaultValue, min, max){
+        return `<div><div class="label">${escapeHtml(label)}</div><input id="${escapeHtml(id)}" type="number" value="${defaultValue}" min="${min}" max="${max}"></div>`;
+      }
+      function check(id, label){
+        return `<label class="check"><input type="checkbox" id="${escapeHtml(id)}"><span>${escapeHtml(label)}</span></label>`;
+      }
+
+      function collectForm(includeNotes){
+        const bristol = clampInt(qs("#bristol")?.value ?? 4, 1, 7);
+        const frequency = clampInt(qs("#frequency")?.value ?? 1, 0, 20);
+        const urgency = qs("#urgency")?.value ?? "none";
+        const pain = qs("#pain")?.value ?? "none";
+        const durationDays = clampInt(qs("#durationDays")?.value ?? 1, 0, 365);
+        const urineColor = clampInt(qs("#urineColor")?.value ?? 0, 0, 8);
+
+        const redFlags = {
+          blood: !!qs("#blood")?.checked,
+          blackTarry: !!qs("#blackTarry")?.checked,
+          fever: !!qs("#fever")?.checked,
+          severePain: !!qs("#severePain")?.checked,
+          vomiting: !!qs("#vomiting")?.checked,
+          weightLoss: !!qs("#weightLoss")?.checked,
+          wateryOver48h: !!qs("#wateryOver48h")?.checked,
+        };
+
+        const entry = { bristol, frequency, urgency, pain, durationDays, urineColor, redFlags };
+        entry.notes = includeNotes ? (qs("#notes")?.value || "").slice(0,1000) : "";
+        return entry;
+      }
+
+      function setDefaultForm(){
+        const setVal=(id,v)=>{ const el=qs("#"+id); if(el) el.value=v; };
+        setVal("bristol",4); setVal("frequency",1); setVal("urgency","none"); setVal("pain","none");
+        setVal("durationDays",1); setVal("urineColor",3);
+        const notes=qs("#notes"); if(notes) notes.value="";
+        ["blood","blackTarry","fever","severePain","vomiting","weightLoss","wateryOver48h"].forEach(id=>{
+          const el=qs("#"+id); if(el) el.checked=false;
+        });
+        const first=qs("#bristol"); if(first) first.dispatchEvent(new Event("change"));
+      }
+
+      function wireEvents(){
+        // Tabs
+        qsa(".tabs button").forEach(b=>{
+          b.addEventListener("click", ()=>{
+            state.tab = b.getAttribute("data-tab");
+            render();
+          });
+        });
+
+        // Person select
+        const personSelect=qs("#personSelect");
+        if(personSelect){
+          personSelect.addEventListener("change", ()=>{
+            state.activeUserId = personSelect.value;
+            setActiveUserId(state.activeUserId);
+            state.entries = loadEntries(state.activeUserId);
+            render();
+          });
+        }
+
+        // Add person
+        const addBtn=qs("#addPersonBtn");
+        if(addBtn){
+          addBtn.addEventListener("click", ()=>{
+            const name=(qs("#newPersonName")?.value||"").trim();
+            if(!name) return;
+            const id=uid();
+            state.users.push({id, name});
+            saveUsers(state.users);
+            state.activeUserId=id;
+            setActiveUserId(id);
+            state.entries=loadEntries(id);
+            const n=qs("#newPersonName"); if(n) n.value="";
+            render();
+          });
+        }
+
+        // Delete person
+        const delBtn=qs("#delPersonBtn");
+        if(delBtn){
+          delBtn.addEventListener("click", ()=>{
+            if(state.activeUserId==="me") return;
+            if(!confirm("Delete this person and all their GI entries?")) return;
+            const id=state.activeUserId;
+            state.users = state.users.filter(u=>u.id!==id);
+            saveUsers(state.users);
+            localStorage.removeItem(giKey(id));
+            state.activeUserId="me";
+            setActiveUserId("me");
+            state.entries=loadEntries("me");
+            render();
+          });
+        }
+
+        // Snapshot -> Add
+        const goAdd=qs("#goAddFromSnapshot");
+        if(goAdd) goAdd.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
+
+        // Live preview
+        const previewBox=qs("#previewBox");
+        const bindPreview=()=>{
+          if(!previewBox) return;
+          const entry=collectForm(false);
+          const computed=computeGiStability(entry);
+          computed.actionPlan=buildActionPlan(entry, computed);
+          setHTML(previewBox, `
+            <div class="${triageStyle(computed.triage)}" style="margin:0 0 10px 0;">${computed.triage}</div>
+            <div class="kvs">
+              <div class="kv"><div class="label">Score</div><div class="val">${computed.score}/100</div></div>
+              <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(computed.band)}</div></div>
+              <div class="kv"><div class="label">Red flags</div><div class="val">${computed.anyRedFlag ? "Yes":"No"}</div></div>
+            </div>
+            <div class="hr"></div>
+            <div class="label">Summary</div>
+            <div>${escapeHtml(computed.summary)}</div>
+            <div class="hr"></div>
+            <div class="label">Actions</div>
+            <ul>${computed.actionPlan.map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
+          `);
+        };
+
+        ["bristol","frequency","urgency","pain","durationDays","urineColor","notes",
+         "blood","blackTarry","fever","severePain","vomiting","weightLoss","wateryOver48h"
+        ].forEach(id=>{
+          const el=qs("#"+id);
+          if(el){
+            el.addEventListener("input", bindPreview);
+            el.addEventListener("change", bindPreview);
+          }
+        });
+        if(previewBox) bindPreview();
+
+        // Save
+        const saveBtn=qs("#saveGiBtn");
+        if(saveBtn){
+          saveBtn.addEventListener("click", ()=>{
+            const entry=collectForm(true);
+            const computed=computeGiStability(entry);
+            computed.actionPlan=buildActionPlan(entry, computed);
+
+            const stored={ id:uid(), ts:new Date().toISOString(), ...entry, computed };
+            state.entries=[stored, ...state.entries];
+            saveEntries(state.activeUserId, state.entries);
+
+            state.tab="SNAPSHOT";
+            render();
+          });
+        }
+
+        // Reset
+        const resetBtn=qs("#resetGiBtn");
+        if(resetBtn) resetBtn.addEventListener("click", setDefaultForm);
+
+        // Clear all (appears in Trends + History)
+        const clearAllBtn=qs("#clearAllBtn");
+        if(clearAllBtn){
+          clearAllBtn.addEventListener("click", ()=>{
+            if(!confirm("Clear ALL GI entries for this person? This cannot be undone.")) return;
+            state.entries=[];
+            saveEntries(state.activeUserId, state.entries);
+            render();
+          });
+        }
+
+        // Remove single (History)
+        qsa("[data-remove]").forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            const id=btn.getAttribute("data-remove");
+            state.entries = state.entries.filter(e=>e.id!==id);
+            saveEntries(state.activeUserId, state.entries);
+            render();
+          });
+        });
+      }
+
+      render();
+    })();
+  </script>
 </body>
 </html>
