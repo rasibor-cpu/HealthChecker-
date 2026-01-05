@@ -1,150 +1,195 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0b0f14" />
-<title>HealthChecker+ — GI</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>HealthChecker+ — GI</title>
 
-<style>
-:root{color-scheme:dark}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0f14;color:#e9eef5}
-.wrap{max-width:1100px;margin:0 auto;padding:16px}
-.topbar{position:sticky;top:0;background:#0b0f14;border-bottom:1px solid #1b2430;padding:14px 16px}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.tabs button{border:1px solid #223043;background:#0f1620;color:#e9eef5;padding:9px 10px;border-radius:10px;cursor:pointer}
-.tabs button.active{border-color:#6a4d00;background:#16120a}
-.card{border:1px solid #1b2430;background:#0f1620;border-radius:14px;padding:14px}
-.h{font-weight:800;margin-bottom:10px}
-.btn{border:1px solid #223043;background:#0b0f14;color:#e9eef5;padding:10px 12px;border-radius:10px;cursor:pointer}
-.btnPrimary{border-color:#6a4d00;background:#16120a;font-weight:800}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
-.label{opacity:.75;font-size:12px}
-.kvs{display:flex;gap:12px;flex-wrap:wrap}
-.kv{min-width:140px}
-.hr{height:1px;background:#1b2430;margin:12px 0}
-.badge{padding:6px 10px;border-radius:999px;font-weight:800;font-size:12px}
-.badge.stable{background:#1f5a2a}
-.badge.routine{background:#143b5a}
-.badge.soon{background:#6b4d00}
-.badge.urgent{background:#5c1a1a}
-</style>
+  <style>
+    :root{ color-scheme: dark; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#0b0f14; color:#e9eef5; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:16px; }
+    .topbar{ position:sticky; top:0; z-index:10; background:#0b0f14; border-bottom:1px solid #1b2430; padding:14px 16px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .tabs button{ border:1px solid #223043; background:#0f1620; color:#e9eef5; padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; }
+    .tabs button.active{ border-color:#6a4d00; background:#16120a; }
+    .btn{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; padding:10px 12px; border-radius:10px; cursor:pointer; font-size:13px; }
+    .btnPrimary{ border:1px solid #6a4d00; background:#16120a; color:#fff; font-weight:800; }
+    .card{ border:1px solid #1b2430; background:#0f1620; border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+    .h{ font-weight:800; margin-bottom:10px; }
+    .label{ opacity:.8; font-size:12px; margin-bottom:4px; }
+    .hr{ height:1px; background:#1b2430; margin:12px 0; }
+    .badge{ display:inline-block; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:900; letter-spacing:.4px; margin:8px 0; }
+    .badge.urgent{ background:#5c1a1a; }
+    .badge.soon{ background:#6b4d00; }
+    .badge.routine{ background:#143b5a; }
+    .badge.stable{ background:#1f5a2a; }
+    a.link{ color:#e9eef5; text-decoration:none; border-bottom:1px dashed #6a4d00; }
+    a.link:hover{ opacity:.85; }
+    .kvs{ display:flex; gap:12px; flex-wrap:wrap; }
+    .kv{ min-width:140px; }
+  </style>
 </head>
 
-<body><script>
-const app = document.getElementById("app");
+<body>
+  <div id="app"></div>
 
-// --- Simple tab state (baseline wiring) ---
-let state = { tab: "SNAPSHOT" };
+  <script>
+    (function(){
+      "use strict";
 
-function badge(t){
-  return "badge " + (
-    t==="URGENT"?"urgent":
-    t==="SOON"?"soon":
-    t==="ROUTINE"?"routine":"stable"
-  );
-}
+      const app = document.getElementById("app");
+      if(!app){
+        alert("GI page error: #app container not found.");
+        return;
+      }
 
-function viewSnapshot(){
-  return `
-    <div class="wrap">
-      <div class="grid">
-        <div class="card">
-          <div class="h">GI Stability</div>
-          <div class="${badge("STABLE")}">STABLE</div>
+      const APP_NAME = "HealthChecker+ — GI";
+      const APP_VERSION = "Baseline Tabs v1.0";
 
-          <div class="kvs">
-            <div class="kv"><div class="label">Score</div><div>—</div></div>
-            <div class="kv"><div class="label">Latest Entry</div><div>None</div></div>
+      const state = { tab: "SNAPSHOT" };
+
+      function badgeClass(t){
+        if(t==="URGENT") return "badge urgent";
+        if(t==="SOON") return "badge soon";
+        if(t==="ROUTINE") return "badge routine";
+        return "badge stable";
+      }
+
+      function viewSnapshot(){
+        return `
+          <div class="wrap">
+            <div class="grid">
+              <div class="card">
+                <div class="h">GI Stability</div>
+                <div class="${badgeClass("STABLE")}">STABLE</div>
+
+                <div class="kvs">
+                  <div class="kv"><div class="label">Score</div><div>—</div></div>
+                  <div class="kv"><div class="label">Latest Entry</div><div>None</div></div>
+                </div>
+
+                <div class="hr"></div>
+                <button class="btn btnPrimary" id="goAddBtn" type="button">Add First GI Entry</button>
+              </div>
+
+              <div class="card">
+                <div class="h">Bristol Stool Types (Reference)</div>
+                <div class="label">Types 3–4 are usually the target.</div>
+                <div class="hr"></div>
+                <ul style="margin:0 0 0 18px;">
+                  <li>Type 1: Hard pellets — constipation</li>
+                  <li>Type 2: Lumpy sausage — constipation tendency</li>
+                  <li>Type 3: Cracks on surface — generally OK</li>
+                  <li>Type 4: Smooth/soft — ideal</li>
+                  <li>Type 5: Soft blobs — mild looseness</li>
+                  <li>Type 6: Mushy — diarrhea tendency</li>
+                  <li>Type 7: Watery — significant diarrhea</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewAdd(){
+        return `
+          <div class="wrap">
+            <div class="grid">
+              <div class="card">
+                <div class="h">Add Entry (Baseline)</div>
+                <div class="label">This screen confirms the tab engine is working. Next step: paste full form + scoring.</div>
+                <div class="hr"></div>
+                <button class="btn" id="backBtn" type="button">Back to Snapshot</button>
+              </div>
+
+              <div class="card">
+                <div class="h">Status</div>
+                <div>Tabs and buttons are active.</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewPlaceholder(title){
+        return `
+          <div class="wrap">
+            <div class="card">
+              <div class="h">${title}</div>
+              <div class="label">Next step: implement this view.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function render(){
+        app.innerHTML = `
+          <div class="topbar">
+            <div class="row" style="justify-content:space-between;">
+              <div>
+                <div style="font-weight:800;font-size:18px;">${APP_NAME}</div>
+                <div style="opacity:.75;font-size:12px;margin-top:2px;">${APP_VERSION}</div>
+              </div>
+              <div class="row">
+                <a class="link" href="./index.html">Back to Dashboard</a>
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <div class="tabs row" style="margin-left:auto;">
+                <button type="button" data-tab="SNAPSHOT" class="${state.tab==="SNAPSHOT" ? "active" : ""}">Snapshot</button>
+                <button type="button" data-tab="ADD" class="${state.tab==="ADD" ? "active" : ""}">Add Entry</button>
+                <button type="button" data-tab="TRENDS" class="${state.tab==="TRENDS" ? "active" : ""}">Trends</button>
+                <button type="button" data-tab="HISTORY" class="${state.tab==="HISTORY" ? "active" : ""}">History</button>
+              </div>
+            </div>
           </div>
 
-          <div class="hr"></div>
-          <button class="btn btnPrimary" id="goAddBtn">Add First GI Entry</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
+          ${
+            state.tab==="SNAPSHOT" ? viewSnapshot() :
+            state.tab==="ADD" ? viewAdd() :
+            state.tab==="TRENDS" ? viewPlaceholder("Trends") :
+            viewPlaceholder("History")
+          }
+        `;
 
-function viewAdd(){
-  return `
-    <div class="wrap">
-      <div class="grid">
-        <div class="card">
-          <div class="h">Add Entry (Baseline)</div>
-          <div class="label">This is the wired Add screen. Next step is to paste the full form + scoring.</div>
+        wireEvents();
+      }
 
-          <div class="hr"></div>
-          <button class="btn" id="backToSnapshotBtn">Back to Snapshot</button>
-        </div>
+      function wireEvents(){
+        // Tabs
+        document.querySelectorAll('button[data-tab]').forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            const t = btn.getAttribute("data-tab");
+            state.tab = t || "SNAPSHOT";
+            render();
+          });
+        });
 
-        <div class="card">
-          <div class="h">Status</div>
-          <div>Tabs and buttons are now active.</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
+        // Snapshot -> Add
+        const goAdd = document.getElementById("goAddBtn");
+        if(goAdd){
+          goAdd.addEventListener("click", ()=>{
+            state.tab = "ADD";
+            render();
+          });
+        }
 
-function render(){
-  app.innerHTML = `
-    <div class="topbar">
-      <div class="row">
-        <strong>HealthChecker+ — GI</strong>
-        <a href="./index.html" style="margin-left:auto;color:#e9eef5">Back to Dashboard</a>
-      </div>
+        // Add -> Snapshot
+        const backBtn = document.getElementById("backBtn");
+        if(backBtn){
+          backBtn.addEventListener("click", ()=>{
+            state.tab = "SNAPSHOT";
+            render();
+          });
+        }
+      }
 
-      <div class="tabs row" style="margin-top:10px">
-        <button data-tab="SNAPSHOT" class="${state.tab==="SNAPSHOT" ? "active" : ""}">Snapshot</button>
-        <button data-tab="ADD" class="${state.tab==="ADD" ? "active" : ""}">Add Entry</button>
-        <button data-tab="TRENDS" class="${state.tab==="TRENDS" ? "active" : ""}">Trends</button>
-        <button data-tab="HISTORY" class="${state.tab==="HISTORY" ? "active" : ""}">History</button>
-      </div>
-    </div>
-
-    ${
-      state.tab==="SNAPSHOT" ? viewSnapshot()
-      : state.tab==="ADD" ? viewAdd()
-      : `<div class="wrap"><div class="card"><div class="h">${state.tab}</div><div class="label">Next step: wire ${state.tab.toLowerCase()} view.</div></div></div>`
-    }
-  `;
-
-  wireEvents();
-}
-
-function wireEvents(){
-  // Tabs
-  document.querySelectorAll(".tabs button[data-tab]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      state.tab = btn.getAttribute("data-tab");
       render();
-    });
-  });
-
-  // Snapshot button -> Add
-  const goAdd = document.getElementById("goAddBtn");
-  if(goAdd){
-    goAdd.addEventListener("click", ()=>{
-      state.tab = "ADD";
-      render();
-    });
-  }
-
-  // Add screen -> back
-  const backBtn = document.getElementById("backToSnapshotBtn");
-  if(backBtn){
-    backBtn.addEventListener("click", ()=>{
-      state.tab = "SNAPSHOT";
-      render();
-    });
-  }
-}
-
-render();
-</script>
-
-<div id="app"></div>
-
+    })();
+  </script>
 </body>
 </html>
