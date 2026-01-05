@@ -21,6 +21,7 @@
     .btn{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; padding:10px 12px; border-radius:10px; cursor:pointer; font-size:13px; }
     .btn:disabled{ opacity:.5; cursor:not-allowed; }
     .btnPrimary{ border:1px solid #6a4d00; background:#16120a; color:#fff; font-weight:800; }
+    .btnGhost{ border:1px solid #223043; background:transparent; }
     .card{ border:1px solid #1b2430; background:#0f1620; border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
     .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
     .h{ font-weight:800; margin-bottom:10px; }
@@ -43,6 +44,42 @@
     a.link{ color:#e9eef5; text-decoration:none; border-bottom:1px dashed #6a4d00; }
     a.link:hover{ opacity:.85; }
     .footer{ padding-bottom:30px; }
+
+    /* “Power BI-ish” tile styling */
+    .tile{
+      border:1px solid #223043;
+      background:#0b0f14;
+      border-radius:14px;
+      padding:14px;
+    }
+    .tileTop{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+    }
+    .tileTitle{ font-weight:900; }
+    .tileMeta{ opacity:.8; font-size:12px; }
+    .tileRow{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
+    .tileStat{
+      min-width:140px;
+      border:1px solid #1b2430;
+      background:#0f1620;
+      border-radius:12px;
+      padding:10px;
+    }
+    .tileStat .label{ margin-bottom:2px; }
+    .tileActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .muted{ opacity:.75; }
+
+    /* Print-friendly adjustments */
+    @media print {
+      .topbar, .tabs, .tileActions, .btn, select, input, textarea { display:none !important; }
+      body{ background:#fff !important; color:#000 !important; }
+      .card, .tile, .entry{ background:#fff !important; color:#000 !important; border:1px solid #ccc !important; box-shadow:none !important; }
+      .badge{ color:#fff !important; }
+      .wrap{ max-width:100% !important; }
+    }
   </style>
 </head>
 
@@ -52,7 +89,7 @@
   <script>
     (function () {
       const APP_NAME = "HealthChecker+";
-      const APP_VERSION = "One-File GI Dashboard v1.0.0";
+      const APP_VERSION = "One-File GI Dashboard v1.1.0 (GI Tile + Export)";
 
       // LocalStorage keys
       const LS = {
@@ -117,7 +154,6 @@
         const bristolPenalty = { 4:0, 3:5, 5:10, 2:15, 6:20, 1:25, 7:30 };
         score -= (bristolPenalty[bristol] ?? 15);
 
-        // frequency / day (simple heuristic)
         if (frequency === 0) score -= 15;
         else if (frequency === 3) score -= 5;
         else if (frequency >= 4 && frequency <= 5) score -= 10;
@@ -134,7 +170,6 @@
         else if (durationDays >= 4 && durationDays <= 7) score -= 10;
         else if (durationDays > 7) score -= 15;
 
-        // hydration proxy
         if (urineColor >= 4 && urineColor <= 5) score -= 5;
         else if (urineColor >= 6 && urineColor <= 8) score -= 10;
 
@@ -215,6 +250,62 @@
         localStorage.setItem(giKey(userId), JSON.stringify(entries));
       }
 
+      function csvEscape(v){
+        const s = String(v ?? "");
+        const needsQuotes = /[",\n]/.test(s);
+        const cleaned = s.replaceAll('"','""');
+        return needsQuotes ? `"${cleaned}"` : cleaned;
+      }
+
+      function entriesToCsv(personName, entries){
+        const header = [
+          "person","timestamp","bristol","frequency_per_day","urgency","pain","duration_days","urine_color",
+          "redflag_blood","redflag_black_tarry","redflag_fever","redflag_severe_pain","redflag_vomiting","redflag_weight_loss","redflag_watery_over_48h",
+          "score","band","triage","summary","notes"
+        ];
+
+        const rows = entries.slice().reverse().map(e=>{
+          const rf = e.redFlags || {};
+          const c = e.computed || {};
+          return [
+            personName,
+            e.ts || "",
+            e.bristol ?? "",
+            e.frequency ?? "",
+            e.urgency ?? "",
+            e.pain ?? "",
+            e.durationDays ?? "",
+            e.urineColor ?? "",
+            rf.blood ? "1":"0",
+            rf.blackTarry ? "1":"0",
+            rf.fever ? "1":"0",
+            rf.severePain ? "1":"0",
+            rf.vomiting ? "1":"0",
+            rf.weightLoss ? "1":"0",
+            rf.wateryOver48h ? "1":"0",
+            typeof c.score==="number" ? c.score : "",
+            c.band || "",
+            c.triage || "",
+            c.summary || "",
+            e.notes || ""
+          ].map(csvEscape).join(",");
+        });
+
+        return header.join(",") + "\n" + rows.join("\n");
+      }
+
+      function downloadTextFile(filename, content, mime="text/plain"){
+        const blob = new Blob([content], {type: mime});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
       let state = {
         tab: "SNAPSHOT",
         users: loadUsers(),
@@ -247,7 +338,7 @@
           <div class="topbar">
             <div class="row" style="justify-content:space-between;">
               <div>
-                <div class="title">${APP_NAME} — GI / Stool</div>
+                <div class="title">${APP_NAME}</div>
                 <div class="sub">${APP_VERSION}</div>
               </div>
               <div class="row">
@@ -293,8 +384,68 @@
       }
 
       function viewSnapshot(user, latest){
+        // NEW: “GI Tile” summary + quick actions
+        const tile = `
+          <div class="tile">
+            <div class="tileTop">
+              <div>
+                <div class="tileTitle">GI Summary (Live)</div>
+                <div class="tileMeta">Active person: <b>${escapeHtml(user.name)}</b></div>
+                <div class="tileMeta muted">${state.entries.length ? `Entries: ${state.entries.length}` : "No entries yet"}</div>
+              </div>
+              <div>
+                ${latest
+                  ? `<div class="${triageStyle(latest.computed.triage)}" style="margin:0;">${latest.computed.triage}</div>`
+                  : `<div class="${triageStyle("ROUTINE")}" style="margin:0; opacity:.7;">—</div>`
+                }
+              </div>
+            </div>
+
+            <div class="tileRow">
+              <div class="tileStat">
+                <div class="label">Latest timestamp</div>
+                <div class="val">${latest ? fmtDateTime(latest.ts) : "—"}</div>
+              </div>
+              <div class="tileStat">
+                <div class="label">Score</div>
+                <div class="val">${latest ? `${latest.computed.score}/100` : "—"}</div>
+              </div>
+              <div class="tileStat">
+                <div class="label">Band</div>
+                <div class="val">${latest ? escapeHtml(latest.computed.band) : "—"}</div>
+              </div>
+              <div class="tileStat">
+                <div class="label">Red flags</div>
+                <div class="val">${latest ? (latest.computed.anyRedFlag ? "Yes" : "No") : "—"}</div>
+              </div>
+            </div>
+
+            <div class="tileActions">
+              <button class="btn btnPrimary" type="button" id="tileAddBtn">${latest ? "Add new GI entry" : "Add first GI entry"}</button>
+              <button class="btn btnGhost" type="button" id="tileHistoryBtn" ${state.entries.length ? "" : "disabled"}>View history</button>
+              <button class="btn btnGhost" type="button" id="tileTrendsBtn" ${state.entries.length ? "" : "disabled"}>View trends</button>
+              <button class="btn" type="button" id="exportCsvBtn" ${state.entries.length ? "" : "disabled"}>Export GI CSV</button>
+              <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
+            </div>
+
+            ${latest ? `
+              <div class="hr"></div>
+              <div class="label">Latest summary</div>
+              <div>${escapeHtml(latest.computed.summary)}</div>
+            ` : `
+              <div class="hr"></div>
+              <div class="muted">Tip: Add a GI entry to generate your live score, triage and action plan.</div>
+            `}
+          </div>
+        `;
+
+        // Existing snapshot cards (kept) + tile at the top
         return `
           <div class="grid">
+            <div class="card" style="grid-column:1 / -1;">
+              ${tile}
+            </div>
+
             <div class="card">
               <div class="h">GI Stability (Latest)</div>
               ${!latest ? `
@@ -391,7 +542,7 @@
       }
 
       function viewTrends(user){
-        const last14 = state.entries.slice(0,14).reverse(); // older -> newer for display
+        const last14 = state.entries.slice(0,14).reverse(); // older -> newer
         if (!last14.length){
           return `<div class="grid"><div class="card"><div class="h">Trends</div><div>No entries yet for ${escapeHtml(user.name)}.</div></div></div>`;
         }
@@ -410,13 +561,18 @@
 
         const last = last14[last14.length-1];
         const first = last14[0];
-
         const delta = (last?.computed?.score ?? 0) - (first?.computed?.score ?? 0);
 
         return `
           <div class="grid">
             <div class="card">
               <div class="h">Trends (Last 14 entries)</div>
+
+              <div class="row" style="margin-bottom:10px;">
+                <button class="btn" type="button" id="exportCsvBtn">Export GI CSV</button>
+                <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
+                <button class="btn" type="button" id="clearAllBtn">Clear all GI entries</button>
+              </div>
 
               <div class="kvs">
                 <div class="kv"><div class="label">Entries</div><div class="val">${last14.length}</div></div>
@@ -440,9 +596,6 @@
               <div class="kvs">
                 ${Object.keys(triageCounts).map(k=>`<div class="kv"><div class="label">${k}</div><div class="val">${triageCounts[k] || 0}</div></div>`).join("")}
               </div>
-
-              <div class="hr"></div>
-              <button class="btn" type="button" id="clearAllBtn">Clear all GI entries</button>
             </div>
 
             <div class="card">
@@ -466,7 +619,10 @@
           <div class="grid">
             <div class="card">
               <div class="h">GI History (${escapeHtml(user.name)})</div>
+
               <div class="row" style="margin-bottom:10px;">
+                <button class="btn" type="button" id="exportCsvBtn">Export GI CSV</button>
+                <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
                 <button class="btn" type="button" id="clearAllBtn">Clear all</button>
               </div>
 
@@ -550,6 +706,14 @@
         const first=qs("#bristol"); if(first) first.dispatchEvent(new Event("change"));
       }
 
+      function doExportCsv(){
+        const user = state.users.find(u => u.id === state.activeUserId) || {name:"Unknown"};
+        const csv = entriesToCsv(user.name, state.entries);
+        const safeName = (user.name || "person").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") || "person";
+        const filename = `HC_GI_${safeName}.csv`;
+        downloadTextFile(filename, csv, "text/csv");
+      }
+
       function wireEvents(){
         // Tabs
         qsa(".tabs button").forEach(b=>{
@@ -604,11 +768,30 @@
           });
         }
 
-        // Snapshot -> Add
+        // Snapshot CTA buttons (old + tile buttons)
         const goAdd=qs("#goAddFromSnapshot");
         if(goAdd) goAdd.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
 
-        // Live preview
+        const tileAdd=qs("#tileAddBtn");
+        if(tileAdd) tileAdd.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
+
+        const tileHistory=qs("#tileHistoryBtn");
+        if(tileHistory) tileHistory.addEventListener("click", ()=>{ state.tab="HISTORY"; render(); });
+
+        const tileTrends=qs("#tileTrendsBtn");
+        if(tileTrends) tileTrends.addEventListener("click", ()=>{ state.tab="TRENDS"; render(); });
+
+        // Export CSV buttons (Snapshot/Trends/History)
+        qsa("#exportCsvBtn").forEach(btn=>{
+          btn.addEventListener("click", doExportCsv);
+        });
+
+        // Print / PDF buttons (Snapshot/Trends/History)
+        qsa("#printBtn").forEach(btn=>{
+          btn.addEventListener("click", ()=>window.print());
+        });
+
+        // Live preview (ADD tab)
         const previewBox=qs("#previewBox");
         const bindPreview=()=>{
           if(!previewBox) return;
@@ -642,7 +825,7 @@
         });
         if(previewBox) bindPreview();
 
-        // Save
+        // Save (ADD tab)
         const saveBtn=qs("#saveGiBtn");
         if(saveBtn){
           saveBtn.addEventListener("click", ()=>{
@@ -659,11 +842,11 @@
           });
         }
 
-        // Reset
+        // Reset (ADD tab)
         const resetBtn=qs("#resetGiBtn");
         if(resetBtn) resetBtn.addEventListener("click", setDefaultForm);
 
-        // Clear all (appears in Trends + History)
+        // Clear all (Trends + History)
         const clearAllBtn=qs("#clearAllBtn");
         if(clearAllBtn){
           clearAllBtn.addEventListener("click", ()=>{
