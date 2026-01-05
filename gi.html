@@ -330,13 +330,22 @@
                 <ul>${(latest.computed.actionPlan||[]).map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
               `}
             </div>
-
             <div class="card">
-              <div class="h">Bristol Stool Types (Quick Guide)</div>
-              <div>Types 3–4 are usually the target.</div>
-              <ul>${BRISTOL_HELP.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul>
-            </div>
-          </div>
+  <div class="h">Bristol Stool Types (Reference)</div>
+  <div>Types 3–4 are usually the target.</div>
+  <ul>
+    <li>Type 1: Hard separate pellets — constipation</li>
+    <li>Type 2: Lumpy sausage — constipation tendency</li>
+    <li>Type 3: Sausage with cracks — generally OK</li>
+    <li>Type 4: Smooth, soft, snake-like — ideal</li>
+    <li>Type 5: Soft blobs — mild looseness</li>
+    <li>Type 6: Mushy, ragged — diarrhea tendency</li>
+    <li>Type 7: Watery — significant diarrhea</li>
+  </ul>
+</div>
+
+
+           
         `;
       }
 
