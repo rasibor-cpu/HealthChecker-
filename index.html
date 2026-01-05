@@ -4,29 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0b0f14" />
-  <title>HealthChecker+ — One-File GI Dashboard</title>
+  <title>HealthChecker+ — One-File Master</title>
 
   <style>
     :root{ color-scheme: dark; }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#0b0f14; color:#e9eef5; }
-    .wrap{ max-width:1100px; margin:0 auto; padding:16px; }
-    .topbar{ position:sticky; top:0; z-index:10; background:#0b0f14; border-bottom:1px solid #1b2430; padding:14px 16px; }
-    .title{ font-weight:800; font-size:18px; }
+    .wrap{ max-width:1120px; margin:0 auto; padding:16px; }
+    .topbar{ position:sticky; top:0; z-index:20; background:#0b0f14; border-bottom:1px solid #1b2430; padding:14px 16px; }
+    .title{ font-weight:900; font-size:18px; }
     .sub{ opacity:.75; font-size:12px; margin-top:2px; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .tabs button{ border:1px solid #223043; background:#0f1620; color:#e9eef5; padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; }
     .tabs button.active{ border-color:#6a4d00; background:#16120a; }
-    select, input, textarea{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; border-radius:10px; padding:10px; font-size:13px; outline:none; }
-    textarea{ min-height:90px; width:100%; }
+    select, input, textarea{
+      border:1px solid #223043; background:#0b0f14; color:#e9eef5;
+      border-radius:10px; padding:10px; font-size:13px; outline:none;
+    }
+    textarea{ min-height:120px; width:100%; }
     .btn{ border:1px solid #223043; background:#0b0f14; color:#e9eef5; padding:10px 12px; border-radius:10px; cursor:pointer; font-size:13px; }
     .btn:disabled{ opacity:.5; cursor:not-allowed; }
-    .btnPrimary{ border:1px solid #6a4d00; background:#16120a; color:#fff; font-weight:800; }
+    .btnPrimary{ border:1px solid #6a4d00; background:#16120a; color:#fff; font-weight:900; }
     .btnGhost{ border:1px solid #223043; background:transparent; }
     .card{ border:1px solid #1b2430; background:#0f1620; border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
     .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
-    .h{ font-weight:800; margin-bottom:10px; }
+    .h{ font-weight:900; margin-bottom:10px; }
     .label{ opacity:.8; font-size:12px; margin-bottom:4px; }
-    .val{ font-weight:800; }
+    .val{ font-weight:900; }
     .hr{ height:1px; background:#1b2430; margin:12px 0; }
     .badge{ display:inline-block; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:900; letter-spacing:.4px; margin:8px 0; }
     .badge.urgent{ background:#5c1a1a; }
@@ -35,49 +38,38 @@
     .badge.stable{ background:#1f5a2a; }
     .kvs{ display:flex; gap:12px; flex-wrap:wrap; }
     .kv{ min-width:140px; }
-    .check{ display:flex; gap:10px; align-items:center; padding:10px; border:1px solid #223043; border-radius:10px; background:#0b0f14; }
-    .checkgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; }
-    ul{ margin:8px 0 0 18px; }
-    li{ margin-bottom:6px; }
-    .entry{ border:1px solid #223043; background:#0b0f14; border-radius:12px; padding:12px; }
-    .mono{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; opacity:.9; }
+    .muted{ opacity:.75; }
     a.link{ color:#e9eef5; text-decoration:none; border-bottom:1px dashed #6a4d00; }
     a.link:hover{ opacity:.85; }
-    .footer{ padding-bottom:30px; }
+    .entry{ border:1px solid #223043; background:#0b0f14; border-radius:12px; padding:12px; }
+    .mono{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; opacity:.92; }
+    .footer{ padding-bottom:40px; }
 
-    /* “Power BI-ish” tile styling */
-    .tile{
-      border:1px solid #223043;
-      background:#0b0f14;
-      border-radius:14px;
-      padding:14px;
+    /* Snapshot metric cards */
+    .metricGrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+    .metricCard{
+      border:1px solid #223043; background:#0b0f14; border-radius:14px; padding:12px;
     }
-    .tileTop{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      gap:10px;
-    }
-    .tileTitle{ font-weight:900; }
-    .tileMeta{ opacity:.8; font-size:12px; }
-    .tileRow{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-    .tileStat{
-      min-width:140px;
-      border:1px solid #1b2430;
-      background:#0f1620;
-      border-radius:12px;
-      padding:10px;
-    }
-    .tileStat .label{ margin-bottom:2px; }
-    .tileActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .muted{ opacity:.75; }
+    .metricTop{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .metricName{ font-weight:900; }
+    .metricTime{ opacity:.7; font-size:11px; }
+    .metricValue{ font-size:22px; font-weight:950; margin-top:6px; }
+    .metricUnit{ opacity:.75; font-size:12px; font-weight:700; margin-left:6px; }
+    .metricHint{ opacity:.8; font-size:12px; margin-top:6px; }
+    .chip{ display:inline-block; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:900; }
+    .chip.ok{ background:#1f5a2a; }
+    .chip.warn{ background:#6b4d00; }
+    .chip.bad{ background:#5c1a1a; }
 
-    /* Print-friendly adjustments */
-    @media print {
-      .topbar, .tabs, .tileActions, .btn, select, input, textarea { display:none !important; }
+    /* Charts */
+    canvas.chart{ width:100%; height:220px; border:1px solid #223043; border-radius:12px; background:#0b0f14; }
+
+    /* Print-friendly */
+    @media print{
+      .topbar, .tabs, .btn, select, input, textarea { display:none !important; }
       body{ background:#fff !important; color:#000 !important; }
-      .card, .tile, .entry{ background:#fff !important; color:#000 !important; border:1px solid #ccc !important; box-shadow:none !important; }
-      .badge{ color:#fff !important; }
+      .card, .metricCard, .entry{ background:#fff !important; color:#000 !important; border:1px solid #ccc !important; box-shadow:none !important; }
+      .badge, .chip{ color:#fff !important; }
       .wrap{ max-width:100% !important; }
     }
   </style>
@@ -89,34 +81,23 @@
   <script>
     (function () {
       const APP_NAME = "HealthChecker+";
-      const APP_VERSION = "One-File GI Dashboard v1.1.0 (GI Tile + Export)";
+      const APP_VERSION = "Master v1.0.0 (Snapshot + Trends + Kidney + GI + Export)";
 
-      // LocalStorage keys
+      // Storage keys
       const LS = {
-        USERS: "hc_users_v1",
-        ACTIVE_USER: "hc_active_user_v1",
-        GI_PREFIX: "hc_gi_entries_v1_", // + userId
+        USERS: "hc_users_v2",
+        ACTIVE_USER: "hc_active_user_v2",
+
+        // time-series per user
+        METRICS_PREFIX: "hc_metrics_v2_",   // + userId
+        GI_PREFIX:      "hc_gi_entries_v2_",// + userId
       };
 
-      const DEFAULT_USERS = [{ id: "me", name: "Me" }];
+      const DEFAULT_USERS = [{ id:"me", name:"Me" }];
 
-      const DEFAULT_RED_FLAGS = {
-        blood: false,
-        blackTarry: false,
-        fever: false,
-        severePain: false,
-        vomiting: false,
-        weightLoss: false,
-        wateryOver48h: false,
-      };
-
-      function uid() { return `${Date.now()}_${Math.random().toString(16).slice(2)}`; }
-      function clampInt(v, min, max) {
-        const n = Number.isFinite(+v) ? Math.floor(+v) : min;
-        return Math.max(min, Math.min(max, n));
-      }
-      function safeParse(json, fallback) { try { return JSON.parse(json) ?? fallback; } catch { return fallback; } }
-      function fmtDateTime(iso) { try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+      // ---- helpers
+      function uid(){ return `${Date.now()}_${Math.random().toString(16).slice(2)}`; }
+      function safeParse(json, fallback){ try { return JSON.parse(json) ?? fallback; } catch { return fallback; } }
       function qs(sel, root=document){ return root.querySelector(sel); }
       function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
       function setHTML(el, html){ el.innerHTML = html; }
@@ -124,6 +105,57 @@
         return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
           .replaceAll('"',"&quot;").replaceAll("'","&#039;");
       }
+      function fmtDateTime(iso){ try{ return new Date(iso).toLocaleString(); } catch { return iso; } }
+      function clampNum(v, min, max){
+        const n = Number.isFinite(+v) ? +v : min;
+        return Math.max(min, Math.min(max, n));
+      }
+      function csvEscape(v){
+        const s = String(v ?? "");
+        const needsQuotes = /[",\n]/.test(s);
+        const cleaned = s.replaceAll('"','""');
+        return needsQuotes ? `"${cleaned}"` : cleaned;
+      }
+      function downloadTextFile(filename, content, mime="text/plain"){
+        const blob = new Blob([content], {type:mime});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      // ---- users
+      function loadUsers(){
+        const stored = safeParse(localStorage.getItem(LS.USERS), null);
+        if (Array.isArray(stored) && stored.length) return stored;
+        localStorage.setItem(LS.USERS, JSON.stringify(DEFAULT_USERS));
+        localStorage.setItem(LS.ACTIVE_USER, "me");
+        return DEFAULT_USERS;
+      }
+      function saveUsers(users){ localStorage.setItem(LS.USERS, JSON.stringify(users)); }
+      function loadActiveUserId(){ return localStorage.getItem(LS.ACTIVE_USER) || "me"; }
+      function setActiveUserId(id){ localStorage.setItem(LS.ACTIVE_USER, id); }
+
+      // ---- metrics time-series structure
+      // Each record: { id, ts, type, payload }
+      // type: "glucose" | "bp" | "sleep" | "spo2" | "kidney" | "hba1c"
+      function metricsKey(userId){ return LS.METRICS_PREFIX + userId; }
+      function loadMetrics(userId){
+        const arr = safeParse(localStorage.getItem(metricsKey(userId)), []);
+        return Array.isArray(arr) ? arr : [];
+      }
+      function saveMetrics(userId, items){
+        localStorage.setItem(metricsKey(userId), JSON.stringify(items));
+      }
+
+      // ---- GI entries (reuse your logic but isolated)
+      const DEFAULT_RED_FLAGS = {
+        blood:false, blackTarry:false, fever:false, severePain:false, vomiting:false, weightLoss:false, wateryOver48h:false
+      };
 
       function triageStyle(triage){
         if (triage === "URGENT") return "badge urgent";
@@ -133,12 +165,12 @@
       }
 
       function computeGiStability(entry){
-        const bristol = clampInt(entry.bristol, 1, 7);
-        const frequency = clampInt(entry.frequency, 0, 20);
+        const bristol = Math.max(1, Math.min(7, Math.floor(+entry.bristol || 4)));
+        const frequency = Math.max(0, Math.min(20, Math.floor(+entry.frequency || 1)));
         const urgency = entry.urgency || "none";
         const pain = entry.pain || "none";
-        const durationDays = clampInt(entry.durationDays, 0, 365);
-        const urineColor = clampInt(entry.urineColor || 0, 0, 8);
+        const durationDays = Math.max(0, Math.min(365, Math.floor(+entry.durationDays || 1)));
+        const urineColor = Math.max(0, Math.min(8, Math.floor(+entry.urineColor || 0)));
         const rf = entry.redFlags || DEFAULT_RED_FLAGS;
 
         const anyRedFlag = Object.values(rf).some(Boolean);
@@ -173,7 +205,7 @@
         if (urineColor >= 4 && urineColor <= 5) score -= 5;
         else if (urineColor >= 6 && urineColor <= 8) score -= 10;
 
-        score = clampInt(score, 0, 100);
+        score = Math.max(0, Math.min(100, Math.floor(score)));
 
         let band = "Stable";
         if (score < 40) band = "Highly unstable";
@@ -193,9 +225,8 @@
         return { score, band, triage, summary, anyRedFlag };
       }
 
-      function buildActionPlan(entry, computed){
-        const bristol = clampInt(entry.bristol, 1, 7);
-
+      function buildGiActionPlan(entry, computed){
+        const b = Math.max(1, Math.min(7, Math.floor(+entry.bristol || 4)));
         if (computed.triage === "URGENT") {
           return [
             "Urgent pattern detected (red flags). Seek urgent medical assessment.",
@@ -210,14 +241,14 @@
             "Avoid heavy/fatty meals and alcohol until stable.",
           ];
         }
-        if (bristol === 1 || bristol === 2) {
+        if (b === 1 || b === 2) {
           return [
             "Constipation tendency: increase water and add fiber gradually (vegetables; psyllium if tolerated).",
             "Gentle daily activity (10–20 minutes walking).",
             "Escalate if pain, bleeding, or no stool >3 days.",
           ];
         }
-        if (bristol === 6 || bristol === 7) {
+        if (b === 6 || b === 7) {
           return [
             "Diarrhea tendency: prioritize hydration; consider electrolytes.",
             "Reduce greasy/high-fat foods, very spicy meals, excess caffeine temporarily.",
@@ -231,108 +262,173 @@
         ];
       }
 
-      function loadUsers(){
-        const stored = safeParse(localStorage.getItem(LS.USERS), null);
-        if (Array.isArray(stored) && stored.length) return stored;
-        localStorage.setItem(LS.USERS, JSON.stringify(DEFAULT_USERS));
-        localStorage.setItem(LS.ACTIVE_USER, "me");
-        return DEFAULT_USERS;
-      }
-      function saveUsers(users){ localStorage.setItem(LS.USERS, JSON.stringify(users)); }
-      function loadActiveUserId(){ return localStorage.getItem(LS.ACTIVE_USER) || "me"; }
-      function setActiveUserId(id){ localStorage.setItem(LS.ACTIVE_USER, id); }
       function giKey(userId){ return LS.GI_PREFIX + userId; }
-      function loadEntries(userId){
+      function loadGiEntries(userId){
         const arr = safeParse(localStorage.getItem(giKey(userId)), []);
-        return Array.isArray(arr) ? arr : [];
+        const out = Array.isArray(arr) ? arr : [];
+        // enrich
+        return out.map(e=>{
+          if (e.computed && typeof e.computed.score === "number") return e;
+          const computed = computeGiStability(e);
+          computed.actionPlan = buildGiActionPlan(e, computed);
+          return { ...e, computed };
+        });
       }
-      function saveEntries(userId, entries){
+      function saveGiEntries(userId, entries){
         localStorage.setItem(giKey(userId), JSON.stringify(entries));
       }
 
-      function csvEscape(v){
-        const s = String(v ?? "");
-        const needsQuotes = /[",\n]/.test(s);
-        const cleaned = s.replaceAll('"','""');
-        return needsQuotes ? `"${cleaned}"` : cleaned;
+      // ---- Snapshot “latest” reducers
+      function latestOf(type, metrics){
+        return metrics.find(m => m.type === type) || null; // metrics kept newest-first
       }
 
-      function entriesToCsv(personName, entries){
-        const header = [
-          "person","timestamp","bristol","frequency_per_day","urgency","pain","duration_days","urine_color",
-          "redflag_blood","redflag_black_tarry","redflag_fever","redflag_severe_pain","redflag_vomiting","redflag_weight_loss","redflag_watery_over_48h",
-          "score","band","triage","summary","notes"
-        ];
+      function chipFor(metricName, val){
+        // simple heuristic chips (can be refined later)
+        if (metricName === "glucose"){
+          if (val <= 140) return {cls:"ok", text:"In range"};
+          if (val <= 180) return {cls:"warn", text:"Elevated"};
+          return {cls:"bad", text:"High"};
+        }
+        if (metricName === "systolic"){
+          if (val < 130) return {cls:"ok", text:"Good"};
+          if (val < 140) return {cls:"warn", text:"Borderline"};
+          return {cls:"bad", text:"High"};
+        }
+        if (metricName === "egfr"){
+          if (val >= 60) return {cls:"ok", text:"OK"};
+          if (val >= 45) return {cls:"warn", text:"CKD 3a"};
+          return {cls:"bad", text:"Low"};
+        }
+        return {cls:"ok", text:"Logged"};
+      }
 
-        const rows = entries.slice().reverse().map(e=>{
-          const rf = e.redFlags || {};
-          const c = e.computed || {};
-          return [
-            personName,
-            e.ts || "",
-            e.bristol ?? "",
-            e.frequency ?? "",
-            e.urgency ?? "",
-            e.pain ?? "",
-            e.durationDays ?? "",
-            e.urineColor ?? "",
-            rf.blood ? "1":"0",
-            rf.blackTarry ? "1":"0",
-            rf.fever ? "1":"0",
-            rf.severePain ? "1":"0",
-            rf.vomiting ? "1":"0",
-            rf.weightLoss ? "1":"0",
-            rf.wateryOver48h ? "1":"0",
-            typeof c.score==="number" ? c.score : "",
-            c.band || "",
-            c.triage || "",
-            c.summary || "",
-            e.notes || ""
-          ].map(csvEscape).join(",");
+      // ---- Minimal chart drawing (simple line chart)
+      function drawLineChart(canvas, points, valueLabel){
+        // points: [{x: Date, y: number}]
+        const ctx = canvas.getContext("2d");
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0,0,W,H);
+
+        // background grid
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#223043";
+        ctx.lineWidth = 1;
+        for (let i=1; i<5; i++){
+          const y = Math.floor((H*i)/5);
+          ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+        }
+
+        if (!points.length){
+          ctx.fillStyle = "#e9eef5";
+          ctx.globalAlpha = .75;
+          ctx.font = "14px system-ui";
+          ctx.fillText("No data yet", 12, 24);
+          ctx.globalAlpha = 1;
+          return;
+        }
+
+        const ys = points.map(p=>p.y);
+        let minY = Math.min(...ys), maxY = Math.max(...ys);
+        if (minY === maxY){ minY -= 1; maxY += 1; }
+
+        const pad = 18;
+        const x0 = pad, x1 = W-pad, y0 = pad, y1 = H-pad;
+
+        const tMin = points[0].x.getTime();
+        const tMax = points[points.length-1].x.getTime();
+
+        function xMap(t){
+          if (tMax === tMin) return x0;
+          return x0 + ((t - tMin) / (tMax - tMin)) * (x1 - x0);
+        }
+        function yMap(v){
+          return y1 - ((v - minY) / (maxY - minY)) * (y1 - y0);
+        }
+
+        // line
+        ctx.strokeStyle = "#e9eef5";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        points.forEach((p, i)=>{
+          const x = xMap(p.x.getTime());
+          const y = yMap(p.y);
+          if (i===0) ctx.moveTo(x,y);
+          else ctx.lineTo(x,y);
         });
+        ctx.stroke();
 
-        return header.join(",") + "\n" + rows.join("\n");
+        // last point dot
+        const last = points[points.length-1];
+        ctx.fillStyle = "#e9eef5";
+        ctx.beginPath();
+        ctx.arc(xMap(last.x.getTime()), yMap(last.y), 3.5, 0, Math.PI*2);
+        ctx.fill();
+
+        // labels
+        ctx.globalAlpha = .85;
+        ctx.font = "12px system-ui";
+        ctx.fillText(`${valueLabel}: ${last.y}`, 12, 14);
+        ctx.globalAlpha = 1;
       }
 
-      function downloadTextFile(filename, content, mime="text/plain"){
-        const blob = new Blob([content], {type: mime});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+      // ---- parsing pasted/attachment text (lightweight)
+      function parseTextIntoSuggestions(txt){
+        const t = (txt || "").toLowerCase();
+        const out = [];
+
+        // glucose: looks for "glucose 150" or "mg/dl 150" patterns
+        const g1 = txt.match(/(?:glucose|cgm|libre|mg\/dl)\D{0,20}(\d{2,3})/i);
+        if (g1) out.push({type:"glucose", payload:{ mgdl:+g1[1], note:"Parsed from text" }});
+
+        // BP: 151/86
+        const bp = txt.match(/(\d{2,3})\s*\/\s*(\d{2,3})/);
+        if (bp) out.push({type:"bp", payload:{ sys:+bp[1], dia:+bp[2], pulse:null, note:"Parsed from text" }});
+
+        // SpO2: "SpO2 95" or "oxygen 92"
+        const o2 = txt.match(/(?:spo2|oxygen)\D{0,20}(\d{2,3})\s*%?/i);
+        if (o2) out.push({type:"spo2", payload:{ pct:+o2[1], note:"Parsed from text" }});
+
+        // eGFR: "eGFR 55"
+        const eg = txt.match(/egfr\D{0,20}(\d{1,3})/i);
+        if (eg) out.push({type:"kidney", payload:{ egfr:+eg[1], creat:null, uacr:null, note:"Parsed from text" }});
+
+        // HbA1c: "A1c 6.1"
+        const a1 = txt.match(/(?:hba1c|a1c)\D{0,20}(\d{1,2}\.?\d{0,2})/i);
+        if (a1) out.push({type:"hba1c", payload:{ pct:+a1[1], note:"Parsed from text" }});
+
+        return out;
       }
 
+      // ---- state
       let state = {
         tab: "SNAPSHOT",
         users: loadUsers(),
         activeUserId: loadActiveUserId(),
-        entries: [],
+        metrics: [],
+        gi: [],
+        giTab: "GI_SNAPSHOT", // internal GI subtab
       };
-      state.entries = loadEntries(state.activeUserId);
 
-      // enrich older entries if needed
-      state.entries = state.entries.map(e=>{
-        if (e.computed && typeof e.computed.score === "number") return e;
-        const computed = computeGiStability(e);
-        computed.actionPlan = buildActionPlan(e, computed);
-        return { ...e, computed };
-      });
-      saveEntries(state.activeUserId, state.entries);
+      function reloadActiveData(){
+        state.metrics = loadMetrics(state.activeUserId);
+        state.metrics.sort((a,b)=> (b.ts||"").localeCompare(a.ts||"")); // newest-first
+        state.gi = loadGiEntries(state.activeUserId);
+        state.gi.sort((a,b)=> (b.ts||"").localeCompare(a.ts||"")); // newest-first
+      }
+      reloadActiveData();
 
       const root = document.getElementById("app");
 
+      // ---- views
       function tabBtn(tab, active, label){
         const text = label || tab[0] + tab.slice(1).toLowerCase();
-        return `<button type="button" data-tab="${tab}" class="${tab === active ? "active" : ""}">${text}</button>`;
+        return `<button type="button" data-tab="${tab}" class="${tab===active?"active":""}">${text}</button>`;
       }
 
       function render(){
-        const activeUser = state.users.find(u => u.id === state.activeUserId) || state.users[0];
-        const latest = state.entries[0] || null;
+        const user = state.users.find(u=>u.id===state.activeUserId) || state.users[0];
+        reloadActiveData();
 
         setHTML(root, `
           <div class="topbar">
@@ -341,9 +437,7 @@
                 <div class="title">${APP_NAME}</div>
                 <div class="sub">${APP_VERSION}</div>
               </div>
-              <div class="row">
-                <span class="sub">Local-only storage</span>
-              </div>
+              <div class="sub">Local-only storage</div>
             </div>
 
             <div class="row" style="margin-top:10px;">
@@ -351,7 +445,7 @@
                 <div class="label">Active person</div>
                 <div class="row">
                   <select id="personSelect">
-                    ${state.users.map(u => `<option value="${u.id}" ${u.id===state.activeUserId?"selected":""}>${escapeHtml(u.name)}</option>`).join("")}
+                    ${state.users.map(u=>`<option value="${u.id}" ${u.id===state.activeUserId?"selected":""}>${escapeHtml(u.name)}</option>`).join("")}
                   </select>
                   <input id="newPersonName" placeholder="Add person name" />
                   <button class="btn" type="button" id="addPersonBtn">Add</button>
@@ -360,304 +454,582 @@
               </div>
 
               <div class="tabs row" style="margin-left:auto;">
-                ${tabBtn("SNAPSHOT", state.tab)}
-                ${tabBtn("ADD", state.tab, "Add GI Entry")}
-                ${tabBtn("TRENDS", state.tab)}
-                ${tabBtn("HISTORY", state.tab)}
+                ${tabBtn("SNAPSHOT", state.tab, "Snapshot")}
+                ${tabBtn("ADD", state.tab, "Add Data")}
+                ${tabBtn("TRENDS", state.tab, "Trends")}
+                ${tabBtn("KIDNEY", state.tab, "Kidney")}
+                ${tabBtn("GI", state.tab, "GI")}
+                ${tabBtn("REPORTS", state.tab, "Reports")}
+                ${tabBtn("PROFILE", state.tab, "Profile")}
               </div>
             </div>
           </div>
 
           <div class="wrap">
-            ${state.tab==="SNAPSHOT" ? viewSnapshot(activeUser, latest) : ""}
-            ${state.tab==="ADD" ? viewAdd() : ""}
-            ${state.tab==="TRENDS" ? viewTrends(activeUser) : ""}
-            ${state.tab==="HISTORY" ? viewHistory(activeUser) : ""}
+            ${state.tab==="SNAPSHOT" ? viewSnapshot(user) : ""}
+            ${state.tab==="ADD" ? viewAddData(user) : ""}
+            ${state.tab==="TRENDS" ? viewTrends(user) : ""}
+            ${state.tab==="KIDNEY" ? viewKidney(user) : ""}
+            ${state.tab==="GI" ? viewGI(user) : ""}
+            ${state.tab==="REPORTS" ? viewReports(user) : ""}
+            ${state.tab==="PROFILE" ? viewProfile(user) : ""}
           </div>
 
           <div class="footer wrap">
-            <div class="sub">GI records are stored locally on this device (LocalStorage). Clearing browser data clears history.</div>
+            <div class="sub">Data is stored on this device only. Clearing site data clears history.</div>
           </div>
         `);
 
         wireEvents();
+        postRender();
       }
 
-      function viewSnapshot(user, latest){
-        // NEW: “GI Tile” summary + quick actions
-        const tile = `
-          <div class="tile">
-            <div class="tileTop">
-              <div>
-                <div class="tileTitle">GI Summary (Live)</div>
-                <div class="tileMeta">Active person: <b>${escapeHtml(user.name)}</b></div>
-                <div class="tileMeta muted">${state.entries.length ? `Entries: ${state.entries.length}` : "No entries yet"}</div>
-              </div>
-              <div>
-                ${latest
-                  ? `<div class="${triageStyle(latest.computed.triage)}" style="margin:0;">${latest.computed.triage}</div>`
-                  : `<div class="${triageStyle("ROUTINE")}" style="margin:0; opacity:.7;">—</div>`
-                }
-              </div>
-            </div>
+      function viewSnapshot(user){
+        const m = state.metrics;
+        const lg = latestOf("glucose", m);
+        const lbp = latestOf("bp", m);
+        const lsl = latestOf("sleep", m);
+        const lo2 = latestOf("spo2", m);
+        const lk = latestOf("kidney", m);
+        const la1 = latestOf("hba1c", m);
 
-            <div class="tileRow">
-              <div class="tileStat">
-                <div class="label">Latest timestamp</div>
-                <div class="val">${latest ? fmtDateTime(latest.ts) : "—"}</div>
-              </div>
-              <div class="tileStat">
-                <div class="label">Score</div>
-                <div class="val">${latest ? `${latest.computed.score}/100` : "—"}</div>
-              </div>
-              <div class="tileStat">
-                <div class="label">Band</div>
-                <div class="val">${latest ? escapeHtml(latest.computed.band) : "—"}</div>
-              </div>
-              <div class="tileStat">
-                <div class="label">Red flags</div>
-                <div class="val">${latest ? (latest.computed.anyRedFlag ? "Yes" : "No") : "—"}</div>
-              </div>
-            </div>
+        const gVal = lg?.payload?.mgdl ?? null;
+        const bpSys = lbp?.payload?.sys ?? null;
+        const bpDia = lbp?.payload?.dia ?? null;
+        const sleepH = lsl?.payload?.hours ?? null;
+        const o2Val = lo2?.payload?.pct ?? null;
+        const egfr = lk?.payload?.egfr ?? null;
+        const uacr = lk?.payload?.uacr ?? null;
+        const a1c = la1?.payload?.pct ?? null;
 
-            <div class="tileActions">
-              <button class="btn btnPrimary" type="button" id="tileAddBtn">${latest ? "Add new GI entry" : "Add first GI entry"}</button>
-              <button class="btn btnGhost" type="button" id="tileHistoryBtn" ${state.entries.length ? "" : "disabled"}>View history</button>
-              <button class="btn btnGhost" type="button" id="tileTrendsBtn" ${state.entries.length ? "" : "disabled"}>View trends</button>
-              <button class="btn" type="button" id="exportCsvBtn" ${state.entries.length ? "" : "disabled"}>Export GI CSV</button>
-              <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
-            </div>
+        const gChip = (gVal!=null) ? chipFor("glucose", gVal) : null;
+        const bpChip = (bpSys!=null) ? chipFor("systolic", bpSys) : null;
+        const egChip = (egfr!=null) ? chipFor("egfr", egfr) : null;
 
-            ${latest ? `
-              <div class="hr"></div>
-              <div class="label">Latest summary</div>
-              <div>${escapeHtml(latest.computed.summary)}</div>
-            ` : `
-              <div class="hr"></div>
-              <div class="muted">Tip: Add a GI entry to generate your live score, triage and action plan.</div>
-            `}
-          </div>
-        `;
-
-        // Existing snapshot cards (kept) + tile at the top
         return `
           <div class="grid">
             <div class="card" style="grid-column:1 / -1;">
-              ${tile}
-            </div>
-
-            <div class="card">
-              <div class="h">GI Stability (Latest)</div>
-              ${!latest ? `
-                <div>No GI entries for ${escapeHtml(user.name)} yet.</div>
-                <div class="hr"></div>
-                <button class="btn btnPrimary" type="button" id="goAddFromSnapshot">Add first GI entry</button>
-              ` : `
-                <div class="kvs">
-                  <div class="kv"><div class="label">Timestamp</div><div class="val">${fmtDateTime(latest.ts)}</div></div>
-                  <div class="kv"><div class="label">Bristol</div><div class="val">${latest.bristol}</div></div>
-                  <div class="kv"><div class="label">Frequency</div><div class="val">${latest.frequency}/day</div></div>
+              <div class="row" style="justify-content:space-between;">
+                <div>
+                  <div class="h">Snapshot (Latest Cards)</div>
+                  <div class="sub">Automatically updates when you save new data.</div>
                 </div>
-
-                <div class="${triageStyle(latest.computed.triage)}">${latest.computed.triage}</div>
-
-                <div class="kvs">
-                  <div class="kv"><div class="label">Score</div><div class="val">${latest.computed.score}/100</div></div>
-                  <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(latest.computed.band)}</div></div>
-                  <div class="kv"><div class="label">Red flags</div><div class="val">${latest.computed.anyRedFlag ? "Yes":"No"}</div></div>
+                <div class="row">
+                  <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                  <button class="btn" type="button" id="exportAllCsvBtn" ${state.metrics.length?"":"disabled"}>Export All Metrics CSV</button>
                 </div>
+              </div>
 
-                <div class="hr"></div>
-                <div class="label">Summary</div>
-                <div>${escapeHtml(latest.computed.summary)}</div>
-
-                <div class="hr"></div>
-                <div class="label">Recommended actions</div>
-                <ul>${(latest.computed.actionPlan||[]).map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
-              `}
-            </div>
-
-            <div class="card">
-              <div class="h">Bristol Stool Types (Reference)</div>
-              <div>Types 3–4 are usually the target.</div>
-              <ul>
-                <li>Type 1: Hard separate pellets — constipation</li>
-                <li>Type 2: Lumpy sausage — constipation tendency</li>
-                <li>Type 3: Sausage with cracks — generally OK</li>
-                <li>Type 4: Smooth, soft, snake-like — ideal</li>
-                <li>Type 5: Soft blobs — mild looseness</li>
-                <li>Type 6: Mushy, ragged — diarrhea tendency</li>
-                <li>Type 7: Watery — significant diarrhea</li>
-              </ul>
               <div class="hr"></div>
-              <div class="sub">Note: This is a self-tracking aid, not a diagnosis tool.</div>
+
+              <div class="metricGrid">
+                ${metricCard("Glucose", gVal, "mg/dL", lg?.ts, gChip, "Target depends on plan; trend matters most.")}
+                ${metricCard("Blood Pressure", (bpSys!=null && bpDia!=null) ? `${bpSys}/${bpDia}` : null, "mmHg", lbp?.ts, bpChip, "If taken with full bladder, BP may read higher.")}
+                ${metricCard("Sleep", sleepH!=null ? sleepH : null, "hours", lsl?.ts, null, "We can add sleep score and stages later.")}
+                ${metricCard("SpO₂", o2Val!=null ? o2Val : null, "%", lo2?.ts, null, "Low readings can be artifact; confirm if repeated.")}
+                ${metricCard("Kidney eGFR", egfr!=null ? egfr : null, "mL/min", lk?.ts, egChip, "Trend + hydration status both affect values.")}
+                ${metricCard("UACR / Protein", uacr!=null ? uacr : null, "mg/g", lk?.ts, null, "If you track proteinuria, this feeds kidney trend.")}
+                ${metricCard("HbA1c", a1c!=null ? a1c : null, "%", la1?.ts, null, "We can also compute estimated A1c later.")}
+                ${metricCard("GI", state.gi[0]?.computed?.score!=null ? `${state.gi[0].computed.score}/100` : null, "score", state.gi[0]?.ts, null, "GI details live under the GI tab.")}
+              </div>
+
+              <div class="hr"></div>
+              <div class="row">
+                <button class="btn btnPrimary" type="button" id="goAddDataBtn">Add new data</button>
+                <button class="btn btnGhost" type="button" id="goTrendsBtn" ${state.metrics.length?"":"disabled"}>View trends</button>
+                <button class="btn btnGhost" type="button" id="goGiBtn">GI module</button>
+                <button class="btn btnGhost" type="button" id="goKidneyBtn">Kidney module</button>
+              </div>
             </div>
           </div>
         `;
       }
 
-      function viewAdd(){
+      function metricCard(name, value, unit, ts, chip, hint){
+        const v = (value==null || value==="") ? "—" : escapeHtml(String(value));
+        const t = ts ? fmtDateTime(ts) : "—";
+        const c = chip ? `<span class="chip ${chip.cls}">${escapeHtml(chip.text)}</span>` : "";
+        return `
+          <div class="metricCard">
+            <div class="metricTop">
+              <div>
+                <div class="metricName">${escapeHtml(name)}</div>
+                <div class="metricTime">${escapeHtml(t)}</div>
+              </div>
+              <div>${c}</div>
+            </div>
+            <div class="metricValue">${v}<span class="metricUnit">${escapeHtml(unit)}</span></div>
+            <div class="metricHint">${escapeHtml(hint)}</div>
+          </div>
+        `;
+      }
+
+      function viewAddData(user){
         return `
           <div class="grid">
             <div class="card">
-              <div class="h">Add GI Entry (Stool Analysis)</div>
-
-              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-                ${fieldSelect("Bristol stool type (1–7)", "bristol", [1,2,3,4,5,6,7], 4)}
-                ${fieldNumber("Frequency (stools/day)", "frequency", 1, 0, 20)}
-                ${fieldSelect("Urgency", "urgency", ["none","sometimes","often"], "none")}
-                ${fieldSelect("Pain with stool", "pain", ["none","mild","moderate","severe"], "none")}
-                ${fieldNumber("How many days has this pattern persisted?", "durationDays", 1, 0, 365)}
-                ${fieldNumber("Hydration proxy: urine color (1–8) (optional)", "urineColor", 3, 0, 8)}
-              </div>
+              <div class="h">Add Data (Manual Entry)</div>
+              <div class="sub">Save any metric. Snapshot updates immediately.</div>
 
               <div class="hr"></div>
-              <div class="label">Red flags (check any that apply)</div>
-              <div class="checkgrid">
-                ${check("blood", "Visible blood in stool")}
-                ${check("blackTarry", "Black/tarry stool")}
-                ${check("fever", "Fever")}
-                ${check("severePain", "Severe abdominal pain")}
-                ${check("vomiting", "Persistent vomiting")}
-                ${check("weightLoss", "Unintentional weight loss")}
-                ${check("wateryOver48h", "Watery diarrhea >48 hours")}
-              </div>
 
-              <div class="hr"></div>
-              <div class="label">Notes (optional)</div>
-              <textarea id="notes" placeholder="e.g., spicy meal, new medication, travel, stress, etc."></textarea>
+              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+                <div>
+                  <div class="label">Glucose (mg/dL)</div>
+                  <input id="glucoseVal" type="number" min="40" max="400" placeholder="e.g., 150" />
+                  <div class="label" style="margin-top:8px;">Notes (optional)</div>
+                  <input id="glucoseNote" placeholder="e.g., before meds, after meal, etc." />
+                  <button class="btn btnPrimary" type="button" id="saveGlucoseBtn" style="margin-top:10px;">Save Glucose</button>
+                </div>
 
-              <div class="row" style="margin-top:10px;">
-                <button class="btn btnPrimary" type="button" id="saveGiBtn">Save GI Entry</button>
-                <button class="btn" type="button" id="resetGiBtn">Reset</button>
+                <div>
+                  <div class="label">Blood Pressure (sys/dia)</div>
+                  <div class="row">
+                    <input id="bpSys" type="number" min="70" max="260" placeholder="SYS" style="max-width:120px;" />
+                    <input id="bpDia" type="number" min="40" max="160" placeholder="DIA" style="max-width:120px;" />
+                  </div>
+                  <div class="label" style="margin-top:8px;">Pulse (optional)</div>
+                  <input id="bpPulse" type="number" min="30" max="200" placeholder="e.g., 62" />
+                  <button class="btn btnPrimary" type="button" id="saveBpBtn" style="margin-top:10px;">Save BP</button>
+                </div>
+
+                <div>
+                  <div class="label">Sleep (hours)</div>
+                  <input id="sleepHours" type="number" min="0" max="24" step="0.1" placeholder="e.g., 5.2" />
+                  <div class="label" style="margin-top:8px;">Sleep score (optional)</div>
+                  <input id="sleepScore" type="number" min="0" max="100" placeholder="e.g., 44" />
+                  <button class="btn btnPrimary" type="button" id="saveSleepBtn" style="margin-top:10px;">Save Sleep</button>
+                </div>
+
+                <div>
+                  <div class="label">SpO₂ (%)</div>
+                  <input id="spo2Val" type="number" min="50" max="100" placeholder="e.g., 95" />
+                  <button class="btn btnPrimary" type="button" id="saveSpo2Btn" style="margin-top:10px;">Save SpO₂</button>
+                </div>
+
+                <div>
+                  <div class="label">Kidney labs</div>
+                  <div class="row">
+                    <input id="egfrVal" type="number" min="1" max="140" placeholder="eGFR" style="max-width:140px;" />
+                    <input id="creatVal" type="number" min="0" max="20" step="0.01" placeholder="Cr (mg/dL)" style="max-width:160px;" />
+                  </div>
+                  <div class="label" style="margin-top:8px;">UACR / Protein (mg/g) (optional)</div>
+                  <input id="uacrVal" type="number" min="0" max="5000" placeholder="e.g., 120" />
+                  <button class="btn btnPrimary" type="button" id="saveKidneyBtn" style="margin-top:10px;">Save Kidney</button>
+                </div>
+
+                <div>
+                  <div class="label">HbA1c (%)</div>
+                  <input id="a1cVal" type="number" min="3" max="20" step="0.1" placeholder="e.g., 6.1" />
+                  <button class="btn btnPrimary" type="button" id="saveA1cBtn" style="margin-top:10px;">Save HbA1c</button>
+                </div>
               </div>
             </div>
 
             <div class="card">
-              <div class="h">Live Preview (Score + Triage)</div>
-              <div id="previewBox"></div>
+              <div class="h">Add Data (Attachment / Paste Text)</div>
+              <div class="sub">If you have a screenshot/report text, paste it here (or copy from Samsung Notes). We'll parse what we can.</div>
+
+              <div class="hr"></div>
+              <textarea id="pasteBox" placeholder="Paste text here..."></textarea>
+
+              <div class="row" style="margin-top:10px;">
+                <button class="btn btnPrimary" type="button" id="parseTextBtn">Parse</button>
+                <button class="btn" type="button" id="clearPasteBtn">Clear</button>
+              </div>
+
+              <div class="hr"></div>
+              <div class="h" style="font-size:14px;">Parsed suggestions</div>
+              <div id="parseOut" class="muted">Nothing parsed yet.</div>
+
+              <div class="hr"></div>
+              <div class="row">
+                <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                <button class="btn" type="button" id="exportAllCsvBtn" ${state.metrics.length?"":"disabled"}>Export All Metrics CSV</button>
+              </div>
             </div>
           </div>
         `;
       }
 
       function viewTrends(user){
-        const last14 = state.entries.slice(0,14).reverse(); // older -> newer
-        if (!last14.length){
-          return `<div class="grid"><div class="card"><div class="h">Trends</div><div>No entries yet for ${escapeHtml(user.name)}.</div></div></div>`;
+        return `
+          <div class="grid">
+            <div class="card" style="grid-column:1 / -1;">
+              <div class="row" style="justify-content:space-between;">
+                <div>
+                  <div class="h">Trends (Key Metrics)</div>
+                  <div class="sub">These charts auto-feed from saved Snapshot data.</div>
+                </div>
+                <div class="row">
+                  <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                  <button class="btn" type="button" id="exportAllCsvBtn" ${state.metrics.length?"":"disabled"}>Export All Metrics CSV</button>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="grid">
+                <div class="card">
+                  <div class="h">Glucose (mg/dL)</div>
+                  <canvas class="chart" id="chartGlucose" width="900" height="220"></canvas>
+                </div>
+
+                <div class="card">
+                  <div class="h">Systolic BP (mmHg)</div>
+                  <canvas class="chart" id="chartBpSys" width="900" height="220"></canvas>
+                </div>
+
+                <div class="card">
+                  <div class="h">Sleep (hours)</div>
+                  <canvas class="chart" id="chartSleep" width="900" height="220"></canvas>
+                </div>
+
+                <div class="card">
+                  <div class="h">SpO₂ (%)</div>
+                  <canvas class="chart" id="chartSpo2" width="900" height="220"></canvas>
+                </div>
+
+                <div class="card">
+                  <div class="h">eGFR</div>
+                  <canvas class="chart" id="chartEgfr" width="900" height="220"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewKidney(user){
+        const lk = latestOf("kidney", state.metrics);
+        const egfr = lk?.payload?.egfr ?? null;
+        const uacr = lk?.payload?.uacr ?? null;
+
+        let flag = {cls:"ok", text:"No flag"};
+        if (uacr != null){
+          if (uacr >= 300) flag = {cls:"bad", text:"Proteinuria high"};
+          else if (uacr >= 30) flag = {cls:"warn", text:"Albuminuria"};
+          else flag = {cls:"ok", text:"UACR normal-ish"};
         }
-
-        const scores = last14.map(e=>e.computed.score);
-        const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
-
-        const counts = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
-        last14.forEach(e=>{ counts[e.bristol]=(counts[e.bristol]||0)+1; });
-
-        const triageCounts = {URGENT:0, SOON:0, ROUTINE:0, STABLE:0};
-        last14.forEach(e=>{
-          const t = (e.computed?.triage || "ROUTINE").toUpperCase();
-          triageCounts[t] = (triageCounts[t] || 0) + 1;
-        });
-
-        const last = last14[last14.length-1];
-        const first = last14[0];
-        const delta = (last?.computed?.score ?? 0) - (first?.computed?.score ?? 0);
+        if (egfr != null){
+          if (egfr < 30) flag = {cls:"bad", text:"eGFR low"};
+          else if (egfr < 60) flag = {cls:"warn", text:"CKD range"};
+        }
 
         return `
           <div class="grid">
             <div class="card">
-              <div class="h">Trends (Last 14 entries)</div>
-
-              <div class="row" style="margin-bottom:10px;">
-                <button class="btn" type="button" id="exportCsvBtn">Export GI CSV</button>
-                <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
-                <button class="btn" type="button" id="clearAllBtn">Clear all GI entries</button>
-              </div>
-
-              <div class="kvs">
-                <div class="kv"><div class="label">Entries</div><div class="val">${last14.length}</div></div>
-                <div class="kv"><div class="label">Average score</div><div class="val">${avg}/100</div></div>
-                <div class="kv"><div class="label">Latest score</div><div class="val">${scores[scores.length-1]}/100</div></div>
-                <div class="kv"><div class="label">Change (first→latest)</div><div class="val">${delta >= 0 ? "+" : ""}${delta}</div></div>
+              <div class="row" style="justify-content:space-between;">
+                <div>
+                  <div class="h">Kidney Module</div>
+                  <div class="sub">Labs, hydration/diarrhea risk, and proteinuria tracking.</div>
+                </div>
+                <div class="row">
+                  <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                  <button class="btn" type="button" id="exportAllCsvBtn" ${state.metrics.length?"":"disabled"}>Export All Metrics CSV</button>
+                </div>
               </div>
 
               <div class="hr"></div>
-              <div class="label">Score trend (older → newer)</div>
-              <div class="mono">${scores.map(s=>`<span style="margin-right:10px;">${s}</span>`).join("")}</div>
 
-              <div class="hr"></div>
-              <div class="label">Bristol distribution (count)</div>
               <div class="kvs">
-                ${Object.keys(counts).map(k=>`<div class="kv"><div class="label">T${k}</div><div class="val">${counts[k]}</div></div>`).join("")}
+                <div class="kv">
+                  <div class="label">Latest timestamp</div>
+                  <div class="val">${lk ? fmtDateTime(lk.ts) : "—"}</div>
+                </div>
+                <div class="kv">
+                  <div class="label">eGFR</div>
+                  <div class="val">${egfr!=null ? egfr : "—"}</div>
+                </div>
+                <div class="kv">
+                  <div class="label">UACR / Protein (mg/g)</div>
+                  <div class="val">${uacr!=null ? uacr : "—"}</div>
+                </div>
               </div>
 
               <div class="hr"></div>
-              <div class="label">Triage distribution (count)</div>
-              <div class="kvs">
-                ${Object.keys(triageCounts).map(k=>`<div class="kv"><div class="label">${k}</div><div class="val">${triageCounts[k] || 0}</div></div>`).join("")}
-              </div>
+              <span class="chip ${flag.cls}">${escapeHtml(flag.text)}</span>
+
+              <div class="hr"></div>
+              <div class="h" style="font-size:14px;">Notes</div>
+              <ul>
+                <li>Loose stools/dehydration can temporarily worsen kidney numbers and BP.</li>
+                <li>Proteinuria/UACR is a key kidney risk marker; trend matters more than one reading.</li>
+                <li>If you track GI, red-flag diarrhea/vomiting is kidney-relevant (hydration risk).</li>
+              </ul>
+
+              <div class="hr"></div>
+              <button class="btn btnPrimary" type="button" id="goAddDataBtn">Add Kidney labs</button>
             </div>
 
             <div class="card">
-              <div class="h">Kidney-aware note</div>
+              <div class="h">Quick proteinuria reduction levers (high-level)</div>
               <ul>
-                <li>Loose stools (Types 6–7) can increase dehydration risk, which may worsen BP and kidney markers temporarily.</li>
-                <li>Constipation (Types 1–2) often improves with water + gradual fiber; avoid aggressive laxatives unless clinician-approved.</li>
-                <li>Blood or black/tarry stool, or severe pain/vomiting = urgent evaluation.</li>
+                <li>BP control (especially ACEi/ARB if prescribed) is often the #1 lever.</li>
+                <li>Salt reduction + consistent hydration (avoid dehydration swings).</li>
+                <li>Diabetes control reduces kidney stress over time.</li>
+                <li>Discuss meds with clinician before changing (especially in CKD).</li>
               </ul>
             </div>
           </div>
         `;
       }
 
-      function viewHistory(user){
-        if (!state.entries.length){
-          return `<div class="grid"><div class="card"><div class="h">GI History (${escapeHtml(user.name)})</div><div>No entries yet.</div></div></div>`;
-        }
+      function viewGI(user){
+        // GI is isolated here only
+        const latest = state.gi[0] || null;
+
+        const giSubTabs = `
+          <div class="tabs row">
+            <button type="button" data-gitab="GI_SNAPSHOT" class="${state.giTab==="GI_SNAPSHOT"?"active":""}">GI Summary</button>
+            <button type="button" data-gitab="GI_ADD" class="${state.giTab==="GI_ADD"?"active":""}">Add Entry</button>
+            <button type="button" data-gitab="GI_TRENDS" class="${state.giTab==="GI_TRENDS"?"active":""}">Trends</button>
+            <button type="button" data-gitab="GI_HISTORY" class="${state.giTab==="GI_HISTORY"?"active":""}">History</button>
+          </div>
+        `;
 
         return `
           <div class="grid">
-            <div class="card">
-              <div class="h">GI History (${escapeHtml(user.name)})</div>
-
-              <div class="row" style="margin-bottom:10px;">
-                <button class="btn" type="button" id="exportCsvBtn">Export GI CSV</button>
-                <button class="btn" type="button" id="printBtn">Print / Save as PDF</button>
-                <button class="btn" type="button" id="clearAllBtn">Clear all</button>
+            <div class="card" style="grid-column:1 / -1;">
+              <div class="row" style="justify-content:space-between;">
+                <div>
+                  <div class="h">GI Module</div>
+                  <div class="sub">Stool tracking + stability score + red-flag triage.</div>
+                </div>
+                <div class="row">
+                  <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                  <button class="btn" type="button" id="exportGiCsvBtn" ${state.gi.length?"":"disabled"}>Export GI CSV</button>
+                </div>
               </div>
 
-              <div style="display:flex; flex-direction:column; gap:10px;">
-                ${state.entries.map(e=>{
-                  const c=e.computed || {};
-                  return `
-                    <div class="entry">
-                      <div class="row">
-                        <div class="${triageStyle((c.triage||"ROUTINE").toUpperCase())}" style="margin:0;">
-                          ${(c.triage||"ROUTINE").toUpperCase()}
-                        </div>
-                        <div class="sub">${e.ts ? fmtDateTime(e.ts) : ""}</div>
-                      </div>
+              <div class="hr"></div>
+              ${giSubTabs}
 
-                      <div style="margin-top:8px;">
-                        <b>Score:</b> ${typeof c.score==="number" ? c.score : "—"}/100
-                        — <b>Band:</b> ${escapeHtml(c.band || "—")}
-                      </div>
-
-                      <div style="margin-top:6px;">${escapeHtml(c.summary || "")}</div>
-                      ${e.notes ? `<div style="margin-top:6px;"><b>Notes:</b> ${escapeHtml(e.notes)}</div>` : ""}
-
-                      <div class="row" style="margin-top:10px;">
-                        <button class="btn" type="button" data-remove="${e.id}">Remove</button>
-                      </div>
-                    </div>
-                  `;
-                }).join("")}
-              </div>
+              <div class="hr"></div>
+              ${state.giTab==="GI_SNAPSHOT" ? giViewSnapshot(user, latest) : ""}
+              ${state.giTab==="GI_ADD" ? giViewAdd() : ""}
+              ${state.giTab==="GI_TRENDS" ? giViewTrends(user) : ""}
+              ${state.giTab==="GI_HISTORY" ? giViewHistory(user) : ""}
             </div>
           </div>
         `;
       }
 
+      function giViewSnapshot(user, latest){
+        return `
+          <div class="card" style="background:#0b0f14; border-color:#223043;">
+            <div class="row" style="justify-content:space-between;">
+              <div>
+                <div class="h" style="margin:0;">GI Summary Tile</div>
+                <div class="sub">Only shown inside the GI module.</div>
+              </div>
+              <div>${latest ? `<div class="${triageStyle(latest.computed.triage)}" style="margin:0;">${latest.computed.triage}</div>` : ""}</div>
+            </div>
+
+            <div class="hr"></div>
+
+            ${!latest ? `
+              <div class="muted">No GI entries yet for ${escapeHtml(user.name)}.</div>
+              <div class="hr"></div>
+              <button class="btn btnPrimary" type="button" id="giGoAddBtn">Add first GI entry</button>
+            ` : `
+              <div class="kvs">
+                <div class="kv"><div class="label">Timestamp</div><div class="val">${fmtDateTime(latest.ts)}</div></div>
+                <div class="kv"><div class="label">Score</div><div class="val">${latest.computed.score}/100</div></div>
+                <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(latest.computed.band)}</div></div>
+                <div class="kv"><div class="label">Red flags</div><div class="val">${latest.computed.anyRedFlag ? "Yes":"No"}</div></div>
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Summary</div>
+              <div>${escapeHtml(latest.computed.summary)}</div>
+
+              <div class="hr"></div>
+              <div class="label">Recommended actions</div>
+              <ul>${(latest.computed.actionPlan||[]).map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
+
+              <div class="hr"></div>
+              <button class="btn btnPrimary" type="button" id="giGoAddBtn">Add new GI entry</button>
+            `}
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <div class="h">Bristol Stool Types (Reference)</div>
+            <div>Types 3–4 are usually the target.</div>
+            <ul>
+              <li>Type 1: Hard separate pellets — constipation</li>
+              <li>Type 2: Lumpy sausage — constipation tendency</li>
+              <li>Type 3: Sausage with cracks — generally OK</li>
+              <li>Type 4: Smooth, soft, snake-like — ideal</li>
+              <li>Type 5: Soft blobs — mild looseness</li>
+              <li>Type 6: Mushy, ragged — diarrhea tendency</li>
+              <li>Type 7: Watery — significant diarrhea</li>
+            </ul>
+          </div>
+        `;
+      }
+
+      function giViewAdd(){
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">Add GI Entry</div>
+
+              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+                ${fieldSelect("Bristol stool type (1–7)", "gi_bristol", [1,2,3,4,5,6,7], 4)}
+                ${fieldNumber("Frequency (stools/day)", "gi_frequency", 1, 0, 20)}
+                ${fieldSelect("Urgency", "gi_urgency", ["none","sometimes","often"], "none")}
+                ${fieldSelect("Pain with stool", "gi_pain", ["none","mild","moderate","severe"], "none")}
+                ${fieldNumber("How many days has this pattern persisted?", "gi_durationDays", 1, 0, 365)}
+                ${fieldNumber("Urine color (1–8) optional", "gi_urineColor", 3, 0, 8)}
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Red flags</div>
+              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px;">
+                ${check("gi_blood", "Visible blood in stool")}
+                ${check("gi_blackTarry", "Black/tarry stool")}
+                ${check("gi_fever", "Fever")}
+                ${check("gi_severePain", "Severe abdominal pain")}
+                ${check("gi_vomiting", "Persistent vomiting")}
+                ${check("gi_weightLoss", "Unintentional weight loss")}
+                ${check("gi_wateryOver48h", "Watery diarrhea >48 hours")}
+              </div>
+
+              <div class="hr"></div>
+              <div class="label">Notes (optional)</div>
+              <textarea id="gi_notes" placeholder="e.g., spicy meal, new medication, travel, stress, etc."></textarea>
+
+              <div class="row" style="margin-top:10px;">
+                <button class="btn btnPrimary" type="button" id="giSaveBtn">Save GI Entry</button>
+                <button class="btn" type="button" id="giResetBtn">Reset</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h">Live Preview</div>
+              <div id="giPreviewBox" class="muted">Adjust inputs to see live triage and actions.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function giViewTrends(user){
+        const last14 = state.gi.slice(0,14).reverse();
+        if (!last14.length){
+          return `<div class="card"><div class="h">GI Trends</div><div class="muted">No entries yet.</div></div>`;
+        }
+        const scores = last14.map(e=>e.computed.score);
+        const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+
+        const counts = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
+        last14.forEach(e=>{ counts[e.bristol]=(counts[e.bristol]||0)+1; });
+
+        return `
+          <div class="card">
+            <div class="h">GI Trends (Last 14)</div>
+            <div class="kvs">
+              <div class="kv"><div class="label">Entries</div><div class="val">${last14.length}</div></div>
+              <div class="kv"><div class="label">Average score</div><div class="val">${avg}/100</div></div>
+              <div class="kv"><div class="label">Latest score</div><div class="val">${scores[scores.length-1]}/100</div></div>
+            </div>
+
+            <div class="hr"></div>
+            <div class="label">Score trend (older → newer)</div>
+            <div class="mono">${scores.map(s=>`<span style="margin-right:10px;">${s}</span>`).join("")}</div>
+
+            <div class="hr"></div>
+            <div class="label">Bristol distribution</div>
+            <div class="kvs">
+              ${Object.keys(counts).map(k=>`<div class="kv"><div class="label">T${k}</div><div class="val">${counts[k]}</div></div>`).join("")}
+            </div>
+
+            <div class="hr"></div>
+            <button class="btn" type="button" id="giClearAllBtn">Clear all GI entries</button>
+          </div>
+        `;
+      }
+
+      function giViewHistory(user){
+        if (!state.gi.length){
+          return `<div class="card"><div class="h">GI History</div><div class="muted">No entries yet.</div></div>`;
+        }
+        return `
+          <div class="card">
+            <div class="h">GI History (${escapeHtml(user.name)})</div>
+            <div class="row" style="margin-bottom:10px;">
+              <button class="btn" type="button" id="giClearAllBtn">Clear all</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              ${state.gi.map(e=>{
+                const c = e.computed || {};
+                return `
+                  <div class="entry">
+                    <div class="row">
+                      <div class="${triageStyle(c.triage)}" style="margin:0;">${c.triage}</div>
+                      <div class="sub">${fmtDateTime(e.ts)}</div>
+                    </div>
+                    <div><b>Score:</b> ${c.score}/100 — <b>Band:</b> ${escapeHtml(c.band)}</div>
+                    <div>${escapeHtml(c.summary)}</div>
+                    ${e.notes ? `<div><b>Notes:</b> ${escapeHtml(e.notes)}</div>` : ""}
+                    <div class="row" style="margin-top:8px;">
+                      <button class="btn" type="button" data-giremove="${e.id}">Remove</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      function viewReports(user){
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">Reports</div>
+              <div class="sub">This is the placeholder for doctor-style PDF reports and weekly summaries.</div>
+
+              <div class="hr"></div>
+              <div class="row">
+                <button class="btn" type="button" id="printBtn">Print / Save PDF</button>
+                <button class="btn" type="button" id="exportAllCsvBtn" ${state.metrics.length?"":"disabled"}>Export All Metrics CSV</button>
+                <button class="btn" type="button" id="exportGiCsvBtn" ${state.gi.length?"":"disabled"}>Export GI CSV</button>
+              </div>
+
+              <div class="hr"></div>
+              <div class="muted">Next step: generate a combined narrative report (BP + glucose + kidney + sleep + GI) with flags and recommendations.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function viewProfile(user){
+        return `
+          <div class="grid">
+            <div class="card">
+              <div class="h">Profile</div>
+              <div class="sub">Multi-person storage is enabled (Me + family).</div>
+              <div class="hr"></div>
+              <div class="kvs">
+                <div class="kv"><div class="label">Active person</div><div class="val">${escapeHtml(user.name)}</div></div>
+                <div class="kv"><div class="label">Metrics entries</div><div class="val">${state.metrics.length}</div></div>
+                <div class="kv"><div class="label">GI entries</div><div class="val">${state.gi.length}</div></div>
+              </div>
+
+              <div class="hr"></div>
+              <div class="row">
+                <button class="btn" type="button" id="dangerClearAllBtn">Factory reset (this person)</button>
+              </div>
+
+              <div class="hr"></div>
+              <div class="muted">This is where we later add BMI, DOB/age, meds timing, and device-time anchors.</div>
+            </div>
+          </div>
+        `;
+      }
+
+      // ---- form helpers
       function fieldSelect(label, id, options, defaultValue){
         const opts = options.map(o=>{
           const v=String(o); const sel=(v===String(defaultValue))?"selected":"";
@@ -669,205 +1041,409 @@
         return `<div><div class="label">${escapeHtml(label)}</div><input id="${escapeHtml(id)}" type="number" value="${defaultValue}" min="${min}" max="${max}"></div>`;
       }
       function check(id, label){
-        return `<label class="check"><input type="checkbox" id="${escapeHtml(id)}"><span>${escapeHtml(label)}</span></label>`;
+        return `<label class="entry" style="display:flex; gap:10px; align-items:center;"><input type="checkbox" id="${escapeHtml(id)}"><span>${escapeHtml(label)}</span></label>`;
       }
 
-      function collectForm(includeNotes){
-        const bristol = clampInt(qs("#bristol")?.value ?? 4, 1, 7);
-        const frequency = clampInt(qs("#frequency")?.value ?? 1, 0, 20);
-        const urgency = qs("#urgency")?.value ?? "none";
-        const pain = qs("#pain")?.value ?? "none";
-        const durationDays = clampInt(qs("#durationDays")?.value ?? 1, 0, 365);
-        const urineColor = clampInt(qs("#urineColor")?.value ?? 0, 0, 8);
-
-        const redFlags = {
-          blood: !!qs("#blood")?.checked,
-          blackTarry: !!qs("#blackTarry")?.checked,
-          fever: !!qs("#fever")?.checked,
-          severePain: !!qs("#severePain")?.checked,
-          vomiting: !!qs("#vomiting")?.checked,
-          weightLoss: !!qs("#weightLoss")?.checked,
-          wateryOver48h: !!qs("#wateryOver48h")?.checked,
-        };
-
-        const entry = { bristol, frequency, urgency, pain, durationDays, urineColor, redFlags };
-        entry.notes = includeNotes ? (qs("#notes")?.value || "").slice(0,1000) : "";
-        return entry;
-      }
-
-      function setDefaultForm(){
-        const setVal=(id,v)=>{ const el=qs("#"+id); if(el) el.value=v; };
-        setVal("bristol",4); setVal("frequency",1); setVal("urgency","none"); setVal("pain","none");
-        setVal("durationDays",1); setVal("urineColor",3);
-        const notes=qs("#notes"); if(notes) notes.value="";
-        ["blood","blackTarry","fever","severePain","vomiting","weightLoss","wateryOver48h"].forEach(id=>{
-          const el=qs("#"+id); if(el) el.checked=false;
+      // ---- exports
+      function exportAllMetricsCsv(){
+        const user = state.users.find(u=>u.id===state.activeUserId) || {name:"Unknown"};
+        const header = ["person","timestamp","type","field1","field2","field3","note"];
+        const rows = state.metrics.slice().reverse().map(m=>{
+          let f1="", f2="", f3="", note="";
+          if (m.type==="glucose"){ f1=m.payload?.mgdl ?? ""; note=m.payload?.note ?? ""; }
+          if (m.type==="bp"){ f1=m.payload?.sys ?? ""; f2=m.payload?.dia ?? ""; f3=m.payload?.pulse ?? ""; note=m.payload?.note ?? ""; }
+          if (m.type==="sleep"){ f1=m.payload?.hours ?? ""; f2=m.payload?.score ?? ""; note=m.payload?.note ?? ""; }
+          if (m.type==="spo2"){ f1=m.payload?.pct ?? ""; note=m.payload?.note ?? ""; }
+          if (m.type==="kidney"){ f1=m.payload?.egfr ?? ""; f2=m.payload?.creat ?? ""; f3=m.payload?.uacr ?? ""; note=m.payload?.note ?? ""; }
+          if (m.type==="hba1c"){ f1=m.payload?.pct ?? ""; note=m.payload?.note ?? ""; }
+          return [
+            user.name, m.ts, m.type, f1, f2, f3, note
+          ].map(csvEscape).join(",");
         });
-        const first=qs("#bristol"); if(first) first.dispatchEvent(new Event("change"));
+        const csv = header.join(",") + "\n" + rows.join("\n");
+        const safeName = (user.name||"person").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"_") || "person";
+        downloadTextFile(`HC_AllMetrics_${safeName}.csv`, csv, "text/csv");
       }
 
-      function doExportCsv(){
-        const user = state.users.find(u => u.id === state.activeUserId) || {name:"Unknown"};
-        const csv = entriesToCsv(user.name, state.entries);
-        const safeName = (user.name || "person").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") || "person";
-        const filename = `HC_GI_${safeName}.csv`;
-        downloadTextFile(filename, csv, "text/csv");
+      function exportGiCsv(){
+        const user = state.users.find(u=>u.id===state.activeUserId) || {name:"Unknown"};
+        const header = [
+          "person","timestamp","bristol","frequency","urgency","pain","durationDays","urineColor",
+          "blood","blackTarry","fever","severePain","vomiting","weightLoss","wateryOver48h",
+          "score","band","triage","summary","notes"
+        ];
+        const rows = state.gi.slice().reverse().map(e=>{
+          const rf = e.redFlags || {};
+          const c = e.computed || {};
+          return [
+            user.name, e.ts, e.bristol, e.frequency, e.urgency, e.pain, e.durationDays, e.urineColor,
+            rf.blood?1:0, rf.blackTarry?1:0, rf.fever?1:0, rf.severePain?1:0, rf.vomiting?1:0, rf.weightLoss?1:0, rf.wateryOver48h?1:0,
+            c.score, c.band, c.triage, c.summary, e.notes||""
+          ].map(csvEscape).join(",");
+        });
+        const csv = header.join(",") + "\n" + rows.join("\n");
+        const safeName = (user.name||"person").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"_") || "person";
+        downloadTextFile(`HC_GI_${safeName}.csv`, csv, "text/csv");
       }
 
+      // ---- event wiring
       function wireEvents(){
-        // Tabs
-        qsa(".tabs button").forEach(b=>{
+        // top tabs
+        qsa(".tabs button[data-tab]").forEach(b=>{
           b.addEventListener("click", ()=>{
             state.tab = b.getAttribute("data-tab");
             render();
           });
         });
 
-        // Person select
-        const personSelect=qs("#personSelect");
-        if(personSelect){
+        // GI subtabs
+        qsa("[data-gitab]").forEach(b=>{
+          b.addEventListener("click", ()=>{
+            state.giTab = b.getAttribute("data-gitab");
+            render();
+          });
+        });
+
+        // person select
+        const personSelect = qs("#personSelect");
+        if (personSelect){
           personSelect.addEventListener("change", ()=>{
             state.activeUserId = personSelect.value;
             setActiveUserId(state.activeUserId);
-            state.entries = loadEntries(state.activeUserId);
             render();
           });
         }
 
-        // Add person
-        const addBtn=qs("#addPersonBtn");
-        if(addBtn){
-          addBtn.addEventListener("click", ()=>{
-            const name=(qs("#newPersonName")?.value||"").trim();
-            if(!name) return;
-            const id=uid();
+        // add person
+        const addPersonBtn = qs("#addPersonBtn");
+        if (addPersonBtn){
+          addPersonBtn.addEventListener("click", ()=>{
+            const name = (qs("#newPersonName")?.value || "").trim();
+            if (!name) return;
+            const id = uid();
             state.users.push({id, name});
             saveUsers(state.users);
-            state.activeUserId=id;
+            state.activeUserId = id;
             setActiveUserId(id);
-            state.entries=loadEntries(id);
-            const n=qs("#newPersonName"); if(n) n.value="";
+            const n = qs("#newPersonName"); if(n) n.value="";
             render();
           });
         }
 
-        // Delete person
-        const delBtn=qs("#delPersonBtn");
-        if(delBtn){
-          delBtn.addEventListener("click", ()=>{
-            if(state.activeUserId==="me") return;
-            if(!confirm("Delete this person and all their GI entries?")) return;
-            const id=state.activeUserId;
+        // delete person
+        const delPersonBtn = qs("#delPersonBtn");
+        if (delPersonBtn){
+          delPersonBtn.addEventListener("click", ()=>{
+            if (state.activeUserId==="me") return;
+            if (!confirm("Delete this person and all their data?")) return;
+            const id = state.activeUserId;
             state.users = state.users.filter(u=>u.id!==id);
             saveUsers(state.users);
+            localStorage.removeItem(metricsKey(id));
             localStorage.removeItem(giKey(id));
-            state.activeUserId="me";
+            state.activeUserId = "me";
             setActiveUserId("me");
-            state.entries=loadEntries("me");
             render();
           });
         }
 
-        // Snapshot CTA buttons (old + tile buttons)
-        const goAdd=qs("#goAddFromSnapshot");
-        if(goAdd) goAdd.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
+        // Snapshot nav buttons
+        const goAddDataBtn = qs("#goAddDataBtn");
+        if (goAddDataBtn) goAddDataBtn.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
 
-        const tileAdd=qs("#tileAddBtn");
-        if(tileAdd) tileAdd.addEventListener("click", ()=>{ state.tab="ADD"; render(); });
+        const goTrendsBtn = qs("#goTrendsBtn");
+        if (goTrendsBtn) goTrendsBtn.addEventListener("click", ()=>{ state.tab="TRENDS"; render(); });
 
-        const tileHistory=qs("#tileHistoryBtn");
-        if(tileHistory) tileHistory.addEventListener("click", ()=>{ state.tab="HISTORY"; render(); });
+        const goGiBtn = qs("#goGiBtn");
+        if (goGiBtn) goGiBtn.addEventListener("click", ()=>{ state.tab="GI"; state.giTab="GI_SNAPSHOT"; render(); });
 
-        const tileTrends=qs("#tileTrendsBtn");
-        if(tileTrends) tileTrends.addEventListener("click", ()=>{ state.tab="TRENDS"; render(); });
+        const goKidneyBtn = qs("#goKidneyBtn");
+        if (goKidneyBtn) goKidneyBtn.addEventListener("click", ()=>{ state.tab="KIDNEY"; render(); });
 
-        // Export CSV buttons (Snapshot/Trends/History)
-        qsa("#exportCsvBtn").forEach(btn=>{
-          btn.addEventListener("click", doExportCsv);
-        });
+        // Print (any view)
+        qsa("#printBtn").forEach(btn=>btn.addEventListener("click", ()=>window.print()));
 
-        // Print / PDF buttons (Snapshot/Trends/History)
-        qsa("#printBtn").forEach(btn=>{
-          btn.addEventListener("click", ()=>window.print());
-        });
+        // Export buttons
+        qsa("#exportAllCsvBtn").forEach(btn=>btn.addEventListener("click", exportAllMetricsCsv));
+        qsa("#exportAllCsvBtn").forEach(btn=>btn.disabled = !state.metrics.length);
 
-        // Live preview (ADD tab)
-        const previewBox=qs("#previewBox");
-        const bindPreview=()=>{
-          if(!previewBox) return;
-          const entry=collectForm(false);
-          const computed=computeGiStability(entry);
-          computed.actionPlan=buildActionPlan(entry, computed);
-          setHTML(previewBox, `
-            <div class="${triageStyle(computed.triage)}" style="margin:0 0 10px 0;">${computed.triage}</div>
-            <div class="kvs">
-              <div class="kv"><div class="label">Score</div><div class="val">${computed.score}/100</div></div>
-              <div class="kv"><div class="label">Band</div><div class="val">${escapeHtml(computed.band)}</div></div>
-              <div class="kv"><div class="label">Red flags</div><div class="val">${computed.anyRedFlag ? "Yes":"No"}</div></div>
-            </div>
-            <div class="hr"></div>
-            <div class="label">Summary</div>
-            <div>${escapeHtml(computed.summary)}</div>
-            <div class="hr"></div>
-            <div class="label">Actions</div>
-            <ul>${computed.actionPlan.map(a=>`<li>${escapeHtml(a)}</li>`).join("")}</ul>
-          `);
-        };
+        qsa("#exportAllCsvBtn2").forEach(btn=>btn.addEventListener("click", exportAllMetricsCsv));
+        qsa("#exportGiCsvBtn").forEach(btn=>btn.addEventListener("click", exportGiCsv));
 
-        ["bristol","frequency","urgency","pain","durationDays","urineColor","notes",
-         "blood","blackTarry","fever","severePain","vomiting","weightLoss","wateryOver48h"
-        ].forEach(id=>{
-          const el=qs("#"+id);
-          if(el){
-            el.addEventListener("input", bindPreview);
-            el.addEventListener("change", bindPreview);
-          }
-        });
-        if(previewBox) bindPreview();
+        // manual saves
+        const nowIso = ()=> new Date().toISOString();
 
-        // Save (ADD tab)
-        const saveBtn=qs("#saveGiBtn");
-        if(saveBtn){
-          saveBtn.addEventListener("click", ()=>{
-            const entry=collectForm(true);
-            const computed=computeGiStability(entry);
-            computed.actionPlan=buildActionPlan(entry, computed);
+        const saveGlucoseBtn = qs("#saveGlucoseBtn");
+        if (saveGlucoseBtn){
+          saveGlucoseBtn.addEventListener("click", ()=>{
+            const v = clampNum(qs("#glucoseVal")?.value, 40, 400);
+            if (!v) return;
+            const note = (qs("#glucoseNote")?.value || "").slice(0,200);
+            const rec = { id:uid(), ts:nowIso(), type:"glucose", payload:{ mgdl:+v, note } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
+            render(); // auto-update snapshot
+          });
+        }
 
-            const stored={ id:uid(), ts:new Date().toISOString(), ...entry, computed };
-            state.entries=[stored, ...state.entries];
-            saveEntries(state.activeUserId, state.entries);
-
-            state.tab="SNAPSHOT";
+        const saveBpBtn = qs("#saveBpBtn");
+        if (saveBpBtn){
+          saveBpBtn.addEventListener("click", ()=>{
+            const sys = clampNum(qs("#bpSys")?.value, 70, 260);
+            const dia = clampNum(qs("#bpDia")?.value, 40, 160);
+            if (!sys || !dia) return;
+            const pulseRaw = qs("#bpPulse")?.value;
+            const pulse = pulseRaw ? clampNum(pulseRaw, 30, 200) : null;
+            const rec = { id:uid(), ts:nowIso(), type:"bp", payload:{ sys:+sys, dia:+dia, pulse: pulse!=null?+pulse:null, note:"" } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
             render();
           });
         }
 
-        // Reset (ADD tab)
-        const resetBtn=qs("#resetGiBtn");
-        if(resetBtn) resetBtn.addEventListener("click", setDefaultForm);
-
-        // Clear all (Trends + History)
-        const clearAllBtn=qs("#clearAllBtn");
-        if(clearAllBtn){
-          clearAllBtn.addEventListener("click", ()=>{
-            if(!confirm("Clear ALL GI entries for this person? This cannot be undone.")) return;
-            state.entries=[];
-            saveEntries(state.activeUserId, state.entries);
+        const saveSleepBtn = qs("#saveSleepBtn");
+        if (saveSleepBtn){
+          saveSleepBtn.addEventListener("click", ()=>{
+            const hours = clampNum(qs("#sleepHours")?.value, 0, 24);
+            if (hours==null) return;
+            const scoreRaw = qs("#sleepScore")?.value;
+            const score = scoreRaw ? clampNum(scoreRaw, 0, 100) : null;
+            const rec = { id:uid(), ts:nowIso(), type:"sleep", payload:{ hours:+hours, score: score!=null?+score:null, note:"" } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
             render();
           });
         }
 
-        // Remove single (History)
-        qsa("[data-remove]").forEach(btn=>{
+        const saveSpo2Btn = qs("#saveSpo2Btn");
+        if (saveSpo2Btn){
+          saveSpo2Btn.addEventListener("click", ()=>{
+            const pct = clampNum(qs("#spo2Val")?.value, 50, 100);
+            if (!pct) return;
+            const rec = { id:uid(), ts:nowIso(), type:"spo2", payload:{ pct:+pct, note:"" } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
+            render();
+          });
+        }
+
+        const saveKidneyBtn = qs("#saveKidneyBtn");
+        if (saveKidneyBtn){
+          saveKidneyBtn.addEventListener("click", ()=>{
+            const egfrRaw = qs("#egfrVal")?.value;
+            const creatRaw = qs("#creatVal")?.value;
+            const uacrRaw = qs("#uacrVal")?.value;
+            const egfr = egfrRaw ? clampNum(egfrRaw, 1, 140) : null;
+            const creat = creatRaw ? clampNum(creatRaw, 0, 20) : null;
+            const uacr = uacrRaw ? clampNum(uacrRaw, 0, 5000) : null;
+            if (egfr==null && creat==null && uacr==null) return;
+            const rec = { id:uid(), ts:nowIso(), type:"kidney", payload:{ egfr: egfr!=null?+egfr:null, creat: creat!=null?+creat:null, uacr: uacr!=null?+uacr:null, note:"" } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
+            render();
+          });
+        }
+
+        const saveA1cBtn = qs("#saveA1cBtn");
+        if (saveA1cBtn){
+          saveA1cBtn.addEventListener("click", ()=>{
+            const pct = clampNum(qs("#a1cVal")?.value, 3, 20);
+            if (!pct) return;
+            const rec = { id:uid(), ts:nowIso(), type:"hba1c", payload:{ pct:+pct, note:"" } };
+            const items = loadMetrics(state.activeUserId);
+            items.unshift(rec);
+            saveMetrics(state.activeUserId, items);
+            render();
+          });
+        }
+
+        // parsing
+        const parseBtn = qs("#parseTextBtn");
+        if (parseBtn){
+          parseBtn.addEventListener("click", ()=>{
+            const text = qs("#pasteBox")?.value || "";
+            const suggestions = parseTextIntoSuggestions(text);
+
+            const box = qs("#parseOut");
+            if (!box) return;
+
+            if (!suggestions.length){
+              box.innerHTML = `<div class="muted">No recognizable metrics found. Paste more complete text (include numbers and labels).</div>`;
+              return;
+            }
+
+            box.innerHTML = `
+              <div class="muted">We found ${suggestions.length} suggestion(s). Click “Save” beside any to store it.</div>
+              <div class="hr"></div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                ${suggestions.map((s, idx)=>{
+                  const label =
+                    s.type==="glucose" ? `Glucose ${s.payload.mgdl} mg/dL` :
+                    s.type==="bp" ? `BP ${s.payload.sys}/${s.payload.dia}` :
+                    s.type==="spo2" ? `SpO₂ ${s.payload.pct}%` :
+                    s.type==="kidney" ? `Kidney eGFR ${s.payload.egfr}` :
+                    s.type==="hba1c" ? `HbA1c ${s.payload.pct}%` :
+                    `${s.type}`;
+                  return `
+                    <div class="entry">
+                      <div><b>${escapeHtml(label)}</b></div>
+                      <div class="sub">${escapeHtml(s.payload.note || "Parsed from text")}</div>
+                      <div class="row" style="margin-top:8px;">
+                        <button class="btn btnPrimary" type="button" data-saveparsed="${idx}">Save</button>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            `;
+
+            // attach click handlers for parsed saves
+            qsa("[data-saveparsed]").forEach(btn=>{
+              btn.addEventListener("click", ()=>{
+                const i = +btn.getAttribute("data-saveparsed");
+                const s = suggestions[i];
+                if (!s) return;
+                const rec = { id:uid(), ts:nowIso(), type:s.type, payload:s.payload };
+                const items = loadMetrics(state.activeUserId);
+                items.unshift(rec);
+                saveMetrics(state.activeUserId, items);
+                render();
+              });
+            });
+          });
+        }
+
+        const clearPasteBtn = qs("#clearPasteBtn");
+        if (clearPasteBtn){
+          clearPasteBtn.addEventListener("click", ()=>{
+            const pb = qs("#pasteBox"); if (pb) pb.value="";
+            const po = qs("#parseOut"); if (po) po.innerHTML = "Nothing parsed yet.";
+          });
+        }
+
+        // GI events
+        const giGoAddBtn = qs("#giGoAddBtn");
+        if (giGoAddBtn){
+          giGoAddBtn.addEventListener("click", ()=>{
+            state.giTab = "GI_ADD";
+            render();
+          });
+        }
+
+        const giResetBtn = qs("#giResetBtn");
+        if (giResetBtn){
+          giResetBtn.addEventListener("click", ()=>{
+            // reset fields
+            const set=(id,v)=>{ const el=qs("#"+id); if(el) el.value=v; };
+            set("gi_bristol","4"); set("gi_frequency","1"); set("gi_urgency","none"); set("gi_pain","none");
+            set("gi_durationDays","1"); set("gi_urineColor","3");
+            const notes = qs("#gi_notes"); if (notes) notes.value="";
+            ["gi_blood","gi_blackTarry","gi_fever","gi_severePain","gi_vomiting","gi_weightLoss","gi_wateryOver48h"].forEach(id=>{
+              const el=qs("#"+id); if(el) el.checked=false;
+            });
+            const b = qs("#gi_bristol"); if (b) b.dispatchEvent(new Event("change"));
+          });
+        }
+
+        const giSaveBtn = qs("#giSaveBtn");
+        if (giSaveBtn){
+          giSaveBtn.addEventListener("click", ()=>{
+            const bristol = Math.max(1, Math.min(7, Math.floor(+qs("#gi_bristol")?.value || 4)));
+            const frequency = Math.max(0, Math.min(20, Math.floor(+qs("#gi_frequency")?.value || 1)));
+            const urgency = qs("#gi_urgency")?.value || "none";
+            const pain = qs("#gi_pain")?.value || "none";
+            const durationDays = Math.max(0, Math.min(365, Math.floor(+qs("#gi_durationDays")?.value || 1)));
+            const urineColor = Math.max(0, Math.min(8, Math.floor(+qs("#gi_urineColor")?.value || 0)));
+            const redFlags = {
+              blood: !!qs("#gi_blood")?.checked,
+              blackTarry: !!qs("#gi_blackTarry")?.checked,
+              fever: !!qs("#gi_fever")?.checked,
+              severePain: !!qs("#gi_severePain")?.checked,
+              vomiting: !!qs("#gi_vomiting")?.checked,
+              weightLoss: !!qs("#gi_weightLoss")?.checked,
+              wateryOver48h: !!qs("#gi_wateryOver48h")?.checked,
+            };
+            const notes = (qs("#gi_notes")?.value || "").slice(0,1000);
+
+            const entry = { bristol, frequency, urgency, pain, durationDays, urineColor, redFlags, notes };
+            const computed = computeGiStability(entry);
+            computed.actionPlan = buildGiActionPlan(entry, computed);
+
+            const stored = { id:uid(), ts:nowIso(), ...entry, computed };
+            const items = loadGiEntries(state.activeUserId);
+            items.unshift(stored);
+            saveGiEntries(state.activeUserId, items);
+
+            state.giTab = "GI_SNAPSHOT";
+            render();
+          });
+        }
+
+        const giClearAllBtn = qs("#giClearAllBtn");
+        if (giClearAllBtn){
+          giClearAllBtn.addEventListener("click", ()=>{
+            if (!confirm("Clear ALL GI entries for this person?")) return;
+            saveGiEntries(state.activeUserId, []);
+            render();
+          });
+        }
+
+        qsa("[data-giremove]").forEach(btn=>{
           btn.addEventListener("click", ()=>{
-            const id=btn.getAttribute("data-remove");
-            state.entries = state.entries.filter(e=>e.id!==id);
-            saveEntries(state.activeUserId, state.entries);
+            const id = btn.getAttribute("data-giremove");
+            const items = loadGiEntries(state.activeUserId).filter(e=>e.id!==id);
+            saveGiEntries(state.activeUserId, items);
             render();
           });
         });
+
+        // Export / print in GI
+        const exportGiCsvBtn = qs("#exportGiCsvBtn");
+        if (exportGiCsvBtn){
+          exportGiCsvBtn.addEventListener("click", exportGiCsv);
+        }
+
+        // Profile: factory reset
+        const dangerClearAllBtn = qs("#dangerClearAllBtn");
+        if (dangerClearAllBtn){
+          dangerClearAllBtn.addEventListener("click", ()=>{
+            if (!confirm("This will delete ALL metrics + GI data for this person. Continue?")) return;
+            localStorage.removeItem(metricsKey(state.activeUserId));
+            localStorage.removeItem(giKey(state.activeUserId));
+            render();
+          });
+        }
       }
 
+      function postRender(){
+        // charts only on Trends tab
+        if (state.tab !== "TRENDS") return;
+
+        const metrics = state.metrics.slice().reverse(); // older->newer for charts
+        const gl = metrics.filter(m=>m.type==="glucose" && typeof m.payload?.mgdl==="number")
+          .map(m=>({x:new Date(m.ts), y:m.payload.mgdl}));
+        const bp = metrics.filter(m=>m.type==="bp" && typeof m.payload?.sys==="number")
+          .map(m=>({x:new Date(m.ts), y:m.payload.sys}));
+        const sl = metrics.filter(m=>m.type==="sleep" && typeof m.payload?.hours==="number")
+          .map(m=>({x:new Date(m.ts), y:m.payload.hours}));
+        const o2 = metrics.filter(m=>m.type==="spo2" && typeof m.payload?.pct==="number")
+          .map(m=>({x:new Date(m.ts), y:m.payload.pct}));
+        const eg = metrics.filter(m=>m.type==="kidney" && typeof m.payload?.egfr==="number")
+          .map(m=>({x:new Date(m.ts), y:m.payload.egfr}));
+
+        const cG = qs("#chartGlucose"); if (cG) drawLineChart(cG, gl, "Latest");
+        const cB = qs("#chartBpSys"); if (cB) drawLineChart(cB, bp, "Latest");
+        const cS = qs("#chartSleep"); if (cS) drawLineChart(cS, sl, "Latest");
+        const cO = qs("#chartSpo2"); if (cO) drawLineChart(cO, o2, "Latest");
+        const cE = qs("#chartEgfr"); if (cE) drawLineChart(cE, eg, "Latest");
+      }
+
+      // start
       render();
     })();
   </script>
