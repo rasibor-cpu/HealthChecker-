@@ -3,196 +3,743 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>HealthChecker+ v3</title>
-
+<title>HealthChecker+ v3.1</title>
 <style>
-body { font-family: Arial; background:#0b1220; color:#fff; margin:0; padding:15px;}
-.card { background:#111827; padding:15px; margin-bottom:12px; border-radius:10px;}
-input,select { width:100%; padding:10px; margin:6px 0; border-radius:6px; border:none;}
-button { width:100%; padding:12px; margin-top:10px; border:none; border-radius:6px; background:#4da3ff; color:#fff; font-weight:bold;}
-.kpi { font-size:22px; font-weight:bold;}
-.ok{color:#2dd4bf;} .warn{color:#fbbf24;} .bad{color:#fb7185;}
+  :root{
+    --bg:#0b1220;
+    --card:#111827;
+    --card2:#0f172a;
+    --text:#f8fafc;
+    --muted:#94a3b8;
+    --line:#1f2937;
+    --blue:#4da3ff;
+    --ok:#2dd4bf;
+    --warn:#fbbf24;
+    --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:14px;
+  }
+  h1,h2,h3{margin:0 0 10px}
+  .wrap{max-width:980px;margin:0 auto}
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    padding:14px;
+    margin-bottom:14px;
+    border-radius:14px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(12,1fr);
+    gap:12px;
+  }
+  .span-12{grid-column:span 12}
+  .span-6{grid-column:span 6}
+  .span-4{grid-column:span 4}
+  @media (max-width:760px){
+    .span-6,.span-4{grid-column:span 12}
+  }
+  label{
+    display:block;
+    margin:10px 0 6px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  input, select, textarea, button{
+    width:100%;
+    border-radius:10px;
+    border:1px solid var(--line);
+    padding:10px 12px;
+    font-size:14px;
+  }
+  input, select, textarea{
+    background:#0b1220;
+    color:var(--text);
+  }
+  textarea{min-height:80px;resize:vertical}
+  button{
+    background:var(--blue);
+    color:white;
+    border:none;
+    font-weight:700;
+    cursor:pointer;
+    margin-top:10px;
+  }
+  button.secondary{
+    background:#1e293b;
+    border:1px solid #334155;
+  }
+  button.danger{
+    background:#7f1d1d;
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .row > *{
+    flex:1 1 180px;
+  }
+  .kpi{
+    background:var(--card2);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px;
+    min-height:92px;
+  }
+  .kpi .label{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .kpi .value{
+    font-size:24px;
+    font-weight:800;
+    margin-top:6px;
+  }
+  .kpi .hint{
+    font-size:12px;
+    margin-top:6px;
+    color:var(--muted);
+  }
+  .ok{color:var(--ok)}
+  .warn{color:var(--warn)}
+  .bad{color:var(--bad)}
+  .muted{color:var(--muted)}
+  .small{font-size:12px;color:var(--muted)}
+  .alert{
+    border-left:4px solid var(--warn);
+    background:#1f2937;
+    padding:10px 12px;
+    border-radius:10px;
+    margin-top:10px;
+    font-size:13px;
+  }
+  .alert.bad{border-left-color:var(--bad)}
+  .alert.ok{border-left-color:var(--ok)}
+  canvas{
+    width:100%;
+    height:220px;
+    background:#0b1220;
+    border:1px solid var(--line);
+    border-radius:12px;
+  }
+  .history-item{
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .history-item:last-child{border-bottom:none}
+  .pill{
+    display:inline-block;
+    font-size:12px;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#1e293b;
+    color:#cbd5e1;
+    margin-right:6px;
+    margin-top:6px;
+  }
 </style>
 </head>
-
 <body>
+<div class="wrap">
 
-<h2>HealthChecker+ v3</h2>
+  <div class="card">
+    <h1>HealthChecker+ v3.1</h1>
+    <div class="small">Standalone kidney intelligence build with history, trend chart, and alerts.</div>
+  </div>
 
-<div class="card">
-<h3>Snapshot</h3>
-<div id="snapshot"></div>
-</div>
+  <div class="card">
+    <h2>Snapshot</h2>
+    <div class="grid" id="snapshotGrid"></div>
+    <div id="alertsBox"></div>
+  </div>
 
-<div class="card">
-<h3>Add Reading</h3>
+  <div class="card">
+    <h2>Add Reading</h2>
 
-<input id="glucose" placeholder="Glucose mg/dL"/>
-<input id="bp" placeholder="BP (e.g. 150/90)"/>
-<input id="egfr" placeholder="eGFR (e.g. 33)"/>
+    <div class="grid">
+      <div class="span-6">
+        <label>Date / time (optional)</label>
+        <input id="ts" placeholder="Leave blank to use current time"/>
+      </div>
+      <div class="span-6">
+        <label>Tag / context (optional)</label>
+        <input id="tag" placeholder="e.g. fasting, after lunch, poor sleep"/>
+      </div>
 
-<select id="protein">
-<option value="">Protein</option>
-<option value="none">None</option>
-<option value="trace">Trace</option>
-<option value="moderate">Moderate</option>
-<option value="high">High</option>
-</select>
+      <div class="span-4">
+        <label>Glucose (mg/dL)</label>
+        <input id="glucose" inputmode="numeric" placeholder="e.g. 114"/>
+      </div>
+      <div class="span-4">
+        <label>Blood Pressure</label>
+        <input id="bp" placeholder="e.g. 150/90"/>
+      </div>
+      <div class="span-4">
+        <label>eGFR</label>
+        <input id="egfr" inputmode="numeric" placeholder="e.g. 33"/>
+      </div>
 
-<select id="hb">
-<option value="">Hemoglobin</option>
-<option value="normal">Normal</option>
-<option value="mild">Mild anemia</option>
-<option value="moderate">Moderate anemia</option>
-</select>
+      <div class="span-4">
+        <label>Urine Protein</label>
+        <select id="protein">
+          <option value="">Unknown</option>
+          <option value="none">None</option>
+          <option value="trace">Trace</option>
+          <option value="moderate">Moderate</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="span-4">
+        <label>Hemoglobin Status</label>
+        <select id="hb">
+          <option value="">Unknown</option>
+          <option value="normal">Normal</option>
+          <option value="mild">Mild anemia</option>
+          <option value="moderate">Moderate anemia</option>
+        </select>
+      </div>
+      <div class="span-4">
+        <label>Hydration</label>
+        <select id="hydration">
+          <option value="">Unknown</option>
+          <option value="good">Good</option>
+          <option value="fair">Fair</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
 
-<select id="hydration">
-<option value="">Hydration</option>
-<option value="good">Good</option>
-<option value="fair">Fair</option>
-<option value="low">Low</option>
-</select>
+      <div class="span-6">
+        <label>Sodium / salty-food burden</label>
+        <select id="sodium">
+          <option value="">Unknown</option>
+          <option value="no">Low</option>
+          <option value="yes">High</option>
+        </select>
+      </div>
+      <div class="span-6">
+        <label>Edema / swelling</label>
+        <select id="edema">
+          <option value="">Unknown</option>
+          <option value="no">No</option>
+          <option value="mild">Mild</option>
+          <option value="yes">Yes</option>
+        </select>
+      </div>
 
-<select id="sodium">
-<option value="">Sodium</option>
-<option value="no">Low</option>
-<option value="yes">High</option>
-</select>
+      <div class="span-12">
+        <label>Notes</label>
+        <textarea id="notes" placeholder="Optional notes: meals, symptoms, meds, activity, swelling, urine changes, stress, etc."></textarea>
+      </div>
+    </div>
 
-<select id="edema">
-<option value="">Edema</option>
-<option value="no">No</option>
-<option value="mild">Mild</option>
-<option value="yes">Yes</option>
-</select>
+    <div class="row">
+      <button onclick="saveReading()">Save Reading</button>
+      <button class="secondary" onclick="clearForm()">Clear Form</button>
+    </div>
 
-<button onclick="save()">Save</button>
+    <div class="small" id="saveStatus" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Trend Chart</h2>
+    <div class="small">Blue = KHS, Orange = Kidney Load. Last 20 entries.</div>
+    <div style="margin-top:10px">
+      <canvas id="trendCanvas" width="900" height="260"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <div class="row">
+      <button class="secondary" onclick="exportData()">Export JSON</button>
+      <button class="danger" onclick="wipeData()">Wipe All v3.1 Data</button>
+    </div>
+    <div id="historyBox" style="margin-top:12px"></div>
+  </div>
+
 </div>
 
 <script>
+const KEY = "HCPLUS_V31";
 
-const KEY = "HCPLUS_V3";
-
-function load(){
-  return JSON.parse(localStorage.getItem(KEY) || "{}");
+function nowISO(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function saveData(d){
-  localStorage.setItem(KEY, JSON.stringify(d));
+function loadStore(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) return normalizeStore(JSON.parse(raw));
+
+    // Migrate from prior v3 if present
+    const oldRaw = localStorage.getItem("HCPLUS_V3");
+    if(oldRaw){
+      const oldObj = JSON.parse(oldRaw);
+      const migrated = {
+        readings: [{
+          ts: nowISO(),
+          tag: "Migrated from v3",
+          glucose: safeNum(oldObj.glucose),
+          bp: normalizeBPObject(oldObj.bp),
+          egfr: safeNum(oldObj.egfr),
+          protein: oldObj.protein || "",
+          hb: oldObj.hb || "",
+          hydration: oldObj.hydration || "",
+          sodium: oldObj.sodium || "",
+          edema: oldObj.edema || "",
+          notes: ""
+        }]
+      };
+      saveStore(migrated);
+      return normalizeStore(migrated);
+    }
+
+    return { readings: [] };
+  }catch{
+    return { readings: [] };
+  }
 }
 
-function parseBP(bp){
-  if(!bp) return {};
-  let parts = bp.split("/");
-  return {sys: Number(parts[0]), dia: Number(parts[1])};
+function normalizeStore(s){
+  if(!s || typeof s !== "object") return { readings: [] };
+  if(!Array.isArray(s.readings)) s.readings = [];
+  s.readings = s.readings.map(r => ({
+    ts: r.ts || nowISO(),
+    tag: r.tag || "",
+    glucose: safeNum(r.glucose),
+    bp: normalizeBPObject(r.bp),
+    egfr: safeNum(r.egfr),
+    protein: r.protein || "",
+    hb: r.hb || "",
+    hydration: r.hydration || "",
+    sodium: r.sodium || "",
+    edema: r.edema || "",
+    notes: r.notes || ""
+  }));
+  return s;
+}
+
+function saveStore(s){
+  localStorage.setItem(KEY, JSON.stringify(s));
+}
+
+function safeNum(v){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseBP(text){
+  if(!text) return {sys:null,dia:null};
+  const cleaned = String(text).replace(/\s+/g,"");
+  const m = cleaned.match(/^(\d{2,3})\/(\d{2,3})$/);
+  if(!m) return {sys:null,dia:null};
+  return {sys:Number(m[1]), dia:Number(m[2])};
+}
+
+function normalizeBPObject(bp){
+  if(!bp || typeof bp !== "object") return {sys:null,dia:null};
+  return {
+    sys: safeNum(bp.sys),
+    dia: safeNum(bp.dia)
+  };
 }
 
 function scoreEGFR(e){
-  if(!e) return 50;
-  if(e>=90) return 100;
-  if(e>=60) return 80;
-  if(e>=45) return 60;
-  if(e>=30) return 40;
-  return 20;
+  if(e == null) return 50;
+  if(e >= 90) return 100;
+  if(e >= 60) return 80;
+  if(e >= 45) return 60;
+  if(e >= 30) return 40;
+  if(e >= 15) return 20;
+  return 10;
 }
 
 function scoreProtein(p){
-  if(p=="none") return 100;
-  if(p=="trace") return 80;
-  if(p=="moderate") return 50;
-  if(p=="high") return 20;
+  if(p === "none") return 100;
+  if(p === "trace") return 80;
+  if(p === "moderate") return 50;
+  if(p === "high") return 20;
   return 80;
 }
 
 function scoreBP(sys){
-  if(!sys) return 60;
-  if(sys<130) return 100;
-  if(sys<140) return 80;
-  if(sys<160) return 60;
+  if(sys == null) return 60;
+  if(sys < 130) return 100;
+  if(sys < 140) return 80;
+  if(sys < 160) return 60;
   return 40;
 }
 
 function scoreGlucose(g){
-  if(!g) return 70;
-  if(g<120) return 100;
-  if(g<160) return 70;
+  if(g == null) return 70;
+  if(g < 120) return 100;
+  if(g < 160) return 70;
   return 40;
 }
 
 function scoreSymptom(edema){
-  if(edema=="no") return 100;
-  if(edema=="mild") return 70;
-  if(edema=="yes") return 40;
+  if(edema === "no") return 100;
+  if(edema === "mild") return 70;
+  if(edema === "yes") return 40;
   return 70;
 }
 
-function computeKHS(d){
-  let F = scoreEGFR(d.egfr);
-  let P = scoreProtein(d.protein);
-  let BP = scoreBP(d.bp?.sys);
-  let G = scoreGlucose(d.glucose);
-  let S = scoreSymptom(d.edema);
-  let H = d.hb=="normal"?100:(d.hb=="mild"?70:50);
+function scoreHb(hb){
+  if(hb === "normal") return 100;
+  if(hb === "mild") return 70;
+  if(hb === "moderate") return 50;
+  return 70;
+}
 
-  let score = Math.round(
-    0.35*F + 0.20*P + 0.15*BP + 0.10*H + 0.10*S + 0.10*G
+function computeKHS(r){
+  const F = scoreEGFR(r.egfr);
+  const P = scoreProtein(r.protein);
+  const BP = scoreBP(r.bp?.sys);
+  const G = scoreGlucose(r.glucose);
+  const S = scoreSymptom(r.edema);
+  const H = scoreHb(r.hb);
+
+  const score = Math.round(
+    0.35*F +
+    0.20*P +
+    0.15*BP +
+    0.10*H +
+    0.10*S +
+    0.10*G
   );
 
-  return score;
+  let label = "Moderate Risk";
+  let cls = "warn";
+  if(score >= 85){
+    label = "Optimal";
+    cls = "ok";
+  } else if(score >= 70){
+    label = "Stable / Controlled";
+    cls = "ok";
+  } else if(score < 50){
+    label = "High Risk";
+    cls = "bad";
+  }
+
+  return { score, label, cls };
 }
 
-function computeLoad(d){
+function computeLoad(r){
   let load = 25;
 
-  if(d.sodium=="yes") load+=15;
-  if(d.protein=="moderate") load+=15;
-  if(d.protein=="high") load+=20;
-  if(d.hydration=="low") load+=15;
+  if(r.sodium === "yes") load += 15;
+  if(r.protein === "trace") load += 8;
+  if(r.protein === "moderate") load += 15;
+  if(r.protein === "high") load += 20;
 
-  if(d.bp?.sys>=140) load+=15;
-  if(d.glucose>=180) load+=15;
+  if(r.hydration === "fair") load += 6;
+  if(r.hydration === "low") load += 15;
+  if(r.hydration === "good") load -= 5;
 
-  if(d.edema=="yes") load+=15;
+  if(r.bp?.sys != null && r.bp.sys >= 140) load += 15;
+  if(r.bp?.dia != null && r.bp.dia >= 90) load += 10;
 
-  return Math.min(100,load);
+  if(r.glucose != null && r.glucose >= 140) load += 8;
+  if(r.glucose != null && r.glucose >= 180) load += 7;
+
+  if(r.edema === "mild") load += 8;
+  if(r.edema === "yes") load += 15;
+
+  load = Math.max(0, Math.min(100, load));
+
+  let label = "Low";
+  let cls = "ok";
+  if(load >= 60){
+    label = "Elevated";
+    cls = "bad";
+  } else if(load >= 40){
+    label = "Moderate";
+    cls = "warn";
+  }
+
+  return { load, label, cls };
 }
 
-function save(){
-  let d = load();
-
-  d.glucose = Number(document.getElementById("glucose").value);
-  d.bp = parseBP(document.getElementById("bp").value);
-  d.egfr = Number(document.getElementById("egfr").value);
-  d.protein = document.getElementById("protein").value;
-  d.hb = document.getElementById("hb").value;
-  d.hydration = document.getElementById("hydration").value;
-  d.sodium = document.getElementById("sodium").value;
-  d.edema = document.getElementById("edema").value;
-
-  saveData(d);
-  render();
+function getLatest(){
+  const s = loadStore();
+  if(!s.readings.length) return null;
+  return s.readings[s.readings.length - 1];
 }
 
-function render(){
-  let d = load();
+function buildAlerts(r){
+  if(!r) return [`No readings yet. Add your first reading to activate the kidney engine.`];
 
-  let khs = computeKHS(d);
-  let loadScore = computeLoad(d);
+  const khs = computeKHS(r);
+  const load = computeLoad(r);
+  const out = [];
 
-  let cls = khs>=70?"ok":(khs>=50?"warn":"bad");
+  if(khs.score < 50){
+    out.push(`Kidney Health Score is in the high-risk zone. This suggests heavier kidney vulnerability and should not be ignored.`);
+  } else if(khs.score < 70){
+    out.push(`Kidney Health Score is in the moderate-risk zone. Focus on BP control, glucose stability, hydration, and follow-up labs.`);
+  } else {
+    out.push(`Kidney Health Score is currently in a more stable zone. Maintain the routine and keep monitoring.`);
+  }
 
-  document.getElementById("snapshot").innerHTML = `
-    <div class="kpi ${cls}">KHS: ${khs}/100</div>
-    <div>Kidney Load: ${loadScore}/100</div>
-    <div>Glucose: ${d.glucose || "-"}</div>
-    <div>BP: ${d.bp?.sys || "-"} / ${d.bp?.dia || "-"}</div>
-    <div>eGFR: ${d.egfr || "-"}</div>
-  `;
+  if(load.load >= 60){
+    out.push(`Kidney Load is elevated right now. Check recent salt intake, hydration, swelling, blood pressure, and glucose spikes.`);
+  }
+
+  if(r.bp?.sys != null && r.bp.sys >= 160){
+    out.push(`Systolic blood pressure is very high in this entry. That can materially increase kidney stress.`);
+  } else if(r.bp?.sys != null && r.bp.sys >= 140){
+    out.push(`Blood pressure is above target and may be pushing kidney burden upward.`);
+  }
+
+  if(r.glucose != null && r.glucose >= 180){
+    out.push(`Glucose is high in this entry and may be contributing to kidney stress.`);
+  }
+
+  if(r.egfr != null && r.egfr < 45){
+    out.push(`eGFR is below 45 in this entry, which falls in a more concerning kidney-function range.`);
+  }
+
+  if(r.edema === "yes"){
+    out.push(`Swelling is marked present in this entry. Watch fluid retention closely.`);
+  }
+
+  return out;
 }
 
-render();
+function renderSnapshot(){
+  const r = getLatest();
+  const grid = document.getElementById("snapshotGrid");
+  const alertsBox = document.getElementById("alertsBox");
+  grid.innerHTML = "";
+  alertsBox.innerHTML = "";
 
+  if(!r){
+    grid.innerHTML = `
+      <div class="kpi span-12">
+        <div class="label">Status</div>
+        <div class="value">No data yet</div>
+        <div class="hint">Add a reading below to start.</div>
+      </div>
+    `;
+    const alerts = buildAlerts(null);
+    alertsBox.innerHTML = alerts.map(a => `<div class="alert">${a}</div>`).join("");
+    return;
+  }
+
+  const khs = computeKHS(r);
+  const load = computeLoad(r);
+
+  const cards = [
+    ["Kidney Health Score", `${khs.score}/100`, khs.label, khs.cls],
+    ["Kidney Load", `${load.load}/100`, load.label, load.cls],
+    ["Glucose", r.glucose != null ? `${r.glucose} mg/dL` : "—", "", "muted"],
+    ["Blood Pressure", (r.bp?.sys != null && r.bp?.dia != null) ? `${r.bp.sys}/${r.bp.dia}` : "—", "", "muted"],
+    ["eGFR", r.egfr != null ? String(r.egfr) : "—", "", "muted"],
+    ["Urine Protein", r.protein || "—", "", "muted"],
+    ["Hydration", r.hydration || "—", "", "muted"],
+    ["Edema", r.edema || "—", `Last saved: ${r.ts}`, "muted"]
+  ];
+
+  cards.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "kpi span-4";
+    div.innerHTML = `
+      <div class="label">${c[0]}</div>
+      <div class="value ${c[3]}">${c[1]}</div>
+      <div class="hint ${c[3]}">${c[2] || "&nbsp;"}</div>
+    `;
+    grid.appendChild(div);
+  });
+
+  const alerts = buildAlerts(r);
+  alertsBox.innerHTML = alerts.map(a => {
+    let cls = "alert";
+    if(/high-risk|very high|elevated right now|below 45|marked present/i.test(a)) cls += " bad";
+    else if(/moderate-risk|above target|contributing/i.test(a)) cls += " warn";
+    else cls += " ok";
+    return `<div class="${cls}">${a}</div>`;
+  }).join("");
+}
+
+function drawTrend(){
+  const s = loadStore();
+  const canvas = document.getElementById("trendCanvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  ctx.clearRect(0,0,W,H);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  for(let i=1;i<5;i++){
+    const y = (H/5)*i;
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(W,y);
+    ctx.stroke();
+  }
+
+  const rows = s.readings.slice(-20).map(r => ({
+    khs: computeKHS(r).score,
+    load: computeLoad(r).load
+  }));
+
+  if(rows.length < 2){
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "16px Arial";
+    ctx.fillText("Not enough history yet", 20, 34);
+    return;
+  }
+
+  const values = rows.flatMap(r => [r.khs, r.load]);
+  const minY = Math.min(...values, 0);
+  const maxY = Math.max(...values, 100);
+  const pad = 10;
+  const lo = Math.max(0, minY - pad);
+  const hi = Math.min(100, maxY + pad);
+
+  const toX = i => 30 + (i/(rows.length-1))*(W-60);
+  const toY = v => H - 25 - ((v-lo)/(hi-lo))*(H-50);
+
+  function drawSeries(vals, color){
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    vals.forEach((v,i)=>{
+      const x = toX(i), y = toY(v);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    vals.forEach((v,i)=>{
+      const x = toX(i), y = toY(v);
+      ctx.beginPath();
+      ctx.arc(x,y,3.5,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  drawSeries(rows.map(r=>r.khs), "#4da3ff");
+  drawSeries(rows.map(r=>r.load), "#f59e0b");
+
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.font = "12px Arial";
+  ctx.fillText("Blue: KHS", 20, H-8);
+  ctx.fillText("Orange: Kidney Load", 110, H-8);
+}
+
+function renderHistory(){
+  const s = loadStore();
+  const box = document.getElementById("historyBox");
+
+  if(!s.readings.length){
+    box.innerHTML = `<div class="small">No saved readings yet.</div>`;
+    return;
+  }
+
+  const rows = s.readings.slice().reverse().map((r, idx) => {
+    const khs = computeKHS(r);
+    const load = computeLoad(r);
+    return `
+      <div class="history-item">
+        <div><strong>${r.ts}</strong>${r.tag ? ` <span class="pill">${escapeHtml(r.tag)}</span>` : ""}</div>
+        <div class="small" style="margin-top:6px">
+          KHS: <span class="${khs.cls}">${khs.score}/100 (${escapeHtml(khs.label)})</span> |
+          Load: <span class="${load.cls}">${load.load}/100 (${escapeHtml(load.label)})</span>
+        </div>
+        <div class="small" style="margin-top:4px">
+          Glucose: ${r.glucose != null ? r.glucose : "—"} |
+          BP: ${(r.bp?.sys != null && r.bp?.dia != null) ? `${r.bp.sys}/${r.bp.dia}` : "—"} |
+          eGFR: ${r.egfr != null ? r.egfr : "—"} |
+          Protein: ${r.protein || "—"} |
+          Edema: ${r.edema || "—"}
+        </div>
+        ${r.notes ? `<div class="small" style="margin-top:6px">Notes: ${escapeHtml(r.notes)}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  box.innerHTML = rows;
+}
+
+function saveReading(){
+  const s = loadStore();
+
+  const ts = document.getElementById("ts").value.trim() || nowISO();
+  const tag = document.getElementById("tag").value.trim();
+  const glucose = safeNum(document.getElementById("glucose").value);
+  const bp = parseBP(document.getElementById("bp").value.trim());
+  const egfr = safeNum(document.getElementById("egfr").value);
+  const protein = document.getElementById("protein").value;
+  const hb = document.getElementById("hb").value;
+  const hydration = document.getElementById("hydration").value;
+  const sodium = document.getElementById("sodium").value;
+  const edema = document.getElementById("edema").value;
+  const notes = document.getElementById("notes").value.trim();
+
+  const reading = {
+    ts, tag, glucose, bp, egfr, protein, hb, hydration, sodium, edema, notes
+  };
+
+  s.readings.push(reading);
+  if(s.readings.length > 300) s.readings = s.readings.slice(-300);
+  saveStore(s);
+
+  document.getElementById("saveStatus").textContent = "Saved successfully.";
+  renderAll();
+}
+
+function clearForm(){
+  ["ts","tag","glucose","bp","egfr","notes"].forEach(id => document.getElementById(id).value = "");
+  ["protein","hb","hydration","sodium","edema"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("saveStatus").textContent = "";
+}
+
+function exportData(){
+  const s = loadStore();
+  const blob = new Blob([JSON.stringify(s, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `healthchecker_v31_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function wipeData(){
+  const ok = confirm("Wipe all HealthChecker+ v3.1 data?");
+  if(!ok) return;
+  localStorage.removeItem(KEY);
+  renderAll();
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+function renderAll(){
+  renderSnapshot();
+  drawTrend();
+  renderHistory();
+}
+
+renderAll();
 </script>
-
 </body>
 </html>
