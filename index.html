@@ -228,7 +228,7 @@
         <div class="row" id="kpiRow"></div>
         <div class="divider"></div>
         <div class="note" id="snapshotNote">
-          No GI/stool content is shown on the landing page. This is your clean Snapshot view.
+          Snapshot now includes kidney intelligence: KHS and Kidney Load are shown alongside your latest metabolic and vitals data.
         </div>
       </div>
 
@@ -320,8 +320,70 @@
           </div>
         </div>
 
+        <div class="divider"></div>
+
+        <h2 style="margin-top:0">Kidney Inputs</h2>
+
+        <div class="two">
+          <div>
+            <label>eGFR (optional)</label>
+            <input id="egfrInput" inputmode="numeric" placeholder="e.g., 33" />
+          </div>
+          <div>
+            <label>Urine protein</label>
+            <select id="proteinInput">
+              <option value="">Unknown</option>
+              <option value="none">None</option>
+              <option value="trace">Trace</option>
+              <option value="moderate">Moderate</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>Hemoglobin status</label>
+            <select id="hbStatusInput">
+              <option value="">Unknown</option>
+              <option value="normal">Normal</option>
+              <option value="mild">Mild anemia</option>
+              <option value="moderate">Moderate anemia</option>
+            </select>
+          </div>
+          <div>
+            <label>Hydration</label>
+            <select id="hydrationInput">
+              <option value="">Unknown</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="two">
+          <div>
+            <label>Sodium / salty-food burden today</label>
+            <select id="sodiumInput">
+              <option value="">Unknown</option>
+              <option value="no">No / low</option>
+              <option value="yes">Yes / high</option>
+            </select>
+          </div>
+          <div>
+            <label>Swelling / edema today</label>
+            <select id="edemaInput">
+              <option value="">Unknown</option>
+              <option value="no">No</option>
+              <option value="mild">Mild</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+
         <label>Notes (optional)</label>
-        <textarea id="notesInput" placeholder="Anything contextual: meal, meds, stress, exercise, symptoms, etc."></textarea>
+        <textarea id="notesInput" placeholder="Anything contextual: meal, meds, stress, exercise, symptoms, labs, swelling, urine changes, etc."></textarea>
 
         <div class="divider"></div>
 
@@ -460,15 +522,7 @@
 </main>
 
 <script>
-/**
- * HealthChecker+ One-File Build
- * - Offline-first localStorage
- * - Tabs: Snapshot/Add/Trends/Symptom Checker/Reports/Profile
- * - BP accepts xxx/yyy and stores sys/dia separately
- * - Run Diagnosis appears only after symptoms exist
- */
-
-const STORE_KEY = "HCPLUS_ONEFILE_V1";
+const STORE_KEY = "HCPLUS_ONEFILE_V2";
 
 function nowISO(){
   const d = new Date();
@@ -485,7 +539,6 @@ function safeParseNum(v){
 }
 
 function parseBP(input){
-  // Accept: "122/82", " 122 / 82 ", "122 /82"
   if (!input) return { sys:null, dia:null, ok:false, msg:"BP is blank." };
   const raw = String(input).trim();
   const cleaned = raw.replace(/\s+/g,"");
@@ -493,7 +546,6 @@ function parseBP(input){
   if (!m) return { sys:null, dia:null, ok:false, msg:"BP must be in SYS/DIA format (e.g., 122/82)." };
   const sys = Number(m[1]), dia = Number(m[2]);
   if (!Number.isFinite(sys) || !Number.isFinite(dia)) return { sys:null, dia:null, ok:false, msg:"BP values must be numeric." };
-  // loose plausibility checks
   if (sys < 70 || sys > 250 || dia < 40 || dia > 150) {
     return { sys, dia, ok:false, msg:"BP looks out of expected range. If correct, you may still save it." };
   }
@@ -503,16 +555,41 @@ function parseBP(input){
 function loadStore(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
-    if(!raw) return defaultStore();
+    if(!raw) return migrateLegacyStore();
     const data = JSON.parse(raw);
     return normalizeStore(data);
   }catch(e){
+    return migrateLegacyStore();
+  }
+}
+
+function migrateLegacyStore(){
+  try{
+    const raw = localStorage.getItem("HCPLUS_ONEFILE_V1");
+    if(!raw) return defaultStore();
+    const oldData = JSON.parse(raw);
+    const s = normalizeStore(oldData);
+    saveStore(s);
+    return s;
+  }catch{
     return defaultStore();
   }
 }
 
 function saveStore(data){
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+function defaultKidney(){
+  return {
+    egfr:null,
+    proteinLevel:"",
+    hbStatus:"",
+    hydration:"",
+    sodiumBurden:"",
+    edema:"",
+    updatedAt:""
+  };
 }
 
 function defaultStore(){
@@ -525,8 +602,9 @@ function defaultStore(){
         dob:"",
         heightCm:null,
         weightKg:null,
-        readings:[],   // {t, tag, glucose, arrow, bp:{sys,dia}, pulse, sleepScore, energyScore, hrv, spo2, notes}
-        symptoms:[]    // {name, severity, duration, addedAt}
+        readings:[],
+        symptoms:[],
+        kidney: defaultKidney()
       }
     }
   };
@@ -539,14 +617,28 @@ function normalizeStore(s){
     const first = Object.keys(s.people)[0];
     s.activePersonId = first || "p1";
   }
-  // normalize each person
   for(const pid of Object.keys(s.people)){
     const p = s.people[pid];
     p.readings = Array.isArray(p.readings) ? p.readings : [];
     p.symptoms = Array.isArray(p.symptoms) ? p.symptoms : [];
     p.name = p.name || "Unknown";
+    p.kidney = normalizeKidney(p.kidney);
   }
   return s;
+}
+
+function normalizeKidney(k){
+  const d = defaultKidney();
+  if(!k || typeof k !== "object") return d;
+  return {
+    egfr: safeParseNum(k.egfr),
+    proteinLevel: typeof k.proteinLevel === "string" ? k.proteinLevel : "",
+    hbStatus: typeof k.hbStatus === "string" ? k.hbStatus : "",
+    hydration: typeof k.hydration === "string" ? k.hydration : "",
+    sodiumBurden: typeof k.sodiumBurden === "string" ? k.sodiumBurden : "",
+    edema: typeof k.edema === "string" ? k.edema : "",
+    updatedAt: typeof k.updatedAt === "string" ? k.updatedAt : ""
+  };
 }
 
 let store = loadStore();
@@ -555,7 +647,6 @@ function activePerson(){
   return store.people[store.activePersonId];
 }
 
-/* UI helpers */
 function qs(id){ return document.getElementById(id); }
 function setText(id, txt){ qs(id).textContent = txt; }
 function setHTML(id, html){ qs(id).innerHTML = html; }
@@ -589,7 +680,6 @@ function refreshPeopleSelect(){
   setText("activePersonSub", "Active: " + activePerson().name);
 }
 
-/* Snapshot */
 function latestReading(){
   const r = activePerson().readings;
   if(!r.length) return null;
@@ -598,7 +688,6 @@ function latestReading(){
 
 function classifyBP(sys,dia){
   if(sys==null || dia==null) return {label:"—", cls:"muted"};
-  // Simplified: Normal <120/<80; Elevated 120-129/<80; Stage 1 130-139 or 80-89; Stage 2 >=140 or >=90
   if(sys < 120 && dia < 80) return {label:"Normal", cls:"ok"};
   if(sys >=120 && sys <=129 && dia < 80) return {label:"Elevated", cls:"warn"};
   if((sys >=130 && sys <=139) || (dia >=80 && dia <=89)) return {label:"Stage 1", cls:"warn"};
@@ -608,16 +697,126 @@ function classifyBP(sys,dia){
 
 function classifyGlucose(g){
   if(g==null) return {label:"—", cls:"muted"};
-  // Non-diagnostic labels; CGM context differs. Keep conservative.
   if(g < 70) return {label:"Low", cls:"bad"};
   if(g <= 140) return {label:"In range", cls:"ok"};
   if(g <= 180) return {label:"High", cls:"warn"};
   return {label:"Very high", cls:"bad"};
 }
 
+function getProteinScore(level){
+  if(level === "none") return 100;
+  if(level === "trace") return 80;
+  if(level === "moderate") return 50;
+  if(level === "high") return 20;
+  return 80;
+}
+
+function getHemoglobinScore(status){
+  if(status === "normal") return 100;
+  if(status === "mild") return 70;
+  if(status === "moderate") return 50;
+  return 70;
+}
+
+function getEGFRScore(egfr){
+  if(egfr == null) return 50;
+  if(egfr >= 90) return 100;
+  if(egfr >= 60) return 80;
+  if(egfr >= 45) return 60;
+  if(egfr >= 30) return 40;
+  if(egfr >= 15) return 20;
+  return 10;
+}
+
+function getBPScore(sys){
+  if(sys == null) return 60;
+  if(sys < 130) return 100;
+  if(sys < 140) return 80;
+  if(sys < 160) return 60;
+  return 40;
+}
+
+function getGlucoseScore(g){
+  if(g == null) return 70;
+  if(g < 120) return 100;
+  if(g < 160) return 70;
+  return 40;
+}
+
+function getSymptomScore(edema){
+  if(edema === "no") return 100;
+  if(edema === "mild") return 70;
+  if(edema === "yes") return 40;
+  return 70;
+}
+
+function computeKidneyLoad({ sodiumBurden, proteinLevel, hydration, bpSys, bpDia, glucose, edema }){
+  let load = 25;
+
+  if(sodiumBurden === "yes") load += 15;
+  if(proteinLevel === "moderate") load += 15;
+  if(proteinLevel === "high") load += 22;
+  if(proteinLevel === "trace") load += 8;
+
+  if(hydration === "low") load += 15;
+  else if(hydration === "fair") load += 6;
+  else if(hydration === "good") load -= 5;
+
+  if(bpSys != null && bpSys >= 140) load += 15;
+  if(bpDia != null && bpDia >= 90) load += 10;
+
+  if(glucose != null && glucose >= 180) load += 15;
+  else if(glucose != null && glucose >= 140) load += 8;
+
+  if(edema === "mild") load += 8;
+  if(edema === "yes") load += 15;
+
+  load = Math.max(0, Math.min(load, 100));
+
+  let label = "Low";
+  if(load >= 60) label = "Elevated";
+  else if(load >= 40) label = "Moderate";
+
+  return { load, label };
+}
+
+function computeKHS({ egfr, proteinLevel, bpSys, hbStatus, glucose, edema }){
+  const F = getEGFRScore(egfr);
+  const P = getProteinScore(proteinLevel);
+  const BP = getBPScore(bpSys);
+  const H = getHemoglobinScore(hbStatus);
+  const S = getSymptomScore(edema);
+  const G = getGlucoseScore(glucose);
+
+  const score = Math.round(
+    (0.35 * F) +
+    (0.20 * P) +
+    (0.15 * BP) +
+    (0.10 * H) +
+    (0.10 * S) +
+    (0.10 * G)
+  );
+
+  let label = "Moderate Risk";
+  let cls = "warn";
+  if(score >= 85){
+    label = "Optimal";
+    cls = "ok";
+  } else if(score >= 70){
+    label = "Stable / Controlled";
+    cls = "ok";
+  } else if(score < 50){
+    label = "High Risk";
+    cls = "bad";
+  }
+
+  return { score, label, cls };
+}
+
 function renderSnapshot(){
   const p = activePerson();
   const r = latestReading();
+  const kidney = p.kidney || defaultKidney();
 
   setText("snapshotTime", r ? `Last: ${r.t}` : "No readings yet");
 
@@ -632,6 +831,28 @@ function renderSnapshot(){
 
   const bmi = (p.heightCm && p.weightKg) ? (p.weightKg / Math.pow(p.heightCm/100,2)) : null;
 
+  const khs = computeKHS({
+    egfr: kidney.egfr,
+    proteinLevel: kidney.proteinLevel,
+    bpSys,
+    hbStatus: kidney.hbStatus,
+    glucose,
+    edema: kidney.edema
+  });
+
+  const kidneyLoad = computeKidneyLoad({
+    sodiumBurden: kidney.sodiumBurden,
+    proteinLevel: kidney.proteinLevel,
+    hydration: kidney.hydration,
+    bpSys,
+    bpDia,
+    glucose,
+    edema: kidney.edema
+  });
+
+  const egfrHint = kidney.egfr != null ? `eGFR ${kidney.egfr}` : "Add kidney data";
+  const proteinHint = kidney.proteinLevel ? `Protein: ${kidney.proteinLevel}` : "Protein unknown";
+
   const cards = [
     {label:"Glucose", value: glucose!=null ? `${glucose}${arrow}` : "—", hint: gClass.label, hintCls: gClass.cls},
     {label:"Blood Pressure", value: (bpSys!=null && bpDia!=null) ? `${bpSys}/${bpDia}` : "—", hint: bpClass.label, hintCls: bpClass.cls},
@@ -640,7 +861,11 @@ function renderSnapshot(){
     {label:"Energy Score", value: r?.energyScore!=null ? r.energyScore : "—", hint:"", hintCls:"muted"},
     {label:"HRV (sleep)", value: r?.hrv!=null ? `${r.hrv} ms` : "—", hint:"", hintCls:"muted"},
     {label:"Lowest SpO₂", value: r?.spo2!=null ? `${r.spo2}%` : "—", hint:"", hintCls:"muted"},
-    {label:"BMI", value: bmi!=null ? bmi.toFixed(1) : "—", hint:(bmi!=null ? "Computed" : ""), hintCls:"muted"}
+    {label:"BMI", value: bmi!=null ? bmi.toFixed(1) : "—", hint:(bmi!=null ? "Computed" : ""), hintCls:"muted"},
+    {label:"Kidney Health Score", value: `${khs.score}/100`, hint: khs.label, hintCls: khs.cls},
+    {label:"Kidney Load", value: `${kidneyLoad.load}/100`, hint: kidneyLoad.label, hintCls: kidneyLoad.label === "Low" ? "ok" : (kidneyLoad.label === "Moderate" ? "warn" : "bad")},
+    {label:"eGFR", value: kidney.egfr != null ? kidney.egfr : "—", hint: egfrHint, hintCls:"muted"},
+    {label:"Urine Protein", value: kidney.proteinLevel || "—", hint: proteinHint, hintCls:"muted"}
   ];
 
   const row = qs("kpiRow");
@@ -657,12 +882,19 @@ function renderSnapshot(){
   });
 }
 
-/* Add Reading */
 function clearAddForm(){
-  ["timeInput","tagInput","glucoseInput","bpInput","pulseInput","sleepScoreInput","energyScoreInput","hrvInput","spo2Input","notesInput"].forEach(id=>{
+  [
+    "timeInput","tagInput","glucoseInput","bpInput","pulseInput","sleepScoreInput",
+    "energyScoreInput","hrvInput","spo2Input","notesInput","egfrInput"
+  ].forEach(id=>{
     qs(id).value = "";
   });
   qs("glucoseArrow").value = "";
+  qs("proteinInput").value = "";
+  qs("hbStatusInput").value = "";
+  qs("hydrationInput").value = "";
+  qs("sodiumInput").value = "";
+  qs("edemaInput").value = "";
   setText("addStatus","");
 }
 
@@ -680,7 +912,6 @@ function saveReading(){
   const spo2 = safeParseNum(qs("spo2Input").value);
   const notes = qs("notesInput").value.trim() || "";
 
-  // BP: accept xxx/yyy, store sys/dia
   const bpRaw = qs("bpInput").value.trim();
   let bp = {sys:null,dia:null, raw:""};
   let bpMsg = "";
@@ -688,7 +919,6 @@ function saveReading(){
     const parsed = parseBP(bpRaw);
     bp = {sys: parsed.sys, dia: parsed.dia, raw: bpRaw};
     bpMsg = parsed.msg;
-    // allow save even if plausibility warning
     if(!parsed.ok && parsed.sys==null && parsed.dia==null){
       setText("addStatus", "❌ " + parsed.msg);
       return;
@@ -697,27 +927,52 @@ function saveReading(){
 
   const entry = { t, tag, glucose, arrow, bp, pulse, sleepScore, energyScore, hrv, spo2, notes };
   p.readings.push(entry);
-
-  // keep only last 500
   if(p.readings.length > 500) p.readings = p.readings.slice(-500);
+
+  const egfr = safeParseNum(qs("egfrInput").value);
+  const proteinLevel = qs("proteinInput").value;
+  const hbStatus = qs("hbStatusInput").value;
+  const hydration = qs("hydrationInput").value;
+  const sodiumBurden = qs("sodiumInput").value;
+  const edema = qs("edemaInput").value;
+
+  const kidneyWasUpdated =
+    egfr !== null ||
+    proteinLevel ||
+    hbStatus ||
+    hydration ||
+    sodiumBurden ||
+    edema;
+
+  if(kidneyWasUpdated){
+    p.kidney = {
+      egfr,
+      proteinLevel,
+      hbStatus,
+      hydration,
+      sodiumBurden,
+      edema,
+      updatedAt: t
+    };
+  } else if(!p.kidney){
+    p.kidney = defaultKidney();
+  }
 
   store.people[p.id] = p;
   saveStore(store);
 
-  const okMsg = `✅ Saved. ${bpRaw ? ("BP: " + bp.sys + "/" + bp.dia + (bpMsg && bpMsg!=="OK" ? " ("+bpMsg+")" : "")) : ""}`;
+  const okMsg = `✅ Saved. ${bpRaw ? ("BP: " + bp.sys + "/" + bp.dia + (bpMsg && bpMsg!=="OK" ? " ("+bpMsg+")" : "")) : ""}${kidneyWasUpdated ? " Kidney inputs updated." : ""}`;
   setText("addStatus", okMsg);
 
   renderSnapshot();
   renderTrends();
 }
 
-/* Trends drawing */
 function drawLineChart(canvas, points, yLabel){
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  // Background grid
   ctx.globalAlpha = 1;
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
@@ -745,7 +1000,6 @@ function drawLineChart(canvas, points, yLabel){
   const toX = (i)=> (i/(points.length-1)) * (W-40) + 20;
   const toY = (v)=> H - ((v - lo)/(hi - lo))*(H-40) - 20;
 
-  // Line
   ctx.strokeStyle = "rgba(77,163,255,0.95)";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -757,7 +1011,6 @@ function drawLineChart(canvas, points, yLabel){
   });
   ctx.stroke();
 
-  // Dots
   ctx.fillStyle = "rgba(234,240,255,0.95)";
   points.forEach((p,i)=>{
     const x=toX(i), y=toY(p.y);
@@ -766,7 +1019,6 @@ function drawLineChart(canvas, points, yLabel){
     ctx.fill();
   });
 
-  // Labels
   ctx.fillStyle = "rgba(255,255,255,0.65)";
   ctx.font = "12px system-ui";
   ctx.fillText(`${yLabel} (min ${minY} / max ${maxY})`, 18, H-10);
@@ -779,7 +1031,6 @@ function renderTrends(){
   const gPts = r.filter(x=>x.glucose!=null).map(x=>({t:x.t, y:x.glucose}));
   drawLineChart(qs("glucoseCanvas"), gPts, "Glucose mg/dL");
 
-  // For BP chart, use SYS as y but annotate DIA in status
   const bpPts = r.filter(x=>x.bp?.sys!=null).map(x=>({t:x.t, y:x.bp.sys}));
   drawLineChart(qs("bpCanvas"), bpPts, "BP SYS mmHg");
 
@@ -790,7 +1041,6 @@ function renderTrends(){
   setText("trendStatus", status);
 }
 
-/* Symptoms */
 function renderSymptoms(){
   const p = activePerson();
   const box = qs("symptomTags");
@@ -805,11 +1055,9 @@ function renderSymptoms(){
     box.appendChild(span);
   });
 
-  // Show Run Diagnosis only if there is at least one symptom
   const runBtn = qs("runDxBtn");
   runBtn.style.display = p.symptoms.length ? "inline-flex" : "none";
 
-  // Remove handler
   box.querySelectorAll("button[data-idx]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const i = Number(btn.dataset.idx);
@@ -857,7 +1105,6 @@ function runDiagnosis(){
   const r = latestReading();
   const symptoms = p.symptoms;
 
-  // Simple conservative triage heuristic (non-diagnostic)
   const redFlags = [
     /chest pain|chest tightness|pressure/i,
     /shortness of breath|breathless|difficulty breathing/i,
@@ -869,7 +1116,6 @@ function runDiagnosis(){
   let risk = "Routine";
   let reasons = [];
 
-  // Symptom red flags
   for(const s of symptoms){
     if(redFlags.some(rx=>rx.test(s.name))){
       risk = "Urgent";
@@ -878,7 +1124,6 @@ function runDiagnosis(){
     }
   }
 
-  // Glucose-based flags
   if(r?.glucose != null){
     if(r.glucose < 70){
       risk = "Urgent";
@@ -889,7 +1134,6 @@ function runDiagnosis(){
     }
   }
 
-  // BP-based flags
   const sys = r?.bp?.sys ?? null;
   const dia = r?.bp?.dia ?? null;
   if(sys != null && dia != null){
@@ -906,11 +1150,11 @@ function runDiagnosis(){
 
   let guidance = "";
   if(risk === "Urgent"){
-    guidance = "Seek urgent medical assessment now (ER/urgent care), especially if symptoms are ongoing or worsening. Do not drive if dizzy/faint.";
+    guidance = "Seek urgent medical assessment now, especially if symptoms are ongoing or worsening. Do not drive if dizzy or faint.";
   }else if(risk === "Soon"){
     guidance = "Arrange medical review within 24–72 hours. Keep monitoring BP/glucose, hydrate, and avoid heavy exertion until symptoms settle.";
   }else{
-    guidance = "Monitor and log. Focus on sleep, hydration, steady meals, and light activity. If symptoms persist >3 days or worsen, escalate.";
+    guidance = "Monitor and log. Focus on sleep, hydration, steady meals, and light activity. If symptoms persist more than 3 days or worsen, escalate.";
   }
 
   const dx = qs("dxOutput");
@@ -932,10 +1176,10 @@ function runDiagnosis(){
   `;
 }
 
-/* Reports */
 function generateReport(){
   const p = activePerson();
   const r = latestReading();
+  const kidney = p.kidney || defaultKidney();
 
   const last7 = p.readings.slice(-7);
   const avg = (arr)=> {
@@ -948,21 +1192,50 @@ function generateReport(){
   const avgSys = avg(last7.map(x=>x.bp?.sys ?? null));
   const avgDia = avg(last7.map(x=>x.bp?.dia ?? null));
 
+  const khs = computeKHS({
+    egfr: kidney.egfr,
+    proteinLevel: kidney.proteinLevel,
+    bpSys: r?.bp?.sys ?? null,
+    hbStatus: kidney.hbStatus,
+    glucose: r?.glucose ?? null,
+    edema: kidney.edema
+  });
+
+  const kidneyLoad = computeKidneyLoad({
+    sodiumBurden: kidney.sodiumBurden,
+    proteinLevel: kidney.proteinLevel,
+    hydration: kidney.hydration,
+    bpSys: r?.bp?.sys ?? null,
+    bpDia: r?.bp?.dia ?? null,
+    glucose: r?.glucose ?? null,
+    edema: kidney.edema
+  });
+
   const lines = [];
   lines.push(`<b>Doctor-Style Summary (offline)</b>`);
   lines.push(`<div class="small">Generated: ${nowISO()}</div>`);
   lines.push(`<div class="divider"></div>`);
-  lines.push(`<b>Patient:</b> ${p.name}`);
-  lines.push(`<b>Latest reading:</b> ${r ? r.t : "—"}`);
+  lines.push(`<b>Patient:</b> ${escapeHtml(p.name)}`);
+  lines.push(`<b>Latest reading:</b> ${r ? escapeHtml(r.t) : "—"}`);
   lines.push(`<b>Latest glucose:</b> ${r?.glucose ?? "—"} ${r?.arrow || ""}`);
   lines.push(`<b>Latest BP:</b> ${(r?.bp?.sys!=null && r?.bp?.dia!=null) ? (r.bp.sys+"/"+r.bp.dia) : "—"} · Pulse: ${r?.pulse ?? "—"}`);
   lines.push(`<b>Latest sleep/energy:</b> Sleep ${r?.sleepScore ?? "—"} · Energy ${r?.energyScore ?? "—"} · HRV ${r?.hrv ?? "—"} ms · Lowest SpO₂ ${r?.spo2 ?? "—"}%`);
+  lines.push(`<div class="divider"></div>`);
+  lines.push(`<b>Kidney module:</b>`);
+  lines.push(`• Kidney Health Score: ${khs.score}/100 (${escapeHtml(khs.label)})`);
+  lines.push(`• Kidney Load: ${kidneyLoad.load}/100 (${escapeHtml(kidneyLoad.label)})`);
+  lines.push(`• eGFR: ${kidney.egfr != null ? kidney.egfr : "—"}`);
+  lines.push(`• Urine protein: ${kidney.proteinLevel || "—"}`);
+  lines.push(`• Hemoglobin status: ${kidney.hbStatus || "—"}`);
+  lines.push(`• Hydration: ${kidney.hydration || "—"}`);
+  lines.push(`• Sodium burden: ${kidney.sodiumBurden || "—"}`);
+  lines.push(`• Edema: ${kidney.edema || "—"}`);
   lines.push(`<div class="divider"></div>`);
   lines.push(`<b>Last 7 entries averages:</b>`);
   lines.push(`• Avg glucose: ${avgG!=null ? avgG.toFixed(1)+" mg/dL" : "—"}`);
   lines.push(`• Avg BP: ${(avgSys!=null && avgDia!=null) ? (avgSys.toFixed(0)+"/"+avgDia.toFixed(0)) : "—"}`);
   lines.push(`<div class="divider"></div>`);
-  lines.push(`<b>Symptoms on file:</b> ${p.symptoms.length ? p.symptoms.map(s=>`${s.name} (${s.severity})`).join(", ") : "None logged"}`);
+  lines.push(`<b>Symptoms on file:</b> ${p.symptoms.length ? p.symptoms.map(s=>`${escapeHtml(s.name)} (${escapeHtml(s.severity)})`).join(", ") : "None logged"}`);
   if(r?.notes){
     lines.push(`<div class="divider"></div>`);
     lines.push(`<b>Latest notes:</b> ${escapeHtml(r.notes)}`);
@@ -980,7 +1253,6 @@ function escapeHtml(str){
     .replaceAll(">","&gt;");
 }
 
-/* Export / Wipe */
 function exportJSON(){
   const blob = new Blob([JSON.stringify(store, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -999,13 +1271,13 @@ function wipeActiveProfile(){
   if(!ok) return;
   p.readings = [];
   p.symptoms = [];
+  p.kidney = defaultKidney();
   saveStore(store);
   renderSnapshot();
   renderTrends();
   renderSymptoms();
 }
 
-/* Profile */
 function renderProfile(){
   const p = activePerson();
   qs("nameInput").value = p.name || "";
@@ -1031,7 +1303,16 @@ function addNewPerson(){
   const name = prompt("New person name (e.g., Wife, Sister, John):");
   if(!name) return;
   const id = "p" + Math.random().toString(16).slice(2,10);
-  store.people[id] = { id, name: name.trim(), dob:"", heightCm:null, weightKg:null, readings:[], symptoms:[] };
+  store.people[id] = {
+    id,
+    name: name.trim(),
+    dob:"",
+    heightCm:null,
+    weightKg:null,
+    readings:[],
+    symptoms:[],
+    kidney: defaultKidney()
+  };
   store.activePersonId = id;
   saveStore(store);
   refreshPeopleSelect();
@@ -1039,7 +1320,6 @@ function addNewPerson(){
   renderSnapshot();
 }
 
-/* Wire up */
 document.querySelectorAll(".tabbtn").forEach(btn=>{
   btn.addEventListener("click", ()=> showTab(btn.dataset.tab));
 });
@@ -1069,7 +1349,6 @@ qs("wipeBtn").addEventListener("click", wipeActiveProfile);
 qs("saveProfileBtn").addEventListener("click", saveProfile);
 qs("addPersonBtn").addEventListener("click", addNewPerson);
 
-/* Init */
 refreshPeopleSelect();
 renderSnapshot();
 renderTrends();
@@ -1077,4 +1356,3 @@ renderSymptoms();
 </script>
 </body>
 </html>
-
