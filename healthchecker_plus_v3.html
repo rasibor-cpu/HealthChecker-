@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>HealthChecker+ v3</title>
+
+<style>
+body { font-family: Arial; background:#0b1220; color:#fff; margin:0; padding:15px;}
+.card { background:#111827; padding:15px; margin-bottom:12px; border-radius:10px;}
+input,select { width:100%; padding:10px; margin:6px 0; border-radius:6px; border:none;}
+button { width:100%; padding:12px; margin-top:10px; border:none; border-radius:6px; background:#4da3ff; color:#fff; font-weight:bold;}
+.kpi { font-size:22px; font-weight:bold;}
+.ok{color:#2dd4bf;} .warn{color:#fbbf24;} .bad{color:#fb7185;}
+</style>
+</head>
+
+<body>
+
+<h2>HealthChecker+ v3</h2>
+
+<div class="card">
+<h3>Snapshot</h3>
+<div id="snapshot"></div>
+</div>
+
+<div class="card">
+<h3>Add Reading</h3>
+
+<input id="glucose" placeholder="Glucose mg/dL"/>
+<input id="bp" placeholder="BP (e.g. 150/90)"/>
+<input id="egfr" placeholder="eGFR (e.g. 33)"/>
+
+<select id="protein">
+<option value="">Protein</option>
+<option value="none">None</option>
+<option value="trace">Trace</option>
+<option value="moderate">Moderate</option>
+<option value="high">High</option>
+</select>
+
+<select id="hb">
+<option value="">Hemoglobin</option>
+<option value="normal">Normal</option>
+<option value="mild">Mild anemia</option>
+<option value="moderate">Moderate anemia</option>
+</select>
+
+<select id="hydration">
+<option value="">Hydration</option>
+<option value="good">Good</option>
+<option value="fair">Fair</option>
+<option value="low">Low</option>
+</select>
+
+<select id="sodium">
+<option value="">Sodium</option>
+<option value="no">Low</option>
+<option value="yes">High</option>
+</select>
+
+<select id="edema">
+<option value="">Edema</option>
+<option value="no">No</option>
+<option value="mild">Mild</option>
+<option value="yes">Yes</option>
+</select>
+
+<button onclick="save()">Save</button>
+</div>
+
+<script>
+
+const KEY = "HCPLUS_V3";
+
+function load(){
+  return JSON.parse(localStorage.getItem(KEY) || "{}");
+}
+
+function saveData(d){
+  localStorage.setItem(KEY, JSON.stringify(d));
+}
+
+function parseBP(bp){
+  if(!bp) return {};
+  let parts = bp.split("/");
+  return {sys: Number(parts[0]), dia: Number(parts[1])};
+}
+
+function scoreEGFR(e){
+  if(!e) return 50;
+  if(e>=90) return 100;
+  if(e>=60) return 80;
+  if(e>=45) return 60;
+  if(e>=30) return 40;
+  return 20;
+}
+
+function scoreProtein(p){
+  if(p=="none") return 100;
+  if(p=="trace") return 80;
+  if(p=="moderate") return 50;
+  if(p=="high") return 20;
+  return 80;
+}
+
+function scoreBP(sys){
+  if(!sys) return 60;
+  if(sys<130) return 100;
+  if(sys<140) return 80;
+  if(sys<160) return 60;
+  return 40;
+}
+
+function scoreGlucose(g){
+  if(!g) return 70;
+  if(g<120) return 100;
+  if(g<160) return 70;
+  return 40;
+}
+
+function scoreSymptom(edema){
+  if(edema=="no") return 100;
+  if(edema=="mild") return 70;
+  if(edema=="yes") return 40;
+  return 70;
+}
+
+function computeKHS(d){
+  let F = scoreEGFR(d.egfr);
+  let P = scoreProtein(d.protein);
+  let BP = scoreBP(d.bp?.sys);
+  let G = scoreGlucose(d.glucose);
+  let S = scoreSymptom(d.edema);
+  let H = d.hb=="normal"?100:(d.hb=="mild"?70:50);
+
+  let score = Math.round(
+    0.35*F + 0.20*P + 0.15*BP + 0.10*H + 0.10*S + 0.10*G
+  );
+
+  return score;
+}
+
+function computeLoad(d){
+  let load = 25;
+
+  if(d.sodium=="yes") load+=15;
+  if(d.protein=="moderate") load+=15;
+  if(d.protein=="high") load+=20;
+  if(d.hydration=="low") load+=15;
+
+  if(d.bp?.sys>=140) load+=15;
+  if(d.glucose>=180) load+=15;
+
+  if(d.edema=="yes") load+=15;
+
+  return Math.min(100,load);
+}
+
+function save(){
+  let d = load();
+
+  d.glucose = Number(document.getElementById("glucose").value);
+  d.bp = parseBP(document.getElementById("bp").value);
+  d.egfr = Number(document.getElementById("egfr").value);
+  d.protein = document.getElementById("protein").value;
+  d.hb = document.getElementById("hb").value;
+  d.hydration = document.getElementById("hydration").value;
+  d.sodium = document.getElementById("sodium").value;
+  d.edema = document.getElementById("edema").value;
+
+  saveData(d);
+  render();
+}
+
+function render(){
+  let d = load();
+
+  let khs = computeKHS(d);
+  let loadScore = computeLoad(d);
+
+  let cls = khs>=70?"ok":(khs>=50?"warn":"bad");
+
+  document.getElementById("snapshot").innerHTML = `
+    <div class="kpi ${cls}">KHS: ${khs}/100</div>
+    <div>Kidney Load: ${loadScore}/100</div>
+    <div>Glucose: ${d.glucose || "-"}</div>
+    <div>BP: ${d.bp?.sys || "-"} / ${d.bp?.dia || "-"}</div>
+    <div>eGFR: ${d.egfr || "-"}</div>
+  `;
+}
+
+render();
+
+</script>
+
+</body>
+</html>
