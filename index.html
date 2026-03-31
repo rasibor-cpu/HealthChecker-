@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>HealthChecker+ Unified</title>
+<title>HealthChecker+ v2 (Upgraded)</title>
 <style>
 body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0}
 header{padding:10px;background:#101a32}
@@ -12,6 +12,7 @@ header{padding:10px;background:#101a32}
 .screen{display:none;padding:12px}
 .screen.active{display:block}
 .card{background:#0f1a30;padding:12px;border-radius:12px;margin-bottom:10px}
+.kpi{margin:6px 0;font-size:14px}
 </style>
 </head>
 <body>
@@ -31,6 +32,14 @@ header{padding:10px;background:#101a32}
 <div class="card">
 <input id="glucose" placeholder="Glucose" />
 <input id="bp" placeholder="BP 120/80" />
+<input id="egfr" placeholder="eGFR" />
+<select id="protein">
+<option value="">Protein</option>
+<option value="none">None</option>
+<option value="trace">Trace</option>
+<option value="moderate">Moderate</option>
+<option value="high">High</option>
+</select>
 <button onclick="saveReading()">Save</button>
 </div>
 </div>
@@ -53,21 +62,55 @@ header{padding:10px;background:#101a32}
 </div>
 
 <script>
-const STORE="HC_UNIFIED";
-function getData(){return JSON.parse(localStorage.getItem(STORE)||"{}")}
+const STORE="HC_UNIFIED_V2";
+
+function getData(){
+ let d=JSON.parse(localStorage.getItem(STORE)||"{}");
+ if(!d.logs) d.logs=[];
+ return d;
+}
 function setData(d){localStorage.setItem(STORE,JSON.stringify(d))}
+
+function getProteinScore(p){
+ if(p=="none")return 100;
+ if(p=="trace")return 80;
+ if(p=="moderate")return 50;
+ if(p=="high")return 20;
+ return 70;
+}
+
+function getEGFRScore(e){
+ if(!e)return 50;
+ if(e>=90)return 100;
+ if(e>=60)return 80;
+ if(e>=45)return 60;
+ if(e>=30)return 40;
+ return 20;
+}
+
+function computeKHS(e,p,g,bp){
+ return Math.round(0.4*getEGFRScore(e)+0.2*getProteinScore(p)+0.2*(g<140?100:60)+0.2*(bp<130?100:60));
+}
 
 function saveReading(){
  let d=getData();
- d.logs=d.logs||[];
- d.logs.push({g:document.getElementById("glucose").value,bp:document.getElementById("bp").value,t:Date.now()});
+ let g=Number(document.getElementById("glucose").value);
+ let bpRaw=document.getElementById("bp").value;
+ let sys=bpRaw.split("/")[0];
+ let e=Number(document.getElementById("egfr").value);
+ let p=document.getElementById("protein").value;
+ d.logs.push({g,sys,e,p,t:Date.now()});
  setData(d);
  refreshDashboard();
 }
 
 function refreshDashboard(){
  let d=getData();
- let html=(d.logs||[]).map(x=>`<div>${x.g} | ${x.bp}</div>`).join("");
+ let html="";
+ d.logs.forEach(x=>{
+ let khs=computeKHS(x.e,x.p,x.g,x.sys);
+ html+=`<div class='kpi'>Glucose:${x.g} | BP:${x.sys} | eGFR:${x.e||"-"} | KHS:${khs}</div>`;
+ });
  document.getElementById("dashboard").innerHTML=html||"No data";
 }
 
@@ -81,12 +124,12 @@ function buildSymptomAccordion(){
 
 function runMultiSymptomCheck(){
  let s=[...document.querySelectorAll(".symptom")].map(x=>x.value).filter(Boolean);
- document.getElementById("symptom-output").innerHTML=s.length?"Symptoms logged":"None";
+ document.getElementById("symptom-output").innerHTML=s.length?"Monitor / escalate if persistent":"None";
 }
 
 function renderReports(){
  let d=getData();
- document.getElementById("report-list").innerHTML=(d.logs||[]).length+" entries";
+ document.getElementById("report-list").innerHTML=d.logs.length+" total readings";
 }
 
 function loadProfileIntoForm(){
@@ -101,7 +144,6 @@ document.getElementById("btn-save-profile").onclick=function(){
  alert("saved");
 }
 
-// tabs
 let tabs=document.querySelectorAll(".tab-btn");
 tabs.forEach(b=>b.onclick=()=>{
  tabs.forEach(x=>x.classList.remove("active"));
@@ -110,7 +152,6 @@ tabs.forEach(b=>b.onclick=()=>{
  document.getElementById(b.dataset.target).classList.add("active");
 });
 
-// init
 buildSymptomAccordion();
 refreshDashboard();
 </script>
