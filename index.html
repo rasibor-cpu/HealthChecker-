@@ -3,145 +3,482 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>HealthChecker+ v6 (Trend Intelligence)</title>
+<title>HealthChecker+ v6 (Trend Intelligence + Foot Pain Analysis)</title>
 <style>
-:root{--bg:#0b1220;--card:#0f1a30;--text:#eaf0ff;--muted:#9fb1d1;--ok:#2dd4bf;--warn:#fbbf24;--bad:#fb7185}
+:root{
+  --bg:#0b1220;
+  --card:#0f1a30;
+  --text:#eaf0ff;
+  --muted:#9fb1d1;
+  --ok:#2dd4bf;
+  --warn:#fbbf24;
+  --bad:#fb7185;
+  --accent:#4da3ff;
+  --line:#233458;
+}
+*{box-sizing:border-box}
 body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
-header{padding:12px;background:#101a32}
-nav{display:flex;gap:8px;padding:10px}
-.tab{padding:8px 10px;border-radius:10px;background:#233458;cursor:pointer}
+header{padding:12px;background:#101a32;font-weight:700}
+nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
+.tab{padding:8px 10px;border-radius:10px;background:#233458;cursor:pointer;user-select:none}
 .tab.active{background:#4da3ff}
 .screen{display:none;padding:12px}
 .screen.active{display:block}
 .card{background:var(--card);padding:12px;border-radius:12px;margin-bottom:10px}
-.alert{padding:10px;border-radius:10px;margin-bottom:10px}
-.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.alert{padding:10px;border-radius:10px;margin-bottom:10px;background:#13203a}
+.ok{color:var(--ok)}
+.warn{color:var(--warn)}
+.bad{color:var(--bad)}
+.muted{color:var(--muted)}
+input,select,button,textarea{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#0c162b;
+  color:var(--text);
+  margin-bottom:10px;
+}
+button{
+  background:var(--accent);
+  border:none;
+  font-weight:700;
+}
+.row{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:700px){
+  .row.two{grid-template-columns:1fr 1fr}
+  .row.three{grid-template-columns:1fr 1fr 1fr}
+}
+.kpi{
+  padding:10px;
+  border-radius:10px;
+  background:#13203a;
+  margin-bottom:8px;
+}
+.small{font-size:12px}
+.section-title{margin:0 0 8px 0}
+.hr{height:1px;background:var(--line);margin:10px 0}
+.badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  background:#13203a;
+  margin:4px 6px 0 0;
+  font-size:12px;
+}
 </style>
 </head>
 <body>
 <header>HealthChecker+ v6</header>
+
 <nav>
-<div class="tab active" data="dash">Dashboard</div>
-<div class="tab" data="add">Add</div>
-<div class="tab" data="sym">Symptoms</div>
-<div class="tab" data="rep">Reports</div>
+  <div class="tab active" data="dash">Dashboard</div>
+  <div class="tab" data="add">Add</div>
+  <div class="tab" data="sym">Symptoms</div>
+  <div class="tab" data="rep">Reports</div>
 </nav>
 
 <div id="dash" class="screen active">
-<div id="alerts"></div>
-<div id="dashboard"></div>
+  <div id="alerts"></div>
+  <div class="card">
+    <h3 class="section-title">Quick Summary</h3>
+    <div id="summary"></div>
+  </div>
+  <div class="card">
+    <h3 class="section-title">Recent Readings</h3>
+    <div id="dashboard"></div>
+  </div>
+  <div class="card">
+    <h3 class="section-title">Foot Pain Analysis</h3>
+    <div id="footDash">No foot pain analysis yet.</div>
+  </div>
 </div>
 
 <div id="add" class="screen">
-<div class="card">
-<input id="g" placeholder="Glucose" />
-<input id="bp" placeholder="BP 120/80" />
-<input id="egfr" placeholder="eGFR" />
-<select id="prot"><option value="">Protein</option><option>none</option><option>trace</option><option>moderate</option><option>high</option></select>
-<button onclick="save()">Save</button>
-</div>
+  <div class="card">
+    <h3 class="section-title">Add Reading</h3>
+    <input id="g" placeholder="Glucose" inputmode="decimal" />
+    <input id="bp" placeholder="BP 120/80" />
+    <input id="egfr" placeholder="eGFR" inputmode="decimal" />
+    <select id="prot">
+      <option value="">Protein</option>
+      <option>none</option>
+      <option>trace</option>
+      <option>moderate</option>
+      <option>high</option>
+    </select>
+    <button onclick="save()">Save</button>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Foot Pain Input</h3>
+
+    <select id="fp_location">
+      <option value="">Pain location</option>
+      <option value="big_toe">Big toe</option>
+      <option value="toe_joint">Toe joint</option>
+      <option value="pinky_side">Pinky side / outer foot</option>
+      <option value="heel">Heel</option>
+      <option value="arch">Arch</option>
+      <option value="ankle">Ankle</option>
+      <option value="top_foot">Top of foot</option>
+      <option value="general">General foot pain</option>
+    </select>
+
+    <select id="fp_swelling">
+      <option value="">Swelling present?</option>
+      <option value="true">Yes</option>
+      <option value="false">No</option>
+    </select>
+
+    <select id="fp_symmetry">
+      <option value="">One foot or both?</option>
+      <option value="one_side">One side</option>
+      <option value="asymmetrical">Asymmetrical</option>
+      <option value="both">Both feet</option>
+    </select>
+
+    <select id="fp_onset">
+      <option value="">Onset speed</option>
+      <option value="sudden">Sudden</option>
+      <option value="gradual">Gradual</option>
+    </select>
+
+    <select id="fp_med_change">
+      <option value="">Recent medication/brand change?</option>
+      <option value="true">Yes</option>
+      <option value="false">No</option>
+    </select>
+
+    <input id="fp_glucose" placeholder="Current glucose (optional)" inputmode="decimal" />
+
+    <select id="fp_kidney">
+      <option value="">Kidney status</option>
+      <option value="normal">Normal / unknown</option>
+      <option value="reduced_eGFR">Reduced eGFR</option>
+    </select>
+
+    <input id="fp_symptoms" placeholder="Extra symptoms: sharp_pain, joint_focus, tingling, burning" />
+    <button onclick="saveFootPain()">Save Foot Pain Analysis</button>
+  </div>
 </div>
 
 <div id="sym" class="screen">
-<div class="card">
-<input id="symi" placeholder="symptom" />
-<button onclick="addSym()">Add</button>
-<div id="syml"></div>
-<button onclick="run()">Run Diagnosis</button>
-<div id="dx"></div>
-</div>
+  <div class="card">
+    <h3 class="section-title">Symptoms</h3>
+    <input id="symi" placeholder="symptom" />
+    <button onclick="addSym()">Add</button>
+    <div id="syml"></div>
+    <div class="hr"></div>
+    <button onclick="run()">Run Diagnosis</button>
+    <div id="dx"></div>
+  </div>
 </div>
 
 <div id="rep" class="screen">
-<div class="card" id="report"></div>
+  <div class="card">
+    <h3 class="section-title">Report</h3>
+    <div id="report"></div>
+  </div>
 </div>
 
 <script>
-const KEY='HC_V6';
-function data(){return JSON.parse(localStorage.getItem(KEY)||'{"logs":[],"sym":[]}')}
-function saveData(d){localStorage.setItem(KEY,JSON.stringify(d))}
+const KEY = 'HC_V6';
+
+function data(){
+  return JSON.parse(localStorage.getItem(KEY) || '{"logs":[],"sym":[],"footPainLogs":[]}');
+}
+
+function saveData(d){
+  localStorage.setItem(KEY, JSON.stringify(d));
+}
 
 function trend(arr){
- if(arr.length<3)return 'stable';
- let a=arr.slice(-3);
- if(a[2]>a[1] && a[1]>a[0]) return 'up';
- if(a[2]<a[1] && a[1]<a[0]) return 'down';
- return 'stable';
+  if(arr.length < 3) return 'stable';
+  let a = arr.slice(-3);
+  if(a[2] > a[1] && a[1] > a[0]) return 'up';
+  if(a[2] < a[1] && a[1] < a[0]) return 'down';
+  return 'stable';
+}
+
+function latestLog(d){
+  return d.logs.length ? d.logs[d.logs.length - 1] : null;
 }
 
 function save(){
- let d=data();
- let g=+gEl.value;
- let sys=+bpEl.value.split('/')[0];
- let e=+egfrEl.value;
- let p=protEl.value;
- d.logs.push({g,sys,e,p});
- saveData(d);
- render();
+  let d = data();
+  let g = +gEl.value;
+  let sys = +(bpEl.value.split('/')[0] || 0);
+  let e = +egfrEl.value;
+  let p = protEl.value;
+
+  d.logs.push({
+    g: Number.isFinite(g) ? g : 0,
+    sys: Number.isFinite(sys) ? sys : 0,
+    e: Number.isFinite(e) ? e : 0,
+    p,
+    ts: new Date().toISOString()
+  });
+
+  saveData(d);
+  gEl.value = '';
+  bpEl.value = '';
+  egfrEl.value = '';
+  protEl.value = '';
+  render();
 }
 
 function alerts(d){
- let out=[];
- let gTrend=trend(d.logs.map(x=>x.g));
- let bpTrend=trend(d.logs.map(x=>x.sys));
- let eTrend=trend(d.logs.map(x=>x.e));
+  let out = [];
+  let gTrend = trend(d.logs.map(x => x.g).filter(x => x > 0));
+  let bpTrend = trend(d.logs.map(x => x.sys).filter(x => x > 0));
+  let eTrend = trend(d.logs.map(x => x.e).filter(x => x > 0));
+  let last = latestLog(d);
 
- if(gTrend==='up') out.push({t:'Glucose rising',c:'warn'});
- if(bpTrend==='up') out.push({t:'Blood pressure rising',c:'warn'});
- if(eTrend==='down') out.push({t:'Kidney function declining',c:'bad'});
+  if(gTrend === 'up') out.push({t:'Glucose rising', c:'warn'});
+  if(bpTrend === 'up') out.push({t:'Blood pressure rising', c:'warn'});
+  if(eTrend === 'down') out.push({t:'Kidney function declining', c:'bad'});
 
- return out;
-}
+  if(last){
+    if(last.g > 180) out.push({t:'Current glucose high', c:'warn'});
+    if(last.g > 0 && last.g < 70) out.push({t:'Current glucose low', c:'bad'});
+    if(last.sys >= 140) out.push({t:'Current systolic BP elevated', c:'warn'});
+    if(last.e > 0 && last.e < 60) out.push({t:'Current eGFR reduced', c:'bad'});
+    if(last.p === 'moderate' || last.p === 'high') out.push({t:'Urine protein needs attention', c:'warn'});
+  }
 
-function render(){
- let d=data();
+  let fp = latestFootPain(d);
+  if(fp && fp.result){
+    if(fp.result.likely_cause === 'medication_edema') out.push({t:'Foot pain pattern suggests medication edema', c:'warn'});
+    if(fp.result.likely_cause === 'renal_edema') out.push({t:'Foot swelling pattern may reflect kidney-related fluid retention', c:'bad'});
+    if(fp.result.likely_cause === 'gout') out.push({t:'Foot pain pattern suggests possible gout', c:'warn'});
+  }
 
- // alerts
- let a=alerts(d);
- alertsDiv.innerHTML=a.map(x=>`<div class='alert ${x.c}'>${x.t}</div>`).join('');
-
- // dashboard
- let html='';
- d.logs.slice(-5).forEach(x=>{
- html+=`<div>G:${x.g} BP:${x.sys} eGFR:${x.e}</div>`
- });
- dashboard.innerHTML=html||'No data';
-
- // report
- report.innerHTML=`Total readings: ${d.logs.length}`;
+  return out;
 }
 
 function addSym(){
- let d=data();
- let v=symi.value;
- if(!v)return;
- d.sym.push(v);
- saveData(d);
- syml.innerHTML=d.sym.join('<br>');
+  let d = data();
+  let v = symi.value.trim();
+  if(!v) return;
+  d.sym.push(v);
+  saveData(d);
+  symi.value = '';
+  render();
 }
 
 function run(){
- let d=data();
- let txt=d.sym.join(' ');
- let urgency='Routine';
- if(txt.match(/chest|breath|stroke/i)) urgency='Urgent';
- dx.innerHTML=`Urgency: ${urgency}`;
+  let d = data();
+  let txt = d.sym.join(' ');
+  let urgency = 'Routine';
+  if(txt.match(/chest|breath|stroke/i)) urgency = 'Urgent';
+  dx.innerHTML = `<div class="kpi"><strong>Urgency:</strong> ${urgency}</div>`;
 }
 
-let gEl=g,bpEl=bp,egfrEl=egfr,protEl=prot;
-let dashboard=document.getElementById('dashboard');
-let report=document.getElementById('report');
-let alertsDiv=document.getElementById('alerts');
-let syml=document.getElementById('syml');
-let symi=document.getElementById('symi');
-let dx=document.getElementById('dx');
+function latestFootPain(d){
+  return d.footPainLogs && d.footPainLogs.length ? d.footPainLogs[d.footPainLogs.length - 1] : null;
+}
 
-let tabs=document.querySelectorAll('.tab');
-tabs.forEach(t=>t.onclick=()=>{
- tabs.forEach(x=>x.classList.remove('active'));
- t.classList.add('active');
- document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
- document.getElementById(t.getAttribute('data')).classList.add('active');
+function evaluateFootPain(payload){
+  const result = {
+    likely_cause: 'undetermined',
+    confidence: 0.4,
+    notes: ['Monitor symptoms progression'],
+    actions: ['Re-evaluate if symptoms persist beyond 48 hours']
+  };
+
+  if(payload.recent_med_change && payload.swelling){
+    if(payload.symmetry === 'one_side' || payload.symmetry === 'asymmetrical'){
+      return {
+        likely_cause: 'medication_edema',
+        confidence: 0.85,
+        notes: ['Likely amlodipine-related fluid shift'],
+        actions: [
+          'Use consistent brand and dosage (avoid splitting tablets)',
+          'Elevate feet 10–15 minutes, 2–3 times daily',
+          'Reduce salt intake temporarily'
+        ]
+      };
+    }
+  }
+
+  if(payload.swelling && payload.kidney_status === 'reduced_eGFR'){
+    if(payload.symmetry === 'both'){
+      return {
+        likely_cause: 'renal_edema',
+        confidence: 0.75,
+        notes: ['Possible fluid retention from reduced kidney function'],
+        actions: [
+          'Monitor hydration balance (avoid excess or low intake)',
+          'Check creatinine/eGFR if swelling persists'
+        ]
+      };
+    }
+  }
+
+  if(payload.symptoms.includes('sharp_pain') || payload.symptoms.includes('joint_focus')){
+    if(payload.pain_location === 'big_toe' || payload.pain_location === 'toe_joint'){
+      return {
+        likely_cause: 'gout',
+        confidence: 0.70,
+        notes: ['Possible uric acid crystal inflammation'],
+        actions: [
+          'Check uric acid levels',
+          'Reduce red meat and high purine foods'
+        ]
+      };
+    }
+  }
+
+  if(payload.symptoms.includes('tingling') || payload.symptoms.includes('burning')){
+    if(payload.glucose > 140){
+      return {
+        likely_cause: 'neuropathy',
+        confidence: 0.65,
+        notes: ['Glucose-related nerve irritation'],
+        actions: [
+          'Tighten glucose control'
+        ]
+      };
+    }
+  }
+
+  return result;
+}
+
+function saveFootPain(){
+  let d = data();
+
+  const symptoms = fpSymptoms.value
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  const payload = {
+    pain_location: fpLocation.value,
+    swelling: fpSwelling.value === 'true',
+    symmetry: fpSymmetry.value,
+    onset_speed: fpOnset.value,
+    recent_med_change: fpMedChange.value === 'true',
+    glucose: +(fpGlucose.value || 0),
+    kidney_status: fpKidney.value || 'normal',
+    symptoms
+  };
+
+  const result = evaluateFootPain(payload);
+
+  d.footPainLogs.push({
+    ...payload,
+    result,
+    ts: new Date().toISOString()
+  });
+
+  saveData(d);
+
+  fpLocation.value = '';
+  fpSwelling.value = '';
+  fpSymmetry.value = '';
+  fpOnset.value = '';
+  fpMedChange.value = '';
+  fpGlucose.value = '';
+  fpKidney.value = '';
+  fpSymptoms.value = '';
+
+  render();
+}
+
+function renderSummary(d){
+  const last = latestLog(d);
+  const fp = latestFootPain(d);
+
+  let html = '';
+  if(last){
+    html += `<div class="kpi"><strong>Latest glucose:</strong> ${last.g || '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest systolic BP:</strong> ${last.sys || '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest eGFR:</strong> ${last.e || '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest urine protein:</strong> ${last.p || '—'}</div>`;
+  } else {
+    html += `<div class="muted">No readings yet.</div>`;
+  }
+
+  if(fp && fp.result){
+    html += `<div class="kpi"><strong>Latest foot pain cause:</strong> ${fp.result.likely_cause}</div>`;
+  }
+
+  summary.innerHTML = html;
+}
+
+function renderFootPain(d){
+  const fp = latestFootPain(d);
+  if(!fp || !fp.result){
+    footDash.innerHTML = 'No foot pain analysis yet.';
+    return;
+  }
+
+  footDash.innerHTML = `
+    <div class="kpi"><strong>Likely cause:</strong> ${fp.result.likely_cause}</div>
+    <div class="kpi"><strong>Confidence:</strong> ${fp.result.confidence}</div>
+    <div class="kpi"><strong>Notes:</strong> ${fp.result.notes.join(' | ')}</div>
+    <div class="kpi"><strong>Actions:</strong> ${fp.result.actions.join(' | ')}</div>
+    <div class="small muted">Saved at: ${new Date(fp.ts).toLocaleString()}</div>
+  `;
+}
+
+function render(){
+  let d = data();
+
+  let a = alerts(d);
+  alertsDiv.innerHTML = a.map(x => `<div class="alert ${x.c}'>${x.t}</div>`).join('');
+
+  let html = '';
+  d.logs.slice(-5).reverse().forEach(x => {
+    html += `<div class="kpi">G:${x.g} BP:${x.sys} eGFR:${x.e} Protein:${x.p || '—'} <div class="small muted">${x.ts ? new Date(x.ts).toLocaleString() : ''}</div></div>`;
+  });
+  dashboard.innerHTML = html || 'No data';
+
+  syml.innerHTML = d.sym.length
+    ? d.sym.map(x => `<span class="badge">${x}</span>`).join('')
+    : '<span class="muted">No symptoms added.</span>';
+
+  report.innerHTML = `
+    <div class="kpi"><strong>Total readings:</strong> ${d.logs.length}</div>
+    <div class="kpi"><strong>Total symptoms logged:</strong> ${d.sym.length}</div>
+    <div class="kpi"><strong>Total foot pain analyses:</strong> ${(d.footPainLogs || []).length}</div>
+  `;
+
+  renderSummary(d);
+  renderFootPain(d);
+}
+
+let gEl = document.getElementById('g');
+let bpEl = document.getElementById('bp');
+let egfrEl = document.getElementById('egfr');
+let protEl = document.getElementById('prot');
+
+let dashboard = document.getElementById('dashboard');
+let report = document.getElementById('report');
+let alertsDiv = document.getElementById('alerts');
+let syml = document.getElementById('syml');
+let symi = document.getElementById('symi');
+let dx = document.getElementById('dx');
+let summary = document.getElementById('summary');
+let footDash = document.getElementById('footDash');
+
+let fpLocation = document.getElementById('fp_location');
+let fpSwelling = document.getElementById('fp_swelling');
+let fpSymmetry = document.getElementById('fp_symmetry');
+let fpOnset = document.getElementById('fp_onset');
+let fpMedChange = document.getElementById('fp_med_change');
+let fpGlucose = document.getElementById('fp_glucose');
+let fpKidney = document.getElementById('fp_kidney');
+let fpSymptoms = document.getElementById('fp_symptoms');
+
+let tabs = document.querySelectorAll('.tab');
+tabs.forEach(t => t.onclick = () => {
+  tabs.forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(t.getAttribute('data')).classList.add('active');
 });
 
 render();
