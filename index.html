@@ -30,7 +30,7 @@ nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
 .warn{color:var(--warn)}
 .bad{color:var(--bad)}
 .muted{color:var(--muted)}
-input,select,button,textarea{
+input,select,button{
   width:100%;
   padding:10px;
   border-radius:10px;
@@ -43,11 +43,6 @@ button{
   background:var(--accent);
   border:none;
   font-weight:700;
-}
-.row{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:700px){
-  .row.two{grid-template-columns:1fr 1fr}
-  .row.three{grid-template-columns:1fr 1fr 1fr}
 }
 .kpi{
   padding:10px;
@@ -80,14 +75,22 @@ button{
 
 <div id="dash" class="screen active">
   <div id="alerts"></div>
+
   <div class="card">
     <h3 class="section-title">Quick Summary</h3>
     <div id="summary"></div>
   </div>
+
+  <div class="card">
+    <h3 class="section-title">Trend Intelligence</h3>
+    <div id="trendBox"></div>
+  </div>
+
   <div class="card">
     <h3 class="section-title">Recent Readings</h3>
     <div id="dashboard"></div>
   </div>
+
   <div class="card">
     <h3 class="section-title">Foot Pain Analysis</h3>
     <div id="footDash">No foot pain analysis yet.</div>
@@ -201,22 +204,39 @@ function trend(arr){
   return 'stable';
 }
 
+function trendLabel(v){
+  if(v === 'up') return 'Rising';
+  if(v === 'down') return 'Falling';
+  return 'Stable';
+}
+
+function parseBP(value){
+  let raw = (value || '').trim();
+  if(!raw) return null;
+  let top = +(raw.split('/')[0] || '');
+  return Number.isFinite(top) && top > 0 ? top : null;
+}
+
 function latestLog(d){
   return d.logs.length ? d.logs[d.logs.length - 1] : null;
 }
 
+function latestFootPain(d){
+  return d.footPainLogs && d.footPainLogs.length ? d.footPainLogs[d.footPainLogs.length - 1] : null;
+}
+
 function save(){
   let d = data();
-  let g = +gEl.value;
-  let sys = +(bpEl.value.split('/')[0] || 0);
-  let e = +egfrEl.value;
+  let gRaw = +gEl.value;
+  let bpParsed = parseBP(bpEl.value);
+  let eRaw = +egfrEl.value;
   let p = protEl.value;
 
   d.logs.push({
-    g: Number.isFinite(g) ? g : 0,
-    sys: Number.isFinite(sys) ? sys : 0,
-    e: Number.isFinite(e) ? e : 0,
-    p,
+    g: Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null,
+    sys: bpParsed,
+    e: Number.isFinite(eRaw) && eRaw > 0 ? eRaw : null,
+    p: p || '',
     ts: new Date().toISOString()
   });
 
@@ -230,9 +250,9 @@ function save(){
 
 function alerts(d){
   let out = [];
-  let gTrend = trend(d.logs.map(x => x.g).filter(x => x > 0));
-  let bpTrend = trend(d.logs.map(x => x.sys).filter(x => x > 0));
-  let eTrend = trend(d.logs.map(x => x.e).filter(x => x > 0));
+  let gTrend = trend(d.logs.map(x => x.g).filter(x => x != null));
+  let bpTrend = trend(d.logs.map(x => x.sys).filter(x => x != null));
+  let eTrend = trend(d.logs.map(x => x.e).filter(x => x != null));
   let last = latestLog(d);
 
   if(gTrend === 'up') out.push({t:'Glucose rising', c:'warn'});
@@ -240,10 +260,10 @@ function alerts(d){
   if(eTrend === 'down') out.push({t:'Kidney function declining', c:'bad'});
 
   if(last){
-    if(last.g > 180) out.push({t:'Current glucose high', c:'warn'});
-    if(last.g > 0 && last.g < 70) out.push({t:'Current glucose low', c:'bad'});
-    if(last.sys >= 140) out.push({t:'Current systolic BP elevated', c:'warn'});
-    if(last.e > 0 && last.e < 60) out.push({t:'Current eGFR reduced', c:'bad'});
+    if(last.g != null && last.g > 180) out.push({t:'Current glucose high', c:'warn'});
+    if(last.g != null && last.g < 70) out.push({t:'Current glucose low', c:'bad'});
+    if(last.sys != null && last.sys >= 140) out.push({t:'Current systolic BP elevated', c:'warn'});
+    if(last.e != null && last.e < 60) out.push({t:'Current eGFR reduced', c:'bad'});
     if(last.p === 'moderate' || last.p === 'high') out.push({t:'Urine protein needs attention', c:'warn'});
   }
 
@@ -273,10 +293,6 @@ function run(){
   let urgency = 'Routine';
   if(txt.match(/chest|breath|stroke/i)) urgency = 'Urgent';
   dx.innerHTML = `<div class="kpi"><strong>Urgency:</strong> ${urgency}</div>`;
-}
-
-function latestFootPain(d){
-  return d.footPainLogs && d.footPainLogs.length ? d.footPainLogs[d.footPainLogs.length - 1] : null;
 }
 
 function evaluateFootPain(payload){
@@ -336,9 +352,7 @@ function evaluateFootPain(payload){
         likely_cause: 'neuropathy',
         confidence: 0.65,
         notes: ['Glucose-related nerve irritation'],
-        actions: [
-          'Tighten glucose control'
-        ]
+        actions: ['Tighten glucose control']
       };
     }
   }
@@ -393,9 +407,9 @@ function renderSummary(d){
 
   let html = '';
   if(last){
-    html += `<div class="kpi"><strong>Latest glucose:</strong> ${last.g || '—'}</div>`;
-    html += `<div class="kpi"><strong>Latest systolic BP:</strong> ${last.sys || '—'}</div>`;
-    html += `<div class="kpi"><strong>Latest eGFR:</strong> ${last.e || '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest glucose:</strong> ${last.g ?? '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest systolic BP:</strong> ${last.sys ?? '—'}</div>`;
+    html += `<div class="kpi"><strong>Latest eGFR:</strong> ${last.e ?? '—'}</div>`;
     html += `<div class="kpi"><strong>Latest urine protein:</strong> ${last.p || '—'}</div>`;
   } else {
     html += `<div class="muted">No readings yet.</div>`;
@@ -406,6 +420,22 @@ function renderSummary(d){
   }
 
   summary.innerHTML = html;
+}
+
+function renderTrend(d){
+  const gVals = d.logs.map(x => x.g).filter(x => x != null);
+  const bpVals = d.logs.map(x => x.sys).filter(x => x != null);
+  const eVals = d.logs.map(x => x.e).filter(x => x != null);
+
+  const gTrend = trend(gVals);
+  const bpTrend = trend(bpVals);
+  const eTrend = trend(eVals);
+
+  trendBox.innerHTML = `
+    <div class="kpi"><strong>Glucose trend:</strong> ${trendLabel(gTrend)}</div>
+    <div class="kpi"><strong>Blood pressure trend:</strong> ${trendLabel(bpTrend)}</div>
+    <div class="kpi"><strong>Kidney trend:</strong> ${trendLabel(eTrend === 'up' ? 'up' : eTrend === 'down' ? 'down' : 'stable')} ${eTrend === 'down' ? '<span class="bad">(declining)</span>' : eTrend === 'up' ? '<span class="ok">(improving)</span>' : ''}</div>
+  `;
 }
 
 function renderFootPain(d){
@@ -428,11 +458,11 @@ function render(){
   let d = data();
 
   let a = alerts(d);
-  alertsDiv.innerHTML = a.map(x => `<div class="alert ${x.c}'>${x.t}</div>`).join('');
+  alertsDiv.innerHTML = a.map(x => `<div class="alert ${x.c}">${x.t}</div>`).join('');
 
   let html = '';
   d.logs.slice(-5).reverse().forEach(x => {
-    html += `<div class="kpi">G:${x.g} BP:${x.sys} eGFR:${x.e} Protein:${x.p || '—'} <div class="small muted">${x.ts ? new Date(x.ts).toLocaleString() : ''}</div></div>`;
+    html += `<div class="kpi">G:${x.g ?? '—'} BP:${x.sys ?? '—'} eGFR:${x.e ?? '—'} Protein:${x.p || '—'} <div class="small muted">${x.ts ? new Date(x.ts).toLocaleString() : ''}</div></div>`;
   });
   dashboard.innerHTML = html || 'No data';
 
@@ -447,6 +477,7 @@ function render(){
   `;
 
   renderSummary(d);
+  renderTrend(d);
   renderFootPain(d);
 }
 
@@ -462,6 +493,7 @@ let syml = document.getElementById('syml');
 let symi = document.getElementById('symi');
 let dx = document.getElementById('dx');
 let summary = document.getElementById('summary');
+let trendBox = document.getElementById('trendBox');
 let footDash = document.getElementById('footDash');
 
 let fpLocation = document.getElementById('fp_location');
