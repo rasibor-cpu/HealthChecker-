@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>HealthChecker+ v2 (Upgraded)</title>
+<title>HealthChecker+ v3 (Non-Regression Build)</title>
 <style>
 body{font-family:system-ui;background:#0b1220;color:#eaf0ff;margin:0}
 header{padding:10px;background:#101a32}
@@ -13,24 +13,25 @@ header{padding:10px;background:#101a32}
 .screen.active{display:block}
 .card{background:#0f1a30;padding:12px;border-radius:12px;margin-bottom:10px}
 .kpi{margin:6px 0;font-size:14px}
+canvas{width:100%;height:200px;background:#000;border-radius:10px}
 </style>
 </head>
 <body>
 <header>
-<button class="tab-btn active" data-target="screen-dashboard">Dashboard</button>
-<button class="tab-btn" data-target="screen-add">Add</button>
-<button class="tab-btn" data-target="screen-check">Symptoms</button>
-<button class="tab-btn" data-target="screen-reports">Reports</button>
-<button class="tab-btn" data-target="screen-profile">Profile</button>
+<button class="tab-btn active" data-target="dashboard">Dashboard</button>
+<button class="tab-btn" data-target="add">Add</button>
+<button class="tab-btn" data-target="trends">Trends</button>
+<button class="tab-btn" data-target="symptoms">Symptoms</button>
+<button class="tab-btn" data-target="reports">Reports</button>
 </header>
 
-<div id="screen-dashboard" class="screen active">
-<div class="card" id="dashboard"></div>
+<div id="dashboard" class="screen active">
+<div class="card" id="dash"></div>
 </div>
 
-<div id="screen-add" class="screen">
+<div id="add" class="screen">
 <div class="card">
-<input id="glucose" placeholder="Glucose" />
+<input id="g" placeholder="Glucose" />
 <input id="bp" placeholder="BP 120/80" />
 <input id="egfr" placeholder="eGFR" />
 <select id="protein">
@@ -40,109 +41,86 @@ header{padding:10px;background:#101a32}
 <option value="moderate">Moderate</option>
 <option value="high">High</option>
 </select>
-<button onclick="saveReading()">Save</button>
+<button onclick="save()">Save</button>
 </div>
 </div>
 
-<div id="screen-check" class="screen">
-<div class="card" id="symptom-accordion"></div>
-<button id="run-multisymptom">Run Diagnosis</button>
-<div id="symptom-output"></div>
-</div>
-
-<div id="screen-reports" class="screen">
-<div class="card" id="report-list"></div>
-</div>
-
-<div id="screen-profile" class="screen">
+<div id="trends" class="screen">
 <div class="card">
-<input id="prof-name" placeholder="Name" />
-<button id="btn-save-profile">Save</button>
+<canvas id="chart"></canvas>
 </div>
+</div>
+
+<div id="symptoms" class="screen">
+<div class="card">
+<input class="sym" placeholder="symptom" />
+<input class="sym" placeholder="symptom" />
+<button onclick="runDx()">Run</button>
+<div id="dx"></div>
+</div>
+</div>
+
+<div id="reports" class="screen">
+<div class="card" id="rep"></div>
 </div>
 
 <script>
-const STORE="HC_UNIFIED_V2";
+const KEY="HC_V3";
+function data(){return JSON.parse(localStorage.getItem(KEY)||"{\"logs\":[]}")}
+function saveData(d){localStorage.setItem(KEY,JSON.stringify(d))}
 
-function getData(){
- let d=JSON.parse(localStorage.getItem(STORE)||"{}");
- if(!d.logs) d.logs=[];
- return d;
-}
-function setData(d){localStorage.setItem(STORE,JSON.stringify(d))}
+function scoreEGFR(e){if(!e)return 50;if(e>=90)return 100;if(e>=60)return 80;if(e>=45)return 60;if(e>=30)return 40;return 20}
+function scoreProt(p){if(p=="none")return 100;if(p=="trace")return 80;if(p=="moderate")return 50;if(p=="high")return 20;return 70}
 
-function getProteinScore(p){
- if(p=="none")return 100;
- if(p=="trace")return 80;
- if(p=="moderate")return 50;
- if(p=="high")return 20;
- return 70;
-}
+function KHS(e,p,g,bp){return Math.round(0.4*scoreEGFR(e)+0.2*scoreProt(p)+0.2*(g<140?100:60)+0.2*(bp<130?100:60))}
+function KLoad(e,p){return Math.min(100,Math.max(0,100-scoreEGFR(e)+ (p=="high"?20:0)))}
 
-function getEGFRScore(e){
- if(!e)return 50;
- if(e>=90)return 100;
- if(e>=60)return 80;
- if(e>=45)return 60;
- if(e>=30)return 40;
- return 20;
+function save(){
+ let d=data();
+ let g=Number(gEl.value);
+ let bpv=bpEl.value.split("/")[0];
+ let e=Number(egfrEl.value);
+ let p=protEl.value;
+ d.logs.push({g,bp:bpv,e,p,t:Date.now()});
+ saveData(d);
+ render();
 }
 
-function computeKHS(e,p,g,bp){
- return Math.round(0.4*getEGFRScore(e)+0.2*getProteinScore(p)+0.2*(g<140?100:60)+0.2*(bp<130?100:60));
-}
-
-function saveReading(){
- let d=getData();
- let g=Number(document.getElementById("glucose").value);
- let bpRaw=document.getElementById("bp").value;
- let sys=bpRaw.split("/")[0];
- let e=Number(document.getElementById("egfr").value);
- let p=document.getElementById("protein").value;
- d.logs.push({g,sys,e,p,t:Date.now()});
- setData(d);
- refreshDashboard();
-}
-
-function refreshDashboard(){
- let d=getData();
+function render(){
+ let d=data();
  let html="";
- d.logs.forEach(x=>{
- let khs=computeKHS(x.e,x.p,x.g,x.sys);
- html+=`<div class='kpi'>Glucose:${x.g} | BP:${x.sys} | eGFR:${x.e||"-"} | KHS:${khs}</div>`;
+ d.logs.slice(-5).forEach(x=>{
+  html+=`<div class='kpi'>G:${x.g} BP:${x.bp} eGFR:${x.e||"-"} KHS:${KHS(x.e,x.p,x.g,x.bp)} Load:${KLoad(x.e,x.p)}</div>`;
  });
- document.getElementById("dashboard").innerHTML=html||"No data";
+ dash.innerHTML=html||"No data";
+ drawChart(d.logs);
+ rep.innerHTML=d.logs.length+" records";
 }
 
-function buildSymptomAccordion(){
- let c=document.getElementById("symptom-accordion");
- c.innerHTML="";
- for(let i=0;i<5;i++){
-  c.innerHTML+=`<input class='symptom' placeholder='symptom'/>`;
- }
+function drawChart(logs){
+ let ctx=chart.getContext("2d");ctx.clearRect(0,0,chart.width,chart.height);
+ if(logs.length<2)return;
+ let max=Math.max(...logs.map(x=>x.g));
+ logs.forEach((x,i)=>{
+  let y=200-(x.g/max)*180;
+  let xPos=i*30;
+  ctx.fillRect(xPos,y,4,4);
+ });
 }
 
-function runMultiSymptomCheck(){
- let s=[...document.querySelectorAll(".symptom")].map(x=>x.value).filter(Boolean);
- document.getElementById("symptom-output").innerHTML=s.length?"Monitor / escalate if persistent":"None";
+function runDx(){
+ let vals=[...document.querySelectorAll(".sym")].map(x=>x.value).filter(Boolean);
+ dx.innerHTML=vals.length?"Monitor / escalate if worse":"No symptoms";
 }
 
-function renderReports(){
- let d=getData();
- document.getElementById("report-list").innerHTML=d.logs.length+" total readings";
-}
-
-function loadProfileIntoForm(){
- let d=getData();
- document.getElementById("prof-name").value=d.name||"";
-}
-
-document.getElementById("btn-save-profile").onclick=function(){
- let d=getData();
- d.name=document.getElementById("prof-name").value;
- setData(d);
- alert("saved");
-}
+let gEl=document.getElementById("g");
+let bpEl=document.getElementById("bp");
+let egfrEl=document.getElementById("egfr");
+let protEl=document.getElementById("protein");
+let dash=document.getElementById("dash");
+let chart=document.getElementById("chart");
+let rep=document.getElementById("rep");
+let dx=document.getElementById("dx");
 
 let tabs=document.querySelectorAll(".tab-btn");
 tabs.forEach(b=>b.onclick=()=>{
@@ -152,8 +130,7 @@ tabs.forEach(b=>b.onclick=()=>{
  document.getElementById(b.dataset.target).classList.add("active");
 });
 
-buildSymptomAccordion();
-refreshDashboard();
+render();
 </script>
 </body>
 </html>
