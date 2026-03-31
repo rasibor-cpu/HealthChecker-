@@ -663,16 +663,76 @@ function saveReading(){
   renderDashboard(); renderTrends(); renderReports();
 }
 
+function resizeCanvasForDisplay(canvas){
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  const rect = canvas.getBoundingClientRect();
+  const displayWidth = Math.max(300, Math.round(rect.width || canvas.clientWidth || 900));
+  const displayHeight = Math.max(180, Math.round(rect.height || canvas.clientHeight || 240));
+  const targetWidth = Math.round(displayWidth * ratio);
+  const targetHeight = Math.round(displayHeight * ratio);
+  if(canvas.width !== targetWidth || canvas.height !== targetHeight){
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return { ctx, W: displayWidth, H: displayHeight };
+}
+
 function drawLineChart(canvas, points, yLabel){
-  const ctx = canvas.getContext('2d'); const W=canvas.width, H=canvas.height; ctx.clearRect(0,0,W,H);
-  ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
-  for(let i=1;i<5;i++){ const y=(H/5)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  if(points.length < 2){ ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='16px system-ui'; ctx.fillText('Not enough data yet',18,34); return; }
-  const ys = points.map(p=>p.y).filter(v=>v!=null); const minY=Math.min(...ys), maxY=Math.max(...ys); const pad=(maxY-minY)===0?10:(maxY-minY)*0.15; const lo=minY-pad, hi=maxY+pad;
-  const toX = i => (i/(points.length-1))*(W-40)+20; const toY = v => H - ((v-lo)/(hi-lo))*(H-40)-20;
-  ctx.strokeStyle='rgba(77,163,255,0.95)'; ctx.lineWidth=3; ctx.beginPath(); points.forEach((p,i)=>{ const x=toX(i), y=toY(p.y); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke();
-  ctx.fillStyle='rgba(234,240,255,0.95)'; points.forEach((p,i)=>{ const x=toX(i), y=toY(p.y); ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill(); });
-  ctx.fillStyle='rgba(255,255,255,0.65)'; ctx.font='12px system-ui'; ctx.fillText(`${yLabel} (min ${minY} / max ${maxY})`, 18, H-10);
+  const { ctx, W, H } = resizeCanvasForDisplay(canvas);
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.08)';
+  ctx.lineWidth=1;
+  for(let i=1;i<5;i++){
+    const y=(H/5)*i;
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(W,y);
+    ctx.stroke();
+  }
+  if(points.length < 2){
+    ctx.fillStyle='rgba(255,255,255,0.65)';
+    ctx.font='16px system-ui';
+    ctx.fillText('Not enough data yet',18,34);
+    return;
+  }
+  const ys = points.map(p=>p.y).filter(v=>v!=null && Number.isFinite(v));
+  if(!ys.length){
+    ctx.fillStyle='rgba(255,255,255,0.65)';
+    ctx.font='16px system-ui';
+    ctx.fillText('No valid data points',18,34);
+    return;
+  }
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const pad=(maxY-minY)===0 ? Math.max(10, Math.abs(maxY)*0.1 || 10) : (maxY-minY)*0.15;
+  const lo=minY-pad, hi=maxY+pad;
+  const plotLeft = 24, plotRight = 16, plotTop = 16, plotBottom = 28;
+  const plotW = Math.max(50, W - plotLeft - plotRight);
+  const plotH = Math.max(50, H - plotTop - plotBottom);
+  const toX = i => plotLeft + (i/(points.length-1))*plotW;
+  const toY = v => plotTop + (1 - ((v-lo)/(hi-lo || 1)))*plotH;
+
+  ctx.strokeStyle='rgba(77,163,255,0.95)';
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  points.forEach((p,i)=>{
+    const x=toX(i), y=toY(p.y);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle='rgba(234,240,255,0.95)';
+  points.forEach((p,i)=>{
+    const x=toX(i), y=toY(p.y);
+    ctx.beginPath();
+    ctx.arc(x,y,3.5,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle='rgba(255,255,255,0.72)';
+  ctx.font='12px system-ui';
+  ctx.fillText(`${yLabel} (min ${minY} / max ${maxY})`, 18, H-8);
 }
 function renderTrends(){
   const r = activePerson().readings.slice(-20);
