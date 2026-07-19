@@ -72,6 +72,17 @@ def create_health_vault_app(store: VaultStore | None = None):
     def integrity() -> dict[str, Any]:
         return vault.verify_integrity()
 
+    @app.get("/api/health-vault/intelligence")
+    def intelligence() -> dict[str, Any]:
+        from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+
+        obs = HealthIntelligenceEngine(vault).generate_observations()
+        return {"observations": obs, "disclaimer": "Observational only — not a diagnosis."}
+
+    @app.get("/api/health-vault/import-log")
+    def import_log() -> dict[str, Any]:
+        return {"entries": vault.import_log()}
+
     return app
 
 

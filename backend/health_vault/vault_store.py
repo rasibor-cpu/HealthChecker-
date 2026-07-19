@@ -30,7 +30,11 @@ class VaultStore:
             "measurements": [],
             "audit": [],
             "imports": [],
+            "import_log": [],
             "trends": {},
+            "health_intelligence": {"observations": [], "disclaimer": ""},
+            "encounters": [],
+            "medications": [],
             "profile": {"diagnoses": [], "medications": []},
         }
 
@@ -168,6 +172,12 @@ class VaultStore:
 
     def imports(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("imports") or [])
+
+    def import_log(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("import_log") or [])
+
+    def health_intelligence(self) -> dict[str, Any]:
+        return dict(self._read_index().get("health_intelligence") or {})
 
     def verify_integrity(self) -> dict[str, Any]:
         data = self._read_index()

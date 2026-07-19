@@ -11,23 +11,20 @@
 Health Vault is a longitudinal electronic health record layer that sits **beside** existing HC_V6 storage.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ HealthChecker+ UI (index.html)                           │
-│  Dashboard · Add · Symptoms · Health Vault · Reports     │
-└───────────────┬───────────────────────────┬──────────────┘
-                │ HC_V6 (unchanged)         │ HC_HEALTH_VAULT_V1
-                ▼                           ▼
-        Trend Intelligence            Health Vault Store
-        Foot Pain Analysis            (append-only docs +
-        Manual readings                measurements + audit)
-                                            │
-                          ┌─────────────────┼─────────────────┐
-                          ▼                 ▼                 ▼
-                   Parser Registry    Import Engine     Trend Engine
-                          │                 │                 │
-                          ▼                 ▼                 ▼
-                   Builtin parsers   Timeline / Doctor   Auto Improving/
-                   + future plugins  Visit Mode          Stable/Worsening
+UI / API
+   │
+   ▼
+ImportService ──► ImportPipeline (HC-201C autonomous path)
+   │
+   ├── EventBus
+   ├── OCRProvider (swappable)
+   ├── ParserRegistry
+   ├── ClinicalRulesEngine (config JSON)
+   ├── ValidationEngine
+   ├── ConfidenceEngine
+   ├── VaultStore (append-only + digital signature metadata)
+   ├── Timeline / Trends / Doctor Visit
+   └── HealthIntelligence (observational only)
 ```
 
 | Layer | Browser (PWA) | Server (optional) |
@@ -35,8 +32,10 @@ Health Vault is a longitudinal electronic health record layer that sits **beside
 | Models | `js/measurement_model.js`, `js/health_vault/medical_document.js` | `backend/health_vault/models.py` |
 | Store | `localStorage` + IndexedDB | `vault_storage/` |
 | Parsers | `js/health_vault/parsers/builtin_parsers.js` | `backend/health_vault/parsers/` |
-| Import | `js/health_vault/import_engine.js` | `backend/health_vault/import_service.py` |
+| Import | `js/health_vault/import_engine.js` | `backend/health_vault/import_pipeline.py` via `ImportService` |
 | API | client-ready payload shape | `POST /api/import-health-record` |
+
+See also: [HC201_RC1_READINESS_REPORT.md](HC201_RC1_READINESS_REPORT.md)
 
 Existing features continue to use `HC_V6`. Vault imports may **optionally** append flattened glucose/BP/eGFR points into `HC_V6.logs` for Trend Intelligence continuity (`source: "health_vault"`).
 
