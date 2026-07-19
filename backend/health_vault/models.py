@@ -38,6 +38,12 @@ class MedicalDocument:
     # Provenance (HC-201F): original_document_verified | user_reported |
     # historical_summary | wearable_screenshot | wearable_pdf
     provenance: str | None = None
+    # HC-201G batch / multi-image grouping (non-destructive)
+    batch_id: str | None = None
+    group_id: str | None = None
+    sequence_number: int | None = None
+    page_number: int | None = None
+    group_title: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

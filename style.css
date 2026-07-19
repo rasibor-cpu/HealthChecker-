@@ -251,3 +251,120 @@ canvas {
     padding: 10px;
     border-radius: 6px;
 }
+
+/* ---------------------------------------
+   HC-201G — Batch upload (mobile-friendly)
+----------------------------------------- */
+.vault-drop-zone {
+    border: 1px dashed #8a7a3a;
+    border-radius: 10px;
+    padding: 14px;
+    margin: 10px 0;
+    background: #121212;
+    text-align: center;
+}
+.vault-drop-active {
+    border-color: gold;
+    background: #1a1808;
+}
+.vault-upload-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.vault-file-label {
+    display: inline-block;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #2a2410;
+    color: #f5e7a3;
+    font-size: 14px;
+    cursor: pointer;
+}
+.vault-file-label input[type="file"] {
+    display: none;
+}
+.vault-batch-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 12px;
+    max-height: 360px;
+    overflow: auto;
+}
+.vault-queue-item {
+    display: grid;
+    grid-template-columns: 56px 1fr 32px;
+    gap: 8px;
+    align-items: start;
+    padding: 8px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #101010;
+}
+.vault-thumb {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #222;
+}
+.vault-thumb-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #bbb;
+}
+.vault-queue-remove {
+    border: none;
+    background: transparent;
+    color: #ccc;
+    font-size: 16px;
+    cursor: pointer;
+    min-height: 44px;
+}
+.vault-batch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+.vault-batch-actions button {
+    min-height: 44px;
+}
+button.secondary {
+    background: #222;
+    color: #ddd;
+    border: 1px solid #555;
+}
+.vault-progress-bar {
+    height: 10px;
+    background: #222;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0;
+}
+.vault-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8a7a3a, gold);
+    width: 0;
+}
+.vault-status-queued { color: #bbb; }
+.vault-status-processing { color: #f0d56a; }
+.vault-status-imported { color: #7dcea0; }
+.vault-status-duplicate { color: #85c1e9; }
+.vault-status-failed { color: #f1948a; }
+.vault-status-requires_review { color: #f5b041; }
+
+@media (max-width: 600px) {
+    .vault-queue-item {
+        grid-template-columns: 48px 1fr 28px;
+    }
+    .vault-batch-actions button {
+        flex: 1 1 140px;
+    }
+}
+

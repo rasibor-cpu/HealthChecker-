@@ -128,6 +128,11 @@
       measured_at: req.measured_at || null,
       status: Doc().STATUS.IMPORTED,
       provenance: req.provenance || null,
+      batch_id: req.batch_id || null,
+      group_id: req.group_id || null,
+      sequence_number: req.sequence_number != null ? Number(req.sequence_number) : null,
+      page_number: req.page_number != null ? Number(req.page_number) : null,
+      group_title: req.group_title || null,
     });
 
     const parseCtx = {

@@ -58,6 +58,11 @@
       mime_type: p.mime_type || null,
       size_bytes: p.size_bytes != null ? Number(p.size_bytes) : null,
       provenance: p.provenance || null,
+      batch_id: p.batch_id || null,
+      group_id: p.group_id || null,
+      sequence_number: p.sequence_number != null ? Number(p.sequence_number) : null,
+      page_number: p.page_number != null ? Number(p.page_number) : null,
+      group_title: p.group_title || null,
     };
   }
 

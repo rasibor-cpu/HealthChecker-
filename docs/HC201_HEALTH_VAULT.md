@@ -32,8 +32,10 @@ ImportService ──► ImportPipeline (HC-201C autonomous path)
 | Models | `js/measurement_model.js`, `js/health_vault/medical_document.js` | `backend/health_vault/models.py` |
 | Store | `localStorage` + IndexedDB | `vault_storage/` |
 | Parsers | `js/health_vault/parsers/builtin_parsers.js` | `backend/health_vault/parsers/` |
-| Import | `js/health_vault/import_engine.js` | `backend/health_vault/import_pipeline.py` via `ImportService` |
-| API | client-ready payload shape | `POST /api/import-health-record` |
+| Import | `js/health_vault/import_engine.js` + `batch_import.js` | `backend/health_vault/import_pipeline.py` via `ImportService` / `BatchImportService` |
+| API | client-ready payload shape | `POST /api/import-health-record`, `POST /api/import-health-records/batch` |
+
+**HC-201G:** multi-file upload, batch preview, grouping, and limits — see [HC201G_BATCH_UPLOAD.md](HC201G_BATCH_UPLOAD.md).
 
 See also: [HC201_RC1_READINESS_REPORT.md](HC201_RC1_READINESS_REPORT.md)
 

@@ -118,6 +118,16 @@ class ImportPipeline:
                 prov_tag = f"provenance:{provenance}"
                 if prov_tag not in tags:
                     tags.append(prov_tag)
+            batch_id = req.get("batch_id")
+            group_id = req.get("group_id")
+            if batch_id:
+                bt = f"batch_id:{batch_id}"
+                if bt not in tags:
+                    tags.append(bt)
+            if group_id:
+                gt = f"group_id:{group_id}"
+                if gt not in tags:
+                    tags.append(gt)
             document = MedicalDocument(
                 patient_id=req.get("patient_id") or "default-patient",
                 document_type=document_type,
@@ -132,6 +142,11 @@ class ImportPipeline:
                 measured_at=req.get("measured_at"),
                 status="imported",
                 provenance=provenance,
+                batch_id=batch_id,
+                group_id=group_id,
+                sequence_number=req.get("sequence_number"),
+                page_number=req.get("page_number"),
+                group_title=req.get("group_title"),
             )
             # Digital signature metadata
             document_meta = {

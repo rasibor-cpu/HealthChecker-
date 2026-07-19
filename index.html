@@ -203,10 +203,34 @@ textarea{
 <div id="vault" class="screen">
   <div class="card" id="vault_import_panel">
     <h3 class="section-title">Import Medical Record</h3>
-    <p class="small muted">Supports PDF, PNG, JPG, JSON. Originals are stored permanently (never overwritten).</p>
+    <p class="small muted">Select multiple PDFs, PNGs, JPGs, or JSON files in one action. Originals are stored permanently (never overwritten).</p>
     <p class="small muted"><strong>Disclaimer:</strong> Health Vault flags and intelligence are observational only and are not a medical diagnosis. Always consult a qualified clinician.</p>
-    <input id="vault_file" type="file" accept=".pdf,.png,.jpg,.jpeg,.json,application/pdf,image/*,application/json" />
-    <button type="button" onclick="HCVaultUI.handleFileImport(document.getElementById('vault_file'), document.getElementById('vault_status'))">Import into Health Vault</button>
+    <p class="small muted">Limits: up to 25 files · 20&nbsp;MB each · 150&nbsp;MB total per batch.</p>
+
+    <div id="vault_drop_zone" class="vault-drop-zone" tabindex="0" aria-label="Drop health documents here">
+      <div class="small">Drop files here or use the buttons below</div>
+      <div class="vault-upload-actions">
+        <label class="vault-file-label">
+          Choose files
+          <input id="vault_file" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.json,application/pdf,image/*,application/json" onchange="HCVaultUI.onFilesSelected(this)" />
+        </label>
+        <label class="vault-file-label">
+          Camera / gallery
+          <input id="vault_file_camera" type="file" multiple accept="image/*,.pdf,application/pdf" capture="environment" onchange="HCVaultUI.onFilesSelected(this)" />
+        </label>
+      </div>
+    </div>
+
+    <div id="vault_batch_summary" class="small muted"></div>
+    <div id="vault_batch_preview" class="vault-batch-preview muted small">No files queued. Select multiple files or drop them here.</div>
+    <div id="vault_batch_progress"></div>
+
+    <div class="vault-batch-actions">
+      <button type="button" onclick="HCVaultUI.importAllQueued()">Import All</button>
+      <button type="button" class="secondary" onclick="HCVaultUI.clearQueue()">Clear Queue</button>
+      <button type="button" class="secondary" onclick="HCVaultUI.retryFailedOnly()">Retry Failed</button>
+      <button type="button" class="secondary" onclick="HCVaultUI.handleFileImport(document.getElementById('vault_file'), document.getElementById('vault_status'))">Import Selected (legacy)</button>
+    </div>
     <div id="vault_status" class="small muted">No import yet.</div>
     <div class="hr"></div>
     <h3 class="section-title">External AI Import (future ChatGPT POST shape)</h3>
@@ -263,6 +287,7 @@ textarea{
 <script src="js/health_vault/trend_engine.js"></script>
 <script src="js/health_vault/timeline.js"></script>
 <script src="js/health_vault/import_engine.js"></script>
+<script src="js/health_vault/batch_import.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script>
