@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>HealthChecker+ v6 (Trend Intelligence + Foot Pain Analysis)</title>
+<title>HealthChecker+ v6 (Trend Intelligence + Foot Pain Analysis + Health Vault)</title>
 <style>
 :root{
   --bg:#0b1220;
@@ -61,6 +61,22 @@ button{
   margin:4px 6px 0 0;
   font-size:12px;
 }
+textarea{
+  width:100%;
+  min-height:110px;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#0c162b;
+  color:var(--text);
+  margin-bottom:10px;
+  font-family:ui-monospace,Consolas,monospace;
+  font-size:12px;
+}
+@media print{
+  nav,header,#vault_import_panel{display:none !important}
+  .screen{display:block !important}
+}
 </style>
 </head>
 <body>
@@ -70,6 +86,7 @@ button{
   <div class="tab active" data="dash">Dashboard</div>
   <div class="tab" data="add">Add</div>
   <div class="tab" data="sym">Symptoms</div>
+  <div class="tab" data="vault">Health Vault</div>
   <div class="tab" data="rep">Reports</div>
 </nav>
 
@@ -94,6 +111,11 @@ button{
   <div class="card">
     <h3 class="section-title">Foot Pain Analysis</h3>
     <div id="footDash">No foot pain analysis yet.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Health Vault Snapshot</h3>
+    <div id="vault_dash_snapshot" class="muted">Open the Health Vault tab to import medical records.</div>
   </div>
 </div>
 
@@ -178,6 +200,51 @@ button{
   </div>
 </div>
 
+<div id="vault" class="screen">
+  <div class="card" id="vault_import_panel">
+    <h3 class="section-title">Import Medical Record</h3>
+    <p class="small muted">Supports PDF, PNG, JPG, JSON. Originals are stored permanently (never overwritten).</p>
+    <input id="vault_file" type="file" accept=".pdf,.png,.jpg,.jpeg,.json,application/pdf,image/*,application/json" />
+    <button type="button" onclick="HCVaultUI.handleFileImport(document.getElementById('vault_file'), document.getElementById('vault_status'))">Import into Health Vault</button>
+    <div id="vault_status" class="small muted">No import yet.</div>
+    <div class="hr"></div>
+    <h3 class="section-title">External AI Import (future ChatGPT POST shape)</h3>
+    <textarea id="vault_ai_json" placeholder='{"extracted_measurements":[{"metric":"glucose","value":112,"units":"mg/dL"}],"interpretation":"Stable","confidence":0.9}'></textarea>
+    <button type="button" onclick="HCVaultUI.handleAiJsonImport(document.getElementById('vault_ai_json'), document.getElementById('vault_status'))">Import AI Payload</button>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Vault Profile (Doctor Visit)</h3>
+    <label class="small muted">Diagnoses (one per line)</label>
+    <textarea id="vault_diagnoses" placeholder="Type 2 diabetes&#10;CKD stage 3"></textarea>
+    <label class="small muted">Medications (one per line)</label>
+    <textarea id="vault_medications" placeholder="Metformin 500mg&#10;Amlodipine 5mg"></textarea>
+    <button type="button" onclick="HCVaultUI.saveVaultProfile()">Save Vault Profile</button>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Imported Documents</h3>
+    <div id="vault_docs" class="muted">Vault is empty.</div>
+    <div id="vault_integrity" class="small"></div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Health Timeline</h3>
+    <div id="vault_timeline" class="muted">No imported medical documents yet.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Vault Trends (auto)</h3>
+    <div id="vault_trends" class="muted">No vault trends yet.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Doctor Visit Mode</h3>
+    <button type="button" onclick="HCVaultUI.openDoctorVisit()">Generate Doctor Visit Report</button>
+    <div id="doctor_visit_report"></div>
+  </div>
+</div>
+
 <div id="rep" class="screen">
   <div class="card">
     <h3 class="section-title">Report</h3>
@@ -185,6 +252,16 @@ button{
   </div>
 </div>
 
+<script src="js/measurement_model.js"></script>
+<script src="js/health_vault/medical_document.js"></script>
+<script src="js/health_vault/parser_registry.js"></script>
+<script src="js/health_vault/parsers/builtin_parsers.js"></script>
+<script src="js/health_vault/vault_store.js"></script>
+<script src="js/health_vault/trend_engine.js"></script>
+<script src="js/health_vault/timeline.js"></script>
+<script src="js/health_vault/import_engine.js"></script>
+<script src="js/health_vault/doctor_visit.js"></script>
+<script src="js/health_vault/ui.js"></script>
 <script>
 const KEY = 'HC_V6';
 
@@ -470,15 +547,31 @@ function render(){
     ? d.sym.map(x => `<span class="badge">${x}</span>`).join('')
     : '<span class="muted">No symptoms added.</span>';
 
+  let vaultDocCount = 0;
+  try {
+    if (window.HCHealthVault) vaultDocCount = HCHealthVault.listDocuments().length;
+  } catch (_) {}
+
   report.innerHTML = `
     <div class="kpi"><strong>Total readings:</strong> ${d.logs.length}</div>
     <div class="kpi"><strong>Total symptoms logged:</strong> ${d.sym.length}</div>
     <div class="kpi"><strong>Total foot pain analyses:</strong> ${(d.footPainLogs || []).length}</div>
+    <div class="kpi"><strong>Health Vault documents:</strong> ${vaultDocCount}</div>
   `;
 
   renderSummary(d);
   renderTrend(d);
   renderFootPain(d);
+
+  const vaultSnap = document.getElementById('vault_dash_snapshot');
+  if (vaultSnap && window.HCHealthVault) {
+    const docs = HCHealthVault.listDocuments();
+    vaultSnap.innerHTML = docs.length
+      ? `<div class="kpi"><strong>Documents in vault:</strong> ${docs.length}</div>
+         <div class="small muted">Latest: ${docs[docs.length - 1].original_filename || docs[docs.length - 1].document_type}</div>`
+      : 'Open the Health Vault tab to import medical records.';
+  }
+  if (window.HCVaultUI) HCVaultUI.refreshVaultViews();
 }
 
 let gEl = document.getElementById('g');
@@ -511,6 +604,9 @@ tabs.forEach(t => t.onclick = () => {
   t.classList.add('active');
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(t.getAttribute('data')).classList.add('active');
+  if (t.getAttribute('data') === 'vault' && window.HCVaultUI) {
+    HCVaultUI.refreshVaultViews();
+  }
 });
 
 render();

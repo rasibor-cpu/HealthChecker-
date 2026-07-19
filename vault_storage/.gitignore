@@ -1,0 +1,3 @@
+# Health Vault storage root (append-only originals + index.json)
+*
+!.gitignore
