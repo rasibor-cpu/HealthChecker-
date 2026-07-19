@@ -75,8 +75,16 @@
         imported_at: d.imported_at,
         confidence: d.parser_confidence,
         sha256: d.sha256,
+        provenance:
+          d.provenance ||
+          ((d.tags || []).find((t) => String(t).indexOf("provenance:") === 0) || "")
+            .toString()
+            .replace(/^provenance:/, "") ||
+          "unspecified",
       })),
       health_timeline: timeline.slice(0, 25),
+      medical_disclaimer:
+        "Observational decision-support only. Not a diagnosis. User-reported and historical-summary values are not laboratory-document verified.",
       legacy_summary: legacy
         ? {
             readings: (legacy.logs || []).length,
@@ -107,8 +115,8 @@
       .map(
         (d) =>
           `<li>${esc(d.type)} — ${esc(d.filename || d.id)} <span class="small muted">${esc(
-            d.imported_at
-          )}</span></li>`
+            d.provenance
+          )} · ${esc(d.imported_at)}</span></li>`
       )
       .join("");
 
@@ -125,6 +133,7 @@
       <div class="doctor-visit-report">
         <h3 class="section-title">${esc(report.title)}</h3>
         <div class="small muted">Generated ${esc(new Date(report.generated_at).toLocaleString())}</div>
+        <div class="small muted">${esc(report.medical_disclaimer)}</div>
         <div class="hr"></div>
         <div class="kpi"><strong>Current diagnoses</strong><ul>${dx}</ul></div>
         <div class="kpi"><strong>Current medications</strong><ul>${meds}</ul></div>

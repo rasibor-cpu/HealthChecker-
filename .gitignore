@@ -6,3 +6,8 @@ venv/
 vault_storage/documents/
 vault_storage/index.json
 vault_storage/index.tmp
+
+# HC-201F — private clinical backfill inputs (never commit real PII)
+private_imports/**
+!private_imports/.gitkeep
+!private_imports/README.md

@@ -112,6 +112,12 @@ class ImportPipeline:
                 self.bus.publish(IMPORT_COMPLETED, {"duplicate": True, "document_id": dup.get("id")})
                 return result
 
+            provenance = req.get("provenance")
+            tags = list(req.get("tags") or [])
+            if provenance:
+                prov_tag = f"provenance:{provenance}"
+                if prov_tag not in tags:
+                    tags.append(prov_tag)
             document = MedicalDocument(
                 patient_id=req.get("patient_id") or "default-patient",
                 document_type=document_type,
@@ -121,10 +127,11 @@ class ImportPipeline:
                 original_filename=filename,
                 sha256=sha256,
                 mime_type=mime,
-                tags=list(req.get("tags") or []),
+                tags=tags,
                 interpretation=req.get("interpretation"),
                 measured_at=req.get("measured_at"),
                 status="imported",
+                provenance=provenance,
             )
             # Digital signature metadata
             document_meta = {

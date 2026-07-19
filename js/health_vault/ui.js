@@ -44,9 +44,12 @@
         mime_type: "application/json",
         document_type: payload.document_type || "ai_assisted_import",
         acquisition_method: "external_ai",
+        source_system: payload.source_system || "external_ai",
+        measured_at: payload.measured_at || null,
         extracted_measurements: payload.extracted_measurements || [],
         interpretation: payload.interpretation || null,
         confidence: payload.confidence,
+        provenance: payload.provenance || null,
         tags: ["external_ai"].concat(payload.tags || []),
       });
       if (statusEl) {
@@ -114,15 +117,22 @@
       const docs = global.HCHealthVault.listDocuments().slice().reverse();
       docsEl.innerHTML = docs.length
         ? docs
-            .map(
-              (d) =>
+            .map((d) => {
+              const prov =
+                d.provenance ||
+                ((d.tags || []).find((t) => String(t).indexOf("provenance:") === 0) || "")
+                  .toString()
+                  .replace(/^provenance:/, "") ||
+                "unspecified";
+              return (
                 `<div class="kpi small"><strong>${d.document_type}</strong> · ${
                   d.original_filename || d.id
                 }<div class="muted">${d.imported_at} · sha ${String(d.sha256 || "").slice(
                   0,
                   12
-                )}…</div></div>`
-            )
+                )}… · <em>${prov}</em></div></div>`
+              );
+            })
             .join("")
         : '<div class="muted">Vault is empty.</div>';
     }

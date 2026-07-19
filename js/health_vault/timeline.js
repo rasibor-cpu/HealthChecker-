@@ -79,12 +79,29 @@
             e.document.original_filename || e.document.id
           )}</div>` +
           `<div class="small">${escapeHtml(mtxt)}</div>` +
+          `<div class="small muted">Provenance: ${escapeHtml(
+            provenanceLabel(e.document)
+          )}</div>` +
           `<div class="small muted">Trend impact: ${escapeHtml(e.trend_impact)}</div>` +
-          `<div class="small muted">Original: ${escapeHtml(e.original_link || "—")}</div>` +
+          `<div class="small muted">Original: ${escapeHtml(
+            e.original_link && String(e.original_link).indexOf("vault://") === 0
+              ? e.original_link
+              : e.original_link && String(e.original_link).indexOf("idb://") === 0
+                ? e.original_link
+                : "— (no local source document)"
+          )}</div>` +
           `</div>`
         );
       })
       .join("");
+  }
+
+  function provenanceLabel(doc) {
+    if (!doc) return "unspecified";
+    if (doc.provenance) return String(doc.provenance);
+    const tags = doc.tags || [];
+    const hit = tags.find((t) => String(t).indexOf("provenance:") === 0);
+    return hit ? String(hit).slice("provenance:".length) : "unspecified";
   }
 
   function escapeHtml(v) {

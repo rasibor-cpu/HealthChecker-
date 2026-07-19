@@ -1,0 +1,74 @@
+{
+  "schema_version": "hc.health_vault.backfill.v1",
+  "patient": {
+    "patient_id": "example-patient-001",
+    "display_name": "Alex Example",
+    "date_of_birth": "1970-01-01"
+  },
+  "profile": {
+    "diagnoses": [
+      "Example chronic condition A",
+      "Example chronic condition B"
+    ],
+    "medications": [
+      {
+        "name": "ExampleMedA",
+        "dose": "10 mg daily",
+        "status": "current",
+        "notes": "Fictional template entry"
+      },
+      {
+        "name": "ExampleMedB",
+        "dose": "5 mg",
+        "status": "uncertain",
+        "notes": "Status not confirmed — fictional"
+      }
+    ]
+  },
+  "records": [
+    {
+      "record_id": "example-ecg-2026-01-01",
+      "document_type": "samsung_health_ecg",
+      "provenance": "wearable_pdf",
+      "source_system": "Example Wearable Monitor",
+      "device": "Example Watch",
+      "measured_at": "2026-01-01T10:00:00-05:00",
+      "original_filename": "Example_ECG_0101_1000.pdf",
+      "interpretation": "Example normal sinus rhythm — fictional only",
+      "confidence": 0.9,
+      "measurements": [
+        {"metric": "heart_rhythm", "value": "sinus rhythm"},
+        {"metric": "ecg_result", "value": "normal heart rhythm"},
+        {"metric": "average_hr", "value": 72, "units": "bpm"}
+      ],
+      "tags": ["example"]
+    },
+    {
+      "record_id": "example-egfr-2025-06-01",
+      "document_type": "laboratory_pdf",
+      "provenance": "historical_summary",
+      "source_system": "historical_summary",
+      "measured_at": "2025-06-01T12:00:00Z",
+      "original_filename": "example_egfr_summary.json",
+      "interpretation": "Fictional eGFR historical point",
+      "measurements": [
+        {"metric": "egfr", "value": 60, "units": "mL/min/1.73m2"}
+      ],
+      "tags": ["example", "kidney"]
+    },
+    {
+      "record_id": "example-bp-2025-08-01",
+      "document_type": "blood_pressure_screenshot",
+      "provenance": "user_reported",
+      "source_system": "user_reported",
+      "measured_at": "2025-08-01T08:00:00Z",
+      "original_filename": "example_bp.json",
+      "interpretation": "Fictional blood pressure",
+      "measurements": [
+        {"metric": "systolic", "value": 120, "units": "mmHg"},
+        {"metric": "diastolic", "value": 80, "units": "mmHg"}
+      ],
+      "tags": ["example", "bp"]
+    }
+  ]
+}

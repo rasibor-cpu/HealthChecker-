@@ -35,6 +35,9 @@ class MedicalDocument:
     mime_type: str | None = None
     size_bytes: int | None = None
     duplicate_of: str | None = None
+    # Provenance (HC-201F): original_document_verified | user_reported |
+    # historical_summary | wearable_screenshot | wearable_pdf
+    provenance: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -89,6 +92,27 @@ METRIC_CATALOG: dict[str, dict[str, Any]] = {
     "diastolic": {"category": "Diastolic", "units": "mmHg"},
     "weight": {"category": "Weight", "units": "kg"},
     "bmi": {"category": "BMI", "units": "kg/m2"},
+    "sleep_latency": {"category": "Sleep Latency", "units": "h"},
+    "urea": {"category": "Urea", "units": "mmol/L"},
+    "skin_temperature_deviation": {"category": "Skin Temperature", "units": "C"},
+    "medication": {"category": "Medication", "units": None},
+    "diagnosis": {"category": "Diagnosis", "units": None},
+}
+
+PROVENANCE_VALUES = (
+    "original_document_verified",
+    "user_reported",
+    "historical_summary",
+    "wearable_screenshot",
+    "wearable_pdf",
+)
+
+PROVENANCE_CONFIDENCE = {
+    "original_document_verified": 0.95,
+    "wearable_pdf": 0.9,
+    "wearable_screenshot": 0.85,
+    "historical_summary": 0.7,
+    "user_reported": 0.65,
 }
 
 

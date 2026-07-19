@@ -57,6 +57,7 @@
       interpretation: p.interpretation || null,
       mime_type: p.mime_type || null,
       size_bytes: p.size_bytes != null ? Number(p.size_bytes) : null,
+      provenance: p.provenance || null,
     };
   }
 

@@ -79,7 +79,12 @@
 
     publish("OCRCompleted", { provider: "passthrough_text", has_text: !!text });
 
-    const sha256 = buffer ? await Vault().sha256Hex(buffer) : req.sha256 || null;
+    const sha256 = buffer
+      ? await Vault().sha256Hex(buffer)
+      : req.sha256 ||
+        (text
+          ? await Vault().sha256Hex(new TextEncoder().encode(text))
+          : null);
 
     // Duplicate detection — do not re-import
     const existing = (Vault().listDocuments() || []).find((d) => d.sha256 && sha256 && d.sha256 === sha256);
@@ -102,6 +107,12 @@
     const documentType =
       req.document_type || Doc().classifyDocumentType(filename, mime, req.document_type);
 
+    const tags = Array.isArray(req.tags) ? req.tags.slice() : [];
+    if (req.provenance) {
+      const pt = "provenance:" + req.provenance;
+      if (tags.indexOf(pt) < 0) tags.push(pt);
+    }
+
     const document = Doc().createMedicalDocument({
       patient_id: req.patient_id || "default-patient",
       document_type: documentType,
@@ -112,10 +123,11 @@
       sha256,
       mime_type: mime,
       size_bytes: buffer ? buffer.byteLength : null,
-      tags: req.tags || [],
+      tags,
       interpretation: req.interpretation || null,
       measured_at: req.measured_at || null,
       status: Doc().STATUS.IMPORTED,
+      provenance: req.provenance || null,
     });
 
     const parseCtx = {
