@@ -195,7 +195,7 @@ def test_samsung_and_historical_mapping(fixture_path: Path, store: VaultStore):
     assert metrics.get("sleep_score") == 32
     assert metrics.get("egfr") == 27
     assert metrics.get("hba1c") == 8.2
-    assert metrics.get("systolic") == 211
+    assert metrics.get("systolic_bp") == 211 or metrics.get("systolic") == 211
     assert metrics.get("weight") == 97
 
 

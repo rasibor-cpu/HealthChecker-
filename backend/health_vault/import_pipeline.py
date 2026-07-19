@@ -35,13 +35,16 @@ from backend.health_vault.event_bus import (
     get_event_bus,
 )
 from backend.health_vault.health_intelligence import HealthIntelligenceEngine
-from backend.health_vault.models import MedicalDocument, classify_document_type, utc_now
+from backend.health_vault.models import MedicalDocument, classify_document_type, utc_now, create_measurement
 from backend.health_vault.ocr import get_ocr_provider
 from backend.health_vault.parser_registry import get_default_registry
 from backend.health_vault.timeline import build_timeline
 from backend.health_vault.trend_engine import TrendEngine
 from backend.health_vault.validation_engine import ValidationEngine
 from backend.health_vault.vault_store import VaultStore
+from backend.health_vault.category_classifier import classify_health_record
+from backend.health_vault.date_extraction import extract_measured_date
+from backend.health_vault.metric_normalization import normalize_measurement
 
 
 class ImportPipeline:
@@ -74,6 +77,12 @@ class ImportPipeline:
 
         try:
             content, filename, mime, text, data_json = self._normalize_input(req)
+            # Promote measured_at from JSON body when not provided on the request
+            if not req.get("measured_at") and isinstance(data_json, dict):
+                if data_json.get("measured_at"):
+                    req["measured_at"] = data_json.get("measured_at")
+                elif data_json.get("report_date"):
+                    req["report_date"] = data_json.get("report_date")
             self.bus.publish(
                 DOCUMENT_RECEIVED,
                 {"filename": filename, "mime_type": mime, "size": len(content or b"")},
@@ -228,8 +237,86 @@ class ImportPipeline:
                 {"count": len(measurements), "parser": parsed.get("parser")},
             )
 
-            # --- Clinical flags + validation ---
+            # Clinical flags on parser metrics (legacy names), then normalize for trends
             measurements = self.rules.apply(measurements)
+
+            normalized_meas = []
+            for m in measurements:
+                raw = m.to_dict() if hasattr(m, "to_dict") else dict(m)
+                norm = normalize_measurement(raw)
+                obj = create_measurement(
+                    **{
+                        k: norm[k]
+                        for k in (
+                            "measurement_id",
+                            "document_id",
+                            "category",
+                            "metric",
+                            "value",
+                            "units",
+                            "reference_range",
+                            "abnormal_flag",
+                            "confidence",
+                            "measured_at",
+                            "fhir_resource",
+                        )
+                        if k in norm
+                    }
+                )
+                obj.original_metric = norm.get("original_metric")
+                obj.original_value = norm.get("original_value")
+                obj.original_units = norm.get("original_units")
+                obj.unit_compatible = bool(norm.get("unit_compatible", True))
+                obj.normalization_version = norm.get("normalization_version")
+                normalized_meas.append(obj)
+            measurements = normalized_meas
+
+            date_info = extract_measured_date(
+                explicit_measured_at=req.get("measured_at") or document.measured_at,
+                report_date=req.get("report_date"),
+                parser_date=parsed.get("measured_at") or parsed.get("report_date"),
+                source_metadata_date=req.get("source_metadata_date"),
+                exif_capture_date=req.get("exif_capture_date") or req.get("file_capture_date"),
+                filename=filename,
+                imported_at=document.imported_at,
+                measurement_dates=[
+                    (m.measured_at if hasattr(m, "measured_at") else None) for m in measurements
+                ],
+            )
+            document.measured_at = date_info["measured_at"]
+            document.report_date = date_info.get("report_date")
+            document.file_capture_date = date_info.get("file_capture_date")
+            document.date_confidence = date_info.get("date_confidence")
+            document.date_source = date_info.get("date_source")
+            for m in measurements:
+                if not getattr(m, "measured_at", None):
+                    m.measured_at = document.measured_at
+
+            classification = classify_health_record(
+                document_type=document.document_type,
+                filename=filename,
+                source_system=document.source_system,
+                measurements=measurements,
+                ocr_text=(ocr_result.text if ocr_result else None) or req.get("text"),
+                group_title=document.group_title,
+            )
+            document.primary_category = classification["primary_category"]
+            document.secondary_categories = list(classification["secondary_categories"])
+            document.classification_confidence = classification["classification_confidence"]
+            document.classification_method = classification["classification_method"]
+            document.classification_version = classification["classification_version"]
+            document.requires_review = bool(
+                classification["requires_review"] or date_info.get("requires_review")
+            )
+            if document.requires_review:
+                tag = "requires_review"
+                if tag not in document.tags:
+                    document.tags.append(tag)
+            cat_tag = f"category:{document.primary_category}"
+            if cat_tag not in document.tags:
+                document.tags.append(cat_tag)
+
+            # --- Validation ---
             existing_fps = self._measurement_fingerprints()
             validation = self.validator.validate(
                 measurements,
@@ -264,7 +351,9 @@ class ImportPipeline:
                     "ocr": ocr_result.to_dict(),
                     "validation": validation.to_dict(),
                     "digital_signature": document_meta,
-                    "pipeline": "hc201c_autonomous_import_pipeline",
+                    "pipeline": "hc201h_classified_import_pipeline",
+                    "classification": classification,
+                    "date_extraction": date_info,
                 },
             )
             timings["store_ms"] = (time.perf_counter() - t_store) * 1000

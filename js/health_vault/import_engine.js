@@ -135,6 +135,18 @@
       group_title: req.group_title || null,
     });
 
+    // HC-201H lightweight browser classification
+    const cls = classifyBrowser(document, req);
+    document.primary_category = cls.primary_category;
+    document.secondary_categories = cls.secondary_categories;
+    document.classification_confidence = cls.classification_confidence;
+    document.classification_method = cls.classification_method;
+    document.classification_version = "hc201h.browser.v1";
+    document.requires_review = !!cls.requires_review;
+    document.date_confidence = document.measured_at ? 0.9 : 0.3;
+    document.date_source = document.measured_at ? "explicit_measured_at" : "imported_at_fallback";
+    if (!document.measured_at) document.measured_at = document.imported_at;
+
     const parseCtx = {
       document_id: document.id,
       document_type: document.document_type,
@@ -241,6 +253,27 @@
       sha256,
       imported_at: document.imported_at,
       ui_notify: true,
+    };
+  }
+
+  function classifyBrowser(document, req) {
+    const t = String(document.document_type || "").toLowerCase();
+    const n = String(document.original_filename || "").toLowerCase();
+    let primary = "other";
+    if (t.indexOf("ecg") >= 0 || n.indexOf("ecg") >= 0) primary = "ecg_cardiology";
+    else if (t.indexOf("sleep") >= 0 || n.indexOf("sleep") >= 0) primary = "sleep";
+    else if (t.indexOf("blood_pressure") >= 0 || n.indexOf("bp") >= 0) primary = "blood_pressure";
+    else if (t.indexOf("glucose") >= 0 || t.indexOf("libre") >= 0) primary = "glucose_diabetes";
+    else if (t.indexOf("lab") >= 0) primary = "laboratory_report";
+    else if (t.indexOf("medication") >= 0) primary = "medication";
+    else if (t.indexOf("hospital") >= 0) primary = "hospital_clinical_report";
+    const secondary = primary === "kidney_renal" ? ["laboratory_report"] : [];
+    return {
+      primary_category: primary,
+      secondary_categories: secondary,
+      classification_confidence: primary === "other" ? 0.4 : 0.75,
+      classification_method: "browser_document_type",
+      requires_review: primary === "other",
     };
   }
 

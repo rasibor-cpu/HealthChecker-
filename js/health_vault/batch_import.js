@@ -186,6 +186,8 @@
     let failed = 0;
     let requires_review = 0;
     const results = [];
+    const categoryCounts = {};
+    const groupIds = {};
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -193,8 +195,10 @@
         continue;
       }
       item.status = "processing";
-      if (onProgress) onProgress(snapshot(items, batchId, imported, duplicates, failed, requires_review));
-
+      if (onProgress)
+        onProgress(
+          snapshot(items, batchId, imported, duplicates, failed, requires_review, item.filename)
+        );
       try {
         const result = await global.HCImportEngine.importHealthRecord({
           file: item.file,
@@ -226,15 +230,20 @@
           imported += 1;
         }
         item.warnings = result.warnings || [];
+        const doc = result.document || {};
         results.push({
           index: i,
           filename: item.filename,
           ok: !!result.ok,
           duplicate: !!result.duplicate,
           status: item.status,
-          document_id: result.document && result.document.id,
+          document_id: doc.id,
           sha256: result.sha256,
           confidence: result.confidence,
+          category: doc.primary_category,
+          primary_category: doc.primary_category,
+          measured_at: doc.measured_at,
+          date_confidence: doc.date_confidence,
           batch_id: batchId,
           group_id: item.group_id,
           sequence_number: item.sequence_number,
@@ -243,7 +252,11 @@
           errors: item.errors,
           warnings: item.warnings,
         });
-      } catch (err) {
+        if (doc.primary_category) {
+          categoryCounts[doc.primary_category] =
+            (categoryCounts[doc.primary_category] || 0) + 1;
+        }
+        if (item.group_id) groupIds[item.group_id] = true;      } catch (err) {
         item.status = "failed";
         item.errors = [err && err.message ? err.message : String(err)];
         failed += 1;
@@ -268,18 +281,63 @@
       partial_success: imported > 0 && failed > 0,
       status: ok ? "complete" : imported || duplicates ? "partial_success" : "failed",
       batch_id: batchId,
+      selected: items.length,
       total: items.length,
       imported: imported,
       duplicates: duplicates,
       failed: failed,
       requires_review: requires_review,
       processed: processed,
+      category_counts: categoryCounts,
+      grouped_reports: Object.keys(groupIds).length,
       results: results,
       limits: limits,
     };
   }
 
-  function snapshot(items, batchId, imported, duplicates, failed, requires_review) {
+  function summarizeQueue(items) {
+    const Batch = global.HCBatchImport;
+    let images = 0;
+    let pdfs = 0;
+    let json = 0;
+    let totalBytes = 0;
+    const cats = {};
+    items.forEach((it) => {
+      totalBytes += it.size_bytes || 0;
+      const ext = String(it.filename || "")
+        .toLowerCase()
+        .match(/(\.[a-z0-9]+)$/);
+      const e = ext ? ext[1] : "";
+      if (e === ".pdf") pdfs += 1;
+      else if (e === ".json") json += 1;
+      else images += 1;
+      const cat = estimateCategory(it);
+      cats[cat] = (cats[cat] || 0) + 1;
+    });
+    return {
+      total: items.length,
+      images: images,
+      pdfs: pdfs,
+      json: json,
+      size_label: Batch ? Batch.formatBytes(totalBytes) : totalBytes + " B",
+      estimated_categories: cats,
+      duplicate_candidates: 0,
+    };
+  }
+
+  function estimateCategory(it) {
+    const t = String(it.document_type || "").toLowerCase();
+    const n = String(it.filename || "").toLowerCase();
+    if (t.indexOf("ecg") >= 0 || n.indexOf("ecg") >= 0) return "ecg_cardiology";
+    if (t.indexOf("sleep") >= 0 || n.indexOf("sleep") >= 0) return "sleep";
+    if (t.indexOf("blood_pressure") >= 0 || n.indexOf("bp") >= 0) return "blood_pressure";
+    if (t.indexOf("glucose") >= 0 || n.indexOf("libre") >= 0) return "glucose_diabetes";
+    if (t.indexOf("lab") >= 0) return "laboratory_report";
+    if (n.indexOf("weight") >= 0) return "weight_body_metrics";
+    return "other";
+  }
+
+  function snapshot(items, batchId, imported, duplicates, failed, requires_review, currentFilename) {
     const processed = items.filter((x) =>
       ["imported", "duplicate", "failed", "requires_review"].includes(x.status)
     ).length;
@@ -291,6 +349,7 @@
       duplicates: duplicates,
       failed: failed,
       requires_review: requires_review,
+      current_filename: currentFilename || "",
       items: items,
     };
   }
@@ -304,5 +363,7 @@
     suggestGroups: suggestGroups,
     makeThumbnail: makeThumbnail,
     processQueue: processQueue,
+    summarizeQueue: summarizeQueue,
+    estimateCategory: estimateCategory,
   };
 })(typeof window !== "undefined" ? window : globalThis);

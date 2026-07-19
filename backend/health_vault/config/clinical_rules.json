@@ -13,7 +13,27 @@
       "impossible_below": 40,
       "impossible_above": 300
     },
+    "systolic_bp": {
+      "units": ["mmHg"],
+      "normal": [90, 120],
+      "borderline": [121, 139],
+      "abnormal": [140, 179],
+      "critical_above": 180,
+      "critical_below": 70,
+      "impossible_below": 40,
+      "impossible_above": 300
+    },
     "diastolic": {
+      "units": ["mmHg"],
+      "normal": [60, 80],
+      "borderline": [81, 89],
+      "abnormal": [90, 119],
+      "critical_above": 120,
+      "critical_below": 40,
+      "impossible_below": 20,
+      "impossible_above": 200
+    },
+    "diastolic_bp": {
       "units": ["mmHg"],
       "normal": [60, 80],
       "borderline": [81, 89],

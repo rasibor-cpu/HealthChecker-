@@ -58,14 +58,14 @@
         storage_uri: d.storage_uri,
       })),
       kidney_trend: trendLine("egfr"),
-      blood_pressure_trend: `${trendLine("systolic")} / ${trendLine("diastolic")}`,
+      blood_pressure_trend: `${trendLine("systolic_bp")} / ${trendLine("diastolic_bp")}`,
       sleep_trend: trendLine("sleep_score"),
       diabetes_trend: `${trendLine("glucose")} · HbA1c ${trendLine("hba1c")}`,
       latest: {
         glucose: latestMeasurement("glucose"),
         egfr: latestMeasurement("egfr"),
-        systolic: latestMeasurement("systolic"),
-        diastolic: latestMeasurement("diastolic"),
+        systolic: latestMeasurement("systolic_bp") || latestMeasurement("systolic"),
+        diastolic: latestMeasurement("diastolic_bp") || latestMeasurement("diastolic"),
         sleep_score: latestMeasurement("sleep_score"),
       },
       imported_reports: docs.map((d) => ({

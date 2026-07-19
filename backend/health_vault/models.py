@@ -44,6 +44,17 @@ class MedicalDocument:
     sequence_number: int | None = None
     page_number: int | None = None
     group_title: str | None = None
+    # HC-201H classification + dating
+    primary_category: str | None = None
+    secondary_categories: list[str] = field(default_factory=list)
+    classification_confidence: float | None = None
+    classification_method: str | None = None
+    classification_version: str | None = None
+    requires_review: bool = False
+    report_date: str | None = None
+    file_capture_date: str | None = None
+    date_confidence: float | None = None
+    date_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -64,6 +75,11 @@ class Measurement:
     confidence: float | None = None
     measured_at: str | None = None
     fhir_resource: str = "Observation"
+    original_metric: str | None = None
+    original_value: Any = None
+    original_units: str | None = None
+    unit_compatible: bool = True
+    normalization_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

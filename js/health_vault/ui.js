@@ -7,36 +7,22 @@
 
   let batchQueue = [];
   let lastBatchReport = null;
+  let activeCategoryFilter = "all";
+  let timelineNewestFirst = true;
 
-  /** Legacy single-file path — still supported. */
+  /** Legacy single-file path — still supported (uses confirmation). */
   async function handleFileImport(fileInput, statusEl) {
+    const Confirm = global.HCImportConfirmUI;
+    if (Confirm && Confirm.isProcessingLocked()) return null;
     const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
     if (!files.length) {
       if (statusEl) statusEl.textContent = "Choose one or more files first (PDF, PNG, JPG, JSON).";
       return null;
     }
-    if (files.length === 1 && !batchQueue.length) {
-      if (statusEl) statusEl.textContent = "Importing…";
-      try {
-        const result = await global.HCImportEngine.importHealthRecord({ file: files[0] });
-        if (statusEl) {
-          const conf =
-            result.confidence && typeof result.confidence === "object"
-              ? result.confidence.overall_confidence
-              : result.confidence;
-          statusEl.textContent =
-            `Imported ${(result.document && result.document.original_filename) || files[0].name} · ` +
-            `${(result.measurements || []).length} measurements · ` +
-            `confidence ${Number(conf || 0).toFixed(2)}`;
-        }
-        refreshVaultViews();
-        return result;
-      } catch (err) {
-        if (statusEl) statusEl.textContent = "Import failed: " + (err && err.message ? err.message : err);
-        return null;
-      }
-    }
     await enqueueFiles(files);
+    try {
+      fileInput.value = "";
+    } catch (_) {}
     return importAllQueued();
   }
 
@@ -174,29 +160,46 @@
   async function importAllQueued() {
     const statusEl = document.getElementById("vault_status");
     const Batch = global.HCBatchImport;
+    const Confirm = global.HCImportConfirmUI;
     if (!Batch) {
       if (statusEl) statusEl.textContent = "Batch import module missing.";
       return null;
     }
+    if (Confirm && Confirm.isProcessingLocked()) return null;
     if (!batchQueue.length) {
       if (statusEl) statusEl.textContent = "Queue is empty.";
       return null;
     }
     const validation = Batch.validateQueue(batchQueue);
     if (!validation.ok) {
-      if (statusEl) {
-        statusEl.textContent = validation.errors.map((e) => e.message).join(" · ");
-      }
+      if (statusEl) statusEl.textContent = validation.errors.map((e) => e.message).join(" · ");
       renderBatchPreview();
       return null;
     }
+
+    const summary = Batch.summarizeQueue(batchQueue);
+    let confirmed = true;
+    if (Confirm && Confirm.openConfirm) {
+      confirmed = await Confirm.openConfirm(summary);
+    }
+    if (!confirmed) {
+      if (statusEl) statusEl.textContent = "Import cancelled.";
+      return { ok: false, cancelled: true, selected: batchQueue.length };
+    }
+
+    if (Confirm) Confirm.setProcessingLock(true);
     if (statusEl) statusEl.textContent = "Importing batch…";
+    const confirmationTimestamp = new Date().toISOString();
     const report = await Batch.processQueue(batchQueue, {
       onProgress: (snap) => {
+        if (Confirm) Confirm.showProgress(snap);
         renderProgress(snap);
         renderBatchPreview();
       },
     });
+    report.confirmed_by_user = true;
+    report.confirmation_timestamp = confirmationTimestamp;
+    report.selected = report.selected || batchQueue.length;
     lastBatchReport = report;
     renderBatchPreview();
     renderProgress({
@@ -207,6 +210,18 @@
       failed: report.failed,
       requires_review: report.requires_review,
     });
+    if (Confirm) {
+      Confirm.setProcessingLock(false);
+      await Confirm.showResult(report, {
+        viewRecords: () => showRecentlyImported(report),
+        viewTimeline: () => {
+          const tab = document.querySelector('[data="vault"]');
+          if (tab) tab.click();
+          const tl = document.getElementById("vault_timeline");
+          if (tl) tl.scrollIntoView({ behavior: "smooth", block: "start" });
+        },
+      });
+    }
     if (statusEl) {
       statusEl.textContent =
         `Batch ${report.status} · imported ${report.imported} · ` +
@@ -217,6 +232,29 @@
     return report;
   }
 
+  function showRecentlyImported(report) {
+    const el = document.getElementById("vault_recent");
+    if (!el) return;
+    const ids = (report.results || [])
+      .filter((r) => r.status === "imported" || r.status === "requires_review")
+      .map((r) => r.document_id)
+      .filter(Boolean);
+    const docs = (global.HCHealthVault.listDocuments() || []).filter((d) => ids.indexOf(d.id) >= 0);
+    el.innerHTML = docs.length
+      ? docs
+          .map(
+            (d) =>
+              `<div class="kpi small"><strong>${escapeHtml(
+                d.primary_category || "other"
+              )}</strong> · ${escapeHtml(d.original_filename || d.id)}` +
+              `<div class="muted">${escapeHtml(d.measured_at || d.imported_at || "")}</div></div>`
+          )
+          .join("")
+      : '<div class="muted small">No newly imported documents.</div>';
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const tab = document.querySelector('[data="vault"]');
+    if (tab) tab.click();
+  }
   async function retryFailedOnly() {
     const statusEl = document.getElementById("vault_status");
     const Batch = global.HCBatchImport;
@@ -354,7 +392,19 @@
     }
     const docsEl = document.getElementById("vault_docs");
     if (docsEl && global.HCHealthVault) {
-      const docs = global.HCHealthVault.listDocuments().slice().reverse();
+      let docs = global.HCHealthVault.listDocuments().slice();
+      docs.sort((a, b) => {
+        const da = String(a.measured_at || a.report_date || a.imported_at || "");
+        const db = String(b.measured_at || b.report_date || b.imported_at || "");
+        return timelineNewestFirst ? db.localeCompare(da) : da.localeCompare(db);
+      });
+      if (activeCategoryFilter && activeCategoryFilter !== "all") {
+        docs = docs.filter(
+          (d) =>
+            d.primary_category === activeCategoryFilter ||
+            (d.secondary_categories || []).indexOf(activeCategoryFilter) >= 0
+        );
+      }
       docsEl.innerHTML = docs.length
         ? docs
             .map((d) => {
@@ -364,23 +414,60 @@
                   .toString()
                   .replace(/^provenance:/, "") ||
                 "unspecified";
-              const group =
-                d.group_title || d.group_id
-                  ? ` · group ${d.group_title || String(d.group_id).slice(0, 8)}` +
-                    (d.sequence_number != null ? ` #${d.sequence_number}` : "")
-                  : "";
+              const meas = global.HCHealthVault.listMeasurements({ document_id: d.id }) || [];
               return (
-                `<div class="kpi small"><strong>${d.document_type}</strong> · ${
+                `<div class="kpi small"><span class="vault-cat-chip">${escapeHtml(
+                  d.primary_category || "other"
+                )}</span> <strong>${escapeHtml(d.document_type)}</strong> · ${escapeHtml(
                   d.original_filename || d.id
-                }<div class="muted">${d.imported_at} · sha ${String(d.sha256 || "").slice(
-                  0,
-                  12
-                )}… · <em>${prov}</em>${group}</div></div>`
+                )}` +
+                `<div class="muted">Measured ${escapeHtml(
+                  d.measured_at || d.report_date || "—"
+                )} · ${meas.length} metrics · ${escapeHtml(prov)} · ${escapeHtml(
+                  d.status || ""
+                )}</div></div>`
               );
             })
             .join("")
         : '<div class="muted">Vault is empty.</div>';
     }
+    renderCategoryChips();
+  }
+
+  function renderCategoryChips() {
+    const el = document.getElementById("vault_category_filters");
+    if (!el) return;
+    const cats = [
+      ["all", "All"],
+      ["blood_pressure", "Blood Pressure"],
+      ["sleep", "Sleep"],
+      ["ecg_cardiology", "ECG / Heart"],
+      ["glucose_diabetes", "Glucose"],
+      ["kidney_renal", "Kidney"],
+      ["laboratory_report", "Labs"],
+      ["weight_body_metrics", "Weight"],
+      ["medication", "Medications"],
+      ["other", "Other"],
+    ];
+    el.innerHTML = cats
+      .map(
+        ([id, label]) =>
+          `<button type="button" class="vault-filter-chip${
+            activeCategoryFilter === id ? " active" : ""
+          }" data-cat="${id}" aria-pressed="${activeCategoryFilter === id}">${label}</button>`
+      )
+      .join("");
+    el.querySelectorAll("[data-cat]").forEach((btn) => {
+      btn.onclick = () => {
+        activeCategoryFilter = btn.getAttribute("data-cat");
+        refreshVaultViews();
+      };
+    });
+  }
+
+  function setTimelineSort(newestFirst) {
+    timelineNewestFirst = !!newestFirst;
+    refreshVaultViews();
   }
 
   function openDoctorVisit() {
@@ -407,6 +494,8 @@
     importAllQueued,
     retryFailedOnly,
     enqueueFiles,
+    setTimelineSort,
+    showRecentlyImported,
     getBatchQueue: () => batchQueue.slice(),
     getLastBatchReport: () => lastBatchReport,
   };

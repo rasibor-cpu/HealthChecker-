@@ -63,6 +63,17 @@
       sequence_number: p.sequence_number != null ? Number(p.sequence_number) : null,
       page_number: p.page_number != null ? Number(p.page_number) : null,
       group_title: p.group_title || null,
+      primary_category: p.primary_category || null,
+      secondary_categories: Array.isArray(p.secondary_categories) ? p.secondary_categories.slice() : [],
+      classification_confidence:
+        p.classification_confidence != null ? Number(p.classification_confidence) : null,
+      classification_method: p.classification_method || null,
+      classification_version: p.classification_version || null,
+      requires_review: !!p.requires_review,
+      report_date: p.report_date || null,
+      file_capture_date: p.file_capture_date || null,
+      date_confidence: p.date_confidence != null ? Number(p.date_confidence) : null,
+      date_source: p.date_source || null,
     };
   }
 

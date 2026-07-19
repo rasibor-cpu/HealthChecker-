@@ -368,3 +368,96 @@ button.secondary {
     }
 }
 
+/* HC-201H — confirmation / sticky progress / filters */
+.vault-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 9998;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+}
+@media (min-width: 700px) {
+    .vault-modal-backdrop {
+        align-items: center;
+    }
+}
+.vault-modal {
+    width: min(520px, 100%);
+    max-height: 90vh;
+    overflow: auto;
+    background: #151515;
+    border: 1px solid #8a7a3a;
+    border-radius: 14px 14px 10px 10px;
+    padding: 16px;
+    z-index: 9999;
+}
+.vault-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.vault-modal-actions button {
+    min-height: 44px;
+    flex: 1 1 120px;
+}
+.vault-confirm-list {
+    margin: 8px 0 0 18px;
+}
+.vault-fixed-progress {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 72px;
+    z-index: 9997;
+    background: #1a1808;
+    border: 1px solid gold;
+    border-radius: 12px;
+    padding: 10px 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.vault-sticky-actions {
+    position: sticky;
+    bottom: 8px;
+    z-index: 20;
+    background: rgba(10, 10, 10, 0.94);
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid #333;
+}
+.vault-filter-row,
+.vault-sort-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+.vault-filter-chip,
+.vault-cat-chip {
+    border: 1px solid #555;
+    background: #1c1c1c;
+    color: #eee;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 36px;
+}
+.vault-filter-chip.active {
+    border-color: gold;
+    color: gold;
+}
+.vault-cat-chip {
+    display: inline-block;
+    min-height: auto;
+    padding: 2px 8px;
+    margin-right: 4px;
+    color: #f5e7a3;
+    border-color: #8a7a3a;
+}
+#vault_batch_preview {
+    max-height: 280px;
+}
+

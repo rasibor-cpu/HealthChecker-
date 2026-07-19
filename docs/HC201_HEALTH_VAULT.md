@@ -37,6 +37,8 @@ ImportService ──► ImportPipeline (HC-201C autonomous path)
 
 **HC-201G:** multi-file upload, batch preview, grouping, and limits — see [HC201G_BATCH_UPLOAD.md](HC201G_BATCH_UPLOAD.md).
 
+**HC-201H:** confirm-before-import, fixed progress/result, category taxonomy, measured-date priority, chronological sorting, and trend normalization — see [HC201H_CONFIRMED_CATEGORIZED_INGESTION.md](HC201H_CONFIRMED_CATEGORIZED_INGESTION.md).
+
 See also: [HC201_RC1_READINESS_REPORT.md](HC201_RC1_READINESS_REPORT.md)
 
 Existing features continue to use `HC_V6`. Vault imports may **optionally** append flattened glucose/BP/eGFR points into `HC_V6.logs` for Trend Intelligence continuity (`source: "health_vault"`).

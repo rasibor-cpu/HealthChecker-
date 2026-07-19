@@ -225,13 +225,15 @@ textarea{
     <div id="vault_batch_preview" class="vault-batch-preview muted small">No files queued. Select multiple files or drop them here.</div>
     <div id="vault_batch_progress"></div>
 
-    <div class="vault-batch-actions">
+    <div class="vault-batch-actions vault-sticky-actions">
       <button type="button" onclick="HCVaultUI.importAllQueued()">Import All</button>
       <button type="button" class="secondary" onclick="HCVaultUI.clearQueue()">Clear Queue</button>
       <button type="button" class="secondary" onclick="HCVaultUI.retryFailedOnly()">Retry Failed</button>
-      <button type="button" class="secondary" onclick="HCVaultUI.handleFileImport(document.getElementById('vault_file'), document.getElementById('vault_status'))">Import Selected (legacy)</button>
     </div>
     <div id="vault_status" class="small muted">No import yet.</div>
+    <div class="hr"></div>
+    <h3 class="section-title">Recently Imported</h3>
+    <div id="vault_recent" class="muted small">Import a batch to see newly added records here.</div>
     <div class="hr"></div>
     <h3 class="section-title">External AI Import (future ChatGPT POST shape)</h3>
     <textarea id="vault_ai_json" placeholder='{"extracted_measurements":[{"metric":"glucose","value":112,"units":"mg/dL"}],"interpretation":"Stable","confidence":0.9}'></textarea>
@@ -249,6 +251,12 @@ textarea{
 
   <div class="card">
     <h3 class="section-title">Imported Documents</h3>
+    <div id="vault_category_filters" class="vault-filter-row" aria-label="Category filters"></div>
+    <div class="vault-sort-row small">
+      <button type="button" class="secondary" onclick="HCVaultUI.setTimelineSort(true)">Newest first</button>
+      <button type="button" class="secondary" onclick="HCVaultUI.setTimelineSort(false)">Oldest first</button>
+      <button type="button" class="secondary" onclick="window.scrollTo({top:0,behavior:'smooth'})">Back to Top</button>
+    </div>
     <div id="vault_docs" class="muted">Vault is empty.</div>
     <div id="vault_integrity" class="small"></div>
   </div>
@@ -288,6 +296,7 @@ textarea{
 <script src="js/health_vault/timeline.js"></script>
 <script src="js/health_vault/import_engine.js"></script>
 <script src="js/health_vault/batch_import.js"></script>
+<script src="js/health_vault/import_confirm.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script>

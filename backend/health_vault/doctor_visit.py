@@ -46,7 +46,7 @@ class DoctorVisitMode:
             "current_medications": profile.get("medications") or [],
             "recent_ecg": list(reversed(ecg)),
             "kidney_trend": self._trend_line("egfr"),
-            "blood_pressure_trend": f"{self._trend_line('systolic')} / {self._trend_line('diastolic')}",
+            "blood_pressure_trend": f"{self._trend_line('systolic_bp')} / {self._trend_line('diastolic_bp')}",
             "sleep_trend": self._trend_line("sleep_score"),
             "diabetes_trend": f"{self._trend_line('glucose')} · HbA1c {self._trend_line('hba1c')}",
             "imported_reports": docs,

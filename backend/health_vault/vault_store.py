@@ -36,6 +36,7 @@ class VaultStore:
             "encounters": [],
             "medications": [],
             "profile": {"diagnoses": [], "medications": []},
+            "batch_audits": [],
         }
 
     def _read_index(self) -> dict[str, Any]:
@@ -186,6 +187,19 @@ class VaultStore:
 
     def import_log(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("import_log") or [])
+
+    def record_batch_audit(self, audit: dict[str, Any]) -> dict[str, Any]:
+        """Append HC-201H batch confirmation metadata (no private payloads)."""
+        data = self._read_index()
+        entry = dict(audit or {})
+        entry.setdefault("recorded_at", utc_now())
+        data.setdefault("batch_audits", []).append(entry)
+        self._audit(data, "batch_import_completed", {"batch_id": entry.get("batch_id")})
+        self._write_index(data)
+        return entry
+
+    def list_batch_audits(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("batch_audits") or [])
 
     def health_intelligence(self) -> dict[str, Any]:
         return dict(self._read_index().get("health_intelligence") or {})

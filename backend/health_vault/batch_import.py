@@ -239,10 +239,15 @@ class BatchImportService:
         batch_id: str | None = None,
         auto_group: bool = True,
         skip_validation: bool = False,
+        confirmed_by_user: bool = False,
+        confirmation_timestamp: str | None = None,
     ) -> dict[str, Any]:
         batch_id = batch_id or str(uuid4())
         started = utc_now()
-
+        kwargs = {
+            "confirmed_by_user": confirmed_by_user,
+            "confirmation_timestamp": confirmation_timestamp,
+        }
         prepared: list[dict[str, Any]] = []
         for item in items or []:
             prepared.append(
@@ -329,19 +334,26 @@ class BatchImportService:
                 }
 
             status = self._map_status(result)
+            doc = result.get("document") or {}
             entry = {
                 "index": i,
                 "filename": item["filename"],
                 "ok": bool(result.get("ok")),
                 "duplicate": bool(result.get("duplicate")),
                 "status": status,
-                "document_id": (result.get("document") or {}).get("id"),
+                "document_id": doc.get("id"),
+                "duplicate_of": result.get("original_document_id") or doc.get("duplicate_of"),
                 "original_document_id": result.get("original_document_id"),
                 "sha256": result.get("sha256"),
                 "parser": result.get("parser"),
                 "confidence": result.get("confidence"),
-                "provenance": (result.get("document") or {}).get("provenance")
-                or item.get("provenance"),
+                "provenance": doc.get("provenance") or item.get("provenance"),
+                "category": doc.get("primary_category"),
+                "primary_category": doc.get("primary_category"),
+                "secondary_categories": doc.get("secondary_categories") or [],
+                "measured_at": doc.get("measured_at"),
+                "date_confidence": doc.get("date_confidence"),
+                "date_source": doc.get("date_source"),
                 "batch_id": batch_id,
                 "group_id": group_id,
                 "sequence_number": sequence_number,
@@ -368,7 +380,20 @@ class BatchImportService:
             imported + duplicates == total
         )
 
-        return {
+        category_counts: dict[str, int] = {}
+        measured_dates = []
+        group_ids = set()
+        for r in results:
+            cat = r.get("primary_category") or r.get("category") or "other"
+            if r.get("status") in {"imported", "requires_review", "duplicate"}:
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+            if r.get("measured_at"):
+                measured_dates.append(str(r["measured_at"]))
+            if r.get("group_id"):
+                group_ids.add(r["group_id"])
+
+        finished = utc_now()
+        report = {
             "ok": ok,
             "partial_success": partial or (imported > 0 and failed > 0),
             "status": (
@@ -377,16 +402,45 @@ class BatchImportService:
                 else ("partial_success" if imported or duplicates else "failed")
             ),
             "batch_id": batch_id,
+            "selected": total,
             "total": total,
             "imported": imported,
             "duplicates": duplicates,
             "failed": failed,
             "requires_review": requires_review,
+            "category_counts": category_counts,
+            "grouped_reports": len(group_ids),
+            "earliest_measured_at": min(measured_dates) if measured_dates else None,
+            "latest_measured_at": max(measured_dates) if measured_dates else None,
             "results": results,
             "started_at": started,
-            "finished_at": utc_now(),
+            "finished_at": finished,
+            "completed_at": finished,
             "limits": self.config.to_dict(),
+            "confirmed_by_user": bool(kwargs.get("confirmed_by_user")),
+            "confirmation_timestamp": kwargs.get("confirmation_timestamp"),
         }
+
+        try:
+            self.store.record_batch_audit(
+                {
+                    "batch_id": batch_id,
+                    "selected_count": total,
+                    "confirmed_by_user": report["confirmed_by_user"],
+                    "confirmation_timestamp": report.get("confirmation_timestamp"),
+                    "imported_count": imported,
+                    "duplicate_count": duplicates,
+                    "failed_count": failed,
+                    "category_counts": category_counts,
+                    "earliest_measured_at": report["earliest_measured_at"],
+                    "latest_measured_at": report["latest_measured_at"],
+                    "completed_at": finished,
+                }
+            )
+        except Exception:
+            pass
+
+        return report
 
     @staticmethod
     def _map_status(result: dict[str, Any]) -> str:
@@ -395,12 +449,10 @@ class BatchImportService:
         if not result.get("ok"):
             return "failed"
         errors = result.get("errors") or []
-        warnings = result.get("warnings") or []
+        # Hard validation errors → requires_review; classification flags stay on the document
         if errors:
             return "requires_review"
         status = str(result.get("status") or "").lower()
-        if status in {"partial", "requires_review"}:
-            return "requires_review"
-        if warnings and status == "partial":
-            return "requires_review"
+        if status in {"failed"}:
+            return "failed"
         return "imported"
