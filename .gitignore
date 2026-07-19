@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+vault_storage/documents/
+vault_storage/index.json
+vault_storage/index.tmp
