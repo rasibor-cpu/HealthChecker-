@@ -152,9 +152,9 @@ def test_never_overwrite_documents(service: ImportService, store: VaultStore):
     # HC-201C: duplicates are not re-imported; original retained
     assert len(store.list_documents()) == 1
     assert r2.get("original_document_id") == r1["document"]["id"]
-    uri = Path(r1["document"]["storage_uri"])
-    assert uri.exists()
-    assert uri.read_bytes() == content
+    path = store.resolve_storage_path(r1["document"].get("storage_uri"), r1["document"]["id"])
+    assert path is not None and path.exists()
+    assert path.read_bytes() == content
 
 
 def test_refuse_id_overwrite(store: VaultStore):

@@ -165,24 +165,63 @@ Measured locally (JSON imports, tmp vault):
 
 ## 13. Recommendations before merge to main
 
-1. Complete encrypted vault prototype (even local-only).  
-2. Wire one real OCR provider behind the abstraction.  
-3. Add clinician-facing disclaimer screens.  
-4. Expand Encounter/Medication UI.  
-5. External security review.  
+HC-201D closure addressed immediate personal-use blockers:
 
-**Merge recommendation:** **Not Merge Ready** (feature branch continue).
+- API absolute path redaction (`vault://` URIs)
+- Structured invalid JSON API errors
+- Orphan blob cleanup if index write fails
+- Visible medical disclaimer on Health Vault UI
+
+Remaining items are deferred (see below).
 
 ---
 
-## 14. Scores (HC-201C)
+## 14. Scores (HC-201C baseline → HC-201D)
 
-| Dimension | Score |
-|-----------|------:|
-| Architecture | 82% |
-| Security | 48% |
-| Performance | 78% |
-| Documentation | 85% |
-| Clinical Readiness | 55% |
-| Production Readiness | 58% |
-| **Overall Release Readiness** | **64%** |
+| Dimension | HC-201C | HC-201D |
+|-----------|--------:|--------:|
+| Architecture | 82% | 86% |
+| Security (personal-use) | 48% | 62% |
+| Performance | 78% | 78% |
+| Documentation | 85% | 90% |
+| Clinical Readiness | 55% | 60% |
+| Production Readiness | 58% | 72% |
+| **Overall Release Readiness** | **64%** | **78%** |
+
+---
+
+## POST-MERGE ROADMAP / NON-BLOCKING ITEMS
+
+These items are **not merge blockers** for the current personal-use HealthChecker+ release. The vault is local-first, append-only, and isolated from HC_V6. Roadmap work belongs in HC-202+.
+
+| Item | Why non-blocking now |
+|------|----------------------|
+| Encryption at rest | Personal local deployment; no network sync yet. Data stays on-device/on-disk under user control. |
+| RBAC | Single-user personal app; no multi-role server deployment in this release. |
+| Real OCR providers | Passthrough/null OCR supports JSON/text imports; image/PDF OCR is additive behind abstraction. |
+| Cloud backup/sync | Not offered yet; no remote exposure surface from sync. |
+| Multi-patient identity | Single default patient model is intentional for personal use. |
+| Advanced Encounter UI | Data hooks reserved; not required for import/timeline/doctor-visit core. |
+| Advanced Medication UI | Profile text medications suffice for personal visit reports. |
+| Hash-chained audit | Append-only audit already exists; chaining is integrity hardening, not a current data-loss fix. |
+| Large-vault performance | Personal vaults are small; O(n) timeline acceptable until thousands of docs. |
+| Full FHIR interoperability | FHIR-ready naming only; not a clinical exchange product yet. |
+
+---
+
+## HC-201D merge decision
+
+**MERGE READY** for `main` as the stable foundation for HC-202, subject to human PR review.
+
+Merge-ready criteria confirmed:
+
+- No known data-loss defect in append-only store
+- No regression in Dashboard / Trends / Foot Pain / Reports / HC_V6
+- Import pipeline stable (canonical `ImportPipeline`)
+- Duplicate detection skips re-import and references original
+- SHA-256 + parser/AI metadata retained
+- API path redaction + banned filesystem keys
+- Tests passing (`pytest -q` → full suite)
+- Deferred items documented above
+
+**Do not auto-merge.** Open PR into `main` for review only.

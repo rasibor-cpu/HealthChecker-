@@ -85,53 +85,64 @@ class VaultStore:
                 None,
             )
 
-        if content is not None and existing is None:
-            dest = self.documents_dir / f"{document.id}.bin"
-            if dest.exists():
-                raise ValueError("Storage path exists — refuse overwrite")
-            dest.write_bytes(content)
-            document.storage_uri = str(dest)
-            document.size_bytes = len(content)
-        elif existing is not None:
-            document.storage_uri = existing.get("storage_uri")
-            document.duplicate_of = existing.get("id")
-            tags = list(document.tags or [])
-            if "duplicate_content" not in tags:
-                tags.append("duplicate_content")
-            document.tags = tags
+        wrote_path: Path | None = None
+        try:
+            if content is not None and existing is None:
+                dest = self.documents_dir / f"{document.id}.bin"
+                if dest.exists():
+                    raise ValueError("Storage path exists — refuse overwrite")
+                dest.write_bytes(content)
+                wrote_path = dest
+                # Public URI is vault-relative — never require absolute filesystem exposure.
+                document.storage_uri = f"vault://documents/{document.id}.bin"
+                document.size_bytes = len(content)
+            elif existing is not None:
+                document.storage_uri = existing.get("storage_uri")
+                document.duplicate_of = existing.get("id")
+                tags = list(document.tags or [])
+                if "duplicate_content" not in tags:
+                    tags.append("duplicate_content")
+                document.tags = tags
 
-        if interpretation:
-            document.interpretation = interpretation
+            if interpretation:
+                document.interpretation = interpretation
 
-        data["documents"].append(document.to_dict())
-        for m in measurements:
-            if not m.document_id:
-                m.document_id = document.id
-            data["measurements"].append(m.to_dict())
+            data["documents"].append(document.to_dict())
+            for m in measurements:
+                if not m.document_id:
+                    m.document_id = document.id
+                data["measurements"].append(m.to_dict())
 
-        import_record = {
-            "import_id": str(uuid4()),
-            "document_id": document.id,
-            "imported_at": document.imported_at,
-            "parser": parser,
-            "confidence": document.parser_confidence,
-            "sha256": document.sha256,
-            "measurement_count": len(measurements),
-            "duplicate_content": existing is not None,
-            "meta": import_meta or {},
-        }
-        data["imports"].append(import_record)
-        self._audit(
-            data,
-            "document_imported",
-            {
+            import_record = {
+                "import_id": str(uuid4()),
                 "document_id": document.id,
-                "sha256": document.sha256,
+                "imported_at": document.imported_at,
                 "parser": parser,
+                "confidence": document.parser_confidence,
+                "sha256": document.sha256,
+                "measurement_count": len(measurements),
                 "duplicate_content": existing is not None,
-            },
-        )
-        self._write_index(data)
+                "meta": import_meta or {},
+            }
+            data["imports"].append(import_record)
+            self._audit(
+                data,
+                "document_imported",
+                {
+                    "document_id": document.id,
+                    "sha256": document.sha256,
+                    "parser": parser,
+                    "duplicate_content": existing is not None,
+                },
+            )
+            self._write_index(data)
+        except Exception:
+            if wrote_path is not None and wrote_path.exists():
+                try:
+                    wrote_path.unlink()
+                except Exception:
+                    pass
+            raise
         return {"document": document.to_dict(), "import_record": import_record, "index": data}
 
     def list_documents(self) -> list[dict[str, Any]]:
@@ -179,6 +190,22 @@ class VaultStore:
     def health_intelligence(self) -> dict[str, Any]:
         return dict(self._read_index().get("health_intelligence") or {})
 
+    def resolve_storage_path(self, storage_uri: str | None, document_id: str | None = None) -> Path | None:
+        """Map public vault:// URI (or legacy absolute path) to local blob path."""
+        if not storage_uri and document_id:
+            candidate = self.documents_dir / f"{document_id}.bin"
+            return candidate if candidate.exists() else None
+        if not storage_uri:
+            return None
+        uri = str(storage_uri)
+        if uri.startswith("vault://documents/"):
+            name = uri.split("/")[-1]
+            return self.documents_dir / name
+        if uri.startswith("idb://"):
+            return None
+        p = Path(uri)
+        return p if p.exists() else None
+
     def verify_integrity(self) -> dict[str, Any]:
         data = self._read_index()
         ids: set[str] = set()
@@ -189,10 +216,15 @@ class VaultStore:
                 issues.append(f"duplicate_document_id:{did}")
             ids.add(did)
             uri = d.get("storage_uri")
-            if uri and Path(uri).exists() is False and not str(uri).startswith("idb://"):
-                # missing file is an issue unless duplicate referencing another id
-                if not d.get("duplicate_of"):
-                    issues.append(f"missing_blob:{did}")
+            if d.get("duplicate_of"):
+                continue
+            if uri and str(uri).startswith("idb://"):
+                continue
+            path = self.resolve_storage_path(uri, did)
+            if uri and path is None:
+                issues.append(f"missing_blob:{did}")
+            elif path is not None and not path.exists():
+                issues.append(f"missing_blob:{did}")
         for m in data.get("measurements") or []:
             if m.get("document_id") and m["document_id"] not in ids:
                 issues.append(f"orphan_measurement:{m.get('measurement_id')}")

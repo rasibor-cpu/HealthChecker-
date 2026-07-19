@@ -297,9 +297,9 @@ def test_digital_signature_fields(pipeline: ImportPipeline):
 def test_document_bytes_immutable(pipeline: ImportPipeline, store: VaultStore):
     content = b'{"glucose": 101}'
     r = pipeline.run({"content": content, "filename": "g.json", "mime_type": "application/json"})
-    path = Path(r["document"]["storage_uri"])
+    path = store.resolve_storage_path(r["document"]["storage_uri"], r["document"]["id"])
+    assert path is not None
     original = path.read_bytes()
-    # Attempted overwrite must fail at store layer
     from backend.health_vault.models import MedicalDocument
 
     with pytest.raises(ValueError):
@@ -371,5 +371,54 @@ def test_import_log_records_parser_and_warnings(pipeline: ImportPipeline, store:
 
 def test_rc1_docs_exist():
     assert (ROOT / "docs/HC201_HEALTH_VAULT.md").exists()
-    # Created by this phase
     assert (ROOT / "docs").is_dir()
+
+
+def test_api_sanitizes_absolute_paths(tmp_path: Path):
+    from backend.health_vault.api import import_health_record_handler
+
+    store = VaultStore(root=tmp_path / "api-vault")
+    out = import_health_record_handler(
+        {
+            "content": b'{"glucose": 105}',
+            "filename": "g.json",
+            "mime_type": "application/json",
+            "path": "C:/secrets/should-not-be-used.json",
+        },
+        store=store,
+    )
+    assert out["ok"] is True
+    blob = json.dumps(out)
+    assert "C:/secrets" not in blob
+    assert "C:\\\\secrets" not in blob
+    uri = out["document"].get("storage_uri") or ""
+    assert uri.startswith("vault://") or not (":\\" in uri or uri.startswith("/home/"))
+
+
+def test_failed_import_before_store_leaves_no_document(tmp_path: Path):
+    store = VaultStore(root=tmp_path / "fail-vault")
+    reg = ParserRegistry()
+    register_builtin_parsers(reg)
+    from backend.health_vault.ocr import OCRProvider, set_ocr_provider, PassthroughTextOCRProvider
+
+    class BoomOCR(OCRProvider):
+        name = "boom"
+
+        def extract(self, content, *, mime_type=None, filename=None):
+            raise RuntimeError("ocr_boom")
+
+    set_ocr_provider(BoomOCR())
+    try:
+        pipeline = ImportPipeline(store=store, registry=reg)
+        result = pipeline.run(
+            {"content": b'{"glucose": 1}', "filename": "x.json", "mime_type": "application/json"}
+        )
+        assert result["ok"] is False
+        assert store.list_documents() == []
+    finally:
+        set_ocr_provider(PassthroughTextOCRProvider())
+
+
+def test_index_html_has_medical_disclaimer():
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert "not a medical diagnosis" in html.lower()

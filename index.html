@@ -204,6 +204,7 @@ textarea{
   <div class="card" id="vault_import_panel">
     <h3 class="section-title">Import Medical Record</h3>
     <p class="small muted">Supports PDF, PNG, JPG, JSON. Originals are stored permanently (never overwritten).</p>
+    <p class="small muted"><strong>Disclaimer:</strong> Health Vault flags and intelligence are observational only and are not a medical diagnosis. Always consult a qualified clinician.</p>
     <input id="vault_file" type="file" accept=".pdf,.png,.jpg,.jpeg,.json,application/pdf,image/*,application/json" />
     <button type="button" onclick="HCVaultUI.handleFileImport(document.getElementById('vault_file'), document.getElementById('vault_status'))">Import into Health Vault</button>
     <div id="vault_status" class="small muted">No import yet.</div>
