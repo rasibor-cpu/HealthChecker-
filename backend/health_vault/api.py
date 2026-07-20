@@ -8,6 +8,9 @@ Endpoints:
   POST /api/import-health-record/json
   GET  /api/health-vault/executive-briefing
   GET  /api/health-vault/executive-briefing/print
+  POST /api/ai-health/import-preview
+  POST /api/ai-health/import-confirm
+  GET  /api/ai-health/import-history
 """
 
 from __future__ import annotations
@@ -269,6 +272,41 @@ def create_health_vault_app(store: VaultStore | None = None):
             engine.printable_summary(patient_id=patient_id, trend_window=trend_window)
         )
 
+    @app.post("/api/ai-health/import-preview")
+    async def ai_health_import_preview(body: dict[str, Any]) -> JSONResponse:
+        """HC-202 — preview AI-extracted records (no vault writes)."""
+        from backend.ai_health.bridge import AIHealthBridge
+
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
+        try:
+            result = AIHealthBridge(store=vault).preview(_strip_banned_path_keys(body))
+        except ValueError as exc:
+            return JSONResponse(
+                {"ok": False, "errors": [str(exc)]},
+                status_code=400,
+            )
+        return JSONResponse(_sanitize_value(result))
+
+    @app.post("/api/ai-health/import-confirm")
+    async def ai_health_import_confirm(body: dict[str, Any]) -> JSONResponse:
+        """HC-202 — confirmed AI import via canonical ImportPipeline only."""
+        from backend.ai_health.bridge import AIHealthBridge
+
+        if not isinstance(body, dict):
+            return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
+        result = AIHealthBridge(store=vault).confirm(_strip_banned_path_keys(body))
+        status = 200 if result.get("ok") or result.get("partial_success") else 400
+        if result.get("status") == "rejected":
+            status = 400
+        return JSONResponse(_sanitize_value(result), status_code=status)
+
+    @app.get("/api/ai-health/import-history")
+    def ai_health_import_history(limit: int = 50) -> dict[str, Any]:
+        from backend.ai_health.bridge import AIHealthBridge
+
+        return _sanitize_value(AIHealthBridge(store=vault).import_history(limit=limit))
+
     return app
 
 
@@ -287,3 +325,30 @@ def import_health_records_batch_handler(
     """Framework-agnostic batch handler for tests."""
     report = BatchImportService(store=store or VaultStore()).import_batch(items, **kwargs)
     return _sanitize_value(report)
+
+
+def ai_health_import_preview_handler(
+    body: dict[str, Any],
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    from backend.ai_health.bridge import AIHealthBridge
+
+    return _sanitize_value(AIHealthBridge(store=store or VaultStore()).preview(_strip_banned_path_keys(body)))
+
+
+def ai_health_import_confirm_handler(
+    body: dict[str, Any],
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    from backend.ai_health.bridge import AIHealthBridge
+
+    return _sanitize_value(AIHealthBridge(store=store or VaultStore()).confirm(_strip_banned_path_keys(body)))
+
+
+def ai_health_import_history_handler(
+    store: VaultStore | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    from backend.ai_health.bridge import AIHealthBridge
+
+    return _sanitize_value(AIHealthBridge(store=store or VaultStore()).import_history(limit=limit))

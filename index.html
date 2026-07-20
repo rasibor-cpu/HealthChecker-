@@ -229,9 +229,10 @@ textarea{
     <h3 class="section-title">Recently Imported</h3>
     <div id="vault_recent" class="muted small">Import a batch to see newly added records here.</div>
     <div class="hr"></div>
-    <h3 class="section-title">External AI Import (future ChatGPT POST shape)</h3>
-    <textarea id="vault_ai_json" placeholder='{"extracted_measurements":[{"metric":"glucose","value":112,"units":"mg/dL"}],"interpretation":"Stable","confidence":0.9}'></textarea>
-    <button type="button" onclick="HCVaultUI.handleAiJsonImport(document.getElementById('vault_ai_json'), document.getElementById('vault_status'))">Import AI Payload</button>
+    <h3 class="section-title">AI Health Bridge (ChatGPT Connector V1)</h3>
+    <p class="small muted">Structured AI-extracted records require explicit confirmation before import. No silent writes.</p>
+    <textarea id="vault_ai_json" placeholder='{"provider_id":"chatgpt","conversation":{"conversation_id":"conv-demo"},"records":[{"filename":"bp.json","measured_at":"2026-07-19","extracted_measurements":[{"metric":"systolic_bp","value":118,"units":"mmHg"},{"metric":"diastolic_bp","value":76,"units":"mmHg"}],"confidence":0.9}]}'></textarea>
+    <button type="button" onclick="HCVaultUI.handleAiJsonImport(document.getElementById('vault_ai_json'), document.getElementById('vault_status'))">Preview &amp; Import AI Payload</button>
   </div>
 
   <div class="card">
@@ -291,6 +292,7 @@ textarea{
 <script src="js/health_vault/import_engine.js"></script>
 <script src="js/health_vault/batch_import.js"></script>
 <script src="js/health_vault/import_confirm.js"></script>
+<script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js"></script>
 <script src="js/health_vault/ui.js"></script>

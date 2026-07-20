@@ -320,29 +320,36 @@
       if (statusEl) statusEl.textContent = "Invalid JSON";
       return null;
     }
-    if (statusEl) statusEl.textContent = "Importing AI payload…";
+    const Bridge = global.HCAIHealthBridge;
+    const Confirm = global.HCImportConfirmUI;
+    if (!Bridge || !Bridge.importWithConfirmation) {
+      if (statusEl) statusEl.textContent = "AI Health Bridge module missing.";
+      return null;
+    }
+    if (Confirm && Confirm.isProcessingLocked && Confirm.isProcessingLocked()) return null;
+    if (statusEl) statusEl.textContent = "Preparing AI import preview…";
     try {
-      const result = await global.HCImportEngine.importHealthRecord({
-        document: payload.document || JSON.stringify(payload),
-        filename: payload.filename || "ai-import.json",
-        mime_type: "application/json",
-        document_type: payload.document_type || "ai_assisted_import",
-        acquisition_method: "external_ai",
-        source_system: payload.source_system || "external_ai",
-        measured_at: payload.measured_at || null,
-        extracted_measurements: payload.extracted_measurements || [],
-        interpretation: payload.interpretation || null,
-        confidence: payload.confidence,
-        provenance: payload.provenance || null,
-        tags: ["external_ai"].concat(payload.tags || []),
+      const report = await Bridge.importWithConfirmation(payload, {
+        actions: {
+          viewRecords: () => showRecentlyImported(report),
+          viewTimeline: () => {
+            const tab = document.querySelector('[data="vault"]');
+            if (tab) tab.click();
+            const tl = document.getElementById("vault_timeline");
+            if (tl) tl.scrollIntoView({ behavior: "smooth", block: "start" });
+          },
+        },
       });
+      if (report && report.cancelled) {
+        if (statusEl) statusEl.textContent = "AI import cancelled.";
+        return report;
+      }
       if (statusEl) {
         statusEl.textContent =
-          `AI import stored · doc ${result.document.id} · ` +
-          `${(result.measurements || []).length} measurements`;
+          `AI import ${report.status} · imported ${report.imported} · ` +
+          `duplicates ${report.duplicates} · failed ${report.failed}`;
       }
-      refreshVaultViews();
-      return result;
+      return report;
     } catch (err) {
       if (statusEl) statusEl.textContent = "AI import failed: " + (err && err.message ? err.message : err);
       return null;

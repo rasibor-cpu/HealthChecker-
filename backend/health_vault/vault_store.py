@@ -37,6 +37,8 @@ class VaultStore:
             "medications": [],
             "profile": {"diagnoses": [], "medications": []},
             "batch_audits": [],
+            "ai_import_previews": {},
+            "ai_import_audits": [],
         }
 
     def _read_index(self) -> dict[str, Any]:
@@ -200,6 +202,65 @@ class VaultStore:
 
     def list_batch_audits(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("batch_audits") or [])
+
+    def save_ai_import_preview(self, ticket: dict[str, Any]) -> dict[str, Any]:
+        """Persist short-lived AI import preview ticket (metadata only, no chat body)."""
+        data = self._read_index()
+        previews = dict(data.get("ai_import_previews") or {})
+        pid = str(ticket.get("preview_id") or uuid4())
+        entry = dict(ticket or {})
+        entry["preview_id"] = pid
+        entry.setdefault("created_at", utc_now())
+        previews[pid] = entry
+        data["ai_import_previews"] = previews
+        self._audit(data, "ai_import_preview_created", {"preview_id": pid})
+        self._write_index(data)
+        return entry
+
+    def get_ai_import_preview(self, preview_id: str | None) -> dict[str, Any] | None:
+        if not preview_id:
+            return None
+        previews = self._read_index().get("ai_import_previews") or {}
+        ticket = previews.get(str(preview_id))
+        return dict(ticket) if ticket else None
+
+    def consume_ai_import_preview(self, preview_id: str | None) -> None:
+        if not preview_id:
+            return
+        data = self._read_index()
+        previews = dict(data.get("ai_import_previews") or {})
+        if str(preview_id) in previews:
+            previews[str(preview_id)]["status"] = "consumed"
+            previews[str(preview_id)]["consumed_at"] = utc_now()
+            data["ai_import_previews"] = previews
+            self._audit(data, "ai_import_preview_consumed", {"preview_id": str(preview_id)})
+            self._write_index(data)
+
+    def record_ai_import_audit(self, audit: dict[str, Any]) -> dict[str, Any]:
+        """Append HC-202 AI import audit (no conversation text unless explicitly imported)."""
+        data = self._read_index()
+        entry = dict(audit or {})
+        entry.setdefault("id", str(uuid4()))
+        entry.setdefault("recorded_at", utc_now())
+        conv = dict(entry.get("conversation") or {})
+        if conv.get("conversation_text") and not conv.get("conversation_text_imported"):
+            conv.pop("conversation_text", None)
+        entry["conversation"] = conv
+        data.setdefault("ai_import_audits", []).append(entry)
+        self._audit(
+            data,
+            "ai_health_import_completed",
+            {
+                "batch_id": entry.get("batch_id"),
+                "ai_provider": entry.get("ai_provider"),
+                "imported_count": entry.get("imported_count"),
+            },
+        )
+        self._write_index(data)
+        return entry
+
+    def list_ai_import_audits(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("ai_import_audits") or [])
 
     def health_intelligence(self) -> dict[str, Any]:
         return dict(self._read_index().get("health_intelligence") or {})
