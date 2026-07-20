@@ -25,6 +25,14 @@ nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
 .screen{display:none;padding:12px}
 .screen.active{display:block}
 .card{background:var(--card);padding:12px;border-radius:12px;margin-bottom:10px}
+.exec-nav-bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.exec-nav-bar button{min-height:44px;flex:1 1 140px}
+.exec-domain-card{margin-top:8px}
+.exec-summary-card .kpi{margin:4px 0}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;font-weight:600}
+@media (max-width:640px){
+  .exec-nav-bar button{flex:1 1 100%}
+}
 .alert{padding:10px;border-radius:10px;margin-bottom:10px;background:#13203a}
 .ok{color:var(--ok)}
 .warn{color:var(--warn)}
@@ -93,30 +101,16 @@ textarea{
 <div id="dash" class="screen active">
   <div id="alerts"></div>
 
-  <div class="card">
-    <h3 class="section-title">Quick Summary</h3>
+  <div id="exec_health_dashboard" aria-label="Executive Health Dashboard"></div>
+
+  <details class="card">
+    <summary class="section-title">Classic Quick Summary &amp; Trends</summary>
     <div id="summary"></div>
-  </div>
-
-  <div class="card">
-    <h3 class="section-title">Trend Intelligence</h3>
     <div id="trendBox"></div>
-  </div>
-
-  <div class="card">
-    <h3 class="section-title">Recent Readings</h3>
     <div id="dashboard"></div>
-  </div>
-
-  <div class="card">
-    <h3 class="section-title">Foot Pain Analysis</h3>
     <div id="footDash">No foot pain analysis yet.</div>
-  </div>
-
-  <div class="card">
-    <h3 class="section-title">Health Vault Snapshot</h3>
     <div id="vault_dash_snapshot" class="muted">Open the Health Vault tab to import medical records.</div>
-  </div>
+  </details>
 </div>
 
 <div id="add" class="screen">
@@ -298,6 +292,7 @@ textarea{
 <script src="js/health_vault/batch_import.js"></script>
 <script src="js/health_vault/import_confirm.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
+<script src="js/health_vault/executive_dashboard.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script>
 const KEY = 'HC_V6';
@@ -644,9 +639,13 @@ tabs.forEach(t => t.onclick = () => {
   if (t.getAttribute('data') === 'vault' && window.HCVaultUI) {
     HCVaultUI.refreshVaultViews();
   }
+  if (t.getAttribute('data') === 'dash' && window.HCExecutiveDashboard) {
+    HCExecutiveDashboard.refresh();
+  }
 });
 
 render();
+if (window.HCExecutiveDashboard) HCExecutiveDashboard.refresh();
 </script>
 </body>
 </html>

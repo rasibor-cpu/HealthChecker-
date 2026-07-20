@@ -6,6 +6,8 @@ Endpoints:
   POST /api/import-health-records/batch   (multipart; requires python-multipart)
   POST /api/import-health-records/batch/json
   POST /api/import-health-record/json
+  GET  /api/health-vault/executive-briefing
+  GET  /api/health-vault/executive-briefing/print
 """
 
 from __future__ import annotations
@@ -235,6 +237,37 @@ def create_health_vault_app(store: VaultStore | None = None):
     @app.get("/api/health-vault/import-log")
     def import_log() -> dict[str, Any]:
         return _sanitize_value({"entries": vault.import_log()})
+
+    @app.get("/api/health-vault/executive-briefing")
+    def executive_briefing(
+        patient_id: str = "default-patient",
+        as_of: str | None = None,
+        trend_window: str = "30d",
+        category: str | None = None,
+    ) -> dict[str, Any]:
+        """HC-201I read-only executive health briefing (observational only)."""
+        from backend.health_vault.executive_briefing import ExecutiveHealthBriefingEngine
+
+        engine = ExecutiveHealthBriefingEngine(vault)
+        payload = engine.generate(
+            patient_id=patient_id,
+            as_of=as_of,
+            trend_window=trend_window,
+            category=category,
+        )
+        return _sanitize_value(payload)
+
+    @app.get("/api/health-vault/executive-briefing/print")
+    def executive_briefing_print(
+        patient_id: str = "default-patient",
+        trend_window: str = "30d",
+    ) -> dict[str, Any]:
+        from backend.health_vault.executive_briefing import ExecutiveHealthBriefingEngine
+
+        engine = ExecutiveHealthBriefingEngine(vault)
+        return _sanitize_value(
+            engine.printable_summary(patient_id=patient_id, trend_window=trend_window)
+        )
 
     return app
 

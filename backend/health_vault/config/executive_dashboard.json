@@ -1,0 +1,102 @@
+{
+  "schema_version": "hc.executive_dashboard.v1",
+  "disclaimer": "Observational decision-support only. Not a diagnosis or prescription. Does not replace professional medical assessment.",
+  "confidence_threshold": 0.45,
+  "trend_min_points": 3,
+  "trend_windows_days": {
+    "latest": 0,
+    "7d": 7,
+    "30d": 30,
+    "90d": 90,
+    "1y": 365,
+    "all": null
+  },
+  "monitoring_intervals_days": {
+    "blood_pressure": 7,
+    "glucose_diabetes": 30,
+    "kidney_renal": 90,
+    "laboratory_report": 90,
+    "ecg_cardiology": 90,
+    "sleep": 7,
+    "weight_body_metrics": 30,
+    "medication": 30
+  },
+  "domains": [
+    {
+      "id": "heart",
+      "title": "Heart / Cardiology",
+      "categories": ["ecg_cardiology"],
+      "metrics": ["average_hr", "heart_rate", "resting_hr", "hrv_rmssd", "rhythm"]
+    },
+    {
+      "id": "kidney",
+      "title": "Kidney",
+      "categories": ["kidney_renal"],
+      "metrics": ["egfr", "creatinine", "uacr"]
+    },
+    {
+      "id": "diabetes",
+      "title": "Diabetes / Glucose",
+      "categories": ["glucose_diabetes"],
+      "metrics": ["glucose", "hba1c", "cgm_time_in_range"]
+    },
+    {
+      "id": "blood_pressure",
+      "title": "Blood Pressure",
+      "categories": ["blood_pressure"],
+      "metrics": ["systolic_bp", "diastolic_bp", "pulse", "heart_rate"]
+    },
+    {
+      "id": "sleep",
+      "title": "Sleep / Recovery",
+      "categories": ["sleep"],
+      "metrics": [
+        "sleep_duration",
+        "sleep_score",
+        "deep_sleep_duration",
+        "rem_sleep_duration",
+        "sleep_latency",
+        "resting_hr",
+        "hrv_rmssd",
+        "respiratory_rate",
+        "skin_temperature_delta",
+        "energy_score"
+      ]
+    },
+    {
+      "id": "weight",
+      "title": "Weight / Body Metrics",
+      "categories": ["weight_body_metrics"],
+      "metrics": ["weight", "bmi"]
+    },
+    {
+      "id": "respiratory",
+      "title": "Respiratory / Oxygen",
+      "categories": ["respiratory_oxygen"],
+      "metrics": ["respiratory_rate", "spo2"]
+    },
+    {
+      "id": "medications",
+      "title": "Medications",
+      "categories": ["medication"],
+      "metrics": []
+    },
+    {
+      "id": "labs",
+      "title": "Laboratory Reports",
+      "categories": ["laboratory_report", "hospital_clinical_report"],
+      "metrics": []
+    }
+  ],
+  "attention_priorities": [
+    "failed_import",
+    "source_document_required",
+    "unreliable_date",
+    "missing_units",
+    "low_confidence_classification",
+    "requires_review",
+    "uncertain_medication",
+    "overdue_measurement",
+    "clinical_flag"
+  ]
+}

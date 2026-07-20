@@ -229,6 +229,13 @@
         (report.partial_success ? " (partial success)" : "");
     }
     refreshVaultViews();
+    if (global.HCExecutiveDashboard && HCExecutiveDashboard.refresh) {
+      try {
+        HCExecutiveDashboard.refresh();
+      } catch (e) {
+        /* ignore */
+      }
+    }
     return report;
   }
 
