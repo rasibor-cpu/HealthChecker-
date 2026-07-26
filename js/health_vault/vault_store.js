@@ -24,6 +24,15 @@
         diagnoses: [],
         medications: [],
       },
+      // HC-301 Guardian extensions (additive)
+      alerts: [],
+      baselines: {},
+      cgm_sensors: [],
+      cgm_inventory: {},
+      cgm_continuity: {},
+      data_gaps: [],
+      timeline_events: [],
+      guardian_status: {},
     };
   }
 
@@ -39,6 +48,23 @@
         imports: Array.isArray(parsed.imports) ? parsed.imports : [],
         trends: parsed.trends && typeof parsed.trends === "object" ? parsed.trends : {},
         profile: parsed.profile && typeof parsed.profile === "object" ? parsed.profile : emptyVault().profile,
+        alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+        baselines: parsed.baselines && typeof parsed.baselines === "object" ? parsed.baselines : {},
+        cgm_sensors: Array.isArray(parsed.cgm_sensors) ? parsed.cgm_sensors : [],
+        cgm_inventory:
+          parsed.cgm_inventory && typeof parsed.cgm_inventory === "object"
+            ? parsed.cgm_inventory
+            : {},
+        cgm_continuity:
+          parsed.cgm_continuity && typeof parsed.cgm_continuity === "object"
+            ? parsed.cgm_continuity
+            : {},
+        data_gaps: Array.isArray(parsed.data_gaps) ? parsed.data_gaps : [],
+        timeline_events: Array.isArray(parsed.timeline_events) ? parsed.timeline_events : [],
+        guardian_status:
+          parsed.guardian_status && typeof parsed.guardian_status === "object"
+            ? parsed.guardian_status
+            : {},
       });
     } catch (_) {
       return emptyVault();
@@ -263,6 +289,161 @@
     return { ok: issues.length === 0, issues, document_count: vault.documents.length };
   }
 
+  // --- HC-301 Guardian storage helpers (additive) ---
+
+  function listAlerts() {
+    return loadMeta().alerts.slice();
+  }
+
+  function saveAlerts(alerts) {
+    const vault = loadMeta();
+    vault.alerts = Array.isArray(alerts) ? alerts : [];
+    saveMeta(vault);
+    return vault.alerts;
+  }
+
+  function upsertAlert(alert) {
+    const vault = loadMeta();
+    const items = vault.alerts || [];
+    let found = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].alert_id === alert.alert_id) {
+        items[i] = alert;
+        found = true;
+        break;
+      }
+    }
+    if (!found) items.push(alert);
+    vault.alerts = items;
+    appendAudit(vault, "alert_upserted", { alert_id: alert.alert_id, severity: alert.severity });
+    saveMeta(vault);
+    return alert;
+  }
+
+  function saveBaselines(payload) {
+    const vault = loadMeta();
+    vault.baselines = payload || {};
+    appendAudit(vault, "baselines_updated", {
+      metrics: Object.keys((payload && payload.baselines) || {}),
+    });
+    saveMeta(vault);
+    return vault.baselines;
+  }
+
+  function getBaselines() {
+    return loadMeta().baselines || {};
+  }
+
+  function listCgmSensors() {
+    return loadMeta().cgm_sensors.slice();
+  }
+
+  function upsertCgmSensor(sensor) {
+    const vault = loadMeta();
+    const items = vault.cgm_sensors || [];
+    let found = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].sensor_id === sensor.sensor_id) {
+        items[i] = sensor;
+        found = true;
+        break;
+      }
+    }
+    if (!found) items.push(sensor);
+    vault.cgm_sensors = items;
+    appendAudit(vault, "cgm_sensor_upserted", {
+      sensor_id: sensor.sensor_id,
+      status: sensor.status,
+    });
+    saveMeta(vault);
+    return sensor;
+  }
+
+  function getCgmInventory(patientId) {
+    const inv = loadMeta().cgm_inventory || {};
+    if (inv && inv.patient_id && patientId && inv.patient_id !== patientId) return null;
+    if (inv && Object.keys(inv).length) return inv;
+    return null;
+  }
+
+  function saveCgmInventory(inventory) {
+    const vault = loadMeta();
+    vault.cgm_inventory = inventory || {};
+    appendAudit(vault, "cgm_inventory_updated", {
+      patient_id: inventory && inventory.patient_id,
+    });
+    saveMeta(vault);
+    return vault.cgm_inventory;
+  }
+
+  function saveCgmContinuity(payload) {
+    const vault = loadMeta();
+    vault.cgm_continuity = payload || {};
+    appendAudit(vault, "cgm_continuity_updated", {
+      state: payload && payload.state,
+    });
+    saveMeta(vault);
+    return vault.cgm_continuity;
+  }
+
+  function getCgmContinuity() {
+    return loadMeta().cgm_continuity || {};
+  }
+
+  function listDataGaps() {
+    return loadMeta().data_gaps.slice();
+  }
+
+  function upsertDataGap(gap) {
+    const vault = loadMeta();
+    const items = vault.data_gaps || [];
+    let found = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].gap_id === gap.gap_id) {
+        items[i] = gap;
+        found = true;
+        break;
+      }
+    }
+    if (!found) items.push(gap);
+    vault.data_gaps = items;
+    appendAudit(vault, "data_gap_upserted", { gap_id: gap.gap_id });
+    saveMeta(vault);
+    return gap;
+  }
+
+  function listTimelineEvents() {
+    return loadMeta().timeline_events.slice();
+  }
+
+  function appendTimelineEvent(event) {
+    const vault = loadMeta();
+    const events = vault.timeline_events || [];
+    const dedupe = event && event.dedupe_key;
+    if (dedupe && events.some((e) => e.dedupe_key === dedupe)) {
+      return events.find((e) => e.dedupe_key === dedupe);
+    }
+    events.push(event);
+    vault.timeline_events = events;
+    appendAudit(vault, "timeline_event_appended", { kind: event && event.kind });
+    saveMeta(vault);
+    return event;
+  }
+
+  function saveGuardianStatus(status) {
+    const vault = loadMeta();
+    vault.guardian_status = status || {};
+    appendAudit(vault, "guardian_status_updated", {
+      overall_state: status && status.overall_state,
+    });
+    saveMeta(vault);
+    return vault.guardian_status;
+  }
+
+  function getGuardianStatus() {
+    return loadMeta().guardian_status || {};
+  }
+
   global.HCHealthVault = {
     META_KEY,
     loadMeta,
@@ -279,5 +460,22 @@
     sha256Hex,
     verifyIntegrity,
     emptyVault,
+    listAlerts,
+    saveAlerts,
+    upsertAlert,
+    saveBaselines,
+    getBaselines,
+    listCgmSensors,
+    upsertCgmSensor,
+    getCgmInventory,
+    saveCgmInventory,
+    saveCgmContinuity,
+    getCgmContinuity,
+    listDataGaps,
+    upsertDataGap,
+    listTimelineEvents,
+    appendTimelineEvent,
+    saveGuardianStatus,
+    getGuardianStatus,
   };
 })(typeof window !== "undefined" ? window : globalThis);

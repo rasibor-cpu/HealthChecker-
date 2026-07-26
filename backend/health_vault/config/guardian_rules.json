@@ -1,0 +1,241 @@
+{
+  "schema_version": "hc.guardian_rules.v1",
+  "rule_pack_version": "1.0.0",
+  "notes": "Observational configurable rules for HC-301. Thresholds require clinician review. No treatment or insulin dosing advice.",
+  "safety_disclaimer": "Observational only — not a diagnosis. Does not replace FreeStyle Libre alarms, Samsung Health Monitor, medical care, or emergency services.",
+  "cooldowns_minutes": {
+    "informational": 360,
+    "watch": 180,
+    "warning": 60,
+    "urgent": 30,
+    "critical": 15
+  },
+  "rules": [
+    {
+      "rule_id": "glucose_low",
+      "version": "1.0.0",
+      "title": "Low glucose",
+      "category": "glucose",
+      "severity": "urgent",
+      "type": "absolute_threshold",
+      "metric": "glucose",
+      "units": ["mg/dL"],
+      "operator": "lte",
+      "threshold": 70,
+      "recommended_next_step": "Review glucose reading and follow your clinician-approved hypoglycemia plan. Manufacturer CGM alarms must remain enabled."
+    },
+    {
+      "rule_id": "glucose_very_low",
+      "version": "1.0.0",
+      "title": "Very low glucose",
+      "category": "glucose",
+      "severity": "critical",
+      "type": "absolute_threshold",
+      "metric": "glucose",
+      "units": ["mg/dL"],
+      "operator": "lte",
+      "threshold": 54,
+      "recommended_next_step": "Treat per clinician-approved plan and seek urgent medical care if needed. This app does not replace emergency services."
+    },
+    {
+      "rule_id": "glucose_high",
+      "version": "1.0.0",
+      "title": "High glucose",
+      "category": "glucose",
+      "severity": "warning",
+      "type": "absolute_threshold",
+      "metric": "glucose",
+      "units": ["mg/dL"],
+      "operator": "gte",
+      "threshold": 250,
+      "recommended_next_step": "Review recent meals, medication timing, and CGM/meter confirmation with your care plan. No dosing advice is provided."
+    },
+    {
+      "rule_id": "glucose_rapid_fall",
+      "version": "1.0.0",
+      "title": "Rapidly falling glucose",
+      "category": "glucose",
+      "severity": "urgent",
+      "type": "rate_of_change",
+      "metric": "glucose",
+      "units": ["mg/dL"],
+      "window_minutes": 60,
+      "delta_lte": -40,
+      "min_points": 2,
+      "recommended_next_step": "Check current glucose and follow clinician-approved guidance. Keep manufacturer alarms enabled."
+    },
+    {
+      "rule_id": "glucose_rapid_rise",
+      "version": "1.0.0",
+      "title": "Rapidly rising glucose",
+      "category": "glucose",
+      "severity": "watch",
+      "type": "rate_of_change",
+      "metric": "glucose",
+      "units": ["mg/dL"],
+      "window_minutes": 60,
+      "delta_gte": 50,
+      "min_points": 2,
+      "recommended_next_step": "Note meal/activity context and confirm with your usual monitoring routine."
+    },
+    {
+      "rule_id": "glucose_data_gap",
+      "version": "1.0.0",
+      "title": "Glucose data gap",
+      "category": "cgm_continuity",
+      "severity": "warning",
+      "type": "missing_data",
+      "metric": "glucose",
+      "source": "cgm_or_meter",
+      "gap_minutes": 180,
+      "recommended_next_step": "Confirm sensor/reader connectivity or enter a confirmed reading. No data is never treated as normal."
+    },
+    {
+      "rule_id": "cgm_sensor_expiring",
+      "version": "1.0.0",
+      "title": "CGM sensor expiring",
+      "category": "cgm_continuity",
+      "severity": "warning",
+      "type": "sensor_expiring",
+      "hours_before": 24,
+      "recommended_next_step": "Prepare a replacement sensor and confirm inventory before expiry."
+    },
+    {
+      "rule_id": "cgm_sensor_expired",
+      "version": "1.0.0",
+      "title": "CGM sensor expired",
+      "category": "cgm_continuity",
+      "severity": "urgent",
+      "type": "sensor_expired",
+      "recommended_next_step": "Replace the sensor per manufacturer instructions and update the sensor registry."
+    },
+    {
+      "rule_id": "cgm_reserve_below_minimum",
+      "version": "1.0.0",
+      "title": "CGM reserve below minimum",
+      "category": "cgm_continuity",
+      "severity": "warning",
+      "type": "inventory_reserve",
+      "recommended_next_step": "Reorder sensors to restore the protected reserve. Confirm inventory manually."
+    },
+    {
+      "rule_id": "cgm_projected_coverage_shortfall",
+      "version": "1.0.0",
+      "title": "CGM projected coverage shortfall",
+      "category": "cgm_continuity",
+      "severity": "urgent",
+      "type": "coverage_shortfall",
+      "recommended_next_step": "Reorder promptly; projected coverage is below configured buffer needs."
+    },
+    {
+      "rule_id": "elevated_resting_hr",
+      "version": "1.0.0",
+      "title": "Elevated resting heart rate",
+      "category": "cardiology",
+      "severity": "watch",
+      "type": "absolute_threshold",
+      "metric": "resting_hr",
+      "units": ["bpm"],
+      "operator": "gte",
+      "threshold": 100,
+      "recommended_next_step": "Review context (illness, activity, medication). Wearable HR is observational."
+    },
+    {
+      "rule_id": "low_resting_hr",
+      "version": "1.0.0",
+      "title": "Unusually low resting heart rate",
+      "category": "cardiology",
+      "severity": "warning",
+      "type": "absolute_threshold",
+      "metric": "resting_hr",
+      "units": ["bpm"],
+      "operator": "lte",
+      "threshold": 40,
+      "recommended_next_step": "If symptomatic, seek medical care. Observational wearable reading only."
+    },
+    {
+      "rule_id": "low_oxygen_saturation",
+      "version": "1.0.0",
+      "title": "Low oxygen saturation",
+      "category": "respiratory",
+      "severity": "urgent",
+      "type": "absolute_threshold",
+      "metric": "oxygen_saturation",
+      "units": ["%"],
+      "operator": "lte",
+      "threshold": 92,
+      "recommended_next_step": "Confirm with a validated pulse oximeter if available and seek care if symptomatic."
+    },
+    {
+      "rule_id": "elevated_blood_pressure",
+      "version": "1.0.0",
+      "title": "Elevated blood pressure",
+      "category": "blood_pressure",
+      "severity": "warning",
+      "type": "multi_metric",
+      "all_of": [
+        {"metric": "systolic", "operator": "gte", "threshold": 140, "units": ["mmHg"]},
+        {"metric": "diastolic", "operator": "gte", "threshold": 90, "units": ["mmHg"]}
+      ],
+      "recommended_next_step": "Samsung BP is user-initiated, not continuous. Follow clinician guidance for repeat checks."
+    },
+    {
+      "rule_id": "low_blood_pressure",
+      "version": "1.0.0",
+      "title": "Unusually low blood pressure",
+      "category": "blood_pressure",
+      "severity": "warning",
+      "type": "multi_metric",
+      "any_of": [
+        {"metric": "systolic", "operator": "lte", "threshold": 90, "units": ["mmHg"]},
+        {"metric": "diastolic", "operator": "lte", "threshold": 50, "units": ["mmHg"]}
+      ],
+      "recommended_next_step": "If dizzy or unwell, seek medical care. Observational only."
+    },
+    {
+      "rule_id": "repeated_abnormal",
+      "version": "1.0.0",
+      "title": "Repeated abnormal measurements",
+      "category": "persistence",
+      "severity": "warning",
+      "type": "consecutive_abnormal",
+      "metric": "glucose",
+      "min_consecutive": 3,
+      "abnormal_flags": ["Abnormal", "Critical"],
+      "recommended_next_step": "Review recent confirmed readings with your clinician-approved plan."
+    },
+    {
+      "rule_id": "worsening_multi_day_trend",
+      "version": "1.0.0",
+      "title": "Worsening multi-day trend",
+      "category": "trend",
+      "severity": "watch",
+      "type": "rolling_average",
+      "metric": "glucose",
+      "window_days": 3,
+      "min_points": 3,
+      "compare": "rising",
+      "delta_gte": 20,
+      "recommended_next_step": "Trend is observational; discuss persistent changes with your clinician."
+    },
+    {
+      "rule_id": "baseline_deviation_glucose",
+      "version": "1.0.0",
+      "title": "Glucose outside personal baseline band",
+      "category": "baseline",
+      "severity": "watch",
+      "type": "baseline_deviation",
+      "metric": "glucose",
+      "recommended_next_step": "Value is outside your personal rolling band when baseline is ready. Not a diagnosis."
+    },
+    {
+      "rule_id": "monitoring_pipeline_failure",
+      "version": "1.0.0",
+      "title": "Monitoring pipeline failure",
+      "category": "system",
+      "severity": "urgent",
+      "type": "pipeline_failure",
+      "recommended_next_step": "Retry evaluation or re-import the latest confirmed record. Background PWA checks are not guaranteed."
+    }
+  ]
+}

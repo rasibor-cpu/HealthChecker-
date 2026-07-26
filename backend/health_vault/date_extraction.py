@@ -141,8 +141,10 @@ def _filename_date(filename: str) -> str | None:
         return None
 
 
-def timeline_sort_key(doc: dict[str, Any]) -> str:
+def timeline_sort_key(doc: dict[str, Any] | None) -> str:
     """measured_at > report_date > imported_at."""
+    if not isinstance(doc, dict):
+        return ""
     return str(
         doc.get("measured_at")
         or doc.get("report_date")

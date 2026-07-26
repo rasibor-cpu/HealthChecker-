@@ -95,6 +95,7 @@ textarea{
   <div class="tab" data="add">Add</div>
   <div class="tab" data="sym">Symptoms</div>
   <div class="tab" data="vault">Health Vault</div>
+  <div class="tab" data="guardian">Guardian</div>
   <div class="tab" data="rep">Reports</div>
 </nav>
 
@@ -102,6 +103,8 @@ textarea{
   <div id="alerts"></div>
 
   <div id="exec_health_dashboard" aria-label="Executive Health Dashboard"></div>
+
+  <div id="guardian_dash_snapshot" class="card muted small">Guardian status appears after first evaluation.</div>
 
   <details class="card">
     <summary class="section-title">Classic Quick Summary &amp; Trends</summary>
@@ -273,6 +276,67 @@ textarea{
   </div>
 </div>
 
+<div id="guardian" class="screen">
+  <div id="guardian_critical_banner" class="alert bad" style="display:none" role="alert"></div>
+
+  <div class="card">
+    <h3 class="section-title">Always-On Health Guardian</h3>
+    <p class="small muted"><strong>Safety disclaimer:</strong> Observational companion only — not a diagnosis, not a medical device claim, and not insulin/medication dosing advice. Does not replace FreeStyle Libre alarms, Samsung Health Monitor, clinician care, or emergency services. Health Connect is not implemented. Galaxy Watch does not measure glucose. Samsung BP/ECG are user-initiated, not continuous. A PWA cannot guarantee unrestricted background execution.</p>
+    <button type="button" onclick="HCHealthGuardian.refresh({trigger:'manual'})">Evaluate Guardian Now</button>
+    <div id="guardian_status_panel" class="muted small">Not evaluated yet.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Active Alerts</h3>
+    <div id="guardian_alerts_list" class="muted small">No active alerts.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">CGM Inventory</h3>
+    <div id="guardian_inventory_summary" class="muted small">Inventory unknown until confirmed.</div>
+    <label class="small muted">Unused sensor count</label>
+    <input id="guardian_unused_count" type="number" min="0" step="1" placeholder="0" inputmode="numeric" />
+    <button type="button" onclick="HCHealthGuardian.saveInventoryFromForm()">Save Inventory</button>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">CGM Sensors</h3>
+    <label class="small muted">Model</label>
+    <input id="guardian_sensor_model" placeholder="FreeStyle Libre" value="FreeStyle Libre" />
+    <label class="small muted">Serial / reference (optional)</label>
+    <input id="guardian_sensor_serial" placeholder="optional" />
+    <button type="button" onclick="HCHealthGuardian.registerSensorFromForm()">Register Sensor</button>
+    <div id="guardian_sensors_list" class="muted small">No sensors registered.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Baselines Summary</h3>
+    <div id="guardian_baselines" class="muted small">Baselines rebuild on evaluation.</div>
+  </div>
+
+  <div class="card">
+    <h3 class="section-title">Timeline Filters</h3>
+    <select id="guardian_tl_severity">
+      <option value="">All severities</option>
+      <option value="critical">critical</option>
+      <option value="urgent">urgent</option>
+      <option value="warning">warning</option>
+      <option value="watch">watch</option>
+      <option value="informational">informational</option>
+    </select>
+    <select id="guardian_tl_category">
+      <option value="">All categories</option>
+      <option value="cgm_continuity">cgm_continuity</option>
+      <option value="glucose">glucose</option>
+      <option value="blood_pressure">blood_pressure</option>
+      <option value="alert">alert</option>
+      <option value="hc_v6">hc_v6</option>
+    </select>
+    <button type="button" onclick="HCHealthGuardian.renderTimelineFiltered()">Apply Filter</button>
+    <div id="guardian_timeline" class="muted small">Use filters to inspect guardian/document timeline events.</div>
+  </div>
+</div>
+
 <div id="rep" class="screen">
   <div class="card">
     <h3 class="section-title">Report</h3>
@@ -295,6 +359,10 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js"></script>
+<script src="js/health_vault/alert_engine.js"></script>
+<script src="js/health_vault/baseline_engine.js"></script>
+<script src="js/health_vault/cgm_continuity.js"></script>
+<script src="js/health_vault/health_guardian.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script>
 const KEY = 'HC_V6';
@@ -606,6 +674,13 @@ function render(){
       : 'Open the Health Vault tab to import medical records.';
   }
   if (window.HCVaultUI) HCVaultUI.refreshVaultViews();
+  if (window.HCHealthGuardian && HCHealthGuardian.instance) {
+    try {
+      HCHealthGuardian.instance.renderUI({
+        status: HCHealthGuardian.instance.getStatus(),
+      });
+    } catch (_) {}
+  }
 }
 
 let gEl = document.getElementById('g');
@@ -644,10 +719,35 @@ tabs.forEach(t => t.onclick = () => {
   if (t.getAttribute('data') === 'dash' && window.HCExecutiveDashboard) {
     HCExecutiveDashboard.refresh();
   }
+  if (t.getAttribute('data') === 'guardian' && window.HCHealthGuardian) {
+    HCHealthGuardian.refresh({ trigger: 'tab' });
+    HCHealthGuardian.renderTimelineFiltered();
+  }
 });
 
 render();
 if (window.HCExecutiveDashboard) HCExecutiveDashboard.refresh();
+if (window.HCHealthGuardian) {
+  try { HCHealthGuardian.refresh({ trigger: 'startup' }); } catch (_) {}
+}
+
+// HC-301 service worker (local notifications only; never off-device)
+(function registerGuardianSW() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./service-worker.js').then(function (reg) {
+    if (reg && 'periodicSync' in reg) {
+      try {
+        reg.periodicSync.register('hc-guardian-eval', { minInterval: 60 * 60 * 1000 });
+      } catch (_) {}
+    }
+  }).catch(function () {});
+  navigator.serviceWorker.addEventListener('message', function (event) {
+    var data = event.data || {};
+    if (data.type === 'GUARDIAN_EVAL' && window.HCHealthGuardian) {
+      HCHealthGuardian.refresh({ trigger: data.reason || 'sw_message' });
+    }
+  });
+})();
 </script>
 </body>
 </html>

@@ -426,6 +426,24 @@ class ImportPipeline:
                 IMPORT_COMPLETED,
                 {"document_id": document.id, "overall_confidence": conf.overall_confidence},
             )
+            # HC-301 — evaluate Guardian after confirmed import (non-fatal)
+            try:
+                from backend.health_vault.guardian.health_guardian import HealthGuardian
+
+                guardian_result = HealthGuardian(store=self.store, bus=self.bus).evaluate_after_import(
+                    result
+                )
+                result["guardian"] = {
+                    "ok": guardian_result.get("ok"),
+                    "overall_state": (guardian_result.get("status") or {}).get("overall_state"),
+                    "alert_count": len(guardian_result.get("alerts") or []),
+                    "fully_evaluated": bool(guardian_result.get("fully_evaluated")),
+                    "evaluation_mode": guardian_result.get("evaluation_mode")
+                    or ("lightweight" if guardian_result.get("deferred_steps") else "full"),
+                    "deferred_steps": list(guardian_result.get("deferred_steps") or []),
+                }
+            except Exception as gexc:
+                result.setdefault("warnings", []).append(f"guardian_eval_skipped:{type(gexc).__name__}")
             return result
 
         except Exception as exc:

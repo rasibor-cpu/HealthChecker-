@@ -219,8 +219,12 @@ def create_health_vault_app(store: VaultStore | None = None):
         return get_batch_config().to_dict()
 
     @app.get("/api/health-vault/timeline")
-    def timeline() -> dict[str, Any]:
-        return _sanitize_value({"entries": build_timeline(vault)})
+    def timeline(unified: bool = False) -> dict[str, Any]:
+        if unified:
+            from backend.health_vault.timeline import build_unified_timeline
+
+            return _sanitize_value({"entries": build_unified_timeline(vault), "unified": True})
+        return _sanitize_value({"entries": build_timeline(vault), "unified": False})
 
     @app.get("/api/health-vault/doctor-visit")
     def doctor_visit() -> dict[str, Any]:
@@ -307,6 +311,84 @@ def create_health_vault_app(store: VaultStore | None = None):
 
         return _sanitize_value(AIHealthBridge(store=vault).import_history(limit=limit))
 
+    # --- HC-301 Health Guardian ---
+
+    @app.get("/api/guardian/status")
+    def guardian_status(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(guardian_status_handler(patient_id=patient_id, store=vault))
+
+    @app.get("/api/guardian/alerts")
+    def guardian_alerts(patient_id: str = "default-patient", active_only: bool = True) -> dict[str, Any]:
+        return _sanitize_value(
+            guardian_alerts_handler(patient_id=patient_id, active_only=active_only, store=vault)
+        )
+
+    @app.get("/api/guardian/alerts/history")
+    def guardian_alerts_history(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(
+            guardian_alerts_handler(patient_id=patient_id, active_only=False, store=vault)
+        )
+
+    @app.post("/api/guardian/alerts/{alert_id}/acknowledge")
+    async def guardian_ack(alert_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
+        result = guardian_acknowledge_handler(alert_id, body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.post("/api/guardian/alerts/{alert_id}/resolve")
+    async def guardian_resolve(alert_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
+        result = guardian_resolve_handler(alert_id, body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.get("/api/guardian/baselines")
+    def guardian_baselines(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(guardian_baselines_handler(patient_id=patient_id, store=vault))
+
+    @app.get("/api/guardian/cgm/sensors")
+    def guardian_cgm_sensors(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_sensors_handler(patient_id=patient_id, store=vault))
+
+    @app.post("/api/guardian/cgm/sensors/register")
+    async def guardian_cgm_register(body: dict[str, Any]) -> JSONResponse:
+        result = cgm_register_handler(body, store=vault)
+        return JSONResponse(_sanitize_value(result))
+
+    @app.post("/api/guardian/cgm/sensors/{sensor_id}/activate")
+    async def guardian_cgm_activate(sensor_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
+        result = cgm_activate_handler(sensor_id, body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.post("/api/guardian/cgm/sensors/{sensor_id}/fail")
+    async def guardian_cgm_fail(sensor_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
+        result = cgm_fail_handler(sensor_id, body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.post("/api/guardian/cgm/sensors/{sensor_id}/replace")
+    async def guardian_cgm_replace(sensor_id: str, body: dict[str, Any]) -> JSONResponse:
+        result = cgm_replace_handler(sensor_id, body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.get("/api/guardian/cgm/inventory")
+    def guardian_cgm_inventory(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_inventory_handler(patient_id=patient_id, store=vault))
+
+    @app.post("/api/guardian/cgm/inventory")
+    async def guardian_cgm_inventory_update(body: dict[str, Any]) -> JSONResponse:
+        return JSONResponse(_sanitize_value(cgm_inventory_update_handler(body, store=vault)))
+
+    @app.get("/api/guardian/cgm/continuity")
+    def guardian_cgm_continuity(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_continuity_handler(patient_id=patient_id, store=vault))
+
+    @app.get("/api/guardian/cgm/data-gaps")
+    def guardian_data_gaps(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_data_gaps_handler(patient_id=patient_id, store=vault))
+
+    @app.post("/api/guardian/evaluate")
+    async def guardian_evaluate(body: dict[str, Any] | None = None) -> JSONResponse:
+        """Development/testing trigger only — not a clinical escalation channel."""
+        result = guardian_evaluate_handler(body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result))
+
     return app
 
 
@@ -352,3 +434,121 @@ def ai_health_import_history_handler(
     from backend.ai_health.bridge import AIHealthBridge
 
     return _sanitize_value(AIHealthBridge(store=store or VaultStore()).import_history(limit=limit))
+
+
+# --- HC-301 framework-agnostic handlers ---
+
+
+def _guardian(store: VaultStore | None = None):
+    from backend.health_vault.guardian.health_guardian import HealthGuardian
+
+    return HealthGuardian(store=store or VaultStore())
+
+
+def guardian_status_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+    g = _guardian(store)
+    return g.get_status(patient_id=patient_id)
+
+
+def guardian_alerts_handler(
+    patient_id: str = "default-patient",
+    active_only: bool = True,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    g = _guardian(store)
+    return {
+        "alerts": g.alerts.list_alerts(patient_id=patient_id, active_only=active_only),
+        "counts": g.alerts.active_counts(patient_id=patient_id),
+        "disclaimer": "Observational alerts only — not diagnoses.",
+    }
+
+
+def guardian_acknowledge_handler(
+    alert_id: str,
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    return _guardian(store).alerts.acknowledge(alert_id, note=body.get("note"))
+
+
+def guardian_resolve_handler(
+    alert_id: str,
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    return _guardian(store).alerts.resolve(
+        alert_id,
+        note=body.get("note"),
+        force=bool(body.get("force")),
+    )
+
+
+def guardian_baselines_handler(
+    patient_id: str = "default-patient",
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    return _guardian(store).baselines.get_summaries(patient_id=patient_id)
+
+
+def cgm_sensors_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+    return {"sensors": _guardian(store).cgm.list_sensors(patient_id=patient_id)}
+
+
+def cgm_register_handler(body: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+    return {"ok": True, "sensor": _guardian(store).cgm.register_sensor(body or {})}
+
+
+def cgm_activate_handler(
+    sensor_id: str,
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    return _guardian(store).cgm.activate_sensor(
+        sensor_id,
+        activation_timestamp=body.get("activation_timestamp"),
+        reduce_inventory=bool(body.get("reduce_inventory", True)),
+    )
+
+
+def cgm_fail_handler(
+    sensor_id: str,
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    return _guardian(store).cgm.fail_sensor(sensor_id, reason=(body or {}).get("reason"))
+
+
+def cgm_replace_handler(
+    sensor_id: str,
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    return _guardian(store).cgm.replace_sensor(sensor_id, body or {})
+
+
+def cgm_inventory_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+    return {"inventory": _guardian(store).cgm.get_inventory(patient_id=patient_id)}
+
+
+def cgm_inventory_update_handler(body: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+    return {"ok": True, "inventory": _guardian(store).cgm.update_inventory(body or {})}
+
+
+def cgm_continuity_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+    return _guardian(store).cgm.evaluate_continuity(patient_id=patient_id)
+
+
+def cgm_data_gaps_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+    return {"gaps": _guardian(store).cgm.list_data_gaps(patient_id=patient_id)}
+
+
+def guardian_evaluate_handler(body: dict[str, Any] | None = None, store: VaultStore | None = None) -> dict[str, Any]:
+    body = body or {}
+    return _guardian(store).evaluate(
+        patient_id=str(body.get("patient_id") or "default-patient"),
+        pipeline_failure=bool(body.get("pipeline_failure")),
+        trigger=str(body.get("trigger") or "api_dev_trigger"),
+    )

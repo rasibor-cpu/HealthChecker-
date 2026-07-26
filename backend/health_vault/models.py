@@ -119,6 +119,8 @@ METRIC_CATALOG: dict[str, dict[str, Any]] = {
     "skin_temperature_deviation": {"category": "Skin Temperature", "units": "C"},
     "medication": {"category": "Medication", "units": None},
     "diagnosis": {"category": "Diagnosis", "units": None},
+    "oxygen_saturation": {"category": "Respiratory", "units": "%"},
+    "pulse": {"category": "Heart Rate", "units": "bpm"},
 }
 
 PROVENANCE_VALUES = (

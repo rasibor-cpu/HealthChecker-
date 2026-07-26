@@ -1,4 +1,4 @@
-"""Chronological health timeline builder (HC-201H measured-date priority)."""
+"""Chronological health timeline builder (HC-201H measured-date priority + HC-301 unified events)."""
 
 from __future__ import annotations
 
@@ -15,9 +15,19 @@ def build_timeline(
     newest_first: bool = True,
     date_from: str | None = None,
     date_to: str | None = None,
+    severity: str | None = None,
+    include_guardian_events: bool = False,
+    include_hc_v6: bool = False,
 ) -> list[dict[str, Any]]:
+    """
+    Document timeline (HC-201 compatible by default).
+
+    Pass include_guardian_events=True / include_hc_v6=True or use
+    build_unified_timeline() for HC-301 merged views.
+    """
     trends = store.get_trends()
     entries: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
     for doc in store.list_documents():
         if category and category != "all":
             primary = doc.get("primary_category")
@@ -38,6 +48,10 @@ def build_timeline(
             continue
         if date_to and sort_date > date_to:
             continue
+        dedupe = f"doc|{doc.get('id')}"
+        if dedupe in seen_keys:
+            continue
+        seen_keys.add(dedupe)
         entries.append(
             {
                 "date": sort_date,
@@ -54,6 +68,9 @@ def build_timeline(
                 "measurements": measurements,
                 "trend_impact": impact,
                 "original_link": doc.get("storage_uri"),
+                "entry_kind": "document",
+                "provenance": doc.get("provenance") or doc.get("source_system"),
+                "severity": None,
                 "fhir_resources": {
                     "document": "DocumentReference",
                     "observations": "Observation",
@@ -61,10 +78,63 @@ def build_timeline(
             }
         )
 
+    if include_guardian_events:
+        for ev in store.list_timeline_events():
+            if category and category != "all":
+                if ev.get("category") != category and ev.get("kind") != category:
+                    continue
+            if severity and ev.get("severity") != severity:
+                continue
+            sort_date = str(ev.get("measured_at") or ev.get("imported_at") or "")
+            if date_from and sort_date < date_from:
+                continue
+            if date_to and sort_date > date_to:
+                continue
+            dedupe = str(ev.get("dedupe_key") or ev.get("event_id") or "")
+            if dedupe and dedupe in seen_keys:
+                continue
+            if dedupe:
+                seen_keys.add(dedupe)
+            entries.append(
+                {
+                    "date": sort_date,
+                    "measured_at": ev.get("measured_at"),
+                    "imported_at": ev.get("imported_at"),
+                    "primary_category": ev.get("category"),
+                    "category_label": ev.get("category"),
+                    "entry_kind": ev.get("kind") or "guardian_event",
+                    "provenance": ev.get("provenance"),
+                    "severity": ev.get("severity"),
+                    "summary": ev.get("summary"),
+                    "payload": ev.get("payload") or {},
+                    "document": None,
+                    "measurements": [],
+                    "trend_impact": ev.get("summary") or "",
+                    "original_link": None,
+                    "fhir_resources": {},
+                }
+            )
+
+    if include_hc_v6:
+        for row in _load_hc_v6_entries():
+            if category and category not in ("all", None, row.get("primary_category"), "hc_v6"):
+                continue
+            sort_date = str(row.get("date") or "")
+            if date_from and sort_date < date_from:
+                continue
+            if date_to and sort_date > date_to:
+                continue
+            dedupe = str(row.get("dedupe_key") or "")
+            if dedupe and dedupe in seen_keys:
+                continue
+            if dedupe:
+                seen_keys.add(dedupe)
+            entries.append(row)
+
     # Group-aware sort: by group measured date, then sequence/page within group
     def _entry_key(e: dict[str, Any]) -> tuple:
-        doc = e.get("document") or {}
-        gid = doc.get("group_id") or doc.get("id") or ""
+        doc = e.get("document") if isinstance(e.get("document"), dict) else {}
+        gid = doc.get("group_id") or doc.get("id") or e.get("entry_kind") or ""
         seq = doc.get("sequence_number") or doc.get("page_number") or 0
         return (str(e.get("date") or ""), str(gid), int(seq) if seq is not None else 0)
 
@@ -74,7 +144,7 @@ def build_timeline(
         entries.sort(
             key=lambda e: (
                 str(e.get("date") or ""),
-                str((e.get("document") or {}).get("group_id") or ""),
+                str((e.get("document") or {}).get("group_id") if isinstance(e.get("document"), dict) else ""),
             ),
             reverse=True,
         )
@@ -82,7 +152,8 @@ def build_timeline(
         buckets: dict[str, list[dict[str, Any]]] = {}
         order: list[str] = []
         for e in entries:
-            gid = str((e.get("document") or {}).get("group_id") or e.get("document", {}).get("id"))
+            doc = e.get("document") if isinstance(e.get("document"), dict) else {}
+            gid = str(doc.get("group_id") or doc.get("id") or e.get("entry_kind") or e.get("date") or "x")
             if gid not in buckets:
                 buckets[gid] = []
                 order.append(gid)
@@ -92,11 +163,71 @@ def build_timeline(
             group = buckets[gid]
             group.sort(
                 key=lambda e: int(
-                    (e.get("document") or {}).get("sequence_number")
-                    or (e.get("document") or {}).get("page_number")
+                    (
+                        (e.get("document") or {}).get("sequence_number")
+                        if isinstance(e.get("document"), dict)
+                        else None
+                    )
+                    or (
+                        (e.get("document") or {}).get("page_number")
+                        if isinstance(e.get("document"), dict)
+                        else None
+                    )
                     or 0
                 )
             )
             rebuilt.extend(group)
         entries = rebuilt
     return entries
+
+
+def _load_hc_v6_entries() -> list[dict[str, Any]]:
+    """
+    Optional HC_V6 merge for server-side timeline.
+
+    Browser localStorage HC_V6 is authoritative in the PWA. Server cannot read
+    browser storage; returns empty unless a local sidecar file is present for tests.
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        side = Path(__file__).resolve().parents[2] / "vault_storage" / "hc_v6_sidecar.json"
+        if not side.exists():
+            return []
+        raw = json.loads(side.read_text(encoding="utf-8"))
+        logs = raw.get("logs") or []
+        out: list[dict[str, Any]] = []
+        for i, row in enumerate(logs):
+            ts = str(row.get("ts") or row.get("measured_at") or "")
+            dedupe = f"hc_v6|{ts}|{row.get('g')}|{row.get('sys')}|{row.get('dia')}"
+            out.append(
+                {
+                    "date": ts,
+                    "measured_at": ts,
+                    "imported_at": ts,
+                    "primary_category": "hc_v6",
+                    "category_label": "hc_v6",
+                    "entry_kind": "hc_v6_log",
+                    "provenance": row.get("source") or "HC_V6",
+                    "severity": None,
+                    "summary": "HC_V6 reading",
+                    "payload": row,
+                    "document": None,
+                    "measurements": [],
+                    "trend_impact": "",
+                    "original_link": None,
+                    "fhir_resources": {},
+                    "dedupe_key": dedupe,
+                }
+            )
+        return out
+    except Exception:
+        return []
+
+
+def build_unified_timeline(store: VaultStore, **kwargs: Any) -> list[dict[str, Any]]:
+    """HC-301 merged timeline: vault docs + guardian events + optional HC_V6 sidecar."""
+    kwargs.setdefault("include_guardian_events", True)
+    kwargs.setdefault("include_hc_v6", True)
+    return build_timeline(store, **kwargs)

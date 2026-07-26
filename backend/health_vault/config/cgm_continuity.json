@@ -1,0 +1,16 @@
+{
+  "schema_version": "hc.cgm_continuity.v1",
+  "notes": "CGM continuity defaults are configuration, not clinical facts. Manufacturer alarms must remain enabled.",
+  "default_expected_wear_days": 14,
+  "minimum_protected_reserve": 1,
+  "travel_buffer_days": 7,
+  "reorder_lead_days": 5,
+  "expiring_warning_hours": 24,
+  "expected_reading_cadence_minutes": 15,
+  "data_gap_watch_minutes": 45,
+  "data_gap_urgent_minutes": 180,
+  "data_gap_critical_minutes": 360,
+  "default_manufacturer": "Abbott",
+  "default_model": "FreeStyle Libre",
+  "disclaimer": "HealthChecker+ supplements FreeStyle Libre alarms and does not replace them. No live Libre API in HC-301; upload/parser and manual sensor registry only."
+}

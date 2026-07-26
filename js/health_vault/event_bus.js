@@ -45,6 +45,20 @@
       DuplicateDetected: "DuplicateDetected",
       ParserFailed: "ParserFailed",
       ImportCompleted: "ImportCompleted",
+      // HC-301 Guardian / Alert / CGM
+      AlertCreated: "AlertCreated",
+      AlertUpdated: "AlertUpdated",
+      AlertEscalated: "AlertEscalated",
+      AlertAcknowledged: "AlertAcknowledged",
+      AlertResolved: "AlertResolved",
+      AlertSnoozed: "AlertSnoozed",
+      GuardianEvaluated: "GuardianEvaluated",
+      GuardianEvaluationFailed: "GuardianEvaluationFailed",
+      CGMSensorRegistered: "CGMSensorRegistered",
+      CGMSensorActivated: "CGMSensorActivated",
+      CGMSensorFailed: "CGMSensorFailed",
+      CGMInventoryUpdated: "CGMInventoryUpdated",
+      DataGapDetected: "DataGapDetected",
     },
   };
 })(typeof window !== "undefined" ? window : globalThis);

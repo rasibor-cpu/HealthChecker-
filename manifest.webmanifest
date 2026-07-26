@@ -1,6 +1,7 @@
 {
   "name": "HealthChecker+",
   "short_name": "HC+",
+  "description": "Local-first health vault and observational Health Guardian companion.",
   "start_url": "/HealthChecker-/",
   "scope": "/HealthChecker-/",
   "display": "standalone",

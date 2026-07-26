@@ -39,6 +39,16 @@ class VaultStore:
             "batch_audits": [],
             "ai_import_previews": {},
             "ai_import_audits": [],
+            # HC-301 Guardian extensions (additive; never rewrite clinical docs)
+            "alerts": [],
+            "baselines": {},
+            "cgm_sensors": [],
+            "cgm_inventory": {},
+            "cgm_continuity": {},
+            "data_gaps": [],
+            "timeline_events": [],
+            "guardian_status": {},
+            "guardian_audits": [],
         }
 
     def _read_index(self) -> dict[str, Any]:
@@ -314,3 +324,146 @@ class VaultStore:
             shutil.rmtree(self.root)
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         self._write_index(self._empty())
+
+    # --- HC-301 Guardian persistence (append/upsert; never destroys clinical docs) ---
+
+    def list_alerts(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("alerts") or [])
+
+    def upsert_alert(self, alert: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        alerts = list(data.get("alerts") or [])
+        aid = str(alert.get("alert_id") or uuid4())
+        alert = dict(alert)
+        alert["alert_id"] = aid
+        replaced = False
+        for i, existing in enumerate(alerts):
+            if existing.get("alert_id") == aid:
+                alerts[i] = alert
+                replaced = True
+                break
+        if not replaced:
+            alerts.append(alert)
+        data["alerts"] = alerts
+        self._audit(data, "alert_upserted", {"alert_id": aid, "status": alert.get("status")})
+        self._write_index(data)
+        return alert
+
+    def save_baselines(self, payload: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        data["baselines"] = dict(payload or {})
+        self._audit(data, "baselines_updated", {"patient_id": (payload or {}).get("patient_id")})
+        self._write_index(data)
+        return data["baselines"]
+
+    def get_baselines(self) -> dict[str, Any]:
+        return dict(self._read_index().get("baselines") or {})
+
+    def list_cgm_sensors(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("cgm_sensors") or [])
+
+    def upsert_cgm_sensor(self, sensor: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        sensors = list(data.get("cgm_sensors") or [])
+        sid = str(sensor.get("sensor_id") or uuid4())
+        sensor = dict(sensor)
+        sensor["sensor_id"] = sid
+        for i, existing in enumerate(sensors):
+            if existing.get("sensor_id") == sid:
+                sensors[i] = sensor
+                data["cgm_sensors"] = sensors
+                self._audit(data, "cgm_sensor_upserted", {"sensor_id": sid, "status": sensor.get("status")})
+                self._write_index(data)
+                return sensor
+        sensors.append(sensor)
+        data["cgm_sensors"] = sensors
+        self._audit(data, "cgm_sensor_upserted", {"sensor_id": sid, "status": sensor.get("status")})
+        self._write_index(data)
+        return sensor
+
+    def get_cgm_inventory(self, patient_id: str = "default-patient") -> dict[str, Any] | None:
+        inv = self._read_index().get("cgm_inventory") or {}
+        if isinstance(inv, dict) and inv.get("patient_id") == patient_id:
+            return dict(inv)
+        if isinstance(inv, dict) and patient_id in inv and isinstance(inv.get(patient_id), dict):
+            return dict(inv[patient_id])
+        return None
+
+    def save_cgm_inventory(self, inventory: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        inv = dict(inventory or {})
+        data["cgm_inventory"] = inv
+        self._audit(data, "cgm_inventory_updated", {"patient_id": inv.get("patient_id")})
+        self._write_index(data)
+        return inv
+
+    def save_cgm_continuity(self, payload: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        data["cgm_continuity"] = dict(payload or {})
+        self._audit(data, "cgm_continuity_updated", {"state": (payload or {}).get("state")})
+        self._write_index(data)
+        return data["cgm_continuity"]
+
+    def get_cgm_continuity(self) -> dict[str, Any]:
+        return dict(self._read_index().get("cgm_continuity") or {})
+
+    def list_data_gaps(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("data_gaps") or [])
+
+    def upsert_data_gap(self, gap: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        gaps = list(data.get("data_gaps") or [])
+        gid = str(gap.get("gap_id") or uuid4())
+        gap = dict(gap)
+        gap["gap_id"] = gid
+        for i, existing in enumerate(gaps):
+            if existing.get("gap_id") == gid:
+                gaps[i] = gap
+                data["data_gaps"] = gaps
+                self._audit(data, "data_gap_upserted", {"gap_id": gid})
+                self._write_index(data)
+                return gap
+        gaps.append(gap)
+        data["data_gaps"] = gaps
+        self._audit(data, "data_gap_upserted", {"gap_id": gid})
+        self._write_index(data)
+        return gap
+
+    def list_timeline_events(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("timeline_events") or [])
+
+    def append_timeline_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        events = list(data.get("timeline_events") or [])
+        entry = dict(event or {})
+        entry.setdefault("event_id", str(uuid4()))
+        dedupe = entry.get("dedupe_key")
+        if dedupe and any(e.get("dedupe_key") == dedupe for e in events):
+            return entry
+        events.append(entry)
+        data["timeline_events"] = events
+        self._audit(data, "timeline_event_appended", {"kind": entry.get("kind")})
+        self._write_index(data)
+        return entry
+
+    def save_guardian_status(self, status: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        data["guardian_status"] = dict(status or {})
+        self._audit(data, "guardian_status_updated", {"overall_state": (status or {}).get("overall_state")})
+        self._write_index(data)
+        return data["guardian_status"]
+
+    def get_guardian_status(self) -> dict[str, Any]:
+        return dict(self._read_index().get("guardian_status") or {})
+
+    def append_guardian_audit(self, entry: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        row = dict(entry or {})
+        row.setdefault("id", str(uuid4()))
+        data.setdefault("guardian_audits", []).append(row)
+        self._audit(data, "guardian_audit_appended", {"audit_id": row.get("audit_id") or row.get("id")})
+        self._write_index(data)
+        return row
+
+    def list_guardian_audits(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("guardian_audits") or [])

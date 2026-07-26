@@ -25,6 +25,20 @@ DOCTOR_REPORT_UPDATED = "DoctorReportUpdated"
 PARSER_FAILED = "ParserFailed"
 IMPORT_COMPLETED = "ImportCompleted"
 IMPORT_FAILED = "ImportFailed"
+# HC-301 Guardian events
+ALERT_CREATED = "AlertCreated"
+ALERT_UPDATED = "AlertUpdated"
+ALERT_ESCALATED = "AlertEscalated"
+ALERT_ACKNOWLEDGED = "AlertAcknowledged"
+ALERT_RESOLVED = "AlertResolved"
+ALERT_SNOOZED = "AlertSnoozed"
+GUARDIAN_EVALUATED = "GuardianEvaluated"
+GUARDIAN_EVALUATION_FAILED = "GuardianEvaluationFailed"
+CGM_SENSOR_REGISTERED = "CGMSensorRegistered"
+CGM_SENSOR_ACTIVATED = "CGMSensorActivated"
+CGM_SENSOR_FAILED = "CGMSensorFailed"
+CGM_INVENTORY_UPDATED = "CGMInventoryUpdated"
+DATA_GAP_DETECTED = "DataGapDetected"
 
 
 @dataclass

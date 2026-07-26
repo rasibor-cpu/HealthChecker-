@@ -1,0 +1,21 @@
+{
+  "schema_version": "hc.baseline.v1",
+  "notes": "Personalized baselines from confirmed measurements only. Observational — not diagnostic.",
+  "minimum_sample_count": 5,
+  "rolling_window_days": 90,
+  "min_confidence": 0.5,
+  "percentile_low": 10,
+  "percentile_high": 90,
+  "supported_metrics": [
+    "glucose",
+    "systolic",
+    "diastolic",
+    "resting_hr",
+    "heart_rate",
+    "oxygen_saturation",
+    "egfr",
+    "sleep_score",
+    "weight"
+  ],
+  "contexts": ["resting", "sleeping", "active", "fasting", "pre_meal", "post_meal", "unspecified"]
+}

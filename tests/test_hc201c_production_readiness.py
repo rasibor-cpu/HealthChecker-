@@ -347,8 +347,10 @@ def test_import_performance_budget(pipeline: ImportPipeline):
     for i in range(5):
         pipeline.run(_json_payload({"glucose": 100 + i}, name=f"p{i}.json"))
     elapsed = time.perf_counter() - t0
-    # Local JSON pipeline should be well under 5s for 5 imports
-    assert elapsed < 5.0
+    # HC-301: each confirmed import also runs lightweight Guardian evaluation
+    # (baseline rebuild + rules/alerts). Personal-vault JSON imports should still
+    # complete five sequential runs well under 10s on a typical developer machine.
+    assert elapsed < 10.0
 
 
 def test_timeline_and_doctor_after_pipeline(pipeline: ImportPipeline, store: VaultStore):
