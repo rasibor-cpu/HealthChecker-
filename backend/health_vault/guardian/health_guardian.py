@@ -24,15 +24,17 @@ OVERALL_STATES = (
 )
 
 KNOWN_LIMITATIONS = [
-    "Samsung Health / Galaxy Watch / Libre support remains upload/parser and manual registry based in HC-301.",
-    "Health Connect is not implemented in this phase.",
+    "HC-302 adds a continuous-monitoring foundation (connectors, ingestion, freshness, status). Live Health Connect / Libre reads still require authorized platform bridges.",
+    "Samsung Health / Galaxy Watch / Libre file support remains upload/parser and manual registry based unless a live bridge is configured.",
+    "Health Connect live reads are not available in the Python vault process without an Android companion bridge.",
     "Galaxy Watch does not measure glucose.",
     "Samsung Watch blood pressure is user-initiated, not continuous.",
     "ECG is not continuously collected.",
     "A PWA cannot guarantee unrestricted background execution.",
     "Manufacturer CGM and device alarms must remain enabled.",
     "HealthChecker+ does not replace medical care or emergency services.",
-    "No caregiver/SMS/email/emergency notifications are sent in HC-301.",
+    "No caregiver/SMS/email/emergency notifications are sent off-device in HC-302.",
+    "Production sync never silently falls back to simulated readings.",
 ]
 
 
@@ -366,11 +368,14 @@ class HealthGuardian:
                 "total_tracked": len(baselines),
             },
             "source_connection_availability": {
-                "health_connect": False,
+                "health_connect": False,  # HC-302 foundation present; live bridge not configured
+                "health_connect_foundation": True,
                 "live_libre_api": False,
+                "libre_import": True,
                 "samsung_live_api": False,
                 "upload_parsers": True,
                 "manual_entry": True,
+                "continuous_monitoring_bridge": True,
             },
             "background_capability": bg,
             "known_limitations": KNOWN_LIMITATIONS,

@@ -287,6 +287,17 @@ textarea{
   </div>
 
   <div class="card">
+    <h3 class="section-title">Continuous Monitoring (HC-302)</h3>
+    <p id="monitoring_disclaimer" class="small muted">Observational continuous-monitoring foundation. Live vs imported data is labeled explicitly. Browser/PWA background execution is not guaranteed.</p>
+    <button type="button" onclick="HCContinuousMonitoring.refresh()">Refresh Monitoring Status</button>
+    <div id="monitoring_status_panel" class="muted small" style="margin-top:0.5rem">Connector status appears here.</div>
+    <h4 class="section-title" style="margin-top:0.75rem">Latest readings</h4>
+    <div id="monitoring_metrics_panel" class="muted small">No readings yet.</div>
+    <h4 class="section-title" style="margin-top:0.75rem">Actions required</h4>
+    <div id="monitoring_actions_panel" class="muted small">Checking connectors…</div>
+  </div>
+
+  <div class="card">
     <h3 class="section-title">Active Alerts</h3>
     <div id="guardian_alerts_list" class="muted small">No active alerts.</div>
   </div>
@@ -363,6 +374,7 @@ textarea{
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
 <script src="js/health_vault/health_guardian.js"></script>
+<script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script>
 const KEY = 'HC_V6';
@@ -722,6 +734,7 @@ tabs.forEach(t => t.onclick = () => {
   if (t.getAttribute('data') === 'guardian' && window.HCHealthGuardian) {
     HCHealthGuardian.refresh({ trigger: 'tab' });
     HCHealthGuardian.renderTimelineFiltered();
+    if (window.HCContinuousMonitoring) HCContinuousMonitoring.refresh();
   }
 });
 
@@ -730,14 +743,18 @@ if (window.HCExecutiveDashboard) HCExecutiveDashboard.refresh();
 if (window.HCHealthGuardian) {
   try { HCHealthGuardian.refresh({ trigger: 'startup' }); } catch (_) {}
 }
+if (window.HCContinuousMonitoring) {
+  try { HCContinuousMonitoring.refresh(); } catch (_) {}
+}
 
-// HC-301 service worker (local notifications only; never off-device)
+// HC-301/302 service worker (local notifications only; never off-device)
 (function registerGuardianSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('./service-worker.js').then(function (reg) {
     if (reg && 'periodicSync' in reg) {
       try {
         reg.periodicSync.register('hc-guardian-eval', { minInterval: 60 * 60 * 1000 });
+        reg.periodicSync.register('hc-monitoring-sync', { minInterval: 60 * 60 * 1000 });
       } catch (_) {}
     }
   }).catch(function () {});
@@ -745,6 +762,9 @@ if (window.HCHealthGuardian) {
     var data = event.data || {};
     if (data.type === 'GUARDIAN_EVAL' && window.HCHealthGuardian) {
       HCHealthGuardian.refresh({ trigger: data.reason || 'sw_message' });
+    }
+    if (data.type === 'MONITORING_SYNC' && window.HCContinuousMonitoring) {
+      HCContinuousMonitoring.refresh();
     }
   });
 })();

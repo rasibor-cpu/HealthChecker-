@@ -121,6 +121,10 @@ METRIC_CATALOG: dict[str, dict[str, Any]] = {
     "diagnosis": {"category": "Diagnosis", "units": None},
     "oxygen_saturation": {"category": "Respiratory", "units": "%"},
     "pulse": {"category": "Heart Rate", "units": "bpm"},
+    "steps": {"category": "Activity", "units": "count"},
+    "activity_minutes": {"category": "Activity", "units": "min"},
+    "exercise_minutes": {"category": "Activity", "units": "min"},
+    "spo2": {"category": "Respiratory", "units": "%"},
 }
 
 PROVENANCE_VALUES = (
@@ -129,6 +133,10 @@ PROVENANCE_VALUES = (
     "historical_summary",
     "wearable_screenshot",
     "wearable_pdf",
+    "health_connect_sync",
+    "libre_authorized_live",
+    "continuous_monitoring",
+    "simulated_test_only",
 )
 
 PROVENANCE_CONFIDENCE = {
@@ -176,6 +184,7 @@ DOCUMENT_TYPES = (
     "imaging_report",
     "ai_assisted_import",
     "json_measurements",
+    "continuous_monitoring_observation",
     "unknown",
 )
 

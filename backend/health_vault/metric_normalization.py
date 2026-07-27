@@ -37,6 +37,13 @@ METRIC_ALIASES = {
     "bmi": "bmi",
     "sleep_score": "sleep_score",
     "energy_score": "energy_score",
+    "oxygen_saturation": "oxygen_saturation",
+    "spo2": "oxygen_saturation",
+    "steps": "steps",
+    "activity_minutes": "activity_minutes",
+    "exercise_minutes": "exercise_minutes",
+    "systolic_bp": "systolic_bp",
+    "diastolic_bp": "diastolic_bp",
 }
 
 CANONICAL_UNITS = {
@@ -59,6 +66,10 @@ CANONICAL_UNITS = {
     "bmi": "kg/m2",
     "sleep_score": "score",
     "energy_score": "score",
+    "oxygen_saturation": "%",
+    "steps": "count",
+    "activity_minutes": "min",
+    "exercise_minutes": "min",
 }
 
 # Metrics allowed into trend engine

@@ -11,6 +11,11 @@ Endpoints:
   POST /api/ai-health/import-preview
   POST /api/ai-health/import-confirm
   GET  /api/ai-health/import-history
+  GET  /api/monitoring/status
+  GET  /api/monitoring/connectors
+  POST /api/monitoring/sync
+  POST /api/monitoring/evaluate
+  POST /api/monitoring/scheduler/tick
 """
 
 from __future__ import annotations
@@ -311,6 +316,35 @@ def create_health_vault_app(store: VaultStore | None = None):
 
         return _sanitize_value(AIHealthBridge(store=vault).import_history(limit=limit))
 
+    # --- HC-302 Continuous Monitoring ---
+
+    @app.get("/api/monitoring/status")
+    def monitoring_status(patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(monitoring_status_handler(patient_id=patient_id, store=vault))
+
+    @app.get("/api/monitoring/connectors")
+    def monitoring_connectors(include_simulated: bool = False) -> dict[str, Any]:
+        return _sanitize_value(
+            monitoring_connectors_handler(include_simulated=include_simulated, store=vault)
+        )
+
+    @app.post("/api/monitoring/sync")
+    async def monitoring_sync(body: dict[str, Any] | None = None) -> JSONResponse:
+        result = monitoring_sync_handler(body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") or result.get("status") in {
+            "UNAVAILABLE", "IMPORT_REQUIRED", "permission_required", "permission_denied"
+        } else (200 if result.get("ok") else 400))
+
+    @app.post("/api/monitoring/evaluate")
+    async def monitoring_evaluate(body: dict[str, Any] | None = None) -> JSONResponse:
+        result = monitoring_evaluate_handler(body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.post("/api/monitoring/scheduler/tick")
+    async def monitoring_scheduler_tick(body: dict[str, Any] | None = None) -> JSONResponse:
+        result = monitoring_scheduler_tick_handler(body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result))
+
     # --- HC-301 Health Guardian ---
 
     @app.get("/api/guardian/status")
@@ -551,4 +585,91 @@ def guardian_evaluate_handler(body: dict[str, Any] | None = None, store: VaultSt
         patient_id=str(body.get("patient_id") or "default-patient"),
         pipeline_failure=bool(body.get("pipeline_failure")),
         trigger=str(body.get("trigger") or "api_dev_trigger"),
+    )
+
+
+# --- HC-302 framework-agnostic handlers ---
+
+
+def _monitoring(store: VaultStore | None = None):
+    from backend.health_vault.monitoring.bridge import ContinuousMonitoringBridge
+
+    return ContinuousMonitoringBridge(store=store or VaultStore())
+
+
+def monitoring_status_handler(
+    patient_id: str = "default-patient",
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    return _monitoring(store).get_status(patient_id=patient_id)
+
+
+def monitoring_connectors_handler(
+    include_simulated: bool = False,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    return {
+        "connectors": _monitoring(store).available_connectors(include_simulated=include_simulated),
+        "disclaimer": (
+            "Connector readiness is observational. Live sync requires platform permissions "
+            "and authorized bridges. Simulated connectors are test-only."
+        ),
+    }
+
+
+def monitoring_sync_handler(body: dict[str, Any] | None = None, store: VaultStore | None = None) -> dict[str, Any]:
+    body = body or {}
+    # Public API never enables simulated connectors (production isolation).
+    if str(body.get("connector_id") or "") == "simulated" or bool(body.get("allow_simulated")):
+        return {
+            "ok": False,
+            "status": "rejected",
+            "errors": ["simulated_connector_forbidden_via_public_api"],
+            "disclaimer": (
+                "Simulated monitoring connectors are test-only and cannot be invoked through the public API."
+            ),
+        }
+    connector_id = body.get("connector_id")
+    ctx = dict(body.get("context") or {})
+    for banned in ("token", "access_token", "refresh_token", "password", "secret", "api_key"):
+        ctx.pop(banned, None)
+    bridge = _monitoring(store)
+    if connector_id:
+        return bridge.sync_connector(
+            str(connector_id),
+            patient_id=str(body.get("patient_id") or "default-patient"),
+            context=ctx,
+            allow_simulated=False,
+            run_guardian=bool(body.get("run_guardian", True)),
+        )
+    return bridge.sync_all(
+        patient_id=str(body.get("patient_id") or "default-patient"),
+        context=ctx,
+        allow_simulated=False,
+    )
+
+
+def monitoring_evaluate_handler(
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    return _monitoring(store).evaluate(
+        patient_id=str(body.get("patient_id") or "default-patient"),
+        trigger=str(body.get("trigger") or "api_monitoring_evaluate"),
+    )
+
+
+def monitoring_scheduler_tick_handler(
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    ctx = dict(body.get("context") or {})
+    for banned in ("token", "access_token", "refresh_token", "password", "secret", "api_key"):
+        ctx.pop(banned, None)
+    return _monitoring(store).run_scheduled_sync(
+        patient_id=str(body.get("patient_id") or "default-patient"),
+        context=ctx,
+        force=bool(body.get("force")),
     )

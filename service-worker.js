@@ -1,13 +1,14 @@
 /**
- * HC-301 — Health Guardian service worker (PWA foundation).
+ * HC-301/302 — Health Guardian + Continuous Monitoring service worker (PWA foundation).
  *
  * Capability notes (honest limits):
  * - Caches the offline app shell only. Never caches vault_storage clinical blobs or API secrets.
  * - Periodic Background Sync / push are best-effort; many mobile browsers suspend PWAs.
  * - showNotification runs only when Notification.permission === 'granted'.
- * - Never sends caregiver SMS/email/push off-device in HC-301.
+ * - Never sends caregiver SMS/email/push off-device in HC-302.
  * - Manufacturer CGM/device alarms must remain the primary safety net.
  * - Continuous unrestricted background execution is NOT guaranteed on iOS/Android browsers.
+ * - MONITORING_SYNC nudges open clients only; SW does not invent LIVE device readings.
  */
 
 const CACHE_NAME = "hc-guardian-v1";
@@ -39,6 +40,7 @@ const APP_SHELL = [
   "./js/health_vault/baseline_engine.js",
   "./js/health_vault/cgm_continuity.js",
   "./js/health_vault/health_guardian.js",
+  "./js/health_vault/continuous_monitoring.js",
   "./js/health_vault/ui.js",
 ];
 
@@ -118,6 +120,7 @@ self.addEventListener("fetch", (event) => {
 /**
  * Message protocol:
  * - { type: 'GUARDIAN_EVAL' } → ask open clients to run HCHealthGuardian.refresh
+ * - { type: 'MONITORING_SYNC' } → ask open clients to refresh HCContinuousMonitoring status
  * - { type: 'SKIP' } → no-op acknowledge (used to suppress noisy evals)
  */
 self.addEventListener("message", (event) => {
@@ -127,6 +130,9 @@ self.addEventListener("message", (event) => {
   }
   if (data.type === "GUARDIAN_EVAL") {
     event.waitUntil(notifyClientsToEvaluate(data.reason || "sw_message"));
+  }
+  if (data.type === "MONITORING_SYNC") {
+    event.waitUntil(notifyClientsMonitoringSync(data.reason || "sw_message"));
   }
 });
 
@@ -139,6 +145,17 @@ async function notifyClientsToEvaluate(reason) {
   await maybeNotify(
     "Health Guardian check",
     "Open HealthChecker+ to refresh observational Guardian status. Not a medical alarm."
+  );
+}
+
+async function notifyClientsMonitoringSync(reason) {
+  const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  all.forEach((client) => {
+    client.postMessage({ type: "MONITORING_SYNC", reason: reason });
+  });
+  await maybeNotify(
+    "Monitoring sync reminder",
+    "Open HealthChecker+ to refresh connector status. Background sync is best-effort and not continuous."
   );
 }
 
@@ -161,10 +178,16 @@ self.addEventListener("periodicsync", (event) => {
   if (event.tag === "hc-guardian-eval") {
     event.waitUntil(notifyClientsToEvaluate("periodic_sync"));
   }
+  if (event.tag === "hc-monitoring-sync") {
+    event.waitUntil(notifyClientsMonitoringSync("periodic_monitoring_sync"));
+  }
 });
 
 self.addEventListener("sync", (event) => {
   if (event.tag === "hc-guardian-eval") {
     event.waitUntil(notifyClientsToEvaluate("background_sync"));
+  }
+  if (event.tag === "hc-monitoring-sync") {
+    event.waitUntil(notifyClientsMonitoringSync("background_monitoring_sync"));
   }
 });

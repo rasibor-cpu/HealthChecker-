@@ -39,6 +39,11 @@ CGM_SENSOR_ACTIVATED = "CGMSensorActivated"
 CGM_SENSOR_FAILED = "CGMSensorFailed"
 CGM_INVENTORY_UPDATED = "CGMInventoryUpdated"
 DATA_GAP_DETECTED = "DataGapDetected"
+# HC-302 continuous monitoring events
+MONITORING_OBSERVATION_INGESTED = "MonitoringObservationIngested"
+MONITORING_SYNC_COMPLETED = "MonitoringSyncCompleted"
+MONITORING_SYNC_FAILED = "MonitoringSyncFailed"
+MONITORING_EVALUATED = "MonitoringEvaluated"
 
 
 @dataclass

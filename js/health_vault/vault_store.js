@@ -33,6 +33,11 @@
       data_gaps: [],
       timeline_events: [],
       guardian_status: {},
+      // HC-302 continuous monitoring extensions (additive)
+      observations: [],
+      connector_cursors: {},
+      connector_sync_health: {},
+      monitoring_status: {},
     };
   }
 
@@ -64,6 +69,19 @@
         guardian_status:
           parsed.guardian_status && typeof parsed.guardian_status === "object"
             ? parsed.guardian_status
+            : {},
+        observations: Array.isArray(parsed.observations) ? parsed.observations : [],
+        connector_cursors:
+          parsed.connector_cursors && typeof parsed.connector_cursors === "object"
+            ? parsed.connector_cursors
+            : {},
+        connector_sync_health:
+          parsed.connector_sync_health && typeof parsed.connector_sync_health === "object"
+            ? parsed.connector_sync_health
+            : {},
+        monitoring_status:
+          parsed.monitoring_status && typeof parsed.monitoring_status === "object"
+            ? parsed.monitoring_status
             : {},
       });
     } catch (_) {
@@ -444,9 +462,28 @@
     return loadMeta().guardian_status || {};
   }
 
+  function saveMonitoringStatus(status) {
+    const vault = loadMeta();
+    vault.monitoring_status = status || {};
+    appendAudit(vault, "monitoring_status_updated", {
+      patient_id: status && status.patient_id,
+    });
+    saveMeta(vault);
+    return vault.monitoring_status;
+  }
+
+  function getMonitoringStatus() {
+    return loadMeta().monitoring_status || {};
+  }
+
+  function listObservations() {
+    return (loadMeta().observations || []).slice();
+  }
+
   global.HCHealthVault = {
     META_KEY,
     loadMeta,
+    emptyVault,
     storeDocument,
     listDocuments,
     listMeasurements,
@@ -459,7 +496,6 @@
     getBlob,
     sha256Hex,
     verifyIntegrity,
-    emptyVault,
     listAlerts,
     saveAlerts,
     upsertAlert,
@@ -477,5 +513,8 @@
     appendTimelineEvent,
     saveGuardianStatus,
     getGuardianStatus,
+    saveMonitoringStatus,
+    getMonitoringStatus,
+    listObservations,
   };
 })(typeof window !== "undefined" ? window : globalThis);

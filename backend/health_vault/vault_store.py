@@ -49,6 +49,13 @@ class VaultStore:
             "timeline_events": [],
             "guardian_status": {},
             "guardian_audits": [],
+            # HC-302 continuous monitoring extensions (additive)
+            "observations": [],
+            "connector_cursors": {},
+            "connector_sync_health": {},
+            "monitoring_status": {},
+            "monitoring_audits": [],
+            "monitoring_scheduler": {},
         }
 
     def _read_index(self) -> dict[str, Any]:
@@ -467,3 +474,174 @@ class VaultStore:
 
     def list_guardian_audits(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("guardian_audits") or [])
+
+    # --- HC-302 continuous monitoring persistence ---
+
+    def list_observations(self) -> list[dict[str, Any]]:
+        return list(self._read_index().get("observations") or [])
+
+    def get_observation_by_fingerprint(
+        self,
+        fingerprint: str,
+        patient_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if not fingerprint:
+            return None
+        for row in self.list_observations():
+            if row.get("fingerprint") != fingerprint:
+                continue
+            if patient_id is not None and str(row.get("patient_id") or "default-patient") != patient_id:
+                continue
+            return dict(row)
+        return None
+
+    def upsert_observation(self, observation: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        rows = list(data.get("observations") or [])
+        oid = str(observation.get("observation_id") or uuid4())
+        row = dict(observation)
+        row["observation_id"] = oid
+        fp = row.get("fingerprint")
+        for i, existing in enumerate(rows):
+            if existing.get("observation_id") == oid or (
+                fp and existing.get("fingerprint") == fp
+            ):
+                rows[i] = row
+                data["observations"] = rows
+                # Audit without clinical values
+                self._audit(
+                    data,
+                    "observation_upserted",
+                    {
+                        "observation_id": oid,
+                        "metric_type": row.get("metric_type"),
+                        "acquisition_mode": row.get("acquisition_mode"),
+                        "fingerprint": fp,
+                    },
+                )
+                self._write_index(data)
+                return row
+        rows.append(row)
+        data["observations"] = rows
+        self._audit(
+            data,
+            "observation_upserted",
+            {
+                "observation_id": oid,
+                "metric_type": row.get("metric_type"),
+                "acquisition_mode": row.get("acquisition_mode"),
+                "fingerprint": fp,
+            },
+        )
+        self._write_index(data)
+        return row
+
+    def save_connector_cursor(self, connector_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        cursors = dict(data.get("connector_cursors") or {})
+        key = str(connector_id)
+        patient_id = str((payload or {}).get("patient_id") or "default-patient")
+        # Nest by connector then patient for multi-patient safety
+        bucket = dict(cursors.get(key) or {})
+        if not isinstance(bucket, dict):
+            bucket = {}
+        bucket[patient_id] = dict(payload or {})
+        cursors[key] = bucket
+        data["connector_cursors"] = cursors
+        self._audit(data, "connector_cursor_saved", {"connector_id": key, "patient_id": patient_id})
+        self._write_index(data)
+        return bucket[patient_id]
+
+    def get_connector_cursor(
+        self, connector_id: str, patient_id: str = "default-patient"
+    ) -> dict[str, Any] | None:
+        cursors = self._read_index().get("connector_cursors") or {}
+        bucket = cursors.get(str(connector_id)) or {}
+        if isinstance(bucket, dict) and patient_id in bucket:
+            return dict(bucket[patient_id])
+        # Legacy flat cursor shape
+        if isinstance(bucket, dict) and bucket.get("cursor") is not None and bucket.get("patient_id") == patient_id:
+            return dict(bucket)
+        return None
+
+    def save_connector_sync_health(self, payload: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        health = dict(data.get("connector_sync_health") or {})
+        cid = str((payload or {}).get("connector_id") or "unknown")
+        patient_id = str((payload or {}).get("patient_id") or "default-patient")
+        bucket = dict(health.get(cid) or {})
+        bucket[patient_id] = dict(payload or {})
+        health[cid] = bucket
+        data["connector_sync_health"] = health
+        self._audit(
+            data,
+            "connector_sync_health_saved",
+            {"connector_id": cid, "patient_id": patient_id, "status": (payload or {}).get("status")},
+        )
+        self._write_index(data)
+        return bucket[patient_id]
+
+    def list_connector_sync_health(self) -> list[dict[str, Any]]:
+        health = self._read_index().get("connector_sync_health") or {}
+        rows: list[dict[str, Any]] = []
+        if not isinstance(health, dict):
+            return rows
+        for cid, bucket in health.items():
+            if isinstance(bucket, dict) and any(
+                isinstance(v, dict) and ("status" in v or "cursor" in v or "updated_at" in v)
+                for v in bucket.values()
+            ):
+                # patient-nested
+                for pid, row in bucket.items():
+                    if isinstance(row, dict):
+                        item = dict(row)
+                        item.setdefault("connector_id", cid)
+                        item.setdefault("patient_id", pid)
+                        rows.append(item)
+            elif isinstance(bucket, dict):
+                item = dict(bucket)
+                item.setdefault("connector_id", cid)
+                rows.append(item)
+        return rows
+
+    def save_monitoring_status(self, status: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        data["monitoring_status"] = dict(status or {})
+        self._audit(
+            data,
+            "monitoring_status_updated",
+            {"patient_id": (status or {}).get("patient_id")},
+        )
+        self._write_index(data)
+        return data["monitoring_status"]
+
+    def get_monitoring_status(self) -> dict[str, Any]:
+        return dict(self._read_index().get("monitoring_status") or {})
+
+    def append_monitoring_audit(self, entry: dict[str, Any]) -> dict[str, Any]:
+        data = self._read_index()
+        row = dict(entry or {})
+        row.setdefault("id", str(uuid4()))
+        data.setdefault("monitoring_audits", []).append(row)
+        self._audit(data, "monitoring_audit_appended", {"audit_id": row.get("id")})
+        self._write_index(data)
+        return row
+
+    def save_monitoring_scheduler_state(
+        self, patient_id: str, state: dict[str, Any]
+    ) -> dict[str, Any]:
+        data = self._read_index()
+        bucket = dict(data.get("monitoring_scheduler") or {})
+        pid = str(patient_id or "default-patient")
+        row = dict(state or {})
+        row["patient_id"] = pid
+        bucket[pid] = row
+        data["monitoring_scheduler"] = bucket
+        self._audit(data, "monitoring_scheduler_updated", {"patient_id": pid, "status": row.get("status")})
+        self._write_index(data)
+        return row
+
+    def get_monitoring_scheduler_state(self, patient_id: str = "default-patient") -> dict[str, Any]:
+        bucket = self._read_index().get("monitoring_scheduler") or {}
+        row = bucket.get(str(patient_id or "default-patient"))
+        return dict(row) if isinstance(row, dict) else {}

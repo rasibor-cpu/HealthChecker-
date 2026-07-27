@@ -1,0 +1,55 @@
+{
+  "schema_version": "hc.monitoring_config.v1",
+  "phase": "HC-302",
+  "disclaimer": "Continuous monitoring foundation is observational decision support only. Not a diagnosis. Not a medical device claim. Does not replace manufacturer alarms, clinician care, or emergency services.",
+  "freshness_windows_minutes": {
+    "heart_rate": 30,
+    "resting_hr": 1440,
+    "oxygen_saturation": 60,
+    "spo2": 60,
+    "glucose": 20,
+    "systolic_bp": 10080,
+    "diastolic_bp": 10080,
+    "steps": 180,
+    "sleep_duration": 2160,
+    "weight": 10080,
+    "default": 360
+  },
+  "stale_escalation_multiplier": 3,
+  "scheduler": {
+    "default_interval_seconds": 900,
+    "min_interval_seconds": 300,
+    "max_interval_seconds": 86400,
+    "max_backoff_seconds": 3600,
+    "busy_loop_forbidden": true,
+    "browser_pwa_continuous_guaranteed": false
+  },
+  "connectors": {
+    "health_connect": {
+      "enabled": true,
+      "live_available": false,
+      "requires_android_health_connect": true,
+      "requires_permissions": true,
+      "bp_continuous": false,
+      "ecg_continuous": false,
+      "note": "BP and ECG generally require explicit user-initiated supported measurements."
+    },
+    "libre": {
+      "enabled": true,
+      "live_available": false,
+      "authorized_live_path": null,
+      "file_import_supported": true,
+      "note": "Live Libre API is UNAVAILABLE until an authorized integration path is configured. File import remains supported and must not be labeled LIVE."
+    },
+    "simulated": {
+      "enabled": false,
+      "production_forbidden": true,
+      "test_only": true
+    }
+  },
+  "privacy": {
+    "log_private_values": false,
+    "log_numeric_values": false,
+    "redact_source_record_ids_in_logs": true
+  }
+}

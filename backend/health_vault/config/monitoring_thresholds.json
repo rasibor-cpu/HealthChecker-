@@ -1,0 +1,115 @@
+{
+  "schema_version": "hc.monitoring_thresholds.v1",
+  "phase": "HC-302",
+  "disclaimer": "Configurable observational thresholds — not personalized medical conclusions. Require clinician review before personal care planning. Overlapping absolute vitals reuse HC-301 AlertEngine rule_ids to prevent duplicate alerts.",
+  "rules": [
+    {
+      "rule_id": "mon_hr_high",
+      "metric": "heart_rate",
+      "op": "gt",
+      "value": 130,
+      "severity": "warning",
+      "title": "Elevated heart rate",
+      "message": "Heart rate reading is above the configured caution threshold. Observational only — if you feel unwell, seek appropriate care.",
+      "category": "heart_rate"
+    },
+    {
+      "rule_id": "mon_hr_low",
+      "metric": "heart_rate",
+      "op": "lt",
+      "value": 40,
+      "severity": "urgent",
+      "title": "Low heart rate",
+      "message": "Heart rate reading is below the configured urgent threshold. Observational only — seek urgent medical help if symptomatic.",
+      "category": "heart_rate"
+    },
+    {
+      "rule_id": "low_oxygen_saturation",
+      "metric": "oxygen_saturation",
+      "op": "lte",
+      "value": 92,
+      "severity": "urgent",
+      "title": "Low oxygen saturation",
+      "message": "SpO₂ reading is at or below the configured urgent threshold. Observational only — seek urgent care if breathing is difficult. Does not replace clinical pulse oximetry.",
+      "category": "respiratory"
+    },
+    {
+      "rule_id": "glucose_high",
+      "metric": "glucose",
+      "op": "gte",
+      "value": 250,
+      "severity": "warning",
+      "title": "High glucose",
+      "message": "Glucose reading is at or above the configured caution threshold. Observational only — follow your care plan and manufacturer CGM alarms. No dosing advice is provided.",
+      "category": "glucose"
+    },
+    {
+      "rule_id": "glucose_low",
+      "metric": "glucose",
+      "op": "lte",
+      "value": 70,
+      "severity": "urgent",
+      "title": "Low glucose",
+      "message": "Glucose reading is at or below the configured urgent threshold. Observational only — follow your clinician-approved plan and seek emergency help if severe symptoms occur. No medication instructions are provided.",
+      "category": "glucose",
+      "emergency_routing": true
+    },
+    {
+      "rule_id": "glucose_very_low",
+      "metric": "glucose",
+      "op": "lte",
+      "value": 54,
+      "severity": "critical",
+      "title": "Very low glucose",
+      "message": "Glucose reading is at or below the configured emergency-routing threshold. Observational only — seek emergency medical assistance if the person cannot treat themselves. This is not a diagnosis and provides no dosing instructions.",
+      "category": "glucose",
+      "emergency_routing": true
+    },
+    {
+      "rule_id": "mon_systolic_high",
+      "metric": "systolic_bp",
+      "op": "gt",
+      "value": 180,
+      "severity": "urgent",
+      "title": "Very high systolic blood pressure",
+      "message": "Systolic BP reading is above the configured urgent threshold. BP is generally measured on demand, not continuously. Seek urgent care if symptomatic. Observational only.",
+      "category": "blood_pressure"
+    },
+    {
+      "rule_id": "mon_diastolic_high",
+      "metric": "diastolic_bp",
+      "op": "gt",
+      "value": 120,
+      "severity": "urgent",
+      "title": "Very high diastolic blood pressure",
+      "message": "Diastolic BP reading is above the configured urgent threshold. Observational only.",
+      "category": "blood_pressure"
+    }
+  ],
+  "trend_rules": [
+    {
+      "rule_id": "glucose_rapid_rise",
+      "metric": "glucose",
+      "window_minutes": 60,
+      "min_points": 3,
+      "min_span_minutes": 10,
+      "delta_gt": 50,
+      "severity": "watch",
+      "title": "Rapidly rising glucose",
+      "message": "Short-term glucose trend shows a rapid rise relative to configured watch criteria. Observational only.",
+      "category": "glucose"
+    },
+    {
+      "rule_id": "mon_hr_rising_fast",
+      "metric": "heart_rate",
+      "window_minutes": 30,
+      "min_points": 3,
+      "min_span_minutes": 5,
+      "delta_gt": 40,
+      "severity": "watch",
+      "title": "Rapid heart-rate rise",
+      "message": "Short-term heart-rate trend shows a rapid rise relative to configured watch criteria. Observational only.",
+      "category": "heart_rate"
+    }
+  ]
+}

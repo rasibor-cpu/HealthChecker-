@@ -335,6 +335,49 @@ class AlertEngine:
             saved = self.store.upsert_alert(alert)
             self._emit("AlertEscalated", saved)
             return saved
+
+        # Material worsening at same severity (urgent/critical): reopen acknowledged alerts
+        # so duplicate suppression cannot hide a worsening condition.
+        prev_evidence = dict(existing.get("evidence") or {})
+        new_evidence = dict(evaluation.get("evidence") or {})
+        material_worsening = False
+        try:
+            if severity in ("urgent", "critical") and "value" in new_evidence and "value" in prev_evidence:
+                old_v = float(prev_evidence["value"])
+                new_v = float(new_evidence["value"])
+                op = str(new_evidence.get("op") or evaluation.get("op") or "")
+                # For low-side rules (lt/lte), lower is worse; for high-side, higher is worse
+                if op in ("lt", "lte"):
+                    material_worsening = new_v < old_v
+                elif op in ("gt", "gte"):
+                    material_worsening = new_v > old_v
+                else:
+                    # Infer from metric heuristics when op missing
+                    metric = str(evaluation.get("metric") or "")
+                    if metric in {"glucose", "heart_rate", "oxygen_saturation"} and severity == "critical":
+                        material_worsening = abs(new_v - old_v) >= 1.0 and (
+                            new_v < old_v if metric in {"glucose", "oxygen_saturation", "heart_rate"} else new_v > old_v
+                        )
+        except (TypeError, ValueError):
+            material_worsening = False
+
+        if material_worsening and alert.get("status") in ("acknowledged", "snoozed"):
+            alert["status"] = "active"
+            alert["acknowledgement_state"] = "none"
+            self._append_audit(
+                alert,
+                now_ts,
+                "reactivated_material_worsening",
+                {
+                    "previous_value": prev_evidence.get("value"),
+                    "new_value": new_evidence.get("value"),
+                    "severity": severity,
+                },
+            )
+            saved = self.store.upsert_alert(alert)
+            self._emit("AlertEscalated", saved)
+            return saved
+
         self._append_audit(
             alert,
             now_ts,
