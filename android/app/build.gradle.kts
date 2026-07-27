@@ -12,7 +12,7 @@ android {
         minSdk = 28
         targetSdk = 35
         versionCode = 1
-        versionName = "hc303a.1.0.0"
+        versionName = "hc303b.1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_CLEARTEXT_LOCAL_DEV", "false")
     }

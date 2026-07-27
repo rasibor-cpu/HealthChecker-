@@ -152,7 +152,11 @@ class CompanionDeliveryService:
                 "errors": [f"observation_count_exceeds_{MAX_OBSERVATIONS_PER_BATCH}"],
             }
 
-        payload_fp = payload_fingerprint(observations, nonce=nonce)
+        payload_fp = payload_fingerprint(
+            observations,
+            nonce=nonce,
+            deletions=body.get("deletions") if isinstance(body.get("deletions"), list) else None,
+        )
         reservation = self.store.reserve_companion_batch(
             batch_id=batch_id,
             nonce=nonce,
@@ -268,7 +272,29 @@ class CompanionDeliveryService:
             row["device"] = safe_meta
             validated.append(row)
 
-        if not validated and rejected:
+        # HC-303B deletion tombstones — never clinical delete; never clinical measurements.
+        deletion_events: list[dict[str, Any]] = []
+        deletions = body.get("deletions")
+        seen_deletion_ids: set[str] = set()
+        if isinstance(deletions, list):
+            for item in deletions[:MAX_OBSERVATIONS_PER_BATCH]:
+                rid = str(item or "").strip()
+                if not rid or len(rid) > MAX_STRING_FIELD_CHARS:
+                    continue
+                if rid in seen_deletion_ids:
+                    continue  # duplicate tombstones are idempotent within the batch
+                seen_deletion_ids.add(rid)
+                deletion_events.append(
+                    {
+                        "source_record_id": rid,
+                        "event_type": "health_connect_record_deleted",
+                        "disposition": "tombstone_only_no_clinical_delete",
+                        "at": now_ts,
+                        "device_id": device.get("device_id"),
+                    }
+                )
+
+        if not validated and rejected and not deletion_events:
             ack = {
                 "ok": False,
                 "status": "rejected",
@@ -289,49 +315,117 @@ class CompanionDeliveryService:
         prior_cursor = self.ingestion.get_cursor("health_connect", patient_id=patient_id)
         proposed_cursor = body.get("next_cursor") or body.get("cursor") or prior_cursor
 
+        if validated:
+            try:
+                ingest = self.ingestion.ingest_observations(
+                    validated,
+                    connector_id="health_connect",
+                    patient_id=patient_id,
+                    allow_simulated=False,
+                    default_tz=body.get("default_tz"),
+                    now=now_ts,
+                )
+            except Exception:
+                fail = {
+                    "ok": False,
+                    "status": "ingest_exception",
+                    "batch_id": batch_id,
+                    "nonce": nonce,
+                    "device_id": device.get("device_id"),
+                    "payload_fp": payload_fp,
+                    "accepted": [],
+                    "rejected": rejected,
+                    "stored": 0,
+                    "skipped": 0,
+                    "errors": ["ingest_failed"],
+                }
+                self.store.save_companion_batch_ack(fail)
+                self.bus.publish(COMPANION_BATCH_REJECTED, redact_companion_log({"batch_id": batch_id}))
+                return fail
+        else:
+            ingest = {
+                "durable_success": True,
+                "stored": 0,
+                "skipped": 0,
+                "errors": [],
+            }
+
+        durable = bool(ingest.get("durable_success"))
+        cursor_advanced = False
+
+        device_upd = dict(device)
+        device_upd["last_seen_at"] = now_ts
+        self.store.upsert_companion_device(device_upd)
+
+        mon = None
+        if int(ingest.get("stored") or 0) > 0:
+            mon = self.bridge.evaluate(patient_id=patient_id, trigger="hc303a_companion_delivery")
+
+        # Persist tombstones/status BEFORE cursor advancement so a failed tombstone
+        # write cannot leave the cursor advanced without a durable tombstone record.
+        prior_status = self.store.get_companion_status(device_id=str(device.get("device_id"))) or {}
+        prior_tombs = list(prior_status.get("deletion_tombstones") or [])
+        prior_ids = {
+            str(t.get("source_record_id"))
+            for t in prior_tombs
+            if isinstance(t, dict) and t.get("source_record_id")
+        }
+        merged_tombs = list(prior_tombs)
+        for ev in deletion_events:
+            rid = str(ev.get("source_record_id") or "")
+            if rid and rid not in prior_ids:
+                merged_tombs.append(ev)
+                prior_ids.add(rid)
+        merged_tombs = merged_tombs[-50:]
+
         try:
-            ingest = self.ingestion.ingest_observations(
-                validated,
-                connector_id="health_connect",
-                patient_id=patient_id,
-                allow_simulated=False,
-                default_tz=body.get("default_tz"),
-                now=now_ts,
+            self.store.save_companion_status(
+                {
+                    "schema_version": "hc.companion_status.v1",
+                    "device_id": device.get("device_id"),
+                    "last_attempt_at": now_ts,
+                    "last_success_at": now_ts if durable else None,
+                    "last_batch_id": batch_id,
+                    "health_connect": body.get("health_connect_status") or {},
+                    "permissions": body.get("permissions") or {},
+                    "workmanager": body.get("workmanager") or {},
+                    "queued_observations": body.get("queued_observations"),
+                    "deletion_tombstones": merged_tombs,
+                    "clinical_history_deleted": False,
+                    "delivery_error": None if durable else (ingest.get("errors") or ["ingest_failed"]),
+                }
             )
         except Exception:
-            # Do not ack success; leave reservation replaceable by failed ack
+            # Fail closed: do not advance cursor when tombstone/status persistence fails.
             fail = {
                 "ok": False,
-                "status": "ingest_exception",
+                "status": "tombstone_persist_failed",
                 "batch_id": batch_id,
                 "nonce": nonce,
                 "device_id": device.get("device_id"),
                 "payload_fp": payload_fp,
                 "accepted": [],
                 "rejected": rejected,
-                "stored": 0,
-                "skipped": 0,
-                "errors": ["ingest_failed"],
+                "stored": ingest.get("stored") or 0,
+                "skipped": ingest.get("skipped") or 0,
+                "errors": ["tombstone_or_status_persist_failed"],
+                "cursor": prior_cursor,
+                "cursor_advanced": False,
+                "monitoring_ran": mon is not None,
             }
             self.store.save_companion_batch_ack(fail)
             self.bus.publish(COMPANION_BATCH_REJECTED, redact_companion_log({"batch_id": batch_id}))
             return fail
 
-        durable = bool(ingest.get("durable_success"))
-        cursor_advanced = False
-        if durable and not rejected:
-            self.ingestion.save_cursor("health_connect", proposed_cursor, patient_id=patient_id)
-            cursor_advanced = True
-
-        # Mark observation keys seen only after durable acceptance
+        # Mark observation keys seen only after durable acceptance AND status persist.
         if durable:
             for row in validated:
                 obs_key = str(row.get("observation_id") or row.get("source_record_id"))
                 self.store.mark_companion_observation_seen(device.get("device_id"), obs_key, batch_id)
 
-        device_upd = dict(device)
-        device_upd["last_seen_at"] = now_ts
-        self.store.upsert_companion_device(device_upd)
+        if durable and not rejected:
+            self.ingestion.save_cursor("health_connect", proposed_cursor, patient_id=patient_id)
+            cursor_advanced = True
 
         sync_health = {
             "connector_id": "health_connect",
@@ -345,27 +439,10 @@ class CompanionDeliveryService:
             "companion_device_id": device.get("device_id"),
             "batch_id": batch_id,
             "cursor_advanced": cursor_advanced,
+            "deletion_tombstones": len(deletion_events),
         }
         self.ingestion.record_sync_health(sync_health)
 
-        mon = None
-        if int(ingest.get("stored") or 0) > 0:
-            mon = self.bridge.evaluate(patient_id=patient_id, trigger="hc303a_companion_delivery")
-
-        self.store.save_companion_status(
-            {
-                "schema_version": "hc.companion_status.v1",
-                "device_id": device.get("device_id"),
-                "last_attempt_at": now_ts,
-                "last_success_at": now_ts if durable else None,
-                "last_batch_id": batch_id,
-                "health_connect": body.get("health_connect_status") or {},
-                "permissions": body.get("permissions") or {},
-                "workmanager": body.get("workmanager") or {},
-                "queued_observations": body.get("queued_observations"),
-                "delivery_error": None if durable else (ingest.get("errors") or ["ingest_failed"]),
-            }
-        )
         if durable:
             device_upd["last_success_at"] = now_ts
             self.store.upsert_companion_device(device_upd)
@@ -387,10 +464,12 @@ class CompanionDeliveryService:
             "errors": ingest.get("errors") or [],
             "cursor": proposed_cursor if cursor_advanced else prior_cursor,
             "cursor_advanced": cursor_advanced,
+            "deletion_tombstones": len(deletion_events),
             "monitoring_ran": mon is not None,
             "disclaimer": (
                 "Observational companion delivery only. Not a diagnosis. "
-                "Blood pressure is not continuously measured. ECG is unsupported in HC-303A."
+                "Blood pressure is not continuously measured. ECG is unsupported in HC-303A. "
+                "Health Connect deletions are tombstoned only; clinical history is not physically erased."
             ),
         }
         self.store.save_companion_batch_ack(ack)

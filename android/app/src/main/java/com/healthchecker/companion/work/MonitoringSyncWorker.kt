@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
  * Unique periodic WorkManager sync.
  * Bounded exponential backoff. Does not claim exact or uninterrupted execution.
  * Android enforces a minimum periodic interval of 15 minutes.
+ * Shares SyncMutex with manual sync to prevent overlap.
  */
 class MonitoringSyncWorker(
     appContext: Context,
@@ -33,11 +34,17 @@ class MonitoringSyncWorker(
         val prefs = SecurePrefs(applicationContext)
         val now = Instant.now().toString()
         prefs.setLastAttempt(now)
+        val lease = prefs.syncMutex.tryAcquire(OWNER)
+        if (!lease.acquired) {
+            prefs.setLastError(lease.reason)
+            SafeLog.i("worker_skip reason=" + lease.reason)
+            return Result.success() // honest skip — not a crash; do not claim sync success timestamp
+        }
         return try {
             val capability = HealthConnectCapability(applicationContext).report()
             if (capability.availability != HealthConnectAvailability.READY) {
                 prefs.setLastError(capability.message)
-                return Result.success() // not a retryable worker crash
+                return Result.success()
             }
             if (capability.permissionsMissing.isNotEmpty()) {
                 prefs.setLastError("permission_required")
@@ -45,13 +52,28 @@ class MonitoringSyncWorker(
             }
 
             val reader = HealthConnectReader(applicationContext, prefs)
-            val fetch = reader.fetchNew()
+            val pendingLoad = prefs.loadPendingBatch()
+            if (pendingLoad is SecurePrefs.PendingBatchLoad.Corrupt) {
+                prefs.setLastError("pending_batch_corrupt")
+                return Result.failure()
+            }
+            val pending = (pendingLoad as? SecurePrefs.PendingBatchLoad.Loaded)?.batch
+            // Frozen pending identity is reused unchanged; new HC readings stay in HC until after ack.
+            val fetch = if (pending != null) {
+                HealthConnectReader.FetchResult(
+                    observations = pending.observations(),
+                    nextChangesToken = pending.nextChangesToken,
+                    deletedRecordIds = pending.deletedRecordIds()
+                )
+            } else {
+                reader.fetchNew()
+            }
             prefs.setQueuedCount(fetch.observations.size)
             if (fetch.permissionRequired) {
                 prefs.setLastError("permission_required")
                 return Result.success()
             }
-            if (fetch.error != null && fetch.observations.isEmpty()) {
+            if (fetch.error != null && fetch.observations.isEmpty() && fetch.deletedRecordIds.isEmpty() && pending == null) {
                 prefs.setLastError(fetch.error)
                 return Result.retry()
             }
@@ -70,7 +92,8 @@ class MonitoringSyncWorker(
                     .put("unique_name", UNIQUE_NAME)
                     .put("overlap_prevented", true)
                     .put("exact_timing_guaranteed", false),
-                queued = fetch.observations.size
+                queued = fetch.observations.size,
+                deletedRecordIds = fetch.deletedRecordIds
             )
             if (ack.ok && ack.cursorAdvanced) {
                 reader.acknowledgeCursor(ack.nextCursorToken ?: fetch.nextChangesToken)
@@ -79,11 +102,9 @@ class MonitoringSyncWorker(
                 prefs.setQueuedCount(0)
                 Result.success()
             } else if (ack.status == "unauthorized" || ack.status == "revoked") {
-                // Permanent auth failures must not retry forever
                 prefs.setLastError(ack.status)
                 Result.failure()
             } else if (ack.ok) {
-                // Accepted but cursor not advanced (partial) — retry later without claiming success cursor
                 prefs.setLastError(ack.error ?: "partial_no_cursor")
                 Result.retry()
             } else {
@@ -94,11 +115,14 @@ class MonitoringSyncWorker(
             SafeLog.e("sync_worker_failed", t)
             prefs.setLastError(t.javaClass.simpleName)
             Result.retry()
+        } finally {
+            prefs.syncMutex.release(OWNER)
         }
     }
 
     companion object {
         const val UNIQUE_NAME = "hc303a_monitoring_sync"
+        const val OWNER = "workmanager"
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()

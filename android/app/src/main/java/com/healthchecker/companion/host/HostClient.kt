@@ -3,6 +3,8 @@ package com.healthchecker.companion.host
 import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.healthconnect.CompanionObservation
 import com.healthchecker.companion.secure.SecurePrefs
+import com.healthchecker.companion.sync.PendingBatch
+import com.healthchecker.companion.sync.PendingBatchAck
 import com.healthchecker.companion.util.SafeLog
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -11,12 +13,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
- * Authenticated delivery client for HC-303A host endpoints.
+ * Authenticated delivery client for HC-303A/B host endpoints.
  * TLS required unless debug local-dev cleartext is explicitly enabled.
+ * Reuses persisted batch identity across retries until durable acknowledgement.
+ * New Health Connect readings are not merged into a frozen pending batch; they remain
+ * unread in Health Connect until the pending identity is cleared and a subsequent fetch runs.
  */
 class HostClient(
     private val prefs: SecurePrefs,
@@ -29,7 +33,8 @@ class HostClient(
         val status: String,
         val cursorAdvanced: Boolean,
         val nextCursorToken: String?,
-        val error: String?
+        val error: String?,
+        val ackBatchId: String? = null
     )
 
     fun confirmPairing(hostUrl: String, pairCode: String, deviceLabel: String): String? {
@@ -64,26 +69,41 @@ class HostClient(
         healthConnectStatus: JSONObject,
         permissions: JSONObject,
         workmanager: JSONObject,
-        queued: Int
+        queued: Int,
+        deletedRecordIds: List<String> = emptyList()
     ): DeliveryAck {
-        val host = prefs.getHostUrl() ?: return DeliveryAck(false, "no_host", false, null, "host_url_missing")
-        val token = prefs.getDeviceToken() ?: return DeliveryAck(false, "unauthorized", false, null, "not_paired")
-        assertTlsOrLocalDev(host)
-
-        val batchId = UUID.randomUUID().toString()
-        val nonce = UUID.randomUUID().toString()
-        val arr = JSONArray()
-        observations.forEach { obs ->
-            val o = JSONObject()
-            obs.toMap().forEach { (k, v) -> o.put(k, v ?: JSONObject.NULL) }
-            arr.put(o)
+        val host = prefs.getHostUrl()
+        val token = prefs.getDeviceToken()
+        val gate = ProductionConfigGate.validateDeliveryConfig(host, token)
+        if (!gate.ok) {
+            return DeliveryAck(false, gate.error ?: "config_gate", false, null, gate.error)
         }
+        assertTlsOrLocalDev(host!!)
+
+        val pending = when (val load = prefs.loadPendingBatch()) {
+            is SecurePrefs.PendingBatchLoad.Corrupt -> {
+                SafeLog.w("pending_batch_corrupt")
+                return DeliveryAck(false, "pending_batch_corrupt", false, null, "pending_batch_corrupt")
+            }
+            is SecurePrefs.PendingBatchLoad.Loaded -> load.batch
+            is SecurePrefs.PendingBatchLoad.Empty -> PendingBatch.create(
+                observations = observations,
+                nextChangesToken = nextChangesToken,
+                deletedRecordIds = deletedRecordIds
+            ).also { prefs.setPendingBatch(it) }
+        }
+
+        val arr = JSONArray(pending.observationsJson)
+        val deletions = JSONArray()
+        pending.deletedRecordIds().forEach { deletions.put(it) }
+
         val body = JSONObject()
-            .put("batch_id", batchId)
-            .put("nonce", nonce)
+            .put("batch_id", pending.batchId)
+            .put("nonce", pending.nonce)
             .put("sent_at", Instant.now().toString())
             .put("observations", arr)
-            .put("next_cursor", JSONObject().put("changes_token", nextChangesToken ?: JSONObject.NULL))
+            .put("deletions", deletions)
+            .put("next_cursor", JSONObject().put("changes_token", pending.nextChangesToken ?: JSONObject.NULL))
             .put("health_connect_status", healthConnectStatus)
             .put("permissions", permissions)
             .put("workmanager", workmanager)
@@ -97,34 +117,52 @@ class HostClient(
             .applyLocalDevHeader(host)
             .build()
 
-        client.newCall(req).execute().use { resp ->
-            val text = resp.body?.string().orEmpty()
-            SafeLog.i("deliver http=" + resp.code + " bytes=" + text.length)
-            val json = runCatching { JSONObject(text) }.getOrElse {
-                return DeliveryAck(false, "malformed_response", false, null, "bad_json")
+        return try {
+            client.newCall(req).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                // Never log request/response bodies — length only.
+                SafeLog.i("deliver http=" + resp.code + " bytes=" + text.length)
+                val json = runCatching { JSONObject(text) }.getOrElse {
+                    return DeliveryAck(false, "malformed_response", false, null, "bad_json")
+                }
+                val status = json.optString("status")
+                val ok = json.optBoolean("ok") || status == "duplicate_ack"
+                val advanced = json.optBoolean("cursor_advanced")
+                val ackBatchId = json.optString("batch_id").ifBlank { null }
+                val cursorObj = json.optJSONObject("cursor")
+                val tokenOut = cursorObj?.optString("changes_token")
+                if (PendingBatchAck.shouldClearPending(
+                        pendingBatchId = pending.batchId,
+                        ackOk = ok,
+                        cursorAdvanced = advanced,
+                        ackBatchId = ackBatchId,
+                        status = status
+                    )
+                ) {
+                    prefs.setPendingBatch(null)
+                }
+                DeliveryAck(
+                    ok = ok,
+                    status = status,
+                    cursorAdvanced = advanced && ackBatchId == pending.batchId,
+                    nextCursorToken = if (advanced && ackBatchId == pending.batchId) tokenOut else null,
+                    error = if (ok) null else json.optJSONArray("errors")?.join(", "),
+                    ackBatchId = ackBatchId
+                )
             }
-            val ok = json.optBoolean("ok") || json.optString("status") == "duplicate_ack"
-            val advanced = json.optBoolean("cursor_advanced")
-            val cursorObj = json.optJSONObject("cursor")
-            val tokenOut = cursorObj?.optString("changes_token")
-            return DeliveryAck(
-                ok = ok,
-                status = json.optString("status"),
-                cursorAdvanced = advanced,
-                nextCursorToken = if (advanced) tokenOut else null,
-                error = if (ok) null else json.optJSONArray("errors")?.join(", ")
-            )
+        } catch (t: Throwable) {
+            SafeLog.e("deliver_transport_failed", t)
+            DeliveryAck(false, "transport_error", false, null, t.javaClass.simpleName)
         }
     }
 
     private fun assertTlsOrLocalDev(host: String) {
-        val isHttps = host.startsWith("https://", ignoreCase = true)
-        val isLocalHttp = host.startsWith("http://127.") || host.startsWith("http://10.") ||
-            host.startsWith("http://192.168.") || host.startsWith("http://localhost")
-        if (!isHttps) {
-            if (!(BuildConfig.DEBUG && BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV && isLocalHttp)) {
-                throw IllegalStateException("tls_required_outside_local_dev")
-            }
+        val gate = ProductionConfigGate.validateDeliveryConfig(
+            hostUrl = host,
+            deviceToken = prefs.getDeviceToken() ?: "present"
+        )
+        if (!gate.ok && gate.error == "tls_required_outside_local_dev") {
+            throw IllegalStateException("tls_required_outside_local_dev")
         }
     }
 

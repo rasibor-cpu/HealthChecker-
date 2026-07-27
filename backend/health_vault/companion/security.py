@@ -162,7 +162,7 @@ def parse_bearer_authorization(authorization_header: str | None) -> str | None:
     return token
 
 
-def payload_fingerprint(observations: list[Any], *, nonce: str) -> str:
+def payload_fingerprint(observations: list[Any], *, nonce: str, deletions: list[Any] | None = None) -> str:
     """Stable fingerprint of batch contents for nonce/payload mismatch detection."""
     keys: list[str] = []
     for row in observations or []:
@@ -176,7 +176,15 @@ def payload_fingerprint(observations: list[Any], *, nonce: str) -> str:
             )
         else:
             keys.append("invalid")
-    material = nonce + "|" + "|".join(sorted(keys)) + f"|count={len(observations or [])}"
+    del_keys = sorted(str(x) for x in (deletions or []) if str(x).strip())
+    material = (
+        nonce
+        + "|"
+        + "|".join(sorted(keys))
+        + f"|count={len(observations or [])}"
+        + "|del="
+        + ",".join(del_keys)
+    )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 

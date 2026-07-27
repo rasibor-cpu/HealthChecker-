@@ -179,13 +179,60 @@ Accepted observations flow through HC-302 `IngestionCoordinator` with `connector
 
 ---
 
-## Remaining work before live activation (HC-303B+)
+## Remaining work before live activation
 
-- Install JDK/Android SDK/Gradle on the build machine and run assemble/lint/unit tests
-- Phone validation checklist above
-- Confirm Samsung→Health Connect record coverage for Robert’s region/device
-- Production TLS termination and LAN bind policy
-- Optional Libre live path remains **out of scope** (not HC-303A)
+- Phone validation checklist above (not started in HC-303B)
+- Confirm Samsung→Health Connect record coverage on Robert’s device/region
+- Production TLS termination and LAN bind policy; set `HC_COMPANION_ADMIN_TOKEN` + `HC_COMPANION_PEPPER`
+- Optional Libre live path remains **out of scope**
+- Full clinical deletion reconciliation remains limited to tombstones (no host clinical history delete)
+
+---
+
+## HC-303B toolchain and build evidence
+
+| Item | Value |
+|------|--------|
+| JDK | Microsoft OpenJDK 17.0.10 (`...\jdk-17.0.10.7-hotspot`) |
+| Android SDK | `%LOCALAPPDATA%\Android\Sdk` |
+| cmdline-tools | 22.0 |
+| build-tools | 35.0.0 |
+| platform | android-35 |
+| platform-tools / adb | 37.0.0 / 1.0.41 |
+| Gradle wrapper | 8.7 (`distributionUrl` HTTPS official) |
+| AGP / Kotlin | 8.5.2 / 1.9.24 |
+| minSdk / compileSdk / targetSdk | 28 / 35 / 35 |
+
+### Reproducible session commands
+
+```powershell
+$env:JAVA_HOME = "C:\Users\Larry\AppData\Local\Programs\Microsoft\jdk-17.0.10.7-hotspot"
+$env:ANDROID_HOME = "C:\Users\Larry\AppData\Local\Android\Sdk"
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:Path = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:Path"
+# android/local.properties -> sdk.dir=C:/Users/Larry/AppData/Local/Android/Sdk  (gitignored)
+cd android
+.\gradlew.bat --version --no-daemon
+.\gradlew.bat testDebugUnitTest --no-daemon
+.\gradlew.bat lintDebug --no-daemon
+.\gradlew.bat assembleDebug --no-daemon
+```
+
+### HC-303B code outcomes
+
+1. **Stable retry identity** — `PendingBatch` persists batch_id/nonce/payload; cleared only after durable ack (or permanent auth failure).
+2. **Manual/worker mutex** — `SyncMutex` lease shared by manual sync and WorkManager; surfaces `sync_already_running`.
+3. **Deletions** — Health Connect deletion IDs delivered as host tombstones; clinical history is **not** deleted.
+4. **Production gate** — `ProductionConfigGate` fails closed for missing host/token and release cleartext.
+
+### Build defects fixed during HC-303B
+
+- `HeartRateRecord.Sample.zoneOffset` unresolved → use record `startZoneOffset` / `zoneOffset`
+- Privacy redactor left Bearer token fragments → strengthened patterns
+- Windows resource merge file lock → cleared locked merge intermediates once
+- AGP compileSdk 35 warning → `android.suppressUnsupportedCompileSdk=35`
+
+LIVE ACTIVATION REMAINS NO-GO.
 
 ---
 
@@ -193,8 +240,8 @@ Accepted observations flow through HC-302 `IngestionCoordinator` with `connector
 
 | Suite | Result |
 |-------|--------|
-| Focused HC-303A / HC-303AR host + static Android contracts | See latest validation run |
-| Android JVM / lint / assembleDebug | **BLOCKED** without JDK/SDK/Gradle |
+| Focused HC-303A/B host + static Android contracts | See latest validation run |
+| Android unit / lint / assembleDebug | Executed on provisioned laptop toolchain (see HC-303B report) |
 
 ### HC-303AR security remediations (foundation)
 

@@ -121,26 +121,28 @@ class HealthConnectReader(
 
         client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
+                // HeartRate Sample has no zoneOffset; use series startZoneOffset.
+                val zone = r.startZoneOffset
                 r.samples.forEachIndexed { idx, sample ->
                     out += ObservationMapper.heartRate(
                         recordId = r.metadata.id + ":$idx",
                         bpm = sample.beatsPerMinute,
                         time = sample.time,
                         dataOrigin = r.metadata.dataOrigin.packageName,
-                        zoneOffset = sample.zoneOffset
+                        zoneOffset = zone
                     )
                 }
             }
         client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
                 out += ObservationMapper.restingHeartRate(
-                    r.metadata.id, r.beatsPerMinute, r.time, r.metadata.dataOrigin.packageName
+                    r.metadata.id, r.beatsPerMinute, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
                 )
             }
         client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
                 out += ObservationMapper.spo2(
-                    r.metadata.id, r.percentage.value, r.time, r.metadata.dataOrigin.packageName
+                    r.metadata.id, r.percentage.value, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
                 )
             }
         client.readRecords(ReadRecordsRequest(BloodPressureRecord::class, timeRangeFilter = filter))
@@ -150,26 +152,27 @@ class HealthConnectReader(
                     r.systolic.inMillimetersOfMercury,
                     r.diastolic.inMillimetersOfMercury,
                     r.time,
-                    r.metadata.dataOrigin.packageName
+                    r.metadata.dataOrigin.packageName,
+                    r.zoneOffset
                 )
             }
         client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
                 out += ObservationMapper.steps(
-                    r.metadata.id, r.count, r.startTime, r.metadata.dataOrigin.packageName
+                    r.metadata.id, r.count, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
                 )
             }
         client.readRecords(ReadRecordsRequest(WeightRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
                 out += ObservationMapper.weightKg(
-                    r.metadata.id, r.weight.inKilograms, r.time, r.metadata.dataOrigin.packageName
+                    r.metadata.id, r.weight.inKilograms, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
                 )
             }
         client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = filter))
             .records.forEach { r ->
                 val hours = java.time.Duration.between(r.startTime, r.endTime).toMinutes() / 60.0
                 out += ObservationMapper.sleepDurationHours(
-                    r.metadata.id, hours, r.startTime, r.metadata.dataOrigin.packageName
+                    r.metadata.id, hours, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
                 )
             }
         // Exercise sessions: map duration minutes as exercise_minutes
@@ -182,7 +185,7 @@ class HealthConnectReader(
                     metricType = "exercise_minutes",
                     value = minutes,
                     unit = "min",
-                    measuredAt = ObservationMapper.instantToIso(r.startTime),
+                    measuredAt = ObservationMapper.instantToIso(r.startTime, r.startZoneOffset),
                     receivedAt = ObservationMapper.instantToIso(Instant.now()),
                     device = mapOf("data_origin" to r.metadata.dataOrigin.packageName)
                 )
@@ -197,17 +200,20 @@ class HealthConnectReader(
                     record.metadata.id + ":$idx",
                     sample.beatsPerMinute,
                     sample.time,
-                    record.metadata.dataOrigin.packageName
+                    record.metadata.dataOrigin.packageName,
+                    record.startZoneOffset
                 )
             }
             is RestingHeartRateRecord -> listOf(
                 ObservationMapper.restingHeartRate(
-                    record.metadata.id, record.beatsPerMinute, record.time, record.metadata.dataOrigin.packageName
+                    record.metadata.id, record.beatsPerMinute, record.time,
+                    record.metadata.dataOrigin.packageName, record.zoneOffset
                 )
             )
             is OxygenSaturationRecord -> listOf(
                 ObservationMapper.spo2(
-                    record.metadata.id, record.percentage.value, record.time, record.metadata.dataOrigin.packageName
+                    record.metadata.id, record.percentage.value, record.time,
+                    record.metadata.dataOrigin.packageName, record.zoneOffset
                 )
             )
             is BloodPressureRecord -> ObservationMapper.bloodPressure(
@@ -215,23 +221,27 @@ class HealthConnectReader(
                 record.systolic.inMillimetersOfMercury,
                 record.diastolic.inMillimetersOfMercury,
                 record.time,
-                record.metadata.dataOrigin.packageName
+                record.metadata.dataOrigin.packageName,
+                record.zoneOffset
             )
             is StepsRecord -> listOf(
                 ObservationMapper.steps(
-                    record.metadata.id, record.count, record.startTime, record.metadata.dataOrigin.packageName
+                    record.metadata.id, record.count, record.startTime,
+                    record.metadata.dataOrigin.packageName, record.startZoneOffset
                 )
             )
             is WeightRecord -> listOf(
                 ObservationMapper.weightKg(
-                    record.metadata.id, record.weight.inKilograms, record.time, record.metadata.dataOrigin.packageName
+                    record.metadata.id, record.weight.inKilograms, record.time,
+                    record.metadata.dataOrigin.packageName, record.zoneOffset
                 )
             )
             is SleepSessionRecord -> {
                 val hours = java.time.Duration.between(record.startTime, record.endTime).toMinutes() / 60.0
                 listOf(
                     ObservationMapper.sleepDurationHours(
-                        record.metadata.id, hours, record.startTime, record.metadata.dataOrigin.packageName
+                        record.metadata.id, hours, record.startTime,
+                        record.metadata.dataOrigin.packageName, record.startZoneOffset
                     )
                 )
             }
@@ -244,7 +254,7 @@ class HealthConnectReader(
                         metricType = "exercise_minutes",
                         value = minutes,
                         unit = "min",
-                        measuredAt = ObservationMapper.instantToIso(record.startTime),
+                        measuredAt = ObservationMapper.instantToIso(record.startTime, record.startZoneOffset),
                         receivedAt = ObservationMapper.instantToIso(Instant.now()),
                         device = mapOf("data_origin" to record.metadata.dataOrigin.packageName)
                     )

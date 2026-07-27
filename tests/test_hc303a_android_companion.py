@@ -609,6 +609,9 @@ def test_android_static_gradle_and_manifest_contracts():
     assert "hc303a_monitoring_sync" in sources
     assert "PeriodicWorkRequestBuilder" in sources
     assert "15, TimeUnit.MINUTES" in sources
+    assert "SyncMutex" in sources
+    assert "PendingBatch" in sources
+    assert "ProductionConfigGate" in sources
     assert "SIMULATED" not in sources or "never SIMULATED" in sources.lower() or "SIMULATED_TEST_ONLY" not in sources
     assert "ecgSupported = false" in sources or "ecgUnsupported" in sources
     assert re.search(r"https?://\d+\.\d+\.\d+\.\d+", sources) is None
@@ -617,14 +620,108 @@ def test_android_static_gradle_and_manifest_contracts():
     assert "Log.d" not in sources or "SafeLog" in sources
     assert "Robert" not in sources
 
+    wrapper_props = (ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.properties").read_text(encoding="utf-8")
+    assert "distributionSha256Sum=" in wrapper_props
+    assert "gradle-8.7-bin.zip" in wrapper_props
+
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "local.properties" in gitignore
     assert "*.jks" in gitignore or "keystore" in gitignore.lower()
 
-    # Document wrapper absence honestly for reviewers
-    assert has_wrapper is False or has_wrapper is True
+    # Document wrapper presence honestly for reviewers
+    assert has_wrapper is True
 
 
-def test_android_no_gradle_wrapper_required_for_static_pass():
-    """Static contracts pass even when gradlew is missing on the laptop."""
-    assert ANDROID_ROOT.is_dir()
+def test_deletion_tombstones_do_not_delete_clinical_history(store: VaultStore):
+    _, token = _pair(store)
+    # First store a clinical observation
+    first = companion_observations_handler(
+        _body(batch_id="with-obs", nonce="n-obs"),
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+    assert first["ok"] is True
+    assert len(store.list_observations()) == 1
+    # Deletion-only batch records tombstone without removing clinical history
+    out = companion_observations_handler(
+        {
+            "batch_id": "del-only",
+            "nonce": "n-del",
+            "sent_at": _now(),
+            "observations": [],
+            "deletions": ["hc-rec-1"],
+            "next_cursor": {"changes_token": "after-del"},
+        },
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+    assert out["ok"] is True
+    assert out["cursor_advanced"] is True
+    assert len(store.list_observations()) == 1  # clinical history preserved
+    status = store.get_companion_status()
+    assert status.get("clinical_history_deleted") is False
+    tombs = status.get("deletion_tombstones") or []
+    assert any(t.get("source_record_id") == "hc-rec-1" for t in tombs)
+
+
+def test_duplicate_deletion_tombstones_are_idempotent(store: VaultStore):
+    device_id, token = _pair(store)
+    body = {
+        "batch_id": "dup-del",
+        "nonce": "n-dup-del",
+        "sent_at": _now(),
+        "observations": [],
+        "deletions": ["rec-x", "rec-x", "rec-x"],
+        "next_cursor": {"changes_token": "tok-dup"},
+    }
+    out = companion_observations_handler(
+        body, authorization="Bearer " + token, store=store, local_dev=True
+    )
+    assert out["ok"] is True
+    status = store.get_companion_status(device_id=device_id)
+    tombs = [t for t in (status.get("deletion_tombstones") or []) if t.get("source_record_id") == "rec-x"]
+    assert len(tombs) == 1
+    # Replay same batch
+    again = companion_observations_handler(
+        body, authorization="Bearer " + token, store=store, local_dev=True
+    )
+    assert again["status"] == "duplicate_ack"
+    status2 = store.get_companion_status(device_id=device_id)
+    tombs2 = [t for t in (status2.get("deletion_tombstones") or []) if t.get("source_record_id") == "rec-x"]
+    assert len(tombs2) == 1
+
+
+def test_failed_tombstone_persist_holds_cursor(store: VaultStore, monkeypatch):
+    _, token = _pair(store)
+
+    def boom(status):
+        raise RuntimeError("disk_full_simulated")
+
+    monkeypatch.setattr(store, "save_companion_status", boom)
+    out = companion_observations_handler(
+        {
+            "batch_id": "tomb-fail",
+            "nonce": "n-tomb-fail",
+            "sent_at": _now(),
+            "observations": [],
+            "deletions": ["gone-1"],
+            "next_cursor": {"changes_token": "must-not-advance"},
+        },
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+    assert out["ok"] is False
+    assert out["status"] == "tombstone_persist_failed"
+    assert out["cursor_advanced"] is False
+
+
+def test_gradle_wrapper_sha256_pinned():
+    props = (ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.properties").read_text(encoding="utf-8")
+    assert "gradle-8.7-bin.zip" in props
+    assert "https://services.gradle.org/distributions/gradle-8.7-bin.zip" in props.replace("\\:", ":")
+    assert "distributionSha256Sum=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d" in props
+    assert (ANDROID_ROOT / "gradlew.bat").is_file()
+    assert (ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.jar").is_file()

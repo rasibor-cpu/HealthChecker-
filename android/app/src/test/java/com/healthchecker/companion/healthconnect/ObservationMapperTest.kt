@@ -42,6 +42,7 @@ class ObservationMapperTest {
     fun safeLogRedactsTokenPatterns() {
         val redacted = PrivacyRedactor.redact("Authorization=Bearer abc.def token=xyz")
         assertTrue(!redacted.contains("abc.def"))
+        assertTrue(!redacted.contains("xyz"))
         assertTrue(redacted.contains("[redacted]"))
     }
 

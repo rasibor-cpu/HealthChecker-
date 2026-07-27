@@ -4,14 +4,23 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.healthchecker.companion.sync.PendingBatch
+import com.healthchecker.companion.sync.SyncMutex
 import com.healthchecker.companion.util.SafeLog
 
 /**
  * Keystore-backed secure preferences for companion credentials and cursors.
- * Never logs token values.
+ * Never logs token values or device identifiers.
  */
 class SecurePrefs(context: Context) {
     private val prefs: SharedPreferences
+    val syncMutex: SyncMutex
+
+    sealed class PendingBatchLoad {
+        data object Empty : PendingBatchLoad()
+        data class Loaded(val batch: PendingBatch) : PendingBatchLoad()
+        data object Corrupt : PendingBatchLoad()
+    }
 
     init {
         val masterKey = MasterKey.Builder(context)
@@ -24,6 +33,7 @@ class SecurePrefs(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
+        syncMutex = SyncMutex(prefs)
     }
 
     fun getHostUrl(): String? = prefs.getString(KEY_HOST, null)
@@ -37,7 +47,7 @@ class SecurePrefs(context: Context) {
             .putString(KEY_DEVICE_ID, deviceId)
             .putString(KEY_TOKEN, token)
             .apply()
-        SafeLog.i("pairing_saved device_id_prefix=" + deviceId.take(8))
+        SafeLog.i("pairing_saved")
     }
 
     fun clearPairing() {
@@ -57,6 +67,27 @@ class SecurePrefs(context: Context) {
     fun setQueuedCount(n: Int) = prefs.edit().putInt(KEY_QUEUED, n).apply()
     fun getQueuedCount(): Int = prefs.getInt(KEY_QUEUED, 0)
 
+    /** Prefer [loadPendingBatch] — corruption is surfaced rather than silently discarded. */
+    fun getPendingBatch(): PendingBatch? {
+        return when (val load = loadPendingBatch()) {
+            is PendingBatchLoad.Loaded -> load.batch
+            else -> null
+        }
+    }
+
+    fun loadPendingBatch(): PendingBatchLoad {
+        val raw = prefs.getString(KEY_PENDING_BATCH, null) ?: return PendingBatchLoad.Empty
+        if (raw.isBlank()) return PendingBatchLoad.Empty
+        val parsed = PendingBatch.fromJson(raw)
+        return if (parsed == null) PendingBatchLoad.Corrupt else PendingBatchLoad.Loaded(parsed)
+    }
+
+    fun setPendingBatch(batch: PendingBatch?) {
+        val editor = prefs.edit()
+        if (batch == null) editor.remove(KEY_PENDING_BATCH) else editor.putString(KEY_PENDING_BATCH, batch.toJson())
+        editor.commit()
+    }
+
     companion object {
         private const val KEY_HOST = "host_url"
         private const val KEY_DEVICE_ID = "device_id"
@@ -66,5 +97,6 @@ class SecurePrefs(context: Context) {
         private const val KEY_LAST_SUCCESS = "last_success_at"
         private const val KEY_LAST_ERROR = "last_error"
         private const val KEY_QUEUED = "queued_count"
+        private const val KEY_PENDING_BATCH = "pending_batch_json"
     }
 }
