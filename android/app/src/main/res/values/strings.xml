@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HealthChecker+ Companion</string>
+    <string name="status_title">Companion status</string>
+    <string name="disclaimer">Observational companion only — not a diagnosis. BP is not continuous. ECG unsupported in HC-303A. Background WorkManager is best-effort.</string>
+    <string name="permissions_rationale">HealthChecker+ reads selected Health Connect records you authorize and delivers them to your local Health Vault host. No medication advice is provided.</string>
+</resources>

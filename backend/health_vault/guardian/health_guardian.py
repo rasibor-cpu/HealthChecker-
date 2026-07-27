@@ -24,16 +24,18 @@ OVERALL_STATES = (
 )
 
 KNOWN_LIMITATIONS = [
-    "HC-302 adds a continuous-monitoring foundation (connectors, ingestion, freshness, status). Live Health Connect / Libre reads still require authorized platform bridges.",
-    "Samsung Health / Galaxy Watch / Libre file support remains upload/parser and manual registry based unless a live bridge is configured.",
-    "Health Connect live reads are not available in the Python vault process without an Android companion bridge.",
+    "HC-303A adds an Android companion foundation for Health Connect delivery; live activation requires phone install and permission validation.",
+    "HC-302 continuous-monitoring foundation remains the host ingestion boundary.",
+    "Samsung Health / Galaxy Watch data is available only when written into Health Connect and authorized by the user.",
+    "Health Connect live reads are not available in the Python vault process without the Android companion.",
     "Galaxy Watch does not measure glucose.",
     "Samsung Watch blood pressure is user-initiated, not continuous.",
-    "ECG is not continuously collected.",
+    "ECG is not supported as continuous Health Connect data in HC-303A.",
     "A PWA cannot guarantee unrestricted background execution.",
+    "WorkManager periodic sync is best-effort (15+ minute minimum) and not continuous.",
     "Manufacturer CGM and device alarms must remain enabled.",
     "HealthChecker+ does not replace medical care or emergency services.",
-    "No caregiver/SMS/email/emergency notifications are sent off-device in HC-302.",
+    "No caregiver/SMS/email/emergency notifications are sent off-device in HC-303A.",
     "Production sync never silently falls back to simulated readings.",
 ]
 

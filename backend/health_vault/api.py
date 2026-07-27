@@ -16,6 +16,12 @@ Endpoints:
   POST /api/monitoring/sync
   POST /api/monitoring/evaluate
   POST /api/monitoring/scheduler/tick
+  POST /api/companion/pair/start
+  POST /api/companion/pair/confirm
+  GET  /api/companion/devices
+  DELETE /api/companion/devices/{device_id}
+  POST /api/companion/observations
+  GET  /api/companion/status
 """
 
 from __future__ import annotations
@@ -95,7 +101,7 @@ def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> 
 def create_health_vault_app(store: VaultStore | None = None):
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
-        from fastapi import FastAPI, File, Form, UploadFile
+        from fastapi import FastAPI, File, Form, Request, UploadFile
         from fastapi.responses import JSONResponse
     except Exception:
         return None
@@ -344,6 +350,109 @@ def create_health_vault_app(store: VaultStore | None = None):
     async def monitoring_scheduler_tick(body: dict[str, Any] | None = None) -> JSONResponse:
         result = monitoring_scheduler_tick_handler(body or {}, store=vault)
         return JSONResponse(_sanitize_value(result))
+
+    # --- HC-303A Android companion ---
+
+    @app.post("/api/companion/pair/start")
+    async def companion_pair_start(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        admin = request.headers.get("X-HC-Companion-Admin")
+        result = companion_pair_start_handler(body or {}, store=vault, admin_header=admin)
+        code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
+        return JSONResponse(_sanitize_value(result), status_code=code)
+
+    @app.post("/api/companion/pair/confirm")
+    async def companion_pair_confirm(body: dict[str, Any] | None = None) -> JSONResponse:
+        result = companion_pair_confirm_handler(body or {}, store=vault)
+        return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
+
+    @app.get("/api/companion/devices")
+    def companion_devices(request: Request, include_revoked: bool = False) -> JSONResponse:
+        admin = request.headers.get("X-HC-Companion-Admin")
+        result = companion_devices_handler(
+            include_revoked=include_revoked, store=vault, admin_header=admin
+        )
+        code = 200 if result.get("ok", True) and result.get("status") != "admin_required" else 403
+        return JSONResponse(_sanitize_value(result), status_code=code)
+
+    @app.delete("/api/companion/devices/{device_id}")
+    async def companion_revoke(device_id: str, request: Request) -> JSONResponse:
+        admin = request.headers.get("X-HC-Companion-Admin")
+        result = companion_revoke_handler(device_id, store=vault, admin_header=admin)
+        code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
+        return JSONResponse(_sanitize_value(result), status_code=code)
+
+    @app.post("/api/companion/observations")
+    async def companion_observations(request: Request) -> JSONResponse:
+        # Fail closed on duplicated Authorization headers
+        try:
+            auth_values = request.headers.getlist("Authorization")
+        except Exception:
+            auth_values = [request.headers.get("Authorization")] if request.headers.get("Authorization") else []
+        auth_values = [v for v in auth_values if v]
+        if len(auth_values) > 1:
+            return JSONResponse(
+                {"ok": False, "status": "unauthorized", "errors": ["duplicate_authorization_header"]},
+                status_code=401,
+            )
+        # Bound body size before JSON parse when Content-Length is present
+        from backend.health_vault.companion.security import MAX_PAYLOAD_BYTES
+
+        cl_raw = request.headers.get("content-length")
+        content_length = None
+        if cl_raw is not None:
+            try:
+                content_length = int(cl_raw)
+            except ValueError:
+                return JSONResponse(
+                    {"ok": False, "status": "malformed", "errors": ["invalid_content_length"]},
+                    status_code=400,
+                )
+            if content_length > MAX_PAYLOAD_BYTES:
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "status": "payload_too_large",
+                        "errors": [f"payload_exceeds_{MAX_PAYLOAD_BYTES}_bytes"],
+                    },
+                    status_code=413,
+                )
+        # Credentials must not be accepted via query parameters
+        if request.query_params.get("token") or request.query_params.get("authorization"):
+            return JSONResponse(
+                {"ok": False, "status": "unauthorized", "errors": ["credentials_in_query_rejected"]},
+                status_code=401,
+            )
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                body = {}
+        except Exception:
+            body = {}
+        auth = auth_values[0] if auth_values else None
+        proto = (request.headers.get("x-forwarded-proto") or "").lower()
+        tls_enabled = True if proto == "https" else (False if proto == "http" else None)
+        local_dev = str(request.headers.get("x-hc-local-dev") or "").lower() in {"1", "true", "yes"}
+        result = companion_observations_handler(
+            body,
+            authorization=auth,
+            store=vault,
+            tls_enabled=tls_enabled,
+            local_dev=local_dev,
+            content_length=content_length,
+        )
+        status = 200 if result.get("ok") or result.get("status") == "duplicate_ack" else 400
+        if result.get("status") == "unauthorized":
+            status = 401
+        if result.get("status") == "revoked":
+            status = 403
+        if result.get("status") == "payload_too_large":
+            status = 413
+        return JSONResponse(_sanitize_value(result), status_code=status)
+
+    @app.get("/api/companion/status")
+    def companion_status(request: Request) -> dict[str, Any]:
+        auth = request.headers.get("Authorization")
+        return _sanitize_value(companion_status_handler(store=vault, authorization=auth))
 
     # --- HC-301 Health Guardian ---
 
@@ -673,3 +782,99 @@ def monitoring_scheduler_tick_handler(
         context=ctx,
         force=bool(body.get("force")),
     )
+
+
+# --- HC-303A companion handlers ---
+
+
+def _companion_pairing(store: VaultStore | None = None):
+    from backend.health_vault.companion.pairing import CompanionPairingService
+
+    return CompanionPairingService(store=store or VaultStore())
+
+
+def _companion_delivery(store: VaultStore | None = None):
+    from backend.health_vault.companion.delivery import CompanionDeliveryService
+
+    return CompanionDeliveryService(store=store or VaultStore())
+
+
+def companion_pair_start_handler(
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+    admin_header: str | None = None,
+) -> dict[str, Any]:
+    from backend.health_vault.companion.security import companion_admin_authorized
+
+    if not companion_admin_authorized(admin_header):
+        return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]}
+    body = body or {}
+    # patient_id from client is ignored — host binds default-patient only
+    return _companion_pairing(store).start_pairing(display_name=body.get("display_name"))
+
+
+def companion_pair_confirm_handler(
+    body: dict[str, Any] | None = None,
+    store: VaultStore | None = None,
+) -> dict[str, Any]:
+    body = body or {}
+    # Ignore caller-supplied device_id — host always generates identity
+    return _companion_pairing(store).confirm_pairing(
+        pair_code=str(body.get("pair_code") or ""),
+        device_label=body.get("device_label"),
+        platform=str(body.get("platform") or "android"),
+        app_version=body.get("app_version"),
+    )
+
+
+def companion_devices_handler(
+    include_revoked: bool = False,
+    store: VaultStore | None = None,
+    admin_header: str | None = None,
+) -> dict[str, Any]:
+    from backend.health_vault.companion.security import companion_admin_authorized
+
+    if not companion_admin_authorized(admin_header):
+        return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"], "devices": []}
+    return {
+        "ok": True,
+        "devices": _companion_pairing(store).list_devices(include_revoked=include_revoked),
+        "disclaimer": "Device list excludes token secrets. Revoke to invalidate companion access.",
+    }
+
+
+def companion_revoke_handler(
+    device_id: str,
+    store: VaultStore | None = None,
+    admin_header: str | None = None,
+) -> dict[str, Any]:
+    from backend.health_vault.companion.security import companion_admin_authorized
+
+    if not companion_admin_authorized(admin_header):
+        return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]}
+    return _companion_pairing(store).revoke_device(str(device_id))
+
+
+def companion_observations_handler(
+    body: dict[str, Any] | None = None,
+    *,
+    authorization: str | None = None,
+    store: VaultStore | None = None,
+    tls_enabled: bool | None = None,
+    local_dev: bool = False,
+    content_length: int | None = None,
+) -> dict[str, Any]:
+    return _companion_delivery(store).deliver(
+        body or {},
+        authorization=authorization,
+        tls_enabled=tls_enabled,
+        local_dev=local_dev,
+        content_length=content_length,
+    )
+
+
+def companion_status_handler(
+    store: VaultStore | None = None,
+    authorization: str | None = None,
+) -> dict[str, Any]:
+    return _companion_delivery(store).status(authorization=authorization)

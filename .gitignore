@@ -11,3 +11,19 @@ vault_storage/index.tmp
 private_imports/**
 !private_imports/.gitkeep
 !private_imports/README.md
+
+# HC-303A Android local build artifacts / secrets (never commit)
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+keystore.properties
+*.jks
+*.keystore
+vault_storage/.companion_pepper

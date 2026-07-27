@@ -48,15 +48,20 @@ class HealthConnectConnector(DeviceConnector):
 
     def readiness(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         ctx = dict(context or {})
-        # Optional injected platform bridge for future Android companion wiring.
+        # Optional injected platform bridge for in-process/test doubles.
         bridge = ctx.get("platform_bridge")
         if bridge is None:
-            return {
-                "state": "unavailable",
+            # HC-303A: paired Android companion may deliver observations without
+            # an in-process Python bridge; report foundation readiness accordingly.
+            paired = bool(ctx.get("companion_paired"))
+            base = {
+                "state": "permission_required" if paired else "unavailable",
                 "acquisition_mode": "UNAVAILABLE",
                 "permission_required": True,
                 "permission_granted": False,
                 "live_available": False,
+                "companion_foundation": True,
+                "companion_paired": paired,
                 "capabilities": {
                     "heart_rate": {"continuous_possible": True, "available": False},
                     "resting_hr": {"continuous_possible": True, "available": False},
@@ -69,15 +74,21 @@ class HealthConnectConnector(DeviceConnector):
                     "ecg": {
                         "continuous_possible": False,
                         "available": False,
-                        "note": "ECG generally requires an explicit recorded session.",
+                        "supported_in_hc303a": False,
+                        "note": "ECG is unsupported via Health Connect continuous path in HC-303A.",
                     },
                     "sleep": {"continuous_possible": False, "session_based": True, "available": False},
                     "steps_activity": {"continuous_possible": True, "available": False},
                     "weight": {"continuous_possible": False, "available": False},
                 },
-                "action_required": "Install/authorize an Android Health Connect companion bridge, then grant read permissions.",
+                "action_required": (
+                    "Grant Health Connect permissions in the Android companion and complete pairing."
+                    if paired
+                    else "Install/authorize the HealthChecker+ Android companion, pair it, then grant Health Connect read permissions."
+                ),
                 "errors": [],
             }
+            return base
         # Future bridge contract: must expose readiness() itself.
         try:
             return dict(bridge.readiness())

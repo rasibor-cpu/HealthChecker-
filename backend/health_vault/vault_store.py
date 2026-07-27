@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from backend.health_vault.models import MedicalDocument, Measurement, utc_now
+
+# Per-index locks for HC-303A atomic pair consume / batch reservation
+_INDEX_LOCKS: dict[str, threading.RLock] = {}
+_INDEX_LOCKS_GUARD = threading.Lock()
+
+
+def _index_lock(path: Path) -> threading.RLock:
+    key = str(path.resolve())
+    with _INDEX_LOCKS_GUARD:
+        lock = _INDEX_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _INDEX_LOCKS[key] = lock
+        return lock
 
 
 class VaultStore:
@@ -56,19 +72,52 @@ class VaultStore:
             "monitoring_status": {},
             "monitoring_audits": [],
             "monitoring_scheduler": {},
+            # HC-303A companion pairing / delivery (additive; token hashes only)
+            "companion_devices": {},
+            "companion_token_index": {},
+            "companion_pair_sessions": {},
+            "companion_pair_throttle": {},
+            "companion_batch_acks": {},
+            "companion_seen_observations": {},
+            "companion_status": {},
         }
 
     def _read_index(self) -> dict[str, Any]:
-        try:
-            return json.loads(self.index_path.read_text(encoding="utf-8"))
-        except Exception:
-            return self._empty()
+        with _index_lock(self.index_path):
+            try:
+                return json.loads(self.index_path.read_text(encoding="utf-8"))
+            except Exception:
+                return self._empty()
 
     def _write_index(self, data: dict[str, Any]) -> None:
-        self.index_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.index_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(self.index_path)
+        """Atomic index write with Windows-safe replace retries."""
+        import time
+
+        with _index_lock(self.index_path):
+            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(data, indent=2)
+            last_err: Exception | None = None
+            for attempt in range(10):
+                tmp = self.index_path.with_suffix(f".tmp.{os.getpid()}.{attempt}")
+                try:
+                    tmp.write_text(payload, encoding="utf-8")
+                    os.replace(tmp, self.index_path)
+                    return
+                except PermissionError as exc:
+                    last_err = exc
+                    time.sleep(0.02 * (attempt + 1))
+                except OSError as exc:
+                    last_err = exc
+                    time.sleep(0.02 * (attempt + 1))
+                finally:
+                    try:
+                        if tmp.exists():
+                            tmp.unlink()
+                    except OSError:
+                        pass
+            if last_err:
+                raise last_err
+            raise OSError("index_write_failed")
 
     def _audit(self, data: dict[str, Any], action: str, detail: dict[str, Any] | None = None) -> None:
         data.setdefault("audit", []).append(
@@ -645,3 +694,269 @@ class VaultStore:
         bucket = self._read_index().get("monitoring_scheduler") or {}
         row = bucket.get(str(patient_id or "default-patient"))
         return dict(row) if isinstance(row, dict) else {}
+
+    # --- HC-303A companion pairing / delivery ---
+
+    def companion_lock(self) -> threading.RLock:
+        return _index_lock(self.index_path)
+
+    def list_companion_devices(self) -> list[dict[str, Any]]:
+        devices = self._read_index().get("companion_devices") or {}
+        if not isinstance(devices, dict):
+            return []
+        return [dict(v) for v in devices.values() if isinstance(v, dict)]
+
+    def get_companion_device(self, device_id: str) -> dict[str, Any] | None:
+        devices = self._read_index().get("companion_devices") or {}
+        row = devices.get(str(device_id))
+        return dict(row) if isinstance(row, dict) else None
+
+    def get_companion_device_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
+        data = self._read_index()
+        index = data.get("companion_token_index") or {}
+        did = index.get(str(token_hash or ""))
+        if not did:
+            return None
+        devices = data.get("companion_devices") or {}
+        row = devices.get(str(did))
+        return dict(row) if isinstance(row, dict) else None
+
+    def upsert_companion_device(self, device: dict[str, Any]) -> dict[str, Any]:
+        with self.companion_lock():
+            data = self._read_index()
+            devices = dict(data.get("companion_devices") or {})
+            token_index = dict(data.get("companion_token_index") or {})
+            row = dict(device or {})
+            did = str(row.get("device_id") or uuid4())
+            row["device_id"] = did
+            # Drop any prior index entries for this device
+            for th, mapped in list(token_index.items()):
+                if mapped == did:
+                    token_index.pop(th, None)
+            thash = str(row.get("token_hash") or "")
+            if thash and not row.get("revoked"):
+                token_index[thash] = did
+            devices[did] = row
+            data["companion_devices"] = devices
+            data["companion_token_index"] = token_index
+            self._audit(
+                data,
+                "companion_device_upserted",
+                {"device_id": did, "revoked": bool(row.get("revoked"))},
+            )
+            self._write_index(data)
+            return row
+
+    def save_companion_pair_session(self, session: dict[str, Any]) -> dict[str, Any]:
+        with self.companion_lock():
+            data = self._read_index()
+            sessions = dict(data.get("companion_pair_sessions") or {})
+            row = dict(session or {})
+            sid = str(row.get("session_id") or uuid4())
+            row["session_id"] = sid
+            # Never persist plaintext pair codes
+            row.pop("pair_code", None)
+            sessions[sid] = row
+            data["companion_pair_sessions"] = sessions
+            self._audit(
+                data,
+                "companion_pair_session_saved",
+                {"session_id": sid, "consumed": row.get("consumed")},
+            )
+            self._write_index(data)
+            return row
+
+    def get_companion_pair_session_by_code_hash(self, code_hash: str) -> dict[str, Any] | None:
+        target = str(code_hash or "")
+        sessions = self._read_index().get("companion_pair_sessions") or {}
+        for row in sessions.values():
+            if not isinstance(row, dict):
+                continue
+            stored = str(row.get("pair_code_hash") or "")
+            if stored and hmac_compare(stored, target):
+                return dict(row)
+        return None
+
+    def consume_companion_pair_session(
+        self,
+        session_id: str,
+        *,
+        now: str,
+        device_id: str,
+    ) -> dict[str, Any] | None:
+        """Atomically mark a pair session consumed. Returns None if already consumed."""
+        with self.companion_lock():
+            data = self._read_index()
+            sessions = dict(data.get("companion_pair_sessions") or {})
+            row = sessions.get(str(session_id))
+            if not isinstance(row, dict) or row.get("consumed"):
+                return None
+            row = dict(row)
+            row["consumed"] = True
+            row["consumed_at"] = now
+            row["device_id"] = device_id
+            row.pop("pair_code", None)
+            sessions[str(session_id)] = row
+            data["companion_pair_sessions"] = sessions
+            self._audit(
+                data,
+                "companion_pair_session_consumed",
+                {"session_id": session_id, "device_id": device_id},
+            )
+            self._write_index(data)
+            return row
+
+    def bump_companion_pair_throttle(self, code_hash: str, *, now: str, limit: int) -> dict[str, Any]:
+        """Track failed confirm attempts for a code hash. Returns throttle state."""
+        with self.companion_lock():
+            data = self._read_index()
+            throttle = dict(data.get("companion_pair_throttle") or {})
+            key = str(code_hash or "unknown")
+            row = dict(throttle.get(key) or {"attempts": 0, "first_at": now, "blocked": False})
+            row["attempts"] = int(row.get("attempts") or 0) + 1
+            row["last_at"] = now
+            if row["attempts"] >= limit:
+                row["blocked"] = True
+            throttle[key] = row
+            # Bound throttle map
+            if len(throttle) > 2000:
+                for k in list(throttle.keys())[:500]:
+                    throttle.pop(k, None)
+            data["companion_pair_throttle"] = throttle
+            self._write_index(data)
+            return dict(row)
+
+    def get_companion_pair_throttle(self, code_hash: str) -> dict[str, Any]:
+        throttle = self._read_index().get("companion_pair_throttle") or {}
+        row = throttle.get(str(code_hash or ""))
+        return dict(row) if isinstance(row, dict) else {}
+
+    def clear_companion_pair_throttle(self, code_hash: str) -> None:
+        with self.companion_lock():
+            data = self._read_index()
+            throttle = dict(data.get("companion_pair_throttle") or {})
+            throttle.pop(str(code_hash or ""), None)
+            data["companion_pair_throttle"] = throttle
+            self._write_index(data)
+
+    def save_companion_batch_ack(self, ack: dict[str, Any]) -> dict[str, Any]:
+        with self.companion_lock():
+            data = self._read_index()
+            acks = dict(data.get("companion_batch_acks") or {})
+            row = dict(ack or {})
+            bid = str(row.get("batch_id") or uuid4())
+            row["batch_id"] = bid
+            acks[bid] = row
+            # Bound growth without prematurely dropping recent successful acks:
+            # trim only oldest non-ok / in_progress entries first; keep ok acks longer.
+            if len(acks) > 2000:
+                removable = [
+                    k
+                    for k, v in acks.items()
+                    if isinstance(v, dict) and not v.get("ok")
+                ]
+                removable.sort()
+                for k in removable[: max(0, len(acks) - 2000)]:
+                    acks.pop(k, None)
+                if len(acks) > 2500:
+                    keys = sorted(acks.keys())
+                    for k in keys[: len(acks) - 2000]:
+                        acks.pop(k, None)
+            data["companion_batch_acks"] = acks
+            self._audit(data, "companion_batch_ack_saved", {"batch_id": bid, "ok": row.get("ok")})
+            self._write_index(data)
+            return row
+
+    def reserve_companion_batch(
+        self,
+        *,
+        batch_id: str,
+        nonce: str,
+        device_id: str,
+        payload_fp: str,
+        now: str,
+    ) -> dict[str, Any]:
+        """
+        Atomically reserve a batch_id for processing.
+        Returns {"status": "reserved"|"duplicate"|"conflict"|"in_flight", ...}
+        """
+        with self.companion_lock():
+            data = self._read_index()
+            acks = dict(data.get("companion_batch_acks") or {})
+            prior = acks.get(str(batch_id))
+            if isinstance(prior, dict):
+                if prior.get("status") == "in_progress":
+                    return {"status": "in_flight", "ack": dict(prior)}
+                if prior.get("ok") and prior.get("nonce") == nonce:
+                    if prior.get("payload_fp") and prior.get("payload_fp") != payload_fp:
+                        return {"status": "conflict", "reason": "nonce_payload_mismatch", "ack": dict(prior)}
+                    return {"status": "duplicate", "ack": dict(prior)}
+                if prior.get("nonce") and prior.get("nonce") != nonce:
+                    return {"status": "conflict", "reason": "batch_id_nonce_mismatch", "ack": dict(prior)}
+                if prior.get("ok") is False and prior.get("nonce") == nonce and prior.get("status") != "in_progress":
+                    # Allow retry of a previously failed identical batch
+                    pass
+            row = {
+                "batch_id": str(batch_id),
+                "nonce": nonce,
+                "device_id": device_id,
+                "payload_fp": payload_fp,
+                "ok": False,
+                "status": "in_progress",
+                "reserved_at": now,
+            }
+            acks[str(batch_id)] = row
+            data["companion_batch_acks"] = acks
+            self._write_index(data)
+            return {"status": "reserved", "ack": dict(row)}
+
+    def get_companion_batch_ack(self, batch_id: str) -> dict[str, Any] | None:
+        acks = self._read_index().get("companion_batch_acks") or {}
+        row = acks.get(str(batch_id))
+        return dict(row) if isinstance(row, dict) else None
+
+    def companion_observation_seen(self, device_id: str | None, obs_key: str) -> bool:
+        seen = self._read_index().get("companion_seen_observations") or {}
+        bucket = seen.get(str(device_id or "")) or {}
+        return str(obs_key) in bucket
+
+    def mark_companion_observation_seen(
+        self, device_id: str | None, obs_key: str, batch_id: str
+    ) -> None:
+        with self.companion_lock():
+            data = self._read_index()
+            seen = dict(data.get("companion_seen_observations") or {})
+            did = str(device_id or "")
+            bucket = dict(seen.get(did) or {})
+            bucket[str(obs_key)] = {"batch_id": batch_id, "at": utc_now()}
+            if len(bucket) > 5000:
+                for k in list(bucket.keys())[:1000]:
+                    bucket.pop(k, None)
+            seen[did] = bucket
+            data["companion_seen_observations"] = seen
+            self._write_index(data)
+
+    def save_companion_status(self, status: dict[str, Any]) -> dict[str, Any]:
+        with self.companion_lock():
+            data = self._read_index()
+            data["companion_status"] = dict(status or {})
+            self._audit(
+                data,
+                "companion_status_updated",
+                {"device_id": (status or {}).get("device_id")},
+            )
+            self._write_index(data)
+            return data["companion_status"]
+
+    def get_companion_status(self, device_id: str | None = None) -> dict[str, Any]:
+        status = dict(self._read_index().get("companion_status") or {})
+        if device_id and status.get("device_id") and status.get("device_id") != device_id:
+            # Do not leak another device's sync status
+            return {}
+        return status
+
+
+def hmac_compare(a: str, b: str) -> bool:
+    import hmac as _hmac
+
+    return _hmac.compare_digest(str(a), str(b))
