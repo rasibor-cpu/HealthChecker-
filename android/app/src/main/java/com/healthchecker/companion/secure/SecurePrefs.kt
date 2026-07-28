@@ -11,9 +11,14 @@ import com.healthchecker.companion.util.SafeLog
 /**
  * Keystore-backed secure preferences for companion credentials and cursors.
  * Never logs token values or device identifiers.
+ *
+ * Host URL roles:
+ * - [getHostUrl] / active `host_url`: trusted paired delivery destination only
+ * - [getDraftHostUrl]: user/debug edit buffer; ignored by Sync and WorkManager
  */
 class SecurePrefs(context: Context) {
     private val prefs: SharedPreferences
+    private val hostStore: CompanionHostStore
     val syncMutex: SyncMutex
 
     sealed class PendingBatchLoad {
@@ -33,27 +38,33 @@ class SecurePrefs(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
+        hostStore = CompanionHostStore(prefs)
         syncMutex = SyncMutex(prefs)
     }
 
-    fun getHostUrl(): String? = prefs.getString(KEY_HOST, null)
-    fun setHostUrl(url: String) = prefs.edit().putString(KEY_HOST, url.trimEnd('/')).apply()
+    /** Active paired delivery host only. Never returns the draft. */
+    fun getHostUrl(): String? = hostStore.getActiveHostUrl()
 
-    fun getDeviceId(): String? = prefs.getString(KEY_DEVICE_ID, null)
-    fun getDeviceToken(): String? = prefs.getString(KEY_TOKEN, null)
+    fun getDraftHostUrl(): String? = hostStore.getDraftHostUrl()
 
-    fun setPairing(deviceId: String, token: String) {
-        prefs.edit()
-            .putString(KEY_DEVICE_ID, deviceId)
-            .putString(KEY_TOKEN, token)
-            .apply()
-        SafeLog.i("pairing_saved")
-    }
+    fun displayHostForEditing(): String = hostStore.displayHostForEditing()
 
-    fun clearPairing() {
-        prefs.edit().remove(KEY_DEVICE_ID).remove(KEY_TOKEN).apply()
-        SafeLog.i("pairing_cleared")
-    }
+    fun setDraftHostUrl(url: String?) = hostStore.setDraftHostUrl(url)
+
+    fun getDeviceId(): String? = hostStore.getDeviceId()
+
+    fun getDeviceToken(): String? = hostStore.getDeviceToken()
+
+    fun assessPairingIntegrity(): CompanionHostStore.PairingIntegrity = hostStore.assessPairingIntegrity()
+
+    /**
+     * Atomic successful-pair write. Prefer this over separate host/token updates.
+     * @return false if the encrypted commit failed (fail closed — prior state unchanged).
+     */
+    fun commitPairedSession(activeHost: String, deviceId: String, token: String): Boolean =
+        hostStore.commitPairedSession(activeHost, deviceId, token)
+
+    fun clearPairing() = hostStore.clearPairingCredentials()
 
     fun getChangesToken(): String? = prefs.getString(KEY_CHANGES, null)
     fun setChangesToken(token: String) = prefs.edit().putString(KEY_CHANGES, token).apply()
@@ -89,9 +100,6 @@ class SecurePrefs(context: Context) {
     }
 
     companion object {
-        private const val KEY_HOST = "host_url"
-        private const val KEY_DEVICE_ID = "device_id"
-        private const val KEY_TOKEN = "device_token"
         private const val KEY_CHANGES = "hc_changes_token"
         private const val KEY_LAST_ATTEMPT = "last_attempt_at"
         private const val KEY_LAST_SUCCESS = "last_success_at"

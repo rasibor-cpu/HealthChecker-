@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -38,9 +39,15 @@ class HostClient(
     )
 
     fun confirmPairing(hostUrl: String, pairCode: String, deviceLabel: String): String? {
-        val url = hostUrl.trimEnd('/') + "/api/companion/pair/confirm"
+        val normalized = PairingInputs.normalize(hostUrl, pairCode)
+        if (normalized is PairingInputs.Result.Invalid) {
+            SafeLog.w("pair_confirm_rejected reason=" + normalized.reason)
+            return normalized.reason
+        }
+        val inputs = normalized as PairingInputs.Result.Normalized
+        val url = inputs.hostUrl + "/api/companion/pair/confirm"
         val body = JSONObject()
-            .put("pair_code", pairCode)
+            .put("pair_code", inputs.pairCode)
             .put("device_label", deviceLabel)
             .put("platform", "android")
             .put("app_version", BuildConfig.VERSION_NAME)
@@ -48,18 +55,27 @@ class HostClient(
             .url(url)
             .post(body.toString().toRequestBody(JSON))
             .header("Content-Type", "application/json")
-            .applyLocalDevHeader(hostUrl)
+            .applyLocalDevHeader(inputs.hostUrl)
             .build()
-        client.newCall(req).execute().use { resp ->
-            val text = resp.body?.string().orEmpty()
-            SafeLog.i("pair_confirm http=" + resp.code)
-            val json = JSONObject(text)
-            if (!json.optBoolean("ok")) return json.optJSONArray("errors")?.join(", ") ?: "pair_failed"
-            val deviceId = json.getString("device_id")
-            val token = json.getString("device_token")
-            prefs.setHostUrl(hostUrl)
-            prefs.setPairing(deviceId, token)
-            return null
+        return try {
+            client.newCall(req).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                SafeLog.i("pair_confirm http=" + resp.code)
+                val json = JSONObject(text)
+                if (!json.optBoolean("ok")) {
+                    return json.optJSONArray("errors")?.join(", ") ?: "pair_failed"
+                }
+                val deviceId = json.getString("device_id")
+                val token = json.getString("device_token")
+                // Atomic promote: active host + identity + token in one encrypted commit.
+                if (!prefs.commitPairedSession(inputs.hostUrl, deviceId, token)) {
+                    return "pairing_persist_failed"
+                }
+                null
+            }
+        } catch (t: Throwable) {
+            SafeLog.e("pair_confirm_transport_failed", t)
+            throw t
         }
     }
 
@@ -72,6 +88,17 @@ class HostClient(
         queued: Int,
         deletedRecordIds: List<String> = emptyList()
     ): DeliveryAck {
+        when (val integrity = prefs.assessPairingIntegrity()) {
+            is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Inconsistent -> {
+                SafeLog.w("delivery_blocked reason=" + integrity.reason)
+                return DeliveryAck(false, integrity.reason, false, null, integrity.reason)
+            }
+            is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Unpaired -> {
+                return DeliveryAck(false, "not_paired", false, null, "not_paired")
+            }
+            is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Paired -> Unit
+        }
+        // Delivery uses active host only — draft is ignored.
         val host = prefs.getHostUrl()
         val token = prefs.getDeviceToken()
         val gate = ProductionConfigGate.validateDeliveryConfig(host, token)
@@ -161,18 +188,28 @@ class HostClient(
             hostUrl = host,
             deviceToken = prefs.getDeviceToken() ?: "present"
         )
-        if (!gate.ok && gate.error == "tls_required_outside_local_dev") {
-            throw IllegalStateException("tls_required_outside_local_dev")
+        if (!gate.ok && (
+                gate.error == "host_url_scheme_invalid" ||
+                    gate.error == "tls_required_outside_local_dev"
+                )
+        ) {
+            throw IllegalStateException(gate.error)
         }
     }
 
     private fun Request.Builder.applyLocalDevHeader(host: String): Request.Builder {
-        val isLocalHttp = host.startsWith("http://127.") || host.startsWith("http://10.") ||
-            host.startsWith("http://192.168.") || host.startsWith("http://localhost")
-        if (BuildConfig.DEBUG && BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV && isLocalHttp) {
+        val origin = when (val parsed = PairingInputs.normalizeOrigin(host)) {
+            is PairingInputs.OriginResult.Ok -> parsed.origin
+            else -> host
+        }
+        val httpUrl = origin.toHttpUrlOrNull()
+        val localCleartext = httpUrl != null &&
+            httpUrl.scheme == "http" &&
+            LocalCleartextHostPolicy.isPermitted(httpUrl.host)
+        if (BuildConfig.DEBUG && BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV && localCleartext) {
             header("X-HC-Local-Dev", "true")
             header("X-Forwarded-Proto", "http")
-        } else if (host.startsWith("https://")) {
+        } else if (httpUrl?.scheme == "https" || origin.startsWith("https://", ignoreCase = true)) {
             header("X-Forwarded-Proto", "https")
         }
         return this

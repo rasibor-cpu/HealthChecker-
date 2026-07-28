@@ -56,8 +56,9 @@
 
             <EditText
                 android:id="@+id/hostUrl"
-                android:hint="Host base URL (https://…)"
-                android:inputType="textUri"
+                android:hint="@string/host_url_hint"
+                android:inputType="textUri|textNoSuggestions"
+                android:importantForAutofill="no"
                 android:minHeight="@dimen/touch_target_min"
                 android:layout_marginTop="16dp"
                 android:layout_width="match_parent"
@@ -65,8 +66,9 @@
 
             <EditText
                 android:id="@+id/pairCode"
-                android:hint="Pairing code"
-                android:inputType="textCapCharacters"
+                android:hint="@string/pair_code_hint"
+                android:inputType="textCapCharacters|textNoSuggestions"
+                android:importantForAutofill="no"
                 android:minHeight="@dimen/touch_target_min"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />

@@ -38,6 +38,13 @@ from backend.health_vault.import_service import ImportService
 from backend.health_vault.timeline import build_timeline
 from backend.health_vault.vault_store import VaultStore
 
+# Module-level Request is required for FastAPI with `from __future__ import annotations`
+# (nested local imports are not visible to get_type_hints / route analysis).
+try:
+    from fastapi import Request
+except Exception:  # pragma: no cover - FastAPI optional at import time
+    Request = Any  # type: ignore[misc,assignment]
+
 _ABS_PATH_RE = re.compile(r"(?i)([a-z]:\\|\\\\|/home/|/Users/|/var/|/tmp/)")
 _BANNED_PATH_KEYS = {
     "path",
@@ -101,7 +108,7 @@ def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> 
 def create_health_vault_app(store: VaultStore | None = None):
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
-        from fastapi import FastAPI, File, Form, Request, UploadFile
+        from fastapi import FastAPI, File, Form, UploadFile
         from fastapi.responses import JSONResponse
     except Exception:
         return None
@@ -354,15 +361,27 @@ def create_health_vault_app(store: VaultStore | None = None):
     # --- HC-303A Android companion ---
 
     @app.post("/api/companion/pair/start")
-    async def companion_pair_start(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+    async def companion_pair_start(request: Request) -> JSONResponse:
         admin = request.headers.get("X-HC-Companion-Admin")
-        result = companion_pair_start_handler(body or {}, store=vault, admin_header=admin)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        result = companion_pair_start_handler(body, store=vault, admin_header=admin)
         code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
         return JSONResponse(_sanitize_value(result), status_code=code)
 
     @app.post("/api/companion/pair/confirm")
-    async def companion_pair_confirm(body: dict[str, Any] | None = None) -> JSONResponse:
-        result = companion_pair_confirm_handler(body or {}, store=vault)
+    async def companion_pair_confirm(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        result = companion_pair_confirm_handler(body, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.get("/api/companion/devices")

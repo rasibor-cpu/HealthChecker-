@@ -15,6 +15,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
+import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
 import com.healthchecker.companion.healthconnect.HealthConnectAvailability
 import com.healthchecker.companion.healthconnect.HealthConnectCapability
@@ -22,6 +23,7 @@ import com.healthchecker.companion.healthconnect.HealthConnectReader
 import com.healthchecker.companion.healthconnect.PermissionLaunchMonitor
 import com.healthchecker.companion.healthconnect.PermissionRequestPlanner
 import com.healthchecker.companion.host.HostClient
+import com.healthchecker.companion.host.PairingInputs
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.util.SafeLog
 import com.healthchecker.companion.work.MonitoringSyncWorker
@@ -106,23 +108,57 @@ class CompanionStatusActivity : AppCompatActivity() {
             permissionLaunchAttempt = null
         }
 
-        findViewById<EditText>(R.id.hostUrl).setText(prefs.getHostUrl().orEmpty())
+        findViewById<EditText>(R.id.hostUrl).setText(prefs.displayHostForEditing())
+        applyDebugPairingExtras(intent)
 
         findViewById<Button>(R.id.btnPair).setOnClickListener {
-            val host = findViewById<EditText>(R.id.hostUrl).text.toString().trim()
-            val code = findViewById<EditText>(R.id.pairCode).text.toString().trim()
-            lifecycleScope.launch {
-                val err = withContext(Dispatchers.IO) {
-                    runCatching {
-                        HostClient(prefs).confirmPairing(host, code, "Android Companion")
-                    }.getOrElse { it.message }
+            val hostRaw = findViewById<EditText>(R.id.hostUrl).text.toString()
+            val codeRaw = findViewById<EditText>(R.id.pairCode).text.toString()
+            when (val normalized = PairingInputs.normalize(hostRaw, codeRaw)) {
+                is PairingInputs.Result.Invalid -> {
+                    SafeLog.w("pair_confirm_rejected reason=" + normalized.reason)
+                    Toast.makeText(
+                        this,
+                        getString(R.string.pair_failed_reason, normalized.reason),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-                Toast.makeText(
-                    this@CompanionStatusActivity,
-                    if (err == null) "Paired" else "Pair failed",
-                    Toast.LENGTH_SHORT
-                ).show()
-                refreshStatus()
+                is PairingInputs.Result.Normalized -> {
+                    // Draft only — never touch active delivery host / token before success.
+                    val host = normalized.hostUrl
+                    val code = normalized.pairCode
+                    prefs.setDraftHostUrl(host)
+                    findViewById<EditText>(R.id.hostUrl).setText(host)
+                    lifecycleScope.launch {
+                        val err = withContext(Dispatchers.IO) {
+                            runCatching {
+                                HostClient(prefs).confirmPairing(
+                                    host,
+                                    code,
+                                    "Android Companion"
+                                )
+                            }.getOrElse { t ->
+                                SafeLog.e("pair_confirm_transport_failed", t)
+                                t.javaClass.simpleName
+                            }
+                        }
+                        // Failed/cancelled pairing: active host + token unchanged; keep draft for retry.
+                        if (err == null) {
+                            findViewById<EditText>(R.id.pairCode).text?.clear()
+                            findViewById<EditText>(R.id.hostUrl).setText(prefs.displayHostForEditing())
+                        }
+                        Toast.makeText(
+                            this@CompanionStatusActivity,
+                            if (err == null) {
+                                getString(R.string.pair_success)
+                            } else {
+                                getString(R.string.pair_failed_reason, err)
+                            },
+                            Toast.LENGTH_LONG
+                        ).show()
+                        refreshStatus()
+                    }
+                }
             }
         }
 
@@ -280,7 +316,14 @@ class CompanionStatusActivity : AppCompatActivity() {
             appendLine("Permissions granted: ${report.permissionsGranted.size}")
             appendLine("Permissions missing: ${report.permissionsMissing.size}")
             appendLine("ECG supported in HC-303A: false")
-            appendLine("Paired device: ${if (prefs.getDeviceId() != null) "yes" else "not paired"}")
+            appendLine("Paired device: ${if (prefs.getDeviceToken() != null && prefs.getHostUrl() != null) "yes" else "not paired"}")
+            when (val integrity = prefs.assessPairingIntegrity()) {
+                is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Inconsistent -> {
+                    appendLine("Pairing repair required: ${integrity.reason}")
+                    appendLine(getString(R.string.pairing_repair_required))
+                }
+                else -> Unit
+            }
             appendLine("Last attempt: ${prefs.getLastAttempt() ?: "never"}")
             appendLine("Last success: ${prefs.getLastSuccess() ?: "never"}")
             appendLine("Queued observations: ${prefs.getQueuedCount()}")
@@ -357,5 +400,37 @@ class CompanionStatusActivity : AppCompatActivity() {
             }
         }
         refreshStatus()
+    }
+
+    /**
+     * Debug-only one-tap pairing prep. Ignored in release builds.
+     * Populates EditText + draft key only — never active host, token, pair, sync, or WorkManager.
+     */
+    private fun applyDebugPairingExtras(intent: Intent?) {
+        if (!BuildConfig.DEBUG || intent == null) return
+        val host = intent.getStringExtra(EXTRA_DEBUG_HOST_URL)
+        val code = intent.getStringExtra(EXTRA_DEBUG_PAIR_CODE)
+        if (!host.isNullOrBlank()) {
+            val origin = PairingInputs.normalizeOrigin(host)
+            val draft = when (origin) {
+                is PairingInputs.OriginResult.Ok -> origin.origin
+                is PairingInputs.OriginResult.Invalid -> PairingInputs.sanitizeHost(host)
+            }
+            if (draft.isNotEmpty()) {
+                prefs.setDraftHostUrl(draft)
+                findViewById<EditText>(R.id.hostUrl).setText(draft)
+                SafeLog.i("debug_pair_draft_populated")
+            }
+        }
+        if (!code.isNullOrBlank()) {
+            // Ephemeral UI only — pairing codes are never written to SecurePrefs.
+            findViewById<EditText>(R.id.pairCode).setText(code.trim())
+            SafeLog.i("debug_pair_code_field_populated")
+        }
+    }
+
+    companion object {
+        const val EXTRA_DEBUG_HOST_URL = "hc_debug_host_url"
+        const val EXTRA_DEBUG_PAIR_CODE = "hc_debug_pair_code"
     }
 }

@@ -8,4 +8,9 @@
     <string name="hc_settings_android16_note">On Android 16, Manage may open the Health Connect app list instead of this package\'s page. Select HealthChecker+ Companion, then adjust permissions.</string>
     <string name="disclaimer">Observational companion only — not a diagnosis. BP is not continuous. ECG unsupported in HC-303A. Background WorkManager is best-effort.</string>
     <string name="permissions_rationale">HealthChecker+ reads selected Health Connect records you authorize and delivers them to your local Health Vault host. No medication advice is provided.</string>
+    <string name="host_url_hint">Host base URL (http://127.0.0.1:8877)</string>
+    <string name="pair_code_hint">Pairing code</string>
+    <string name="pair_success">Paired</string>
+    <string name="pair_failed_reason">Pair failed: %1$s</string>
+    <string name="pairing_repair_required">Pairing state is inconsistent. Re-pair with your Health Vault host. Existing credentials were not erased.</string>
 </resources>

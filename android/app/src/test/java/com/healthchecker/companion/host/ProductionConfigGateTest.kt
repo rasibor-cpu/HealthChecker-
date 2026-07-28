@@ -24,7 +24,7 @@ class ProductionConfigGateTest {
             allowCleartextLocalDev = false
         )
         assertFalse(cleartext.ok)
-        assertEquals("tls_required_outside_local_dev", cleartext.error)
+        assertEquals("host_url_scheme_invalid", cleartext.error)
     }
 
     @Test
@@ -45,7 +45,28 @@ class ProductionConfigGateTest {
             allowCleartextLocalDev = false
         )
         assertFalse(httpProd.ok)
-        assertEquals("tls_required_outside_local_dev", httpProd.error)
+        assertEquals("host_url_scheme_invalid", httpProd.error)
+    }
+
+    @Test
+    fun releaseRejectsUserinfoAndPathOnDeliveryHost() {
+        val userinfo = ProductionConfigGate.validateDeliveryConfig(
+            hostUrl = "https://127.0.0.1@evil.example",
+            deviceToken = "tok",
+            isDebugBuild = false,
+            allowCleartextLocalDev = false,
+        )
+        assertFalse(userinfo.ok)
+        assertEquals("host_url_userinfo_forbidden", userinfo.error)
+
+        val path = ProductionConfigGate.validateDeliveryConfig(
+            hostUrl = "https://vault.example/api",
+            deviceToken = "tok",
+            isDebugBuild = false,
+            allowCleartextLocalDev = false,
+        )
+        assertFalse(path.ok)
+        assertEquals("host_url_path_forbidden", path.error)
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.healthchecker.companion.BuildConfig
 /**
  * Production configuration gate for HC-303B.
  * Release builds fail closed when host URL is missing/cleartext or pairing is absent.
+ * Local cleartext host matching uses [LocalCleartextHostPolicy] via [PairingInputs.normalizeOrigin].
  */
 object ProductionConfigGate {
     data class GateResult(val ok: Boolean, val error: String?)
@@ -21,15 +22,14 @@ object ProductionConfigGate {
         if (deviceToken.isNullOrBlank()) {
             return GateResult(false, "not_paired")
         }
-        val https = hostUrl.startsWith("https://", ignoreCase = true)
-        val localHttp = hostUrl.startsWith("http://127.") ||
-            hostUrl.startsWith("http://10.") ||
-            hostUrl.startsWith("http://192.168.") ||
-            hostUrl.startsWith("http://localhost")
-        if (!https) {
-            if (!(isDebugBuild && allowCleartextLocalDev && localHttp)) {
-                return GateResult(false, "tls_required_outside_local_dev")
-            }
+        // Delivery hosts must already be canonical origins (no userinfo/path/query).
+        val origin = PairingInputs.normalizeOrigin(
+            hostUrl,
+            isDebugBuild = isDebugBuild,
+            allowCleartextLocalDev = allowCleartextLocalDev,
+        )
+        if (origin is PairingInputs.OriginResult.Invalid) {
+            return GateResult(false, origin.reason)
         }
         // Release must never embed fixed production hosts or secrets via BuildConfig flags
         if (!isDebugBuild && allowCleartextLocalDev) {
