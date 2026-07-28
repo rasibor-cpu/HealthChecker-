@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.HealthCheckerCompanion" parent="Theme.MaterialComponents.DayNight.DarkActionBar" />
+    <style name="Theme.HealthCheckerCompanion" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/hc_brand_navy</item>
+        <item name="colorPrimaryVariant">@color/hc_brand_navy</item>
+        <item name="colorSecondary">@color/hc_brand_blue</item>
+        <item name="android:statusBarColor">@color/hc_brand_navy</item>
+        <item name="android:navigationBarColor">@color/hc_brand_navy</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
 </resources>

@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">HealthChecker+ Companion</string>
     <string name="status_title">Companion status</string>
+    <string name="nav_back">Back</string>
+    <string name="btn_request_permissions">Request Health Connect permissions</string>
+    <string name="btn_manage_permissions">Manage Health Connect permissions</string>
+    <string name="hc_settings_android16_note">On Android 16, Manage may open the Health Connect app list instead of this package\'s page. Select HealthChecker+ Companion, then adjust permissions.</string>
     <string name="disclaimer">Observational companion only — not a diagnosis. BP is not continuous. ECG unsupported in HC-303A. Background WorkManager is best-effort.</string>
     <string name="permissions_rationale">HealthChecker+ reads selected Health Connect records you authorize and delivers them to your local Health Vault host. No medication advice is provided.</string>
 </resources>

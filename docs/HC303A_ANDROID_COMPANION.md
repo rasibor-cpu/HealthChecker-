@@ -1,8 +1,8 @@
 # HC-303A — Android Companion Readiness and Secure Bridge
 
-**Repository:** HealthChecker+  
-**Phase:** HC-303A  
-**Date:** 2026-07-27  
+**Repository:** HealthChecker+
+**Phase:** HC-303A
+**Date:** 2026-07-27
 **Starting HEAD:** `40e7b9e41792b73609990b7c79888a246b5b9bc3`
 
 ---
@@ -252,3 +252,54 @@ LIVE ACTIVATION REMAINS NO-GO.
 - Release cleartext disabled; debug cleartext isolated to debug source set
 - WorkManager permanent auth failures return `Result.failure()` (no infinite retry)
 
+---
+
+## HC-303C — Permission UI reopen + navigation (pre-live)
+
+**Phase:** HC-303C device validation (pre-commit)
+**Base HEAD:** `0f48b39478eb72addd13e0ddc08b9142c5ed8c58`
+**Device:** Samsung S24 Ultra · Android 16
+**Debug APK SHA-256:** `61C44F54CFCAA028E57E701EBE71545C712F6CF73BDDB57AAC077D0431D8D50A`
+
+### Defects discovered and remediated
+
+1. **Permission UI would not reopen** after cancel / partial Steps grant when re-requesting the full permission set on Android 16 → request **only missing** permissions; silent/no-result detection; visible **Manage Health Connect permissions** (user-initiated only; no automatic settings redirect).
+2. **Missing Back navigation** → Material toolbar Back + system Back via `StatusScreenNavigator` (finish only; no sync/pairing side effects).
+3. **Generic launcher icon** → adaptive HealthChecker+ brand mark (navy / blue / teal).
+4. **WorkManager button under Samsung nav bar** → window insets + scroll bottom clearance.
+
+### Android 16 platform limitations (documented, not defects)
+
+- Repeated REQUEST after a partial grant may no-op unless missing-only launch is used (remediated).
+- **Manage** may open the main Health Connect **app list** rather than the package-specific page; user selects **HealthChecker+ Companion**, then adjusts permissions.
+
+### Confirmed device results (Samsung S24 Ultra / Android 16)
+
+| Check | Result |
+|-------|--------|
+| ADB authorization | PASS |
+| Debug APK install/update | PASS |
+| Launch / no crash | PASS |
+| Health Connect READY | PASS |
+| Initial permission denial | PASS — 0 granted / 8 missing |
+| Steps-only grant | PASS — 1 granted / 7 missing |
+| Android 16 repeated-request limitation | Documented |
+| Manage Health Connect settings fallback | PASS |
+| Steps revocation | PASS — 0 granted / 8 missing |
+| Status refresh after reopening Companion | PASS |
+| Toolbar Back | PASS |
+| State preserved after Back/reopen | PASS |
+| Branded adaptive icon | PASS |
+| System-bar insets / bottom-button visibility | PASS |
+| No pairing | Confirmed |
+| No sync attempt | Confirmed |
+| No queued observations | Confirmed |
+| No WorkManager activation | Confirmed |
+| No real health observation displayed, transmitted, or persisted | Confirmed |
+
+### Safety boundary for HC-303C
+
+HC-303C validates install, capability, permission UX, navigation, and UI chrome only.
+It does **not** authorize pairing, host delivery, WorkManager clinical sync, or live monitoring.
+
+LIVE ACTIVATION REMAINS NO-GO.

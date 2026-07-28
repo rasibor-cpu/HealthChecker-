@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Canonical HealthChecker+ identity (from product UI tokens). -->
+    <color name="hc_brand_navy">#0B1220</color>
+    <color name="hc_brand_blue">#4DA3FF</color>
+    <color name="hc_brand_teal">#2DD4BF</color>
+    <color name="hc_brand_text">#F8FAFC</color>
+    <color name="ic_launcher_background">@color/hc_brand_navy</color>
+</resources>

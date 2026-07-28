@@ -1,75 +1,116 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/statusRoot"
+    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:fitsSystemWindows="false">
 
-    <LinearLayout
-        android:orientation="vertical"
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/topAppBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="@color/hc_brand_navy"
+        android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:navigationContentDescription="@string/nav_back"
+        app:title="@string/status_title"
+        app:titleTextColor="@color/hc_brand_text" />
 
-        <TextView
-            android:id="@+id/title"
-            android:text="@string/status_title"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+    <ScrollView
+        android:id="@+id/statusScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="vertical"
+        android:overScrollMode="ifContentScrolls"
+        android:clipToPadding="false"
+        android:paddingLeft="@dimen/status_scroll_base_padding"
+        android:paddingRight="@dimen/status_scroll_base_padding"
+        android:paddingTop="@dimen/status_scroll_base_padding"
+        android:paddingBottom="@dimen/status_scroll_extra_bottom">
 
-        <TextView
-            android:id="@+id/disclaimer"
-            android:text="@string/disclaimer"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp"
+        <LinearLayout
+            android:id="@+id/statusContent"
+            android:orientation="vertical"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content">
 
-        <TextView
-            android:id="@+id/statusBody"
-            android:layout_marginTop="16dp"
-            android:textSize="14sp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Loading…" />
+            <TextView
+                android:id="@+id/disclaimer"
+                android:text="@string/disclaimer"
+                android:textSize="13sp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-        <EditText
-            android:id="@+id/hostUrl"
-            android:hint="Host base URL (https://…)"
-            android:inputType="textUri"
-            android:layout_marginTop="16dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <TextView
+                android:id="@+id/statusBody"
+                android:layout_marginTop="16dp"
+                android:textSize="14sp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Loading…" />
 
-        <EditText
-            android:id="@+id/pairCode"
-            android:hint="Pairing code"
-            android:inputType="textCapCharacters"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/hostUrl"
+                android:hint="Host base URL (https://…)"
+                android:inputType="textUri"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_marginTop="16dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-        <Button
-            android:id="@+id/btnPair"
-            android:text="Confirm pairing"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/pairCode"
+                android:hint="Pairing code"
+                android:inputType="textCapCharacters"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-        <Button
-            android:id="@+id/btnPermissions"
-            android:text="Request Health Connect permissions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <Button
+                android:id="@+id/btnPair"
+                android:text="Confirm pairing"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-        <Button
-            android:id="@+id/btnSyncNow"
-            android:text="Sync now"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <Button
+                android:id="@+id/btnPermissions"
+                android:text="@string/btn_request_permissions"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-        <Button
-            android:id="@+id/btnSchedule"
-            android:text="Enable WorkManager schedule"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-    </LinearLayout>
-</ScrollView>
+            <Button
+                android:id="@+id/btnManagePermissions"
+                android:text="@string/btn_manage_permissions"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/btnSyncNow"
+                android:text="Sync now"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/btnSchedule"
+                android:text="Enable WorkManager schedule"
+                android:minHeight="@dimen/touch_target_min"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <!-- Ensures last control clears the nav bar when scrolled to end. -->
+            <Space
+                android:id="@+id/bottomScrollSpacer"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/status_scroll_extra_bottom" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
