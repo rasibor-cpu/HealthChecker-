@@ -1,0 +1,25 @@
+# Template: start / stop / status for companion host service.
+# Inert unless HC_304B_ALLOW_SERVICE_SCRIPTS=I_UNDERSTAND
+#
+# Usage (after operator approval):
+#   $env:HC_304B_ALLOW_SERVICE_SCRIPTS='I_UNDERSTAND'
+#   .\service_control.ps1.template -Action status
+
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("start", "stop", "status")]
+    [string]$Action
+)
+
+$ErrorActionPreference = "Stop"
+if ($env:HC_304B_ALLOW_SERVICE_SCRIPTS -ne "I_UNDERSTAND") {
+    Write-Host "REFUSING: start/stop/status template is inert (HC-304B)."
+    exit 2
+}
+
+$Name = "HealthCheckerCompanionHost"
+switch ($Action) {
+    "start" { Start-Service -Name $Name }
+    "stop" { Stop-Service -Name $Name }
+    "status" { Get-Service -Name $Name | Format-List Name, Status, StartType }
+}

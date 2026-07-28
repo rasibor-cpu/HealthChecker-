@@ -1,0 +1,94 @@
+# HC-304BR2 - Start local trusted Caddy proxy (REVIEW ONLY)
+#
+# Topology: Tailscale Serve -> this proxy (127.0.0.1) -> Companion Host
+# Does NOT install or download Caddy. Operator supplies CaddyPath.
+#
+# Fail closed before launch:
+#   - HC_304_ALLOW_LOCAL_PROXY=I_UNDERSTAND
+#   - HC_PROXY_SHARED_TOKEN present (24+) - value never printed
+#   - HC_EXTERNAL_HTTPS_ORIGIN https origin + HC_EXTERNAL_HTTPS_HOST hostname match
+#   - proxy/backend ports differ; reserved ports rejected
+#
+# Secrets must already be in the process environment (env file). Never pass tokens on CLI.
+# Quoting: all paths use -LiteralPath / & operator for spaces.
+
+param(
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("validate-env", "validate-caddyfile", "print-summary")]
+    [string]$Action = "validate-env",
+
+    [Parameter(Mandatory = $false)]
+    [string]$CaddyPath = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$CaddyfilePath = ""
+)
+
+$ErrorActionPreference = "Stop"
+
+if ($env:HC_304_ALLOW_LOCAL_PROXY -ne "I_UNDERSTAND") {
+    Write-Host "REFUSING: local proxy template is inert until HC_304_ALLOW_LOCAL_PROXY=I_UNDERSTAND"
+    exit 2
+}
+
+function Assert-SecretEnvPresent([string]$Name, [int]$MinLen) {
+    $val = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($val) -or $val.Trim().Length -lt $MinLen) {
+        throw "Refuse: $Name missing or too short (value not shown)"
+    }
+    # Never Write-Host / transcript the value.
+    return $val.Trim().Length
+}
+
+function Get-EnvPort([string]$Name, [int]$Default) {
+    $raw = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
+    $parsed = 0
+    if (-not [int]::TryParse($raw.Trim(), [ref]$parsed)) { throw "Refuse: $Name invalid" }
+    return $parsed
+}
+
+$proxyPort = Get-EnvPort "HC_PROXY_LISTEN_PORT" 8744
+$companionPort = Get-EnvPort "HC_BIND_PORT" 8743
+if ($proxyPort -eq $companionPort) { throw "Refuse: proxy and Companion Host ports must differ" }
+if ($proxyPort -in 8765, 8877 -or $companionPort -in 8765, 8877) {
+    throw "Refuse: reserved ports 8765/8877 forbidden"
+}
+if ($proxyPort -lt 1024 -or $companionPort -lt 1024) { throw "Refuse: privileged ports forbidden" }
+
+$tokenLen = Assert-SecretEnvPresent "HC_PROXY_SHARED_TOKEN" 24
+$origin = [Environment]::GetEnvironmentVariable("HC_EXTERNAL_HTTPS_ORIGIN")
+if ([string]::IsNullOrWhiteSpace($origin) -or -not $origin.Trim().ToLower().StartsWith("https://")) {
+    throw "Refuse: HC_EXTERNAL_HTTPS_ORIGIN must be https origin (value not fully echoed)"
+}
+$hostOnly = [Environment]::GetEnvironmentVariable("HC_EXTERNAL_HTTPS_HOST")
+if ([string]::IsNullOrWhiteSpace($hostOnly)) {
+    throw "Refuse: HC_EXTERNAL_HTTPS_HOST required for Caddy {env.HC_EXTERNAL_HTTPS_HOST}"
+}
+$originHost = ($origin.Trim().TrimEnd("/") -replace '^https://', '').ToLowerInvariant()
+if ($hostOnly.Trim().ToLowerInvariant() -ne $originHost) {
+    throw "Refuse: HC_EXTERNAL_HTTPS_HOST must match HC_EXTERNAL_HTTPS_ORIGIN host"
+}
+
+Write-Host "Proxy env gate OK: token_len=$tokenLen proxy=127.0.0.1:$proxyPort companion=127.0.0.1:$companionPort"
+
+switch ($Action) {
+    "validate-env" {
+        exit 0
+    }
+    "print-summary" {
+        Write-Host "Would bind Caddy to 127.0.0.1:$proxyPort -> 127.0.0.1:$companionPort (no secrets printed)."
+        Write-Host "Live 'caddy run' is intentionally NOT executed by this template during HC-304."
+        exit 0
+    }
+    "validate-caddyfile" {
+        if ([string]::IsNullOrWhiteSpace($CaddyPath) -or [string]::IsNullOrWhiteSpace($CaddyfilePath)) {
+            throw "Refuse: -CaddyPath and -CaddyfilePath required for validate-caddyfile"
+        }
+        if (-not (Test-Path -LiteralPath $CaddyPath)) { throw "Refuse: CaddyPath not found" }
+        if (-not (Test-Path -LiteralPath $CaddyfilePath)) { throw "Refuse: CaddyfilePath not found" }
+        # Validation only - do not start the server. Operator must have installed Caddy already.
+        & $CaddyPath validate --config $CaddyfilePath
+        exit $LASTEXITCODE
+    }
+}

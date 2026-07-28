@@ -1,0 +1,131 @@
+# HC-304BR2 - Configure private Tailscale Serve -> local trusted proxy ONLY
+#
+# Official CLI reference: https://tailscale.com/docs/reference/tailscale-cli/serve
+# Feature overview: https://tailscale.com/kb/1242/tailscale-serve
+# Do NOT use Funnel: https://tailscale.com/kb/1223/funnel
+#
+# Proven gap: Tailscale Serve does not document custom secret-header injection
+# (X-HC-Proxy-Token). Serve must forward only to the local proxy loopback port
+# (default placeholder 8744), never directly to Companion Host (8743).
+#
+# Documented Serve syntax used here (HTTPS to tailnet by default):
+#   tailscale serve [--bg] http://127.0.0.1:<proxy-port>
+# Status:  tailscale serve status --json
+# Rollback: tailscale serve reset
+#
+# This template is INERT. It refuses unless HC_304_ALLOW_TAILSCALE_SERVE=I_UNDERSTAND.
+# Do not execute during HC-304 certification. Background persistence only with
+# -BackgroundPersist after explicit operator approval.
+#
+# No hostname or token appears in Serve command arguments.
+# No firewall, registry, or unrelated service changes.
+
+param(
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("apply", "status", "reset")]
+    [string]$Action = "status",
+
+    [Parameter(Mandatory = $false)]
+    [int]$ProxyListenPort = 0,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$BackgroundPersist
+)
+
+$ErrorActionPreference = "Stop"
+
+if ($env:HC_304_ALLOW_TAILSCALE_SERVE -ne "I_UNDERSTAND") {
+    Write-Host "REFUSING: Tailscale Serve template is inert until HC_304_ALLOW_TAILSCALE_SERVE=I_UNDERSTAND"
+    Write-Host "This is intentional for HC-304 (no Serve/Funnel execution)."
+    exit 2
+}
+
+function Get-EnvPort([string]$Name, [int]$Default) {
+    $raw = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
+    $parsed = 0
+    if (-not [int]::TryParse($raw.Trim(), [ref]$parsed)) {
+        throw "Refuse: env $Name is not an integer"
+    }
+    return $parsed
+}
+
+$ExpectedProxyPort = Get-EnvPort "HC_PROXY_LISTEN_PORT" 8744
+$CompanionPort = Get-EnvPort "HC_BIND_PORT" 8743
+if ($ProxyListenPort -eq 0) { $ProxyListenPort = $ExpectedProxyPort }
+
+# Hard rejects: reserved / conflicting / wrong-target ports
+if ($ProxyListenPort -lt 1024 -or $ProxyListenPort -gt 65535) {
+    throw "Refuse: malformed or privileged ProxyListenPort"
+}
+if ($ProxyListenPort -eq 8765) { throw "Refuse: port 8765 reserved (CSS / historical)" }
+if ($ProxyListenPort -eq 8877) { throw "Refuse: port 8877 reserved (HC-303D temp)" }
+if ($ProxyListenPort -eq $CompanionPort) {
+    throw "Refuse: Serve target must be the local PROXY port, not Companion Host ($CompanionPort)"
+}
+if ($ProxyListenPort -ne $ExpectedProxyPort) {
+    throw "Refuse: ProxyListenPort must equal HC_PROXY_LISTEN_PORT ($ExpectedProxyPort)"
+}
+
+# Target is exactly the proxy loopback listener - never a hostname, never Companion Host.
+$Target = "http://127.0.0.1:$ProxyListenPort"
+
+function Assert-NoFunnel {
+    # Parse JSON properly: the key name "AllowFunnel" must NOT false-positive when false/absent.
+    $statusJson = & tailscale serve status --json 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "serve status --json unavailable or empty (ok before first apply)."
+        return
+    }
+    $text = [string]$statusJson
+    if ([string]::IsNullOrWhiteSpace($text)) { return }
+    try {
+        $obj = $text | ConvertFrom-Json
+    }
+    catch {
+        throw "REFUSING: serve status --json is not valid JSON"
+    }
+    $exposed = @()
+    if ($null -ne $obj.AllowFunnel) {
+        foreach ($prop in $obj.AllowFunnel.PSObject.Properties) {
+            if ($prop.Value -eq $true) { $exposed += [string]$prop.Name }
+        }
+    }
+    if ($exposed.Count -gt 0) {
+        throw "REFUSING: Funnel/public exposure enabled in AllowFunnel - run reset and remove Funnel before continuing."
+    }
+    Write-Host "serve status --json checked (no AllowFunnel=true entries)."
+}
+
+switch ($Action) {
+    "status" {
+        Assert-NoFunnel
+        & tailscale serve status --json
+        exit $LASTEXITCODE
+    }
+    "reset" {
+        # Scoped rollback: clear Serve config only (tailscale serve reset per official CLI docs).
+        Write-Host "Rollback: tailscale serve reset"
+        & tailscale serve reset
+        Assert-NoFunnel
+        Write-Host "Serve reset complete. Verify: tailscale serve status --json"
+        exit $LASTEXITCODE
+    }
+    "apply" {
+        Assert-NoFunnel
+        Write-Host "Configuring private Serve only to loopback proxy port (never Funnel; never Companion Host direct)."
+        # Background persistence ONLY when -BackgroundPersist is passed AND operator already set the guard.
+        if ($BackgroundPersist) {
+            Write-Host "Background persistence requested explicitly (-BackgroundPersist)."
+            & tailscale serve --bg $Target
+        }
+        else {
+            Write-Host "Foreground/ephemeral apply (no --bg). Re-run with -BackgroundPersist after explicit approval."
+            & tailscale serve $Target
+        }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Assert-NoFunnel
+        & tailscale serve status --json
+        exit $LASTEXITCODE
+    }
+}

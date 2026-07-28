@@ -1,0 +1,69 @@
+# HC-304BR2 trusted local reverse proxy — Caddyfile template (REVIEW ONLY)
+#
+# Topology (required):
+#   Phone (tailnet) → Tailscale Serve HTTPS → this proxy (127.0.0.1) → Companion Host (other 127.0.0.1 port)
+#
+# Proven gap: Tailscale Serve does not document custom secret-header injection.
+# Therefore Serve must NOT target Companion Host directly; it targets this proxy,
+# which overwrites forwarding headers and injects X-HC-Proxy-Token from the
+# process environment (never a literal in this file).
+#
+# Official Serve reference: https://tailscale.com/kb/1242/tailscale-serve
+# Do NOT use Funnel (https://tailscale.com/kb/1223/funnel).
+#
+# Placeholders (defaults — operator may change; reserved ports rejected in code):
+#   HC_PROXY_LISTEN_PORT            = 8744   (this listener)
+#   HC_BIND_PORT / companion        = 8743   (backend)
+#   HC_TAILSCALE_SERVE_TARGET_PORT  = 8744   (must equal proxy listen)
+#
+# Required process environment for Caddy (never put secrets in this file):
+#   HC_PROXY_SHARED_TOKEN
+#   HC_EXTERNAL_HTTPS_HOST   (hostname only, from HC_EXTERNAL_HTTPS_ORIGIN)
+#
+# This repository does NOT install or download Caddy.
+# Refuse to start the proxy if HC_PROXY_SHARED_TOKEN or external origin is missing
+# (see start_local_proxy.ps1.template + caddy_config.assert_proxy_env_ready_for_start).
+# Authorization is preserved (never stripped) for Companion Bearer delivery.
+# Access logs discarded; Caddy config/startup errors still go to stderr (must not echo secrets).
+
+{
+	auto_https off
+	admin off
+}
+
+http://127.0.0.1:8744 {
+	bind 127.0.0.1
+	request_body {
+		max_size 512KB
+	}
+	# Strip ALL inbound client-supplied trust headers (overwrite, do not preserve).
+	# HTTP header names are case-insensitive; wildcards catch variant spellings.
+	request_header -X-HC-Proxy-Token
+	request_header -Forwarded
+	request_header -X-Forwarded-For
+	request_header -X-Forwarded-Host
+	request_header -X-Forwarded-Proto
+	request_header -X-Forwarded-Port
+	request_header -X-Forwarded-*
+	request_header -X-HC-Proxy-*
+	reverse_proxy 127.0.0.1:8743 {
+		# Delete again inside reverse_proxy before setting canonical values.
+		header_up -X-HC-Proxy-Token
+		header_up -Forwarded
+		header_up -X-Forwarded-For
+		header_up -X-Forwarded-Host
+		header_up -X-Forwarded-Proto
+		header_up -X-Forwarded-Port
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}
+		header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+	# Privacy-safe: access logs discarded by default (does not hide startup failures).
+	log {
+		output discard
+	}
+}

@@ -1,0 +1,52 @@
+# HC-304B - Windows service packaging templates (REVIEW ONLY)
+#
+# These scripts are intentionally inert documentation/templates.
+# They DO NOT install, start, stop, or modify Windows services unless
+# an operator explicitly uncomments and runs them AFTER architecture
+# approval and secret setup.
+#
+# Do not run during HC-304B certification.
+
+<#
+.SYNOPSIS
+  Template: install HealthChecker companion-only host as a Windows service (NSSM example).
+
+.NOTES
+  Prerequisites (manual, not automated here):
+  - NSSM or equivalent service wrapper installed by the operator
+  - Python venv with fastapi/uvicorn
+  - Env file outside Git (see env.example)
+  - Dedicated monitoring vault path outside the repo
+  - Least-privilege service account with Modify on vault + log dirs only
+
+  This template refuses to run unless HC_304B_ALLOW_SERVICE_SCRIPTS=I_UNDERSTAND is set.
+#>
+
+$ErrorActionPreference = "Stop"
+if ($env:HC_304B_ALLOW_SERVICE_SCRIPTS -ne "I_UNDERSTAND") {
+    Write-Host "REFUSING: service install template is inert until HC_304B_ALLOW_SERVICE_SCRIPTS=I_UNDERSTAND"
+    Write-Host "This is intentional for HC-304B (no service installation)."
+    exit 2
+}
+
+Write-Host "Operator must fill paths below before use - template only."
+# Example (DO NOT COMMIT real paths/secrets):
+# nssm install HealthCheckerCompanionHost "C:\Path\To\python.exe" "-m backend.health_vault.companion_host"
+# nssm set HealthCheckerCompanionHost AppDirectory "C:\rasib\source\healthchecker"
+# nssm set HealthCheckerCompanionHost AppEnvironmentExtra FILE "C:\ProgramData\HealthChecker\companion_host\host.env"
+# nssm set HealthCheckerCompanionHost AppStdout "C:\ProgramData\HealthChecker\logs\companion_host.out.log"
+# nssm set HealthCheckerCompanionHost AppStderr "C:\ProgramData\HealthChecker\logs\companion_host.err.log"
+# nssm set HealthCheckerCompanionHost ObjectName "NT SERVICE\HealthCheckerCompanionHost"  # or custom gMSA/service account
+# nssm set HealthCheckerCompanionHost AppExit Default Restart
+# nssm set HealthCheckerCompanionHost AppRestartDelay 5000
+#
+# NEVER put tokens/pepper into nssm AppParameters.
+#
+# HC-304BR1 topology startup order (separate processes/services):
+#   1) HealthCheckerCompanionHost   -> 127.0.0.1:HC_BIND_PORT (default 8743)
+#   2) Local trusted proxy (Caddy)  -> 127.0.0.1:HC_PROXY_LISTEN_PORT (default 8744)
+#      injects X-HC-Proxy-Token from process env; see Caddyfile.template
+#   3) Tailscale Serve -> http://127.0.0.1:HC_PROXY_LISTEN_PORT only (never Funnel;
+#      never Serve -> Companion Host direct). See configure_tailscale_serve.ps1.template
+# Shutdown: reverse order. Health: topology_control.ps1.template -Action health
+exit 0
