@@ -84,29 +84,38 @@ def render_caddyfile(
 ) -> CaddyRenderResult:
     """
     Render a Caddyfile that:
-    - binds proxy to 127.0.0.1 only
+    - uses a host-agnostic HTTP site label on the proxy port (HC-306D-R1)
+    - binds proxy to 127.0.0.1 only (explicit bind; never trust client Host)
     - reverse_proxies to Companion Host on a different loopback port
     - strips inbound untrusted headers at the edge (exact + wildcard request_header)
     - sets canonical trusted headers once inside reverse_proxy (no matching header_up delete)
     - injects X-HC-Proxy-Token via {env.HC_PROXY_SHARED_TOKEN} (never a literal secret)
+    - overwrites X-Forwarded-Host from {env.HC_EXTERNAL_HTTPS_HOST} (never client Host)
     - preserves Authorization by never listing it in strip directives
     - discards access logs by default (startup/config errors still go to stderr)
     """
     env = {k: str(v) for k, v in (environ if environ is not None else os.environ).items()}
     topo = topology or load_host_topology(env)
     _require_proxy_env(env)
+    if topo.proxy_listen_host != "127.0.0.1":
+        raise ActivationError("caddyfile_bind_must_be_loopback")
+    if topo.companion_bind_host != "127.0.0.1":
+        raise ActivationError("caddyfile_upstream_non_loopback_forbidden")
 
     strip_lines = "\n".join(
         [f"\trequest_header -{name}" for name in STRIP_HEADERS]
         + [f"\trequest_header -{name}" for name in STRIP_HEADER_WILDCARDS]
     )
+    # Host-agnostic site label so Tailscale Serve MagicDNS Host still matches.
+    # Loopback exposure is enforced by explicit bind, not by the site hostname.
     # Edge strip only — do not header_up-delete names that are also set (Caddy v2.11.4).
     text = f"""# HC-304BR2 trusted local reverse proxy (Caddy)
 # Topology: Tailscale Serve → this proxy → Companion Host
 # Ordering: edge request_header strip → reverse_proxy canonical header_up set → Companion Host
 # DO NOT put secrets in this file. Use process environment:
 #   HC_PROXY_SHARED_TOKEN, HC_EXTERNAL_HTTPS_HOST (hostname from HC_EXTERNAL_HTTPS_ORIGIN)
-# Bind: loopback only. No Funnel. No public/LAN listen.
+# Site label is host-agnostic (http://:PORT); bind remains loopback-only (HC-306D-R1).
+# Bind: loopback only. No Funnel. No public/LAN listen. No Caddy TLS.
 # Authorization is preserved (not listed in strip directives).
 # Access log discarded; Caddy startup/config failures still print to stderr (no secrets).
 #
@@ -117,13 +126,13 @@ def render_caddyfile(
 \tadmin off
 }}
 
-http://{topo.proxy_listen_host}:{topo.proxy_listen_port} {{
-\tbind {topo.proxy_listen_host}
+http://:{topo.proxy_listen_port} {{
+\tbind 127.0.0.1
 \trequest_body {{
 \t\tmax_size 512KB
 \t}}
 {strip_lines}
-\treverse_proxy {topo.companion_bind_host}:{topo.companion_bind_port} {{
+\treverse_proxy 127.0.0.1:{topo.companion_bind_port} {{
 \t\theader_up X-Forwarded-Proto https
 \t\theader_up X-Forwarded-Host {{env.HC_EXTERNAL_HTTPS_HOST}}
 \t\theader_up X-HC-Proxy-Token {{env.HC_PROXY_SHARED_TOKEN}}
@@ -160,12 +169,48 @@ def validate_rendered_caddyfile(text: str, *, topology: HostTopology) -> None:
     # Funnel must not appear as an active directive (comments already stripped).
     if re.search(r"\bfunnel\b", low):
         raise ActivationError("caddyfile_funnel_forbidden")
-    if f"bind {topology.proxy_listen_host}" not in text:
-        raise ActivationError("caddyfile_bind_missing")
-    if f"reverse_proxy {topology.companion_bind_host}:{topology.companion_bind_port}" not in text:
-        raise ActivationError("caddyfile_backend_missing")
     if topology.proxy_listen_port == topology.companion_bind_port:
         raise ActivationError("proxy_backend_ports_must_differ")
+    if topology.proxy_listen_host != "127.0.0.1":
+        raise ActivationError("caddyfile_bind_must_be_loopback")
+    if topology.companion_bind_host != "127.0.0.1":
+        raise ActivationError("caddyfile_upstream_non_loopback_forbidden")
+
+    # HC-306D-R1: host-agnostic HTTP site label on the configured proxy port.
+    # Reject HTTPS / host-specific / prior loopback-host labels before requiring the good form.
+    if re.search(r"(?m)^\s*https://", active):
+        raise ActivationError("caddyfile_https_site_label_forbidden")
+    if re.search(rf"(?m)^\s*http://127\.0\.0\.1:{topology.proxy_listen_port}\s*\{{", active):
+        raise ActivationError("caddyfile_site_label_loopback_host_forbidden")
+    if re.search(r"(?m)^\s*http://(?!:)", active):
+        # Any http://HOST:port site label is forbidden; only http://:port is allowed.
+        raise ActivationError("caddyfile_site_label_host_agnostic_required")
+    site_ports = [int(p) for p in re.findall(r"(?m)^\s*http://:(\d+)\s*\{", active)]
+    if not site_ports:
+        raise ActivationError("caddyfile_site_label_host_agnostic_required")
+    if any(p != topology.proxy_listen_port for p in site_ports):
+        raise ActivationError("caddyfile_site_label_wrong_port")
+    expected_site = f"http://:{topology.proxy_listen_port}"
+    if not re.search(rf"(?m)^\s*{re.escape(expected_site)}\s*\{{", active):
+        raise ActivationError("caddyfile_site_label_host_agnostic_required")
+
+    # Explicit loopback bind mandatory; reject public/interface binds first.
+    if re.search(r"(?m)^\s*bind\s+(?:0\.0\.0\.0|::|\[::\])\b", active):
+        raise ActivationError("caddyfile_public_bind_forbidden")
+    if re.search(r"(?m)^\s*bind\s+(?!127\.0\.0\.1\b)\S+", active):
+        raise ActivationError("caddyfile_public_bind_forbidden")
+    if not re.search(r"(?m)^\s*bind\s+127\.0\.0\.1\b", active):
+        raise ActivationError("caddyfile_bind_missing")
+
+    # Upstream must be loopback companion port only.
+    if not re.search(
+        rf"(?m)^\s*reverse_proxy\s+127\.0\.0\.1:{topology.companion_bind_port}\b",
+        active,
+    ):
+        raise ActivationError("caddyfile_backend_missing")
+    if re.search(r"(?m)^\s*reverse_proxy\s+(?!127\.0\.0\.1:)\S+", active):
+        raise ActivationError("caddyfile_upstream_non_loopback_forbidden")
+
     for name in STRIP_HEADERS:
         if f"request_header -{name}" not in text:
             raise ActivationError("caddyfile_strip_incomplete")
@@ -198,10 +243,22 @@ def validate_rendered_caddyfile(text: str, *, topology: HostTopology) -> None:
     host_assigns = re.findall(r"header_up\s+X-Forwarded-Host\s+(\S+)", text)
     if host_assigns != ["{env.HC_EXTERNAL_HTTPS_HOST}"]:
         raise ActivationError("caddyfile_forwarded_host_env_required")
+    # Client Host / request host placeholders must never be treated as trusted host.
+    if re.search(
+        r"header_up\s+X-Forwarded-Host\s+\{(?:host|http\.request\.host)[^}]*\}",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        raise ActivationError("caddyfile_client_host_trust_forbidden")
     # No reverse_proxy delete for any header that is also canonically set (HC-305F-R1).
     for name in CANONICAL_SET_HEADERS:
         if re.search(rf"(?im)^\s*header_up\s+-{re.escape(name)}\b", block):
             raise ActivationError("caddyfile_header_up_delete_set_conflict")
+    # No Caddy TLS site/automation in active config (auto_https off is required separately).
+    if re.search(r"(?m)^\s*tls\b", active):
+        raise ActivationError("caddyfile_tls_forbidden")
+    if not re.search(r"(?m)^\s*auto_https\s+off\b", active):
+        raise ActivationError("caddyfile_auto_https_must_be_off")
     if "output discard" not in text and "log {\n\t\toff" not in text:
         raise ActivationError("caddyfile_access_log_must_be_privacy_safe")
     if "request_body" not in text or "max_size" not in text:

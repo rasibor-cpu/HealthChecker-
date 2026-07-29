@@ -39,6 +39,15 @@ Certified **Caddy v2.11.4** proved that `reverse_proxy` `header_up -Name` follow
 
 Direct **Serve → Companion Host** remains **invalid**. Gate F stays blocked pending independent review/commit of this remediation. This document does **not** claim live clinical activation.
 
+### Caddy site label vs bind (HC-306D-R1)
+
+Certified **Caddy v2.11.4** with Tailscale Serve proved that a site label of `http://127.0.0.1:<proxy_port>` matches only a loopback `Host` header. Serve preserves the private MagicDNS `Host`, so requests reach Caddy but miss the site block (empty HTTP 200). Required contract:
+
+1. Site label: **`http://:<proxy_port>`** (host-agnostic)
+2. Explicit **`bind 127.0.0.1`** (loopback-only listen)
+3. Canonical **`X-Forwarded-Host`** from `{env.HC_EXTERNAL_HTTPS_HOST}` — never client `Host`
+4. No Caddy TLS; no Funnel; Authorization preserved
+
 ### Port placeholders (operator may change; code rejects reserved / colliding)
 
 | Role | Env | Default placeholder |

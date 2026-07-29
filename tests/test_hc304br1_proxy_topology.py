@@ -210,6 +210,11 @@ def test_caddy_render_overwrites_headers_and_uses_env_token(monitoring_vault: Pa
     env = _base_env(monitoring_vault)
     rendered = render_caddyfile(environ=env)
     text = rendered.caddyfile
+    # HC-306D-R1 host-agnostic site label + loopback bind
+    assert "http://:8744 {" in text or "http://:8744{" in text.replace(" ", "")
+    assert re.search(r"(?m)^\s*http://:8744\s*\{", text)
+    assert "http://127.0.0.1:8744" not in _caddy_active_for_assert(text)
+    assert re.search(r"(?m)^\s*bind\s+127\.0\.0\.1\b", text)
     # Strip before set = overwrite design
     strip_pos = min(text.index(f"request_header -{h}") for h in STRIP_HEADERS)
     set_token_pos = text.index("header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}")
@@ -283,12 +288,23 @@ def test_templates_no_funnel_no_literal_secrets_and_rollback():
     assert "I_UNDERSTAND" in serve_tpl
 
     caddy_tpl = (SCRIPTS / "Caddyfile.template").read_text(encoding="utf-8")
+    assert "http://:8744" in caddy_tpl
+    assert "http://127.0.0.1:8744" not in _caddy_active_for_assert(caddy_tpl)
     assert "bind 127.0.0.1" in caddy_tpl
     assert "request_header -X-HC-Proxy-Token" in caddy_tpl
     assert "{env.HC_PROXY_SHARED_TOKEN}" in caddy_tpl
     assert "output discard" in caddy_tpl
     for name in STRIP_HEADERS:
         assert f"request_header -{name}" in caddy_tpl
+
+
+def _caddy_active_for_assert(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        if "#" in line:
+            line = line.split("#", 1)[0]
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def test_docs_corrected_topology_no_direct_serve_to_host():
@@ -523,6 +539,8 @@ def test_live_certified_caddy_injects_configured_token_not_forged(monitoring_vau
                 req = urllib.request.Request(
                     f"http://127.0.0.1:{proxy_port}/probe",
                     headers={
+                        # Synthetic non-private MagicDNS-like Host (Serve preserves this).
+                        "Host": "synthetic-desktop.example.ts.net",
                         "X-HC-Proxy-Token": forged,
                         "X-Forwarded-Proto": "http",
                         "X-Forwarded-Host": "evil.example",
@@ -532,12 +550,28 @@ def test_live_certified_caddy_injects_configured_token_not_forged(monitoring_vau
                 )
                 with urllib.request.urlopen(req, timeout=2) as resp:
                     assert resp.status == 200
+                    body = resp.read()
+                    assert body == b'{"ok":true}', "upstream body required (not empty 200)"
                 break
             except Exception as exc:  # noqa: BLE001 — wait for listener
                 last_err = exc
                 time.sleep(0.2)
         else:
             raise AssertionError(f"proxy did not become ready: {type(last_err).__name__}")
+
+        # Also prove loopback Host still works after host-agnostic site label.
+        req_loop = urllib.request.Request(
+            f"http://127.0.0.1:{proxy_port}/probe",
+            headers={
+                "Host": "127.0.0.1",
+                "Authorization": auth_value,
+                "X-HC-Proxy-Token": forged,
+                "X-Forwarded-Host": "evil.example",
+            },
+        )
+        with urllib.request.urlopen(req_loop, timeout=2) as resp_loop:
+            assert resp_loop.status == 200
+            assert resp_loop.read() == b'{"ok":true}'
 
         assert result.get("token_eq_configured") is True
         assert result.get("token_eq_forged") is False
@@ -548,6 +582,8 @@ def test_live_certified_caddy_injects_configured_token_not_forged(monitoring_vau
         # Privacy: result blob must not embed secrets if serialized in assert messages.
         blob = json.dumps(result)
         assert env["HC_PROXY_SHARED_TOKEN"] not in blob
+        assert env["HC_COMPANION_ADMIN_TOKEN"] not in blob
+        assert env["HC_COMPANION_PEPPER"] not in blob
     finally:
         proc.terminate()
         try:
@@ -555,6 +591,108 @@ def test_live_certified_caddy_injects_configured_token_not_forged(monitoring_vau
         except subprocess.TimeoutExpired:
             proc.kill()
         upstream.shutdown()
+
+
+def test_caddy_validator_rejects_unsafe_site_bind_variants(monitoring_vault: Path):
+    env = _base_env(monitoring_vault)
+    rendered = render_caddyfile(environ=env)
+    topo = rendered.topology
+    good = rendered.caddyfile
+
+    # Missing bind
+    missing_bind = re.sub(r"(?m)^\s*bind\s+127\.0\.0\.1\s*$", "", good)
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(missing_bind, topology=topo)
+    assert ei.value.code == "caddyfile_bind_missing"
+
+    # Public / non-loopback bind
+    public_bind = good.replace("bind 127.0.0.1", "bind 192.0.2.10")
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(public_bind, topology=topo)
+    assert ei.value.code == "caddyfile_public_bind_forbidden"
+
+    # HTTPS site label
+    https_label = good.replace("http://:8744", "https://:8744")
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(https_label, topology=topo)
+    assert ei.value.code in {
+        "caddyfile_https_site_label_forbidden",
+        "caddyfile_site_label_host_agnostic_required",
+    }
+
+    # Wrong port on site label
+    wrong_port = good.replace("http://:8744", "http://:8755")
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(wrong_port, topology=topo)
+    assert ei.value.code == "caddyfile_site_label_wrong_port"
+
+    # Old loopback-host site label forbidden
+    loop_label = good.replace("http://:8744", "http://127.0.0.1:8744")
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(loop_label, topology=topo)
+    assert ei.value.code == "caddyfile_site_label_loopback_host_forbidden"
+
+    # Non-loopback upstream
+    evil_up = good.replace("reverse_proxy 127.0.0.1:8743", "reverse_proxy 203.0.113.9:8743")
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(evil_up, topology=topo)
+    assert ei.value.code in {
+        "caddyfile_backend_missing",
+        "caddyfile_upstream_non_loopback_forbidden",
+    }
+
+    # Client Host trust forbidden
+    client_host = good.replace(
+        "header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}",
+        "header_up X-Forwarded-Host {http.request.host}",
+    )
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(client_host, topology=topo)
+    assert ei.value.code in {
+        "caddyfile_forwarded_host_env_required",
+        "caddyfile_client_host_trust_forbidden",
+    }
+
+    # Funnel directive forbidden
+    with_funnel = good + "\nfunnel 443 {\n}\n"
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(with_funnel, topology=topo)
+    assert ei.value.code == "caddyfile_funnel_forbidden"
+
+
+def test_reserved_ports_8765_8877_untouched(monitoring_vault: Path):
+    from backend.health_vault.companion_host.topology import RESERVED_PORTS
+
+    assert 8765 in RESERVED_PORTS
+    assert 8877 in RESERVED_PORTS
+    env = _base_env(monitoring_vault)
+    for field, port in (("HC_BIND_PORT", "8765"), ("HC_PROXY_LISTEN_PORT", "8877")):
+        bad = dict(env)
+        bad[field] = port
+        if field == "HC_PROXY_LISTEN_PORT":
+            bad["HC_TAILSCALE_SERVE_TARGET_PORT"] = port
+        with pytest.raises(ActivationError) as ei:
+            render_caddyfile(environ=bad)
+        assert "reserved_forbidden" in ei.value.code
+
+
+def test_authorization_not_stripped_in_render(monitoring_vault: Path):
+    text = render_caddyfile(environ=_base_env(monitoring_vault)).caddyfile
+    assert "request_header -Authorization" not in text
+    assert "header_up -Authorization" not in text
+
+
+def test_proxy_token_injected_exactly_once(monitoring_vault: Path):
+    text = render_caddyfile(environ=_base_env(monitoring_vault)).caddyfile
+    assert len(re.findall(r"header_up\s+X-HC-Proxy-Token\s+", text)) == 1
+    assert "header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}" in text
+    assert_no_literal_secrets(
+        text,
+        [
+            _base_env(monitoring_vault)["HC_PROXY_SHARED_TOKEN"],
+            _base_env(monitoring_vault)["HC_COMPANION_ADMIN_TOKEN"],
+        ],
+    )
 
 
 def test_external_https_host_mismatch_refuses(monitoring_vault: Path):

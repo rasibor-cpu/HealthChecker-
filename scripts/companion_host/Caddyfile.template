@@ -26,6 +26,10 @@
 #   HC_PROXY_SHARED_TOKEN
 #   HC_EXTERNAL_HTTPS_HOST   (hostname only, from HC_EXTERNAL_HTTPS_ORIGIN)
 #
+# Site label is host-agnostic (http://:8744) so Tailscale Serve MagicDNS Host
+# headers still match. Loopback-only exposure is enforced by explicit bind
+# (HC-306D-R1). Client Host is never trusted; X-Forwarded-Host comes from env.
+#
 # This repository does NOT install or download Caddy.
 # Refuse to start the proxy if HC_PROXY_SHARED_TOKEN or external origin is missing
 # (see start_local_proxy.ps1.template + caddy_config.assert_proxy_env_ready_for_start).
@@ -37,7 +41,7 @@
 	admin off
 }
 
-http://127.0.0.1:8744 {
+http://:8744 {
 	bind 127.0.0.1
 	request_body {
 		max_size 512KB
