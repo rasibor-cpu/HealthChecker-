@@ -11,6 +11,12 @@
 # Official Serve reference: https://tailscale.com/kb/1242/tailscale-serve
 # Do NOT use Funnel (https://tailscale.com/kb/1223/funnel).
 #
+# Directive ordering (HC-305F-R1 / certified Caddy v2.11.4):
+#   1) edge request_header strip of untrusted inbound trust headers
+#   2) reverse_proxy canonical header_up set (proto/host/token) — do NOT
+#      header_up-delete the same names you set (delete+set drops the inject)
+#   3) Companion Host evaluates X-HC-Proxy-Token + forwarded origin
+#
 # Placeholders (defaults — operator may change; reserved ports rejected in code):
 #   HC_PROXY_LISTEN_PORT            = 8744   (this listener)
 #   HC_BIND_PORT / companion        = 8743   (backend)
@@ -47,13 +53,7 @@ http://127.0.0.1:8744 {
 	request_header -X-Forwarded-*
 	request_header -X-HC-Proxy-*
 	reverse_proxy 127.0.0.1:8743 {
-		# Delete again inside reverse_proxy before setting canonical values.
-		header_up -X-HC-Proxy-Token
-		header_up -Forwarded
-		header_up -X-Forwarded-For
-		header_up -X-Forwarded-Host
-		header_up -X-Forwarded-Proto
-		header_up -X-Forwarded-Port
+		# Canonical sets only — no matching header_up deletes (HC-305F-R1).
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}
 		header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}

@@ -31,6 +31,15 @@ STRIP_HEADER_WILDCARDS = (
     "X-HC-Proxy-*",
 )
 
+# Canonical trusted headers set once inside reverse_proxy (never also header_up-deleted).
+# HC-305F Gate E: Caddy v2.11.4 applies reverse_proxy header deletes in a way that
+# drops a subsequent header_up set of the same name (proxy_token_invalid upstream).
+CANONICAL_SET_HEADERS = (
+    "X-Forwarded-Proto",
+    "X-Forwarded-Host",
+    "X-HC-Proxy-Token",
+)
+
 # Never strip Authorization — Companion device Bearer delivery depends on it.
 PRESERVE_HEADERS = ("Authorization",)
 
@@ -77,8 +86,8 @@ def render_caddyfile(
     Render a Caddyfile that:
     - binds proxy to 127.0.0.1 only
     - reverse_proxies to Companion Host on a different loopback port
-    - strips inbound untrusted headers (exact + wildcard)
-    - deletes the same headers again inside reverse_proxy before setting canonical values
+    - strips inbound untrusted headers at the edge (exact + wildcard request_header)
+    - sets canonical trusted headers once inside reverse_proxy (no matching header_up delete)
     - injects X-HC-Proxy-Token via {env.HC_PROXY_SHARED_TOKEN} (never a literal secret)
     - preserves Authorization by never listing it in strip directives
     - discards access logs by default (startup/config errors still go to stderr)
@@ -91,10 +100,10 @@ def render_caddyfile(
         [f"\trequest_header -{name}" for name in STRIP_HEADERS]
         + [f"\trequest_header -{name}" for name in STRIP_HEADER_WILDCARDS]
     )
-    # Defense in depth: reverse_proxy may synthesize X-Forwarded-*; delete then set.
-    header_up_deletes = "\n".join(f"\t\theader_up -{name}" for name in STRIP_HEADERS)
+    # Edge strip only — do not header_up-delete names that are also set (Caddy v2.11.4).
     text = f"""# HC-304BR2 trusted local reverse proxy (Caddy)
 # Topology: Tailscale Serve → this proxy → Companion Host
+# Ordering: edge request_header strip → reverse_proxy canonical header_up set → Companion Host
 # DO NOT put secrets in this file. Use process environment:
 #   HC_PROXY_SHARED_TOKEN, HC_EXTERNAL_HTTPS_HOST (hostname from HC_EXTERNAL_HTTPS_ORIGIN)
 # Bind: loopback only. No Funnel. No public/LAN listen.
@@ -115,7 +124,6 @@ http://{topo.proxy_listen_host}:{topo.proxy_listen_port} {{
 \t}}
 {strip_lines}
 \treverse_proxy {topo.companion_bind_host}:{topo.companion_bind_port} {{
-{header_up_deletes}
 \t\theader_up X-Forwarded-Proto https
 \t\theader_up X-Forwarded-Host {{env.HC_EXTERNAL_HTTPS_HOST}}
 \t\theader_up X-HC-Proxy-Token {{env.HC_PROXY_SHARED_TOKEN}}
@@ -161,40 +169,39 @@ def validate_rendered_caddyfile(text: str, *, topology: HostTopology) -> None:
     for name in STRIP_HEADERS:
         if f"request_header -{name}" not in text:
             raise ActivationError("caddyfile_strip_incomplete")
-        if f"header_up -{name}" not in text:
-            raise ActivationError("caddyfile_header_up_strip_incomplete")
     for name in STRIP_HEADER_WILDCARDS:
         if f"request_header -{name}" not in text:
             raise ActivationError("caddyfile_wildcard_strip_incomplete")
+    # Edge strip must appear before reverse_proxy in active config (ignore comments).
+    strip_pos = active.find("request_header -X-HC-Proxy-Token")
+    rp_idx = active.find("reverse_proxy")
+    if rp_idx < 0:
+        raise ActivationError("caddyfile_backend_missing")
+    if strip_pos < 0 or strip_pos > rp_idx:
+        raise ActivationError("caddyfile_edge_strip_before_proxy_required")
+    block = active[rp_idx:]
     # Authorization must not be stripped.
     for name in PRESERVE_HEADERS:
         if re.search(rf"(?i)request_header\s+-{re.escape(name)}\b", text):
             raise ActivationError("caddyfile_authorization_must_be_preserved")
         if re.search(rf"(?i)header_up\s+-{re.escape(name)}\b", text):
             raise ActivationError("caddyfile_authorization_must_be_preserved")
-    # Token must come from env placeholder — never a literal secret.
+    # Token must come from env placeholder — never a literal secret; exactly one set.
     token_assigns = re.findall(r"header_up\s+X-HC-Proxy-Token\s+(\S+)", text)
-    if not token_assigns:
+    if len(token_assigns) != 1:
         raise ActivationError("caddyfile_proxy_token_env_required")
-    for value in token_assigns:
-        if value != "{env.HC_PROXY_SHARED_TOKEN}":
-            raise ActivationError("caddyfile_literal_secret_forbidden")
-    # Canonical headers must be set AFTER deletes (ordering within reverse_proxy block).
-    # Do not use non-greedy `{.*?}` — nested `transport http { ... }` ends that match early.
-    rp_idx = text.find("reverse_proxy")
-    if rp_idx < 0:
-        raise ActivationError("caddyfile_backend_missing")
-    block = text[rp_idx:]
-    del_pos = block.find("header_up -X-HC-Proxy-Token")
-    set_pos = block.find("header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}")
-    proto_del = block.find("header_up -X-Forwarded-Proto")
-    proto_set = block.find("header_up X-Forwarded-Proto https")
-    if del_pos < 0 or set_pos < 0 or del_pos > set_pos:
-        raise ActivationError("caddyfile_token_overwrite_order_invalid")
-    if proto_del < 0 or proto_set < 0 or proto_del > proto_set:
-        raise ActivationError("caddyfile_forwarded_overwrite_order_invalid")
-    if "header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}" not in text:
+    if token_assigns[0] != "{env.HC_PROXY_SHARED_TOKEN}":
+        raise ActivationError("caddyfile_literal_secret_forbidden")
+    proto_assigns = re.findall(r"header_up\s+X-Forwarded-Proto\s+(\S+)", text)
+    if proto_assigns != ["https"]:
+        raise ActivationError("caddyfile_forwarded_proto_required")
+    host_assigns = re.findall(r"header_up\s+X-Forwarded-Host\s+(\S+)", text)
+    if host_assigns != ["{env.HC_EXTERNAL_HTTPS_HOST}"]:
         raise ActivationError("caddyfile_forwarded_host_env_required")
+    # No reverse_proxy delete for any header that is also canonically set (HC-305F-R1).
+    for name in CANONICAL_SET_HEADERS:
+        if re.search(rf"(?im)^\s*header_up\s+-{re.escape(name)}\b", block):
+            raise ActivationError("caddyfile_header_up_delete_set_conflict")
     if "output discard" not in text and "log {\n\t\toff" not in text:
         raise ActivationError("caddyfile_access_log_must_be_privacy_safe")
     if "request_body" not in text or "max_size" not in text:

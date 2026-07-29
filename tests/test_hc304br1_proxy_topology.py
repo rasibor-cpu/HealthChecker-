@@ -23,6 +23,7 @@ from backend.health_vault.companion_host import (  # noqa: E402
     load_and_validate_activation,
 )
 from backend.health_vault.companion_host.caddy_config import (  # noqa: E402
+    CANONICAL_SET_HEADERS,
     STRIP_HEADERS,
     assert_no_literal_secrets,
     render_caddyfile,
@@ -377,13 +378,183 @@ def test_caddy_preserves_authorization_and_overwrites_inside_reverse_proxy(monit
     text = render_caddyfile(environ=env).caddyfile
     assert "request_header -Authorization" not in text
     assert "header_up -Authorization" not in text
-    assert "header_up -X-HC-Proxy-Token" in text
+    assert "request_header -X-HC-Proxy-Token" in text
     assert "request_header -X-Forwarded-*" in text
-    # Deletes precede sets inside reverse_proxy
+    # reverse_proxy must set canonical headers without conflicting deletes (HC-305F-R1)
     block = text.split("reverse_proxy", 1)[1]
-    assert block.index("header_up -X-Forwarded-Proto") < block.index(
-        "header_up X-Forwarded-Proto https"
+    assert "header_up X-Forwarded-Proto https" in block
+    assert "header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}" in block
+    assert "header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}" in block
+    for name in CANONICAL_SET_HEADERS:
+        assert f"header_up -{name}" not in block
+
+
+def test_caddy_rejects_reverse_proxy_delete_set_conflict(monitoring_vault: Path):
+    env = _base_env(monitoring_vault)
+    rendered = render_caddyfile(environ=env)
+    # Re-introduce the Gate E defective pattern: delete then set same header.
+    evil = rendered.caddyfile.replace(
+        "\treverse_proxy 127.0.0.1:8743 {\n",
+        "\treverse_proxy 127.0.0.1:8743 {\n\t\theader_up -X-HC-Proxy-Token\n",
     )
+    assert "header_up -X-HC-Proxy-Token" in evil
+    with pytest.raises(ActivationError) as ei:
+        validate_rendered_caddyfile(evil, topology=rendered.topology)
+    assert ei.value.code == "caddyfile_header_up_delete_set_conflict"
+
+
+def test_caddy_canonical_sets_exactly_once(monitoring_vault: Path):
+    env = _base_env(monitoring_vault)
+    text = render_caddyfile(environ=env).caddyfile
+    assert text.count("header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}") == 1
+    assert text.count("header_up X-Forwarded-Proto https") == 1
+    assert text.count("header_up X-Forwarded-Host {env.HC_EXTERNAL_HTTPS_HOST}") == 1
+    # Edge strips present for all required names
+    for name in STRIP_HEADERS:
+        assert f"request_header -{name}" in text
+    assert "request_header -X-Forwarded-*" in text
+    assert "request_header -X-HC-Proxy-*" in text
+
+
+def test_live_certified_caddy_injects_configured_token_not_forged(monitoring_vault: Path, tmp_path: Path):
+    """
+    TEMP-only integration against certified Caddy v2.11.4.
+    Proves forged client token is stripped and configured env token arrives upstream.
+    Never prints secret values.
+    """
+    import hashlib
+    import json
+    import os
+    import socket
+    import subprocess
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    localapp = os.environ.get("LOCALAPPDATA") or ""
+    caddy_bin = Path(localapp) / "HealthChecker" / "tools" / "caddy" / "2.11.4" / "caddy.exe"
+    if not caddy_bin.is_file():
+        pytest.skip("certified Caddy v2.11.4 not installed")
+    expected_sha = "5CB9AB71E5756CE72840B8234177A2F40C8B4AB47A806B8E841E2B784E9DF62B"
+    digest = hashlib.sha256(caddy_bin.read_bytes()).hexdigest().upper()
+    if digest != expected_sha:
+        pytest.skip("Caddy binary hash does not match certified install")
+
+    def _free_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return int(s.getsockname()[1])
+
+    upstream_port = _free_port()
+    proxy_port = _free_port()
+    assert upstream_port != proxy_port
+
+    env = _base_env(monitoring_vault)
+    env["HC_BIND_PORT"] = str(upstream_port)
+    env["HC_PROXY_LISTEN_PORT"] = str(proxy_port)
+    env["HC_TAILSCALE_SERVE_TARGET_PORT"] = str(proxy_port)
+    env["HC_EXTERNAL_HTTPS_HOST"] = "phone-host.example.ts.net"
+    rendered = render_caddyfile(environ=env)
+    caddyfile_path = tmp_path / "Caddyfile"
+    caddyfile_path.write_text(rendered.caddyfile, encoding="utf-8")
+    assert_no_literal_secrets(
+        rendered.caddyfile,
+        [env["HC_PROXY_SHARED_TOKEN"], env["HC_COMPANION_ADMIN_TOKEN"], env["HC_COMPANION_PEPPER"]],
+    )
+
+    result: dict[str, object] = {}
+    forged = "forged-client-token-24chars!!"
+    auth_value = "Bearer test-device-token-value-ok"
+
+    class Upstream(BaseHTTPRequestHandler):
+        def log_message(self, *_args) -> None:
+            return
+
+        def do_GET(self) -> None:  # noqa: N802
+            tok = self.headers.get("X-HC-Proxy-Token") or ""
+            result.update(
+                {
+                    "token_eq_configured": tok == env["HC_PROXY_SHARED_TOKEN"],
+                    "token_eq_forged": tok == forged,
+                    "token_len": len(tok),
+                    "proto": self.headers.get("X-Forwarded-Proto") or "",
+                    "host_eq": (self.headers.get("X-Forwarded-Host") or "")
+                    == env["HC_EXTERNAL_HTTPS_HOST"],
+                    "auth_eq": (self.headers.get("Authorization") or "") == auth_value,
+                }
+            )
+            body = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    upstream = HTTPServer(("127.0.0.1", upstream_port), Upstream)
+    thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    thread.start()
+
+    caddy_env = os.environ.copy()
+    caddy_env["HC_PROXY_SHARED_TOKEN"] = env["HC_PROXY_SHARED_TOKEN"]
+    caddy_env["HC_EXTERNAL_HTTPS_HOST"] = env["HC_EXTERNAL_HTTPS_HOST"]
+    # Fail closed if validate fails.
+    validate = subprocess.run(
+        [str(caddy_bin), "validate", "--config", str(caddyfile_path), "--adapter", "caddyfile"],
+        capture_output=True,
+        text=True,
+        env=caddy_env,
+        check=False,
+    )
+    assert validate.returncode == 0, "caddy validate failed"
+
+    proc = subprocess.Popen(
+        [str(caddy_bin), "run", "--config", str(caddyfile_path), "--adapter", "caddyfile"],
+        env=caddy_env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.time() + 8
+        last_err = None
+        while time.time() < deadline:
+            try:
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{proxy_port}/probe",
+                    headers={
+                        "X-HC-Proxy-Token": forged,
+                        "X-Forwarded-Proto": "http",
+                        "X-Forwarded-Host": "evil.example",
+                        "Forwarded": "for=1.2.3.4",
+                        "Authorization": auth_value,
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=2) as resp:
+                    assert resp.status == 200
+                break
+            except Exception as exc:  # noqa: BLE001 — wait for listener
+                last_err = exc
+                time.sleep(0.2)
+        else:
+            raise AssertionError(f"proxy did not become ready: {type(last_err).__name__}")
+
+        assert result.get("token_eq_configured") is True
+        assert result.get("token_eq_forged") is False
+        assert int(result.get("token_len") or 0) >= 24
+        assert result.get("proto") == "https"
+        assert result.get("host_eq") is True
+        assert result.get("auth_eq") is True
+        # Privacy: result blob must not embed secrets if serialized in assert messages.
+        blob = json.dumps(result)
+        assert env["HC_PROXY_SHARED_TOKEN"] not in blob
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        upstream.shutdown()
 
 
 def test_external_https_host_mismatch_refuses(monitoring_vault: Path):

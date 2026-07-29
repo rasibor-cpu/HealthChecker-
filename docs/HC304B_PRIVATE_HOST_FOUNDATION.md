@@ -29,6 +29,16 @@ Phone over private tailnet
 
 The local proxy must **overwrite** (not preserve) trusted forwarding headers and inject `X-HC-Proxy-Token` from protected process environment configuration. Do **not** use [Funnel](https://tailscale.com/kb/1223/funnel).
 
+### Caddy directive ordering (HC-305F-R1)
+
+Certified **Caddy v2.11.4** proved that `reverse_proxy` `header_up -Name` followed by `header_up Name …` for the **same** trusted header can drop the inject (`proxy_token_invalid` at Companion Host). Correct ordering:
+
+1. **Edge** `request_header` strip of `Forwarded`, `X-Forwarded-*`, `X-HC-Proxy-Token` (and wildcards)
+2. **`reverse_proxy`** canonical `header_up` **set only** for `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-HC-Proxy-Token` (no matching deletes)
+3. Companion Host evaluates proxy token + HTTPS origin
+
+Direct **Serve → Companion Host** remains **invalid**. Gate F stays blocked pending independent review/commit of this remediation. This document does **not** claim live clinical activation.
+
 ### Port placeholders (operator may change; code rejects reserved / colliding)
 
 | Role | Env | Default placeholder |
@@ -203,5 +213,6 @@ Rules (tested as documentation contract + HC-303D phone behavior):
 | Item | Verdict |
 |------|---------|
 | Foundation code + tests | Ready for independent review |
-| Install service / Tailscale / Caddy / create real vault | **NO-GO** until approved |
+| HC-305F-R1 Caddy header remediation | Ready for independent review / commit (Gate F still blocked until then) |
+| Install service / Tailscale Serve / create real vault | **NO-GO** until approved |
 | Phone permissions / Sync / WorkManager / live clinical | **NO-GO** |
