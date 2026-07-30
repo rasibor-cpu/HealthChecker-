@@ -1,0 +1,138 @@
+# HC-306E-R2 — Control HealthChecker scheduled tasks (INERT TEMPLATE)
+#
+# Actions: start | stop | status | uninstall | rollback
+# Exact task names only:
+#   HealthCheckerCompanionHost
+#   HealthCheckerCompanionProxy
+#
+# stop: reverse order (Proxy then Companion)
+# start: Companion then Proxy
+# uninstall: unregister ONLY those two tasks; NEVER delete vault or secrets
+# rollback: point CURRENT at a previous verified release directory (no task rewrite unless reinstall)
+# Never touch CSS port 8765 or HC-303D port 8877. Never Serve/Funnel/firewall.
+#
+# Refuse unless HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND.
+# Uses ScheduledTasks cmdlets (not deprecated schtasks wrappers as the primary path).
+
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('start', 'stop', 'status', 'uninstall', 'rollback')]
+    [string]$Action,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ReleaseCommit = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ($env:HC_306E_ALLOW_SCHEDULED_HOST -ne 'I_UNDERSTAND') {
+    Write-Host 'REFUSING: control_scheduled_tasks is inert until HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND'
+    exit 2
+}
+
+Import-Module ScheduledTasks -ErrorAction Stop
+
+$ExactNames = @('HealthCheckerCompanionHost', 'HealthCheckerCompanionProxy')
+$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+$VaultRoot = 'C:\HealthCheckerData\monitoring_vault'
+$HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
+$SecretsDir = 'C:\ProgramData\HealthChecker\companion_host\secrets'
+
+function Assert-ExactTaskName([string]$Name) {
+    if ($ExactNames -notcontains $Name) {
+        Write-Host 'hc_scheduled_host:task_name_forbidden'
+        throw 'task_name_forbidden'
+    }
+}
+
+switch ($Action) {
+    'status' {
+        foreach ($n in $ExactNames) {
+            Assert-ExactTaskName $n
+            $t = Get-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue
+            if (-not $t) {
+                Write-Host ("task_missing name=" + $n)
+                continue
+            }
+            $i = Get-ScheduledTaskInfo -TaskName $n
+            Write-Host ("task=" + $n + " state=" + $t.State + " lastResult=" + $i.LastTaskResult)
+            $actions = ($t.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join '; '
+            if ($actions -match '(?i)(token=|pepper=|HC_COMPANION_ADMIN_TOKEN|HC_COMPANION_PEPPER|HC_PROXY_SHARED_TOKEN)') {
+                Write-Host 'hc_scheduled_host:env_injection_rejected'
+                throw 'secret_in_task_definition'
+            }
+            Write-Host ("action_secret_free=True name=" + $n)
+        }
+        exit 0
+    }
+    'start' {
+        # Companion precedes Caddy
+        Assert-ExactTaskName 'HealthCheckerCompanionHost'
+        Assert-ExactTaskName 'HealthCheckerCompanionProxy'
+        Start-ScheduledTask -TaskName 'HealthCheckerCompanionHost'
+        Start-Sleep -Seconds 2
+        Start-ScheduledTask -TaskName 'HealthCheckerCompanionProxy'
+        Write-Host 'hc_scheduled_host:ok started_companion_then_proxy'
+        exit 0
+    }
+    'stop' {
+        # Reverse order
+        Assert-ExactTaskName 'HealthCheckerCompanionProxy'
+        Assert-ExactTaskName 'HealthCheckerCompanionHost'
+        Stop-ScheduledTask -TaskName 'HealthCheckerCompanionProxy' -ErrorAction SilentlyContinue
+        Stop-ScheduledTask -TaskName 'HealthCheckerCompanionHost' -ErrorAction SilentlyContinue
+        Write-Host 'hc_scheduled_host:ok stopped_proxy_then_companion'
+        exit 0
+    }
+    'uninstall' {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]$identity
+        if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Write-Host 'hc_scheduled_host:elevation_required'
+            exit 2
+        }
+        foreach ($n in $ExactNames) {
+            Assert-ExactTaskName $n
+            Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Host ("unregistered=" + $n)
+        }
+        # NEVER delete vault or secrets during uninstall
+        if (-not (Test-Path -LiteralPath $VaultRoot)) {
+            Write-Host 'vault_path_note=absent'
+        } else {
+            Write-Host 'vault_preserved=True'
+        }
+        if (Test-Path -LiteralPath $HostEnv) { Write-Host 'host_env_preserved=True' }
+        if (Test-Path -LiteralPath $SecretsDir) { Write-Host 'secrets_preserved=True' }
+        Write-Host 'hc_scheduled_host:ok uninstall_exact_tasks_only'
+        exit 0
+    }
+    'rollback' {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]$identity
+        if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Write-Host 'hc_scheduled_host:elevation_required'
+            exit 2
+        }
+        if ([string]::IsNullOrWhiteSpace($ReleaseCommit)) {
+            Write-Host 'hc_scheduled_host:manifest_mismatch'
+            exit 1
+        }
+        $commit = $ReleaseCommit.Trim().ToLowerInvariant()
+        if ($commit -notmatch '^[0-9a-f]{40}$') {
+            Write-Host 'hc_scheduled_host:manifest_mismatch'
+            exit 1
+        }
+        $releaseDir = Join-Path $ReleasesRoot $commit
+        $manifest = Join-Path $releaseDir 'RELEASE_MANIFEST.json'
+        if (-not (Test-Path -LiteralPath $manifest)) {
+            Write-Host 'hc_scheduled_host:manifest_missing'
+            exit 1
+        }
+        # Operator should re-run install after pointer update; this only selects release.
+        Set-Content -LiteralPath (Join-Path $ReleasesRoot 'CURRENT') -Value ($commit + "`n") -Encoding ASCII
+        Write-Host ('hc_scheduled_host:ok rollback_current=' + $commit)
+        Write-Host 'Re-run install_scheduled_tasks.ps1.template to retarget task actions after approval.'
+        exit 0
+    }
+}

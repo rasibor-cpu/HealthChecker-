@@ -1,25 +1,23 @@
-# Template: start / stop / status for companion host service.
-# Inert unless HC_304B_ALLOW_SERVICE_SCRIPTS=I_UNDERSTAND
+# HC-306E-R2 — Legacy service_control redirect (INERT)
 #
-# Usage (after operator approval):
-#   $env:HC_304B_ALLOW_SERVICE_SCRIPTS='I_UNDERSTAND'
-#   .\service_control.ps1.template -Action status
+# HealthChecker always-on units are scheduled startup tasks, not Windows services.
+# This file no longer calls Start-Service / Stop-Service for HealthCheckerCompanionHost.
+#
+# Use: control_scheduled_tasks.ps1.template -Action start|stop|status|uninstall|rollback
+# Approval: HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("start", "stop", "status")]
+    [ValidateSet('start', 'stop', 'status')]
     [string]$Action
 )
 
-$ErrorActionPreference = "Stop"
-if ($env:HC_304B_ALLOW_SERVICE_SCRIPTS -ne "I_UNDERSTAND") {
-    Write-Host "REFUSING: start/stop/status template is inert (HC-304B)."
-    exit 2
+$ErrorActionPreference = 'Stop'
+Write-Host 'REFUSING: service_control.ps1.template is retired for Windows services.'
+Write-Host 'Use control_scheduled_tasks.ps1.template with ScheduledTasks cmdlets.'
+Write-Host 'NSSM/WinSW remain REJECTED.'
+Write-Host ("requested_action=" + $Action)
+if ($env:HC_304B_ALLOW_SERVICE_SCRIPTS -eq 'I_UNDERSTAND') {
+    Write-Host 'HC_304B_ALLOW_SERVICE_SCRIPTS no longer starts HealthChecker Windows services.'
 }
-
-$Name = "HealthCheckerCompanionHost"
-switch ($Action) {
-    "start" { Start-Service -Name $Name }
-    "stop" { Stop-Service -Name $Name }
-    "status" { Get-Service -Name $Name | Format-List Name, Status, StartType }
-}
+exit 2

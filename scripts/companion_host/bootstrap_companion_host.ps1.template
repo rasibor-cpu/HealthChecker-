@@ -1,0 +1,66 @@
+# HC-306E-R2 — Companion Host scheduled-task bootstrap (RELEASE COPY ONLY)
+#
+# Fixed action for task HealthCheckerCompanionHost:
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File <release>\scripts\companion_host\bootstrap_companion_host.ps1
+#
+# - Verifies release manifest (fail closed)
+# - Loads protected host.env via allowlisted loader (no secrets in args/logs)
+# - Starts ONLY the fixed ProgramData Python interpreter
+# - Module: backend.health_vault.companion_host (one worker via uvicorn.run)
+# - No Serve / Funnel / firewall / ports 8765|8877
+# - Must NOT run from the mutable Git working tree
+
+$ErrorActionPreference = 'Stop'
+
+$ReleaseRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+$releaseFull = [System.IO.Path]::GetFullPath($ReleaseRoot)
+$releasesFull = [System.IO.Path]::GetFullPath($ReleasesRoot)
+if (-not $releaseFull.StartsWith($releasesFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host 'hc_scheduled_host:git_tree_execution_forbidden'
+    exit 1
+}
+$Loader = Join-Path $PSScriptRoot 'host_env_loader.ps1'
+if (-not (Test-Path -LiteralPath $Loader)) {
+    Write-Host 'hc_scheduled_host:release_file_missing'
+    exit 1
+}
+. $Loader
+
+$LogDir = 'C:\ProgramData\HealthChecker\logs'
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$FixedPython = 'C:\ProgramData\HealthChecker\tools\python\python.exe'
+$HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
+
+try {
+    Assert-HcReleaseManifest -ReleaseDir $ReleaseRoot
+    Import-HcHostEnv -Path $HostEnv | Out-Null
+    $python = Assert-HcFixedExecutable -Path $FixedPython -AllowedPath $FixedPython
+
+    $bindPort = [Environment]::GetEnvironmentVariable('HC_BIND_PORT')
+    if ([string]::IsNullOrWhiteSpace($bindPort)) { $bindPort = '8743' }
+    $portNum = 0
+    if (-not [int]::TryParse($bindPort, [ref]$portNum)) {
+        Write-HcReason 'env_malformed'
+        exit 1
+    }
+    if ($portNum -in 8765, 8877) {
+        Write-HcReason 'forbidden_port'
+        exit 1
+    }
+
+    Set-Location -LiteralPath $ReleaseRoot
+    $env:PYTHONPATH = $ReleaseRoot
+    # Fixed argv only — never accept caller-controlled executable or arguments.
+    $argList = @('-m', 'backend.health_vault.companion_host')
+    Write-HcReason 'ok'
+    $p = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $ReleaseRoot -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput (Join-Path $LogDir 'companion_host.out.log') `
+        -RedirectStandardError (Join-Path $LogDir 'companion_host.err.log')
+    exit $p.ExitCode
+}
+catch {
+    $msg = [string]$_.Exception.Message
+    if ($msg -match '^[a-z0-9_]+$') { Write-HcReason $msg } else { Write-HcReason 'env_parse_failed' }
+    exit 1
+}

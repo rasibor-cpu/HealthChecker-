@@ -1,0 +1,94 @@
+# HC-306E-R2 — Companion Proxy (Caddy) scheduled-task bootstrap (RELEASE COPY ONLY)
+#
+# Fixed action for task HealthCheckerCompanionProxy:
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File <release>\scripts\companion_host\bootstrap_companion_proxy.ps1
+#
+# - Startup trigger should include bounded Delay (PT15S) so Companion precedes Caddy
+# - Verifies release manifest (fail closed)
+# - Loads protected host.env via allowlisted loader
+# - Bounded wait for Companion /healthz (no infinite busy loop)
+# - Starts ONLY the fixed ProgramData Caddy executable with fixed Caddyfile
+# - No Serve / Funnel / firewall / ports 8765|8877
+# - Must NOT run from the mutable Git working tree
+
+$ErrorActionPreference = 'Stop'
+
+$ReleaseRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+$releaseFull = [System.IO.Path]::GetFullPath($ReleaseRoot)
+$releasesFull = [System.IO.Path]::GetFullPath($ReleasesRoot)
+if (-not $releaseFull.StartsWith($releasesFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host 'hc_scheduled_host:git_tree_execution_forbidden'
+    exit 1
+}
+$Loader = Join-Path $PSScriptRoot 'host_env_loader.ps1'
+if (-not (Test-Path -LiteralPath $Loader)) {
+    Write-Host 'hc_scheduled_host:release_file_missing'
+    exit 1
+}
+. $Loader
+
+$LogDir = 'C:\ProgramData\HealthChecker\logs'
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$FixedCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\caddy.exe'
+$Caddyfile = 'C:\ProgramData\HealthChecker\companion_host\Caddyfile'
+$HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
+$HealthTimeoutSec = 60
+$HealthPollSec = 2
+
+function Wait-HcCompanionHealthz {
+    param([int]$Port, [int]$TimeoutSec, [int]$PollSec)
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
+    $url = "http://127.0.0.1:$Port/healthz"
+    while ([DateTime]::UtcNow -lt $deadline) {
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
+            if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300) {
+                return $true
+            }
+        }
+        catch {
+            # bounded retry
+        }
+        Start-Sleep -Seconds $PollSec
+    }
+    return $false
+}
+
+try {
+    Assert-HcReleaseManifest -ReleaseDir $ReleaseRoot
+    Import-HcHostEnv -Path $HostEnv | Out-Null
+    $caddy = Assert-HcFixedExecutable -Path $FixedCaddy -AllowedPath $FixedCaddy
+    if (-not (Test-Path -LiteralPath $Caddyfile)) {
+        Write-HcReason 'release_file_missing'
+        exit 1
+    }
+
+    $bindPort = [Environment]::GetEnvironmentVariable('HC_BIND_PORT')
+    if ([string]::IsNullOrWhiteSpace($bindPort)) { $bindPort = '8743' }
+    $proxyPort = [Environment]::GetEnvironmentVariable('HC_PROXY_LISTEN_PORT')
+    if ([string]::IsNullOrWhiteSpace($proxyPort)) { $proxyPort = '8744' }
+    $bp = 0; $pp = 0
+    if (-not [int]::TryParse($bindPort, [ref]$bp)) { Write-HcReason 'env_malformed'; exit 1 }
+    if (-not [int]::TryParse($proxyPort, [ref]$pp)) { Write-HcReason 'env_malformed'; exit 1 }
+    if ($bp -in 8765, 8877 -or $pp -in 8765, 8877) { Write-HcReason 'forbidden_port'; exit 1 }
+    if ($bp -eq $pp) { Write-HcReason 'env_malformed'; exit 1 }
+
+    if (-not (Wait-HcCompanionHealthz -Port $bp -TimeoutSec $HealthTimeoutSec -PollSec $HealthPollSec)) {
+        Write-HcReason 'healthz_timeout'
+        exit 1
+    }
+
+    # Fixed argv only — config path is fixed ProgramData Caddyfile (no secrets on CLI).
+    $argList = @('run', '--config', $Caddyfile, '--adapter', 'caddyfile')
+    Write-HcReason 'ok'
+    $p = Start-Process -FilePath $caddy -ArgumentList $argList -WorkingDirectory $ReleaseRoot -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput (Join-Path $LogDir 'companion_proxy.out.log') `
+        -RedirectStandardError (Join-Path $LogDir 'companion_proxy.err.log')
+    exit $p.ExitCode
+}
+catch {
+    $msg = [string]$_.Exception.Message
+    if ($msg -match '^[a-z0-9_]+$') { Write-HcReason $msg } else { Write-HcReason 'env_parse_failed' }
+    exit 1
+}

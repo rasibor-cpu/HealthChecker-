@@ -28,9 +28,13 @@ This document captures the HC-304A readiness audit. Permanent-host **implementat
 | Phone pairing today | `http://127.0.0.1:8877` via USB/ADB | Cleartext; not production |
 | Committed LAN/`0.0.0.0` policy | **Absent** | Documented as remaining work in `docs/HC303A_ANDROID_COMPANION.md` |
 
-### 1.3 Windows service suitability
+### 1.3 Windows always-on suitability
 
-**Not suitable as-is.** No NSSM, WinSW, Task Scheduler, or service wrapper in repo. Permanent host needs a new always-on process + restart policy + explicit vault root + env secrets.
+**HC-306E-R2 foundation (repo):** inert Task Scheduler templates + release packaging — **not installed** on hosts until a later approved gate.
+
+**Rejected for this pilot:** NSSM and WinSW (third-party service wrappers). Do not treat historical NSSM sketches as an active path.
+
+**Active design:** Microsoft Windows Task Scheduler scheduled startup tasks (`HealthCheckerCompanionHost`, `HealthCheckerCompanionProxy`) running from an immutable ProgramData release copy — accurately described as scheduled tasks, **not** Windows services.
 
 ### 1.4 CORS, auth, rate limits, body limits, TLS
 

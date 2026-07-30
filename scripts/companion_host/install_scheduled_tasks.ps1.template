@@ -1,0 +1,136 @@
+# HC-306E-R2 — Install HealthChecker scheduled startup tasks (INERT TEMPLATE)
+#
+# Mechanism: Microsoft Windows Task Scheduler (scheduled startup tasks — NOT Windows services).
+# REJECTED: NSSM, WinSW, and any third-party service wrapper / package download.
+#
+# Tasks:
+#   1) HealthCheckerCompanionHost  — AtStartup, IgnoreNew, bounded restart
+#   2) HealthCheckerCompanionProxy — AtStartup + PT15S delay, IgnoreNew, bounded restart
+#
+# Requires:
+#   - HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND
+#   - Elevation
+#   - Verified release under C:\ProgramData\HealthChecker\releases\<commit>
+#   - Fixed Python + Caddy under C:\ProgramData\HealthChecker\tools\ (Admin/SYSTEM-owned)
+#
+# Never: secrets in task XML/args; Serve/Funnel; firewall; ports 8765/8877;
+# reboot-on-failure; Git working-tree execution.
+# Rejected wrappers: NSSM, WinSW.
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$ReleaseCommit = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ($env:HC_306E_ALLOW_SCHEDULED_HOST -ne 'I_UNDERSTAND') {
+    Write-Host 'REFUSING: install_scheduled_tasks is inert until HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND'
+    Write-Host 'NSSM/WinSW REJECTED. Use Windows Task Scheduler only after privilege audit passes.'
+    exit 2
+}
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]$identity
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host 'hc_scheduled_host:elevation_required'
+    exit 2
+}
+
+Import-Module ScheduledTasks -ErrorAction Stop
+
+$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+$ToolsPython = 'C:\ProgramData\HealthChecker\tools\python\python.exe'
+$ToolsCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\caddy.exe'
+$HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
+$Pwsh = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+function Test-HcUnderTools([string]$Path) {
+    $full = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetFullPath('C:\ProgramData\HealthChecker\tools')
+    return $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $full)
+}
+
+if (-not (Test-HcUnderTools $ToolsPython) -or -not (Test-HcUnderTools $ToolsCaddy)) {
+    Write-Host 'hc_scheduled_host:executable_privilege_risk'
+    Write-Host 'STOP: stage Admin/SYSTEM-owned python.exe and caddy.exe under ProgramData\HealthChecker\tools before install.'
+    Write-Host 'User-profile interpreters (LocalAppData / Users) are forbidden for SYSTEM scheduled tasks.'
+    exit 1
+}
+if (-not (Test-Path -LiteralPath $HostEnv)) {
+    Write-Host 'hc_scheduled_host:env_parse_failed'
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($ReleaseCommit)) {
+    $pointer = Join-Path $ReleasesRoot 'CURRENT'
+    if (-not (Test-Path -LiteralPath $pointer)) {
+        Write-Host 'hc_scheduled_host:manifest_missing'
+        exit 1
+    }
+    $ReleaseCommit = (Get-Content -LiteralPath $pointer -Raw).Trim().ToLowerInvariant()
+}
+$releaseDir = Join-Path $ReleasesRoot $ReleaseCommit
+$releaseFull = [System.IO.Path]::GetFullPath($releaseDir)
+$releasesFull = [System.IO.Path]::GetFullPath($ReleasesRoot)
+if (-not $releaseFull.StartsWith($releasesFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host 'hc_scheduled_host:git_tree_execution_forbidden'
+    exit 1
+}
+$manifest = Join-Path $releaseDir 'RELEASE_MANIFEST.json'
+if (-not (Test-Path -LiteralPath $manifest)) {
+    Write-Host 'hc_scheduled_host:manifest_missing'
+    exit 1
+}
+
+$companionBootstrap = Join-Path $releaseDir 'scripts\companion_host\bootstrap_companion_host.ps1'
+$proxyBootstrap = Join-Path $releaseDir 'scripts\companion_host\bootstrap_companion_proxy.ps1'
+$loader = Join-Path $releaseDir 'scripts\companion_host\host_env_loader.ps1'
+foreach ($p in @($companionBootstrap, $proxyBootstrap, $loader)) {
+    if (-not (Test-Path -LiteralPath $p)) {
+        Write-Host 'hc_scheduled_host:release_file_missing'
+        exit 1
+    }
+}
+
+# Verify release integrity BEFORE registering SYSTEM tasks
+. $loader
+Assert-HcReleaseManifest -ReleaseDir $releaseDir
+Assert-HcFixedExecutable -Path $ToolsPython -AllowedPath $ToolsPython | Out-Null
+Assert-HcFixedExecutable -Path $ToolsCaddy -AllowedPath $ToolsCaddy | Out-Null
+function New-HcStartupTask {
+    param(
+        [string]$TaskName,
+        [string]$BootstrapPath,
+        [string]$Delay = ''
+    )
+    $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$BootstrapPath`""
+    if ($arg -match '(?i)token=|pepper=|HC_COMPANION_|HC_PROXY_SHARED') {
+        Write-Host 'hc_scheduled_host:env_injection_rejected'
+        throw 'secret_in_task_arguments'
+    }
+    $action = New-ScheduledTaskAction -Execute $Pwsh -Argument $arg
+    $trigger = New-ScheduledTaskTrigger -AtStartup
+    if ($Delay) {
+        $trigger.Delay = $Delay
+    }
+    # IgnoreNew = single instance; bounded restart; NEVER reboot Windows on failure
+    $settings = New-ScheduledTaskSettingsSet `
+        -MultipleInstances IgnoreNew `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1) `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit ([TimeSpan]::Zero)
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+}
+
+# Companion before Caddy (proxy delayed)
+New-HcStartupTask -TaskName 'HealthCheckerCompanionHost' -BootstrapPath $companionBootstrap
+New-HcStartupTask -TaskName 'HealthCheckerCompanionProxy' -BootstrapPath $proxyBootstrap -Delay 'PT15S'
+
+Write-Host 'hc_scheduled_host:ok tasks_registered'
+Write-Host 'NOTE: These are scheduled startup tasks, not Windows services. No Serve/Funnel configured.'
+exit 0

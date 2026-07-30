@@ -1,0 +1,122 @@
+# HC-306E-R2 — Package verified immutable release copy (INERT TEMPLATE)
+#
+# Creates C:\ProgramData\HealthChecker\releases\<commit-hash>\ from committed HEAD
+# with SHA-256 RELEASE_MANIFEST.json. Excludes .git, tests, docs, Android, APK,
+# vault_storage, private_imports, secrets, logs, and unrelated frontend assets.
+#
+# Refuse unless HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND.
+# Prefer elevation so release ACLs can be locked to SYSTEM + Administrators.
+# Does NOT install scheduled tasks. Does NOT copy personal records / vault data.
+#
+# Packaging refuses dirty release-tracked paths (require_clean_commit).
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$RepoRoot = '',
+
+    [Parameter(Mandatory = $false)]
+    [string]$SourceCommit = '',
+
+    [Parameter(Mandatory = $false)]
+    [string]$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ($env:HC_306E_ALLOW_SCHEDULED_HOST -ne 'I_UNDERSTAND') {
+    Write-Host 'REFUSING: package_verified_release is inert until HC_306E_ALLOW_SCHEDULED_HOST=I_UNDERSTAND'
+    Write-Host 'NSSM and WinSW are REJECTED for this pilot. Mechanism: Windows Task Scheduler only.'
+    exit 2
+}
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]$identity
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host 'hc_scheduled_host:elevation_required'
+    exit 2
+}
+
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+}
+$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot '.git'))) {
+    Write-Host 'hc_scheduled_host:manifest_mismatch'
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($SourceCommit)) {
+    $SourceCommit = (git -C $RepoRoot rev-parse HEAD).Trim().ToLowerInvariant()
+}
+if ($SourceCommit -notmatch '^[0-9a-f]{40}$') {
+    Write-Host 'hc_scheduled_host:manifest_mismatch'
+    exit 1
+}
+
+$releasesFull = [System.IO.Path]::GetFullPath($ReleasesRoot)
+$expectedReleases = [System.IO.Path]::GetFullPath('C:\ProgramData\HealthChecker\releases')
+if ($releasesFull -ne $expectedReleases) {
+    Write-Host 'hc_scheduled_host:git_tree_execution_forbidden'
+    exit 1
+}
+
+$pyCandidates = @(
+    'C:\ProgramData\HealthChecker\tools\python\python.exe'
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+if (-not $pyCandidates) {
+    Write-Host 'hc_scheduled_host:executable_privilege_risk'
+    Write-Host 'STOP: packaging for ProgramData release requires ProgramData tools python (Admin-owned).'
+    exit 1
+}
+$python = $pyCandidates[0]
+
+# Pass paths via process env only (no string interpolation into -c payload).
+$env:HC_PKG_REPO_ROOT = $RepoRoot
+$env:HC_PKG_SOURCE_COMMIT = $SourceCommit
+$env:HC_PKG_RELEASES_ROOT = $releasesFull
+$helper = @'
+import os, sys
+from pathlib import Path
+repo = Path(os.environ["HC_PKG_REPO_ROOT"])
+sys.path.insert(0, str(repo))
+from backend.health_vault.companion_host.scheduled_host import write_release_copy
+release = write_release_copy(
+    repo_root=repo,
+    source_commit=os.environ["HC_PKG_SOURCE_COMMIT"],
+    dest_root=Path(os.environ["HC_PKG_RELEASES_ROOT"]),
+    require_clean_commit=True,
+)
+pointer = Path(os.environ["HC_PKG_RELEASES_ROOT"]) / "CURRENT"
+pointer.write_text(release.name + "\n", encoding="utf-8")
+print(str(release))
+'@
+
+try {
+    $out = & $python -c $helper
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'hc_scheduled_host:manifest_mismatch'
+        exit 1
+    }
+}
+finally {
+    Remove-Item Env:HC_PKG_REPO_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:HC_PKG_SOURCE_COMMIT -ErrorAction SilentlyContinue
+    Remove-Item Env:HC_PKG_RELEASES_ROOT -ErrorAction SilentlyContinue
+}
+
+$releaseDir = [string]$out.Trim()
+Write-Host ("hc_scheduled_host:ok release_packaged")
+
+# Lock release directory: SYSTEM + Administrators full; others none.
+$acl = Get-Acl -LiteralPath $releaseDir
+$acl.SetAccessRuleProtection($true, $false)
+$acl.Access | ForEach-Object { [void]$acl.RemoveAccessRule($_) }
+$admins = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'BUILTIN\Administrators', 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$system = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    'NT AUTHORITY\SYSTEM', 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$acl.AddAccessRule($admins)
+$acl.AddAccessRule($system)
+Set-Acl -LiteralPath $releaseDir -AclObject $acl
+Write-Host 'hc_scheduled_host:ok acl_locked'
+exit 0

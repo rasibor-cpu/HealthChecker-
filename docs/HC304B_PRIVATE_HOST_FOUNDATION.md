@@ -6,13 +6,24 @@
 
 This phase builds and certifies a **fail-closed companion-only host**. It does **not**:
 
-- install Tailscale, Caddy, or a Windows service;
+- install Tailscale, Caddy, or Windows scheduled tasks;
 - create a real monitoring vault on disk outside tests;
 - grant phone permissions, Sync, or WorkManager;
 - connect to production `vault_storage`;
 - commit/push (until separately approved).
 
 See also: `docs/HC304A_PERMANENT_HOST_READINESS.md`.
+
+### Always-on mechanism (HC-306E-R2)
+
+**Active:** Microsoft Windows **Task Scheduler** scheduled startup tasks (not Windows services):
+
+1. `HealthCheckerCompanionHost` — AtStartup; IgnoreNew; bounded restart
+2. `HealthCheckerCompanionProxy` — AtStartup + bounded delay; waits for Companion `/healthz`; IgnoreNew; bounded restart
+
+**Rejected:** NSSM, WinSW, and any third-party service wrapper. Historical NSSM sketches in `install_service.ps1.template` are marked rejected only.
+
+Privileged tasks must run from an immutable release copy under `C:\ProgramData\HealthChecker\releases\<commit>\` with SHA-256 manifest verification. Python and Caddy for SYSTEM tasks must be staged under `C:\ProgramData\HealthChecker\tools\` (Admin/SYSTEM-owned) — user-profile interpreters are a privilege risk and block install.
 
 ---
 
@@ -88,8 +99,10 @@ Shutdown in reverse. Health checks: `/healthz` on companion and proxy loopback U
 | Tailscale Serve template (inert) | `scripts/companion_host/configure_tailscale_serve.ps1.template` |
 | Serve status Funnel parse | `backend/health_vault/companion_host/serve_status.py` |
 | Topology control template | `scripts/companion_host/topology_control.ps1.template` |
-| Service templates (inert) | `scripts/companion_host/*.ps1.template` |
-| Adversarial tests | `tests/test_hc304b_private_host_foundation.py`, `tests/test_hc304br1_proxy_topology.py` |
+| Scheduled-host policy + packaging | `backend/health_vault/companion_host/scheduled_host.py` |
+| Task Scheduler templates (inert) | `scripts/companion_host/install_scheduled_tasks.ps1.template`, `control_scheduled_tasks.ps1.template`, `package_verified_release.ps1.template`, bootstraps |
+| NSSM install template (REJECTED) | `scripts/companion_host/install_service.ps1.template` (historical; exits rejected) |
+| Adversarial tests | `tests/test_hc304b_private_host_foundation.py`, `tests/test_hc304br1_proxy_topology.py`, `tests/test_hc306e_scheduled_host_foundation.py` |
 
 ---
 
@@ -125,16 +138,18 @@ Shutdown in reverse. Health checks: `/healthz` on companion and proxy loopback U
 5. Set `HC_TRUSTED_PROXY_MODE=tailscale_https`, loopback binds, distinct `HC_BIND_PORT` / `HC_PROXY_LISTEN_PORT`.
 6. Set `HC_HOST_ACTIVATION=enabled` only when ready.
 7. Install Tailscale (manual), enroll laptop + phone, restrict ACL to those nodes; **no Funnel/public exposure**.
-8. Install Caddy (manual — **not** by this repo). Render/review Caddyfile; start Companion Host, then proxy.
-9. Configure Tailscale **Serve** only to `http://127.0.0.1:<HC_PROXY_LISTEN_PORT>` (template: `configure_tailscale_serve.ps1.template`).
+8. Install Caddy (manual — **not** by this repo). Stage Admin-owned copies under `%ProgramData%\HealthChecker\tools\` for SYSTEM tasks. Render/review Caddyfile; package verified release; install scheduled tasks only after privilege audit.
+9. Configure Tailscale **Serve** only to `http://127.0.0.1:<HC_PROXY_LISTEN_PORT>` (template: `configure_tailscale_serve.ps1.template`). Tasks never auto-configure Serve/Funnel.
 10. Pair the phone to the **HTTPS** origin with a **new** pair code.
 
 ### Windows ACL guidance
 
-- Service account: Modify on monitoring vault + log directory only.
-- Env/secret file: Readable only by that account.
+- Scheduled-task identity (SYSTEM pilot): read/execute on verified release + tools; Modify on monitoring vault + log directory only.
+- Env/secret file: Readable only by that account / Administrators.
+- Release directory + manifest: writable only by SYSTEM and Administrators.
 - Logs: Outside the vault (e.g. `%ProgramData%\HealthChecker\logs\`).
-- Never put secrets in process command-line arguments.
+- Never put secrets in process command-line arguments or task XML.
+- Do not execute privileged tasks from the mutable Git working tree.
 
 ---
 
@@ -158,7 +173,7 @@ Rules (tested as documentation contract + HC-303D phone behavior):
 
 1. `tailscale serve reset` (confirm no Funnel / no public listener).
 2. Stop local trusted proxy.
-3. Stop companion-host process/service (when installed).
+3. Stop companion-host / proxy scheduled tasks (when installed).
 4. Leave phone on prior active host if permanent pair never succeeded.
 5. If permanent pair succeeded but must roll back: re-pair to a known-good host with a new code; revoke the unwanted device on the abandoned host.
 6. Do not delete monitoring vault until backup confirmed.
@@ -223,5 +238,5 @@ Rules (tested as documentation contract + HC-303D phone behavior):
 |------|---------|
 | Foundation code + tests | Ready for independent review |
 | HC-305F-R1 Caddy header remediation | Ready for independent review / commit (Gate F still blocked until then) |
-| Install service / Tailscale Serve / create real vault | **NO-GO** until approved |
+| Install scheduled tasks / Tailscale Serve / create real vault | **NO-GO** until approved + privilege audit |
 | Phone permissions / Sync / WorkManager / live clinical | **NO-GO** |

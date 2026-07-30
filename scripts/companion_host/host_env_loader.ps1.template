@@ -1,0 +1,223 @@
+# HC-306E-R2 — Safe host.env loader (REVIEW / release-copy ONLY)
+#
+# Smallest safe PowerShell loader for privileged scheduled-task bootstraps.
+# - Reads ONLY the fixed protected host.env path
+# - Allowlisted HC_* keys only
+# - Rejects duplicates, unknown keys, blank names, malformed lines, controls,
+#   and command-injection syntax
+# - Values are literal strings — NEVER Invoke-Expression / iex
+# - NEVER echoes secret values (privacy-safe reason codes only)
+#
+# This template is inert documentation until copied into an immutable
+# ProgramData release directory and invoked by a fixed scheduled-task action.
+# Do not execute from the Git working tree under a privileged identity.
+
+$script:HC_HOST_ENV_PATH = 'C:\ProgramData\HealthChecker\companion_host\host.env'
+$script:HC_ALLOWED_HOST_ENV_KEYS = @(
+    'HC_HOST_ACTIVATION',
+    'HC_COMPANION_ADMIN_TOKEN',
+    'HC_COMPANION_PEPPER',
+    'HC_PROXY_SHARED_TOKEN',
+    'HC_MONITORING_VAULT_ROOT',
+    'HC_TRUSTED_PROXY_MODE',
+    'HC_EXTERNAL_HTTPS_ORIGIN',
+    'HC_EXTERNAL_HTTPS_HOST',
+    'HC_BIND_HOST',
+    'HC_BIND_PORT',
+    'HC_PROXY_LISTEN_HOST',
+    'HC_PROXY_LISTEN_PORT',
+    'HC_TAILSCALE_SERVE_TARGET_PORT'
+)
+
+function Write-HcReason([string]$Code) {
+    # Privacy-safe reason codes only — never print env values.
+    Write-Host ("hc_scheduled_host:" + $Code)
+}
+
+function Test-HcInjectionSyntax([string]$Text) {
+    if ($null -eq $Text) { return $false }
+    if ($Text -match '[\x00-\x08\x0b\x0c\x0e-\x1f]') { return $true }
+    if ($Text -match '[;`|&<>]') { return $true }
+    if ($Text -match '\$\(') { return $true }
+    if ($Text -match '(?i)\$env:') { return $true }
+    if ($Text -match '`') { return $true }
+    if ($Text -match '(?i)Invoke-Expression|\biex\b') { return $true }
+    return $false
+}
+
+function Import-HcHostEnv {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$Path = $script:HC_HOST_ENV_PATH
+    )
+    $expected = [System.IO.Path]::GetFullPath($script:HC_HOST_ENV_PATH)
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    if ($resolved -ne $expected) {
+        Write-HcReason 'env_path_forbidden'
+        throw 'env_path_forbidden'
+    }
+    if (-not (Test-Path -LiteralPath $resolved)) {
+        Write-HcReason 'env_parse_failed'
+        throw 'env_parse_failed'
+    }
+    $allow = @{}
+    foreach ($k in $script:HC_ALLOWED_HOST_ENV_KEYS) { $allow[$k] = $true }
+    $seen = @{}
+    $lines = Get-Content -LiteralPath $resolved -Encoding UTF8
+    $lineno = 0
+    foreach ($raw in $lines) {
+        $lineno++
+        if ($null -eq $raw) { continue }
+        $line = [string]$raw
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $trimmedStart = $line.TrimStart()
+        if ($trimmedStart.StartsWith('#')) { continue }
+        if (Test-HcInjectionSyntax $line) {
+            Write-HcReason 'env_injection_rejected'
+            throw 'env_injection_rejected'
+        }
+        $eq = $line.IndexOf('=')
+        if ($eq -lt 1) {
+            Write-HcReason 'env_malformed'
+            throw 'env_malformed'
+        }
+        $key = $line.Substring(0, $eq).Trim()
+        $value = $line.Substring($eq + 1)
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            Write-HcReason 'env_malformed'
+            throw 'env_malformed'
+        }
+        if ($key -notmatch '^HC_[A-Z0-9_]+$') {
+            Write-HcReason 'env_malformed'
+            throw 'env_malformed'
+        }
+        if (-not $allow.ContainsKey($key)) {
+            Write-HcReason 'env_unknown_key'
+            throw 'env_unknown_key'
+        }
+        if ($seen.ContainsKey($key)) {
+            Write-HcReason 'env_duplicate_key'
+            throw 'env_duplicate_key'
+        }
+        if ($value.Length -ge 2) {
+            $q = $value[0]
+            if (($q -eq '"' -or $q -eq "'") -and $value[$value.Length - 1] -eq $q) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+        }
+        if (Test-HcInjectionSyntax $value) {
+            Write-HcReason 'env_injection_rejected'
+            throw 'env_injection_rejected'
+        }
+        # Literal assignment only — never Invoke-Expression.
+        [Environment]::SetEnvironmentVariable($key, $value, 'Process')
+        $seen[$key] = $true
+    }
+    Write-HcReason 'ok'
+    return $seen.Keys.Count
+}
+
+function Assert-HcReleaseManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ReleaseDir
+    )
+    $releaseFull = [System.IO.Path]::GetFullPath($ReleaseDir)
+    $manifestPath = Join-Path $releaseFull 'RELEASE_MANIFEST.json'
+    if (-not (Test-Path -LiteralPath $manifestPath)) {
+        Write-HcReason 'manifest_missing'
+        throw 'manifest_missing'
+    }
+    $required = @(
+        'scripts/companion_host/bootstrap_companion_host.ps1',
+        'scripts/companion_host/bootstrap_companion_proxy.ps1',
+        'scripts/companion_host/host_env_loader.ps1',
+        'backend/health_vault/companion_host/__main__.py',
+        'backend/health_vault/companion_host/scheduled_host.py',
+        'backend/__init__.py'
+    )
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $manifest.files) {
+        Write-HcReason 'manifest_mismatch'
+        throw 'manifest_mismatch'
+    }
+    $names = @{}
+    foreach ($prop in $manifest.files.PSObject.Properties) {
+        $names[[string]$prop.Name.Replace('\', '/')] = $true
+    }
+    foreach ($req in $required) {
+        if (-not $names.ContainsKey($req)) {
+            Write-HcReason 'manifest_mismatch'
+            throw 'manifest_mismatch'
+        }
+    }
+    foreach ($prop in $manifest.files.PSObject.Properties) {
+        $rel = [string]$prop.Name
+        $expected = ([string]$prop.Value).Trim().ToUpperInvariant()
+        $norm = $rel.Replace('\', '/')
+        if ([string]::IsNullOrWhiteSpace($norm) -or $norm.StartsWith('/') -or $norm -match '^[A-Za-z]:' -or $norm.Split('/') -contains '..') {
+            Write-HcReason 'manifest_mismatch'
+            throw 'manifest_mismatch'
+        }
+        $filePath = [System.IO.Path]::GetFullPath((Join-Path $releaseFull ($norm -replace '/', [IO.Path]::DirectorySeparatorChar)))
+        if (-not $filePath.StartsWith($releaseFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            Write-HcReason 'manifest_mismatch'
+            throw 'manifest_mismatch'
+        }
+        if (-not (Test-Path -LiteralPath $filePath)) {
+            Write-HcReason 'release_file_missing'
+            throw 'release_file_missing'
+        }
+        $item = Get-Item -LiteralPath $filePath -Force
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            Write-HcReason 'release_file_modified'
+            throw 'release_file_modified'
+        }
+        $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($hash -ne $expected) {
+            Write-HcReason 'release_file_modified'
+            throw 'release_file_modified'
+        }
+    }
+    Write-HcReason 'ok'
+}
+
+function Assert-HcFixedExecutable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string]$AllowedPath
+    )
+    $toolsRoot = [System.IO.Path]::GetFullPath('C:\ProgramData\HealthChecker\tools')
+    $resolvedLiteral = [System.IO.Path]::GetFullPath($Path)
+    $allowed = [System.IO.Path]::GetFullPath($AllowedPath)
+    if ($resolvedLiteral -ne $allowed) {
+        Write-HcReason 'executable_override_rejected'
+        throw 'executable_override_rejected'
+    }
+    if (-not $resolvedLiteral.StartsWith($toolsRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-HcReason 'executable_privilege_risk'
+        throw 'executable_privilege_risk'
+    }
+    # Reject symlink / reparse on the file or any ancestor under tools
+    $cur = $resolvedLiteral
+    while ($true) {
+        if (Test-Path -LiteralPath $cur) {
+            $it = Get-Item -LiteralPath $cur -Force
+            if ($it.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                Write-HcReason 'executable_privilege_risk'
+                throw 'executable_privilege_risk'
+            }
+        }
+        if ($cur.Equals($toolsRoot, [StringComparison]::OrdinalIgnoreCase)) { break }
+        $parent = Split-Path -Parent $cur
+        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $cur) { break }
+        $cur = $parent
+    }
+    if (-not (Test-Path -LiteralPath $resolvedLiteral)) {
+        Write-HcReason 'executable_override_rejected'
+        throw 'executable_override_rejected'
+    }
+    return $resolvedLiteral
+}
