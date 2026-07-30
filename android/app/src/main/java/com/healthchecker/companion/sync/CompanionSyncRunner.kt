@@ -147,48 +147,38 @@ class CompanionSyncRunner(
                 deletedRecordIdsJson = chunk.deletedRecordIdsJson,
             )
 
-            if (ack.status == "unauthorized" || ack.status == "revoked") {
-                prefs.setPendingBatch(null)
-                prefs.setLastError(ack.status)
-                prefs.setQueuedCount(0)
-                return Outcome.FAILURE
-            }
-
-            val durableAck = ack.ok && ack.ackBatchId == chunk.batchId
-            if (!durableAck) {
-                prefs.setLastError(ack.error ?: ack.status)
-                return Outcome.RETRY
-            }
-
-            if (!pending.isFinalChunk()) {
-                pending = pending.advanceChunk()
-                if (pending == null) {
-                    prefs.setLastError("pending_chunk_advance_failed")
+            when (val action = ChunkAckDecision.decide(pending, ack)) {
+                is ChunkAckDecision.Action.ClearAndFail -> {
+                    prefs.setPendingBatch(null)
+                    prefs.setLastError(action.reason)
+                    prefs.setQueuedCount(0)
+                    return Outcome.FAILURE
+                }
+                is ChunkAckDecision.Action.RetrySameChunk -> {
+                    prefs.setLastError(action.reason)
                     return Outcome.RETRY
                 }
-                prefs.setPendingBatch(pending)
-                continue
+                is ChunkAckDecision.Action.AdvanceToNextChunk -> {
+                    pending = action.next
+                    prefs.setPendingBatch(pending)
+                    continue
+                }
+                is ChunkAckDecision.Action.FinalizeCursor -> {
+                    val persisted = reader.acknowledgeCursor(
+                        action.cursorToken,
+                        pending.tokenScope,
+                    )
+                    if (!persisted) {
+                        prefs.setLastError("cursor_scope_persist_failed")
+                        return Outcome.RETRY
+                    }
+                    prefs.setPendingBatch(null)
+                    prefs.setLastSuccess(Instant.now().toString())
+                    prefs.setLastError(null)
+                    prefs.setQueuedCount(0)
+                    return Outcome.SUCCESS
+                }
             }
-
-            if (!ack.cursorAdvanced) {
-                prefs.setLastError(ack.error ?: "partial_no_cursor")
-                return Outcome.RETRY
-            }
-
-            val persisted = reader.acknowledgeCursor(
-                ack.nextCursorToken ?: pending.nextChangesToken,
-                pending.tokenScope,
-            )
-            if (!persisted) {
-                prefs.setLastError("cursor_scope_persist_failed")
-                return Outcome.RETRY
-            }
-
-            prefs.setPendingBatch(null)
-            prefs.setLastSuccess(Instant.now().toString())
-            prefs.setLastError(null)
-            prefs.setQueuedCount(0)
-            return Outcome.SUCCESS
         }
 
         prefs.setLastError("pending_plan_unavailable")

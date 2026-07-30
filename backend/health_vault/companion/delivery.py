@@ -36,6 +36,41 @@ def _parse_ts(value: str) -> datetime:
     return datetime.fromisoformat(text).astimezone(timezone.utc)
 
 
+def resolve_cursor_advancement_request(body: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    """
+    HC-306I-R11 absent-cursor contract.
+
+    Returns:
+      ("absent", None)  — next_cursor/cursor omitted; do not modify host cursor
+      ("present", cursor) — explicit valid final cursor advancement request
+      ("invalid", None) — explicit null/malformed cursor; fail closed
+
+    Missing keys must never be converted into an explicit null advancement.
+    """
+    if not isinstance(body, dict):
+        return "invalid", None
+    if "next_cursor" in body:
+        raw = body.get("next_cursor")
+    elif "cursor" in body:
+        raw = body.get("cursor")
+    else:
+        return "absent", None
+
+    if raw is None:
+        return "invalid", None
+    if not isinstance(raw, dict):
+        return "invalid", None
+    token = raw.get("changes_token")
+    if token is None:
+        return "invalid", None
+    if not isinstance(token, str):
+        return "invalid", None
+    cleaned = token.strip()
+    if not cleaned:
+        return "invalid", None
+    return "present", {"changes_token": cleaned}
+
+
 class CompanionDeliveryService:
     """
     Authenticated batch delivery from the Android companion.
@@ -150,6 +185,14 @@ class CompanionDeliveryService:
                 "ok": False,
                 "status": "payload_too_large",
                 "errors": [f"observation_count_exceeds_{MAX_OBSERVATIONS_PER_BATCH}"],
+            }
+
+        cursor_mode, requested_cursor = resolve_cursor_advancement_request(body)
+        if cursor_mode == "invalid":
+            return {
+                "ok": False,
+                "status": "malformed",
+                "errors": ["next_cursor_invalid"],
             }
 
         payload_fp = payload_fingerprint(
@@ -313,7 +356,9 @@ class CompanionDeliveryService:
             return ack
 
         prior_cursor = self.ingestion.get_cursor("health_connect", patient_id=patient_id)
-        proposed_cursor = body.get("next_cursor") or body.get("cursor") or prior_cursor
+        # Absent next_cursor means "do not modify cursor". Only an explicit valid
+        # final cursor may request advancement. Never coerce missing → null.
+        proposed_cursor = requested_cursor if cursor_mode == "present" else prior_cursor
 
         if validated:
             try:
@@ -357,6 +402,11 @@ class CompanionDeliveryService:
         device_upd["last_seen_at"] = now_ts
         self.store.upsert_companion_device(device_upd)
 
+        # HC-306I-R11 monitoring decision: retain per-chunk monitoring when rows are
+        # newly stored. Evidence was insufficient to defer monitoring to the final
+        # cursor-bearing chunk without risking unmonitored durable stores after an
+        # interrupted multi-chunk plan. Client call/read timeouts were raised to
+        # 180s to absorb this per-chunk cost on the permanent host.
         mon = None
         if int(ingest.get("stored") or 0) > 0:
             mon = self.bridge.evaluate(patient_id=patient_id, trigger="hc303a_companion_delivery")
@@ -423,8 +473,8 @@ class CompanionDeliveryService:
                 obs_key = str(row.get("observation_id") or row.get("source_record_id"))
                 self.store.mark_companion_observation_seen(device.get("device_id"), obs_key, batch_id)
 
-        if durable and not rejected:
-            self.ingestion.save_cursor("health_connect", proposed_cursor, patient_id=patient_id)
+        if durable and not rejected and cursor_mode == "present" and requested_cursor is not None:
+            self.ingestion.save_cursor("health_connect", requested_cursor, patient_id=patient_id)
             cursor_advanced = True
 
         sync_health = {
