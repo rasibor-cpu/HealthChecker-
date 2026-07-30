@@ -19,19 +19,17 @@ import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
 import com.healthchecker.companion.healthconnect.HealthConnectAvailability
 import com.healthchecker.companion.healthconnect.HealthConnectCapability
-import com.healthchecker.companion.healthconnect.HealthConnectReader
+import com.healthchecker.companion.host.HostClient
 import com.healthchecker.companion.healthconnect.PermissionLaunchMonitor
 import com.healthchecker.companion.healthconnect.PermissionRequestPlanner
-import com.healthchecker.companion.healthconnect.SyncDeliveryGate
-import com.healthchecker.companion.host.HostClient
 import com.healthchecker.companion.host.PairingInputs
 import com.healthchecker.companion.secure.SecurePrefs
+import com.healthchecker.companion.sync.CompanionSyncRunner
 import com.healthchecker.companion.util.SafeLog
 import com.healthchecker.companion.work.MonitoringSyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 /**
  * Minimal accessible companion status screen.
@@ -377,65 +375,7 @@ class CompanionStatusActivity : AppCompatActivity() {
                 return@withContext
             }
             try {
-                prefs.setLastAttempt(java.time.Instant.now().toString())
-                val reader = HealthConnectReader(this@CompanionStatusActivity, prefs)
-                val pendingLoad = prefs.loadPendingBatch()
-                if (pendingLoad is SecurePrefs.PendingBatchLoad.Corrupt) {
-                    prefs.setLastError("pending_batch_corrupt")
-                    prefs.setLastQueryPerformed(false)
-                    return@withContext
-                }
-                val pending = (pendingLoad as? SecurePrefs.PendingBatchLoad.Loaded)?.batch
-                val fetch = if (pending != null) {
-                    HealthConnectReader.FetchResult.fromPending(
-                        observations = pending.observations(),
-                        nextChangesToken = pending.nextChangesToken,
-                        deletedRecordIds = pending.deletedRecordIds(),
-                        tokenScope = pending.tokenScope,
-                        partialPermissionWarning = pending.partialPermissionWarning
-                    )
-                } else {
-                    reader.fetchNew()
-                }
-                prefs.setQueuedCount(fetch.observations.size)
-                prefs.setLastQueryPerformed(fetch.queryPerformed)
-                prefs.setPartialPermissionWarning(SyncDeliveryGate.visiblePartialWarning(fetch))
-
-                if (!SyncDeliveryGate.shouldDeliver(fetch)) {
-                    prefs.setLastError(SyncDeliveryGate.visibleError(fetch) ?: "query_not_performed")
-                    return@withContext
-                }
-
-                val capability = HealthConnectCapability(this@CompanionStatusActivity).report()
-                val ack = HostClient(prefs).deliver(
-                    fetch.observations,
-                    fetch.nextChangesToken,
-                    JSONObject().put("availability", capability.availability.name),
-                    JSONObject()
-                        .put("missing_count", capability.permissionsMissing.size)
-                        .put("granted_count", capability.permissionsGranted.size),
-                    JSONObject().put("unique_name", MonitoringSyncWorker.UNIQUE_NAME),
-                    fetch.observations.size,
-                    fetch.deletedRecordIds,
-                    fetch.proposedTokenScope,
-                    SyncDeliveryGate.visiblePartialWarning(fetch)
-                )
-                if (SyncDeliveryGate.shouldMarkSuccess(fetch, ack.ok, ack.cursorAdvanced)) {
-                    val scope = pending?.tokenScope ?: fetch.proposedTokenScope
-                    val persisted = reader.acknowledgeCursor(
-                        ack.nextCursorToken ?: fetch.nextChangesToken,
-                        scope
-                    )
-                    if (!persisted) {
-                        prefs.setLastError("cursor_scope_persist_failed")
-                    } else {
-                        prefs.setLastSuccess(java.time.Instant.now().toString())
-                        prefs.setLastError(null)
-                        prefs.setQueuedCount(0)
-                    }
-                } else {
-                    prefs.setLastError(ack.error ?: ack.status)
-                }
+                CompanionSyncRunner(this@CompanionStatusActivity, prefs).runOnce("manual")
             } finally {
                 prefs.syncMutex.release("manual")
             }

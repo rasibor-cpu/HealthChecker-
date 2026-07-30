@@ -1,10 +1,7 @@
 package com.healthchecker.companion.host
 
 import com.healthchecker.companion.BuildConfig
-import com.healthchecker.companion.healthconnect.CompanionObservation
 import com.healthchecker.companion.secure.SecurePrefs
-import com.healthchecker.companion.sync.PendingBatch
-import com.healthchecker.companion.sync.PendingBatchAck
 import com.healthchecker.companion.util.SafeLog
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -13,7 +10,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 /**
@@ -80,15 +76,15 @@ class HostClient(
     }
 
     fun deliver(
-        observations: List<CompanionObservation>,
+        batchId: String,
+        nonce: String,
+        observationsJson: String,
         nextChangesToken: String?,
-        healthConnectStatus: JSONObject,
-        permissions: JSONObject,
-        workmanager: JSONObject,
+        healthConnectStatusJson: String,
+        permissionsJson: String,
+        workmanagerJson: String,
         queued: Int,
-        deletedRecordIds: List<String> = emptyList(),
-        tokenScope: String? = null,
-        partialPermissionWarning: Boolean = false
+        deletedRecordIdsJson: String = "[]",
     ): DeliveryAck {
         when (val integrity = prefs.assessPairingIntegrity()) {
             is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Inconsistent -> {
@@ -108,37 +104,19 @@ class HostClient(
             return DeliveryAck(false, gate.error ?: "config_gate", false, null, gate.error)
         }
         assertTlsOrLocalDev(host!!)
-
-        val pending = when (val load = prefs.loadPendingBatch()) {
-            is SecurePrefs.PendingBatchLoad.Corrupt -> {
-                SafeLog.w("pending_batch_corrupt")
-                return DeliveryAck(false, "pending_batch_corrupt", false, null, "pending_batch_corrupt")
-            }
-            is SecurePrefs.PendingBatchLoad.Loaded -> load.batch
-            is SecurePrefs.PendingBatchLoad.Empty -> PendingBatch.create(
-                observations = observations,
-                nextChangesToken = nextChangesToken,
-                deletedRecordIds = deletedRecordIds,
-                tokenScope = tokenScope,
-                partialPermissionWarning = partialPermissionWarning
-            ).also { prefs.setPendingBatch(it) }
-        }
-
-        val arr = JSONArray(pending.observationsJson)
-        val deletions = JSONArray()
-        pending.deletedRecordIds().forEach { deletions.put(it) }
-
-        val body = JSONObject()
-            .put("batch_id", pending.batchId)
-            .put("nonce", pending.nonce)
-            .put("sent_at", Instant.now().toString())
-            .put("observations", arr)
-            .put("deletions", deletions)
-            .put("next_cursor", JSONObject().put("changes_token", pending.nextChangesToken ?: JSONObject.NULL))
-            .put("health_connect_status", healthConnectStatus)
-            .put("permissions", permissions)
-            .put("workmanager", workmanager)
-            .put("queued_observations", queued)
+        val body = DeliveryEnvelope.build(
+            batchId = batchId,
+            nonce = nonce,
+            observations = JSONArray(observationsJson),
+            deletedRecordIds = JSONArray(deletedRecordIdsJson),
+            nextChangesToken = nextChangesToken,
+            healthConnectStatus = JSONObject(healthConnectStatusJson),
+            permissions = JSONObject(permissionsJson),
+            workmanager = JSONObject(workmanagerJson),
+            queued = queued,
+            // Non-final chunks intentionally omit next_cursor so the host keeps prior cursor.
+            includeNextCursor = nextChangesToken != null,
+        )
 
         val req = Request.Builder()
             .url(host.trimEnd('/') + "/api/companion/observations")
@@ -162,21 +140,11 @@ class HostClient(
                 val ackBatchId = json.optString("batch_id").ifBlank { null }
                 val cursorObj = json.optJSONObject("cursor")
                 val tokenOut = cursorObj?.optString("changes_token")
-                if (PendingBatchAck.shouldClearPending(
-                        pendingBatchId = pending.batchId,
-                        ackOk = ok,
-                        cursorAdvanced = advanced,
-                        ackBatchId = ackBatchId,
-                        status = status
-                    )
-                ) {
-                    prefs.setPendingBatch(null)
-                }
                 DeliveryAck(
                     ok = ok,
                     status = status,
-                    cursorAdvanced = advanced && ackBatchId == pending.batchId,
-                    nextCursorToken = if (advanced && ackBatchId == pending.batchId) tokenOut else null,
+                    cursorAdvanced = advanced && ackBatchId == batchId,
+                    nextCursorToken = if (advanced && ackBatchId == batchId) tokenOut else null,
                     error = if (ok) null else json.optJSONArray("errors")?.join(", "),
                     ackBatchId = ackBatchId
                 )
