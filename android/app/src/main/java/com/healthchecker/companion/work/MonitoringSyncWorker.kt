@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import com.healthchecker.companion.healthconnect.HealthConnectCapability
 import com.healthchecker.companion.healthconnect.HealthConnectAvailability
 import com.healthchecker.companion.healthconnect.HealthConnectReader
+import com.healthchecker.companion.healthconnect.SyncDeliveryGate
 import com.healthchecker.companion.host.HostClient
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.util.SafeLog
@@ -24,6 +25,8 @@ import java.util.concurrent.TimeUnit
  * Bounded exponential backoff. Does not claim exact or uninterrupted execution.
  * Android enforces a minimum periodic interval of 15 minutes.
  * Shares SyncMutex with manual sync to prevent overlap.
+ *
+ * HC-306I-R3: mirrors manual sync disposition — never delivers fatal non-queries.
  */
 class MonitoringSyncWorker(
     appContext: Context,
@@ -37,6 +40,7 @@ class MonitoringSyncWorker(
         val lease = prefs.syncMutex.tryAcquire(OWNER)
         if (!lease.acquired) {
             prefs.setLastError(lease.reason)
+            prefs.setLastQueryPerformed(false)
             SafeLog.i("worker_skip reason=" + lease.reason)
             return Result.success() // honest skip — not a crash; do not claim sync success timestamp
         }
@@ -44,10 +48,7 @@ class MonitoringSyncWorker(
             val capability = HealthConnectCapability(applicationContext).report()
             if (capability.availability != HealthConnectAvailability.READY) {
                 prefs.setLastError(capability.message)
-                return Result.success()
-            }
-            if (capability.permissionsMissing.isNotEmpty()) {
-                prefs.setLastError("permission_required")
+                prefs.setLastQueryPerformed(false)
                 return Result.success()
             }
 
@@ -55,27 +56,29 @@ class MonitoringSyncWorker(
             val pendingLoad = prefs.loadPendingBatch()
             if (pendingLoad is SecurePrefs.PendingBatchLoad.Corrupt) {
                 prefs.setLastError("pending_batch_corrupt")
+                prefs.setLastQueryPerformed(false)
                 return Result.failure()
             }
             val pending = (pendingLoad as? SecurePrefs.PendingBatchLoad.Loaded)?.batch
             // Frozen pending identity is reused unchanged; new HC readings stay in HC until after ack.
             val fetch = if (pending != null) {
-                HealthConnectReader.FetchResult(
+                HealthConnectReader.FetchResult.fromPending(
                     observations = pending.observations(),
                     nextChangesToken = pending.nextChangesToken,
-                    deletedRecordIds = pending.deletedRecordIds()
+                    deletedRecordIds = pending.deletedRecordIds(),
+                    tokenScope = pending.tokenScope,
+                    partialPermissionWarning = pending.partialPermissionWarning
                 )
             } else {
                 reader.fetchNew()
             }
             prefs.setQueuedCount(fetch.observations.size)
-            if (fetch.permissionRequired) {
-                prefs.setLastError("permission_required")
+            prefs.setLastQueryPerformed(fetch.queryPerformed)
+            prefs.setPartialPermissionWarning(SyncDeliveryGate.visiblePartialWarning(fetch))
+
+            if (!SyncDeliveryGate.shouldDeliver(fetch)) {
+                prefs.setLastError(SyncDeliveryGate.visibleError(fetch) ?: "query_not_performed")
                 return Result.success()
-            }
-            if (fetch.error != null && fetch.observations.isEmpty() && fetch.deletedRecordIds.isEmpty() && pending == null) {
-                prefs.setLastError(fetch.error)
-                return Result.retry()
             }
 
             val host = HostClient(prefs)
@@ -93,14 +96,25 @@ class MonitoringSyncWorker(
                     .put("overlap_prevented", true)
                     .put("exact_timing_guaranteed", false),
                 queued = fetch.observations.size,
-                deletedRecordIds = fetch.deletedRecordIds
+                deletedRecordIds = fetch.deletedRecordIds,
+                tokenScope = fetch.proposedTokenScope,
+                partialPermissionWarning = SyncDeliveryGate.visiblePartialWarning(fetch)
             )
-            if (ack.ok && ack.cursorAdvanced) {
-                reader.acknowledgeCursor(ack.nextCursorToken ?: fetch.nextChangesToken)
-                prefs.setLastSuccess(Instant.now().toString())
-                prefs.setLastError(null)
-                prefs.setQueuedCount(0)
-                Result.success()
+            if (SyncDeliveryGate.shouldMarkSuccess(fetch, ack.ok, ack.cursorAdvanced)) {
+                val scope = pending?.tokenScope ?: fetch.proposedTokenScope
+                val persisted = reader.acknowledgeCursor(
+                    ack.nextCursorToken ?: fetch.nextChangesToken,
+                    scope
+                )
+                if (!persisted) {
+                    prefs.setLastError("cursor_scope_persist_failed")
+                    Result.retry()
+                } else {
+                    prefs.setLastSuccess(Instant.now().toString())
+                    prefs.setLastError(null)
+                    prefs.setQueuedCount(0)
+                    Result.success()
+                }
             } else if (ack.status == "unauthorized" || ack.status == "revoked") {
                 prefs.setLastError(ack.status)
                 Result.failure()
@@ -114,6 +128,7 @@ class MonitoringSyncWorker(
         } catch (t: Throwable) {
             SafeLog.e("sync_worker_failed", t)
             prefs.setLastError(t.javaClass.simpleName)
+            prefs.setLastQueryPerformed(false)
             Result.retry()
         } finally {
             prefs.syncMutex.release(OWNER)

@@ -15,7 +15,11 @@ data class PendingBatch(
     val observationsJson: String,
     val nextChangesToken: String?,
     val deletedRecordIdsJson: String,
-    val createdAtEpochMs: Long
+    val createdAtEpochMs: Long,
+    /** Privacy-safe granted-type scope fingerprint committed with the token after ack. */
+    val tokenScope: String? = null,
+    /** Survives retry so partial-grant warning is not cleared by fromPending. */
+    val partialPermissionWarning: Boolean = false
 ) {
     fun observations(): List<CompanionObservation> {
         val arr = JSONArray(observationsJson)
@@ -59,6 +63,8 @@ data class PendingBatch(
             observations: List<CompanionObservation>,
             nextChangesToken: String?,
             deletedRecordIds: List<String>,
+            tokenScope: String? = null,
+            partialPermissionWarning: Boolean = false,
             nowEpochMs: Long = System.currentTimeMillis()
         ): PendingBatch {
             val arr = JSONArray()
@@ -85,7 +91,9 @@ data class PendingBatch(
                 observationsJson = arr.toString(),
                 nextChangesToken = nextChangesToken,
                 deletedRecordIdsJson = deleted.toString(),
-                createdAtEpochMs = nowEpochMs
+                createdAtEpochMs = nowEpochMs,
+                tokenScope = tokenScope,
+                partialPermissionWarning = partialPermissionWarning
             )
         }
 
@@ -106,7 +114,9 @@ data class PendingBatch(
                     observationsJson = observationsJson,
                     nextChangesToken = if (o.isNull("next_changes_token")) null else o.optString("next_changes_token"),
                     deletedRecordIdsJson = deletedJson,
-                    createdAtEpochMs = o.optLong("created_at_epoch_ms", 0L)
+                    createdAtEpochMs = o.optLong("created_at_epoch_ms", 0L),
+                    tokenScope = if (o.isNull("token_scope")) null else o.optString("token_scope").ifBlank { null },
+                    partialPermissionWarning = o.optBoolean("partial_permission_warning", false)
                 )
             }.getOrNull()
         }
@@ -119,5 +129,7 @@ data class PendingBatch(
         .put("next_changes_token", nextChangesToken ?: JSONObject.NULL)
         .put("deleted_record_ids_json", deletedRecordIdsJson)
         .put("created_at_epoch_ms", createdAtEpochMs)
+        .put("token_scope", tokenScope ?: JSONObject.NULL)
+        .put("partial_permission_warning", partialPermissionWarning)
         .toString()
 }

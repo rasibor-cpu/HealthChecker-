@@ -86,7 +86,9 @@ class HostClient(
         permissions: JSONObject,
         workmanager: JSONObject,
         queued: Int,
-        deletedRecordIds: List<String> = emptyList()
+        deletedRecordIds: List<String> = emptyList(),
+        tokenScope: String? = null,
+        partialPermissionWarning: Boolean = false
     ): DeliveryAck {
         when (val integrity = prefs.assessPairingIntegrity()) {
             is com.healthchecker.companion.secure.CompanionHostStore.PairingIntegrity.Inconsistent -> {
@@ -116,7 +118,9 @@ class HostClient(
             is SecurePrefs.PendingBatchLoad.Empty -> PendingBatch.create(
                 observations = observations,
                 nextChangesToken = nextChangesToken,
-                deletedRecordIds = deletedRecordIds
+                deletedRecordIds = deletedRecordIds,
+                tokenScope = tokenScope,
+                partialPermissionWarning = partialPermissionWarning
             ).also { prefs.setPendingBatch(it) }
         }
 

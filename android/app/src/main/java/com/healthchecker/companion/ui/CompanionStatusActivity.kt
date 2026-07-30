@@ -22,6 +22,7 @@ import com.healthchecker.companion.healthconnect.HealthConnectCapability
 import com.healthchecker.companion.healthconnect.HealthConnectReader
 import com.healthchecker.companion.healthconnect.PermissionLaunchMonitor
 import com.healthchecker.companion.healthconnect.PermissionRequestPlanner
+import com.healthchecker.companion.healthconnect.SyncDeliveryGate
 import com.healthchecker.companion.host.HostClient
 import com.healthchecker.companion.host.PairingInputs
 import com.healthchecker.companion.secure.SecurePrefs
@@ -313,8 +314,24 @@ class CompanionStatusActivity : AppCompatActivity() {
         val text = buildString {
             appendLine("Health Connect: ${report.availability}")
             appendLine(report.message)
+            appendLine("Sync mode: granted types only")
             appendLine("Permissions granted: ${report.permissionsGranted.size}")
             appendLine("Permissions missing: ${report.permissionsMissing.size}")
+            if (report.permissionsMissing.isNotEmpty() && report.permissionsGranted.isNotEmpty()) {
+                appendLine("Partial permissions warning: yes")
+            } else if (prefs.getPartialPermissionWarning()) {
+                appendLine("Partial permissions warning: yes")
+            } else {
+                appendLine("Partial permissions warning: no")
+            }
+            when {
+                prefs.getLastError()?.let { it == "no_granted_permissions" || it == "query_not_performed" || it == "permission_required" } == true ->
+                    appendLine("Last fetch: query not performed (permission action required)")
+                prefs.getLastQueryPerformed() ->
+                    appendLine("Last fetch: query performed")
+                else ->
+                    appendLine("Last fetch: none")
+            }
             appendLine("ECG supported in HC-303A: false")
             appendLine("Paired device: ${if (prefs.getDeviceToken() != null && prefs.getHostUrl() != null) "yes" else "not paired"}")
             when (val integrity = prefs.assessPairingIntegrity()) {
@@ -356,6 +373,7 @@ class CompanionStatusActivity : AppCompatActivity() {
             val lease = prefs.syncMutex.tryAcquire("manual")
             if (!lease.acquired) {
                 prefs.setLastError(lease.reason)
+                prefs.setLastQueryPerformed(false)
                 return@withContext
             }
             try {
@@ -364,34 +382,57 @@ class CompanionStatusActivity : AppCompatActivity() {
                 val pendingLoad = prefs.loadPendingBatch()
                 if (pendingLoad is SecurePrefs.PendingBatchLoad.Corrupt) {
                     prefs.setLastError("pending_batch_corrupt")
+                    prefs.setLastQueryPerformed(false)
                     return@withContext
                 }
                 val pending = (pendingLoad as? SecurePrefs.PendingBatchLoad.Loaded)?.batch
                 val fetch = if (pending != null) {
-                    HealthConnectReader.FetchResult(
+                    HealthConnectReader.FetchResult.fromPending(
                         observations = pending.observations(),
                         nextChangesToken = pending.nextChangesToken,
-                        deletedRecordIds = pending.deletedRecordIds()
+                        deletedRecordIds = pending.deletedRecordIds(),
+                        tokenScope = pending.tokenScope,
+                        partialPermissionWarning = pending.partialPermissionWarning
                     )
                 } else {
                     reader.fetchNew()
                 }
                 prefs.setQueuedCount(fetch.observations.size)
+                prefs.setLastQueryPerformed(fetch.queryPerformed)
+                prefs.setPartialPermissionWarning(SyncDeliveryGate.visiblePartialWarning(fetch))
+
+                if (!SyncDeliveryGate.shouldDeliver(fetch)) {
+                    prefs.setLastError(SyncDeliveryGate.visibleError(fetch) ?: "query_not_performed")
+                    return@withContext
+                }
+
                 val capability = HealthConnectCapability(this@CompanionStatusActivity).report()
                 val ack = HostClient(prefs).deliver(
                     fetch.observations,
                     fetch.nextChangesToken,
                     JSONObject().put("availability", capability.availability.name),
-                    JSONObject().put("missing_count", capability.permissionsMissing.size),
+                    JSONObject()
+                        .put("missing_count", capability.permissionsMissing.size)
+                        .put("granted_count", capability.permissionsGranted.size),
                     JSONObject().put("unique_name", MonitoringSyncWorker.UNIQUE_NAME),
                     fetch.observations.size,
-                    fetch.deletedRecordIds
+                    fetch.deletedRecordIds,
+                    fetch.proposedTokenScope,
+                    SyncDeliveryGate.visiblePartialWarning(fetch)
                 )
-                if (ack.ok && ack.cursorAdvanced) {
-                    reader.acknowledgeCursor(ack.nextCursorToken ?: fetch.nextChangesToken)
-                    prefs.setLastSuccess(java.time.Instant.now().toString())
-                    prefs.setLastError(null)
-                    prefs.setQueuedCount(0)
+                if (SyncDeliveryGate.shouldMarkSuccess(fetch, ack.ok, ack.cursorAdvanced)) {
+                    val scope = pending?.tokenScope ?: fetch.proposedTokenScope
+                    val persisted = reader.acknowledgeCursor(
+                        ack.nextCursorToken ?: fetch.nextChangesToken,
+                        scope
+                    )
+                    if (!persisted) {
+                        prefs.setLastError("cursor_scope_persist_failed")
+                    } else {
+                        prefs.setLastSuccess(java.time.Instant.now().toString())
+                        prefs.setLastError(null)
+                        prefs.setQueuedCount(0)
+                    }
                 } else {
                     prefs.setLastError(ack.error ?: ack.status)
                 }

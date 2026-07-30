@@ -67,7 +67,32 @@ class SecurePrefs(context: Context) {
     fun clearPairing() = hostStore.clearPairingCredentials()
 
     fun getChangesToken(): String? = prefs.getString(KEY_CHANGES, null)
-    fun setChangesToken(token: String) = prefs.edit().putString(KEY_CHANGES, token).apply()
+
+    fun getChangesTokenScope(): String? = prefs.getString(KEY_CHANGES_SCOPE, null)
+
+    /** Atomic persist of changes token + scope after durable host ack. */
+    fun persistChangesCursor(token: String, scope: String): Boolean {
+        if (token.isBlank() || scope.isBlank()) return false
+        return prefs.edit()
+            .putString(KEY_CHANGES, token)
+            .putString(KEY_CHANGES_SCOPE, scope)
+            .commit()
+    }
+
+    fun clearChangesCursor() {
+        prefs.edit()
+            .remove(KEY_CHANGES)
+            .remove(KEY_CHANGES_SCOPE)
+            .commit()
+    }
+
+    @Deprecated("Use persistChangesCursor after durable ack", ReplaceWith("persistChangesCursor(token, scope)"))
+    fun setChangesToken(token: String) {
+        // Fail closed: never persist a token without an accompanying scope.
+        if (token.isBlank()) {
+            clearChangesCursor()
+        }
+    }
 
     fun setLastAttempt(iso: String) = prefs.edit().putString(KEY_LAST_ATTEMPT, iso).apply()
     fun getLastAttempt(): String? = prefs.getString(KEY_LAST_ATTEMPT, null)
@@ -75,6 +100,12 @@ class SecurePrefs(context: Context) {
     fun getLastSuccess(): String? = prefs.getString(KEY_LAST_SUCCESS, null)
     fun setLastError(msg: String?) = prefs.edit().putString(KEY_LAST_ERROR, msg).apply()
     fun getLastError(): String? = prefs.getString(KEY_LAST_ERROR, null)
+    fun setPartialPermissionWarning(active: Boolean) =
+        prefs.edit().putBoolean(KEY_PARTIAL_WARNING, active).apply()
+    fun getPartialPermissionWarning(): Boolean = prefs.getBoolean(KEY_PARTIAL_WARNING, false)
+    fun setLastQueryPerformed(performed: Boolean) =
+        prefs.edit().putBoolean(KEY_LAST_QUERY_PERFORMED, performed).apply()
+    fun getLastQueryPerformed(): Boolean = prefs.getBoolean(KEY_LAST_QUERY_PERFORMED, false)
     fun setQueuedCount(n: Int) = prefs.edit().putInt(KEY_QUEUED, n).apply()
     fun getQueuedCount(): Int = prefs.getInt(KEY_QUEUED, 0)
 
@@ -101,9 +132,12 @@ class SecurePrefs(context: Context) {
 
     companion object {
         private const val KEY_CHANGES = "hc_changes_token"
+        private const val KEY_CHANGES_SCOPE = "hc_changes_token_scope"
         private const val KEY_LAST_ATTEMPT = "last_attempt_at"
         private const val KEY_LAST_SUCCESS = "last_success_at"
         private const val KEY_LAST_ERROR = "last_error"
+        private const val KEY_PARTIAL_WARNING = "partial_permission_warning"
+        private const val KEY_LAST_QUERY_PERFORMED = "last_query_performed"
         private const val KEY_QUEUED = "queued_count"
         private const val KEY_PENDING_BATCH = "pending_batch_json"
     }

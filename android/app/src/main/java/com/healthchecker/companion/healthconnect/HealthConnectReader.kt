@@ -8,6 +8,7 @@ import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
@@ -18,10 +19,13 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import com.healthchecker.companion.secure.SecurePrefs
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.reflect.KClass
 
 /**
- * Incremental Health Connect reader.
- * Advances local change-token only after the caller reports durable host acknowledgement.
+ * Incremental Health Connect reader (HC-306I-R3).
+ *
+ * Queries only currently granted supported record types.
+ * Advances local change-token + scope only after durable host acknowledgement.
  */
 class HealthConnectReader(
     private val context: Context,
@@ -33,49 +37,90 @@ class HealthConnectReader(
         val deletedRecordIds: List<String>,
         val permissionRequired: Boolean = false,
         val permissionDenied: Boolean = false,
-        val error: String? = null
-    )
+        val error: String? = null,
+        val queryPerformed: Boolean = false,
+        val disposition: QueryDisposition = QueryDisposition.NOT_PERFORMED_FATAL,
+        val partialPermissionWarning: Boolean = false,
+        val grantedTypeCount: Int = 0,
+        val missingTypeCount: Int = 0,
+        /** Scope fingerprint that must be persisted with [nextChangesToken] after durable ack. */
+        val proposedTokenScope: String? = null
+    ) {
+        companion object {
+            fun fromPending(
+                observations: List<CompanionObservation>,
+                nextChangesToken: String?,
+                deletedRecordIds: List<String>,
+                tokenScope: String?,
+                partialPermissionWarning: Boolean = false
+            ): FetchResult = FetchResult(
+                observations = observations,
+                nextChangesToken = nextChangesToken,
+                deletedRecordIds = deletedRecordIds,
+                queryPerformed = true,
+                disposition = if (partialPermissionWarning) {
+                    QueryDisposition.PERFORMED_PARTIAL
+                } else {
+                    QueryDisposition.PERFORMED_OK
+                },
+                partialPermissionWarning = partialPermissionWarning,
+                proposedTokenScope = tokenScope
+            )
+        }
+    }
 
     suspend fun fetchNew(initialHistoryDays: Long = 7): FetchResult {
         val capability = HealthConnectCapability(context).report()
         if (capability.availability != HealthConnectAvailability.READY) {
-            return FetchResult(emptyList(), null, emptyList(), error = capability.message)
+            return fatal(capability.message, granted = 0, missing = capability.permissionsMissing.size)
         }
-        if (capability.permissionsMissing.isNotEmpty()) {
-            return FetchResult(
-                emptyList(),
-                null,
-                emptyList(),
+
+        val granted = capability.permissionsGranted
+        val missing = capability.permissionsMissing
+        if (granted.isEmpty()) {
+            return fatal(
+                "no_granted_permissions",
                 permissionRequired = true,
-                error = "permissions_missing"
+                granted = 0,
+                missing = missing.size
             )
         }
 
+        val recordTypes = GrantedRecordCatalog.recordClasses(granted)
+        val scope = GrantedRecordCatalog.scopeFingerprint(granted)
+        val partial = missing.isNotEmpty()
+        val disposition =
+            if (partial) QueryDisposition.PERFORMED_PARTIAL else QueryDisposition.PERFORMED_OK
+
         val client = HealthConnectClient.getOrCreate(context)
-        val recordTypes = setOf(
-            HeartRateRecord::class,
-            RestingHeartRateRecord::class,
-            OxygenSaturationRecord::class,
-            BloodPressureRecord::class,
-            SleepSessionRecord::class,
-            StepsRecord::class,
-            ExerciseSessionRecord::class,
-            WeightRecord::class
-        )
+        val token = prefs.getChangesToken()
+        val persistedScope = prefs.getChangesTokenScope()
+        val scopeOk = GrantedRecordCatalog.scopeMatches(persistedScope, scope)
+        val needsReinit =
+            token.isNullOrBlank() ||
+                persistedScope.isNullOrBlank() ||
+                !GrantedRecordCatalog.isValidScopeFingerprint(persistedScope) ||
+                !scopeOk
 
-        var token = prefs.getChangesToken()
-        val observations = mutableListOf<CompanionObservation>()
-        val deleted = mutableListOf<String>()
-
-        if (token.isNullOrBlank()) {
-            // Initial bounded history (not full lifetime scan)
+        if (needsReinit) {
             val start = Instant.now().minus(initialHistoryDays, ChronoUnit.DAYS)
-            observations += readInitial(client, start)
-            token = client.getChangesToken(ChangesTokenRequest(recordTypes))
-            // Do not persist token until host ack — return proposed token only
-            return FetchResult(observations, token, deleted)
+            val observations = readInitial(client, start, recordTypes)
+            val freshToken = client.getChangesToken(ChangesTokenRequest(recordTypes))
+            return FetchResult(
+                observations = observations,
+                nextChangesToken = freshToken,
+                deletedRecordIds = emptyList(),
+                queryPerformed = true,
+                disposition = disposition,
+                partialPermissionWarning = partial,
+                grantedTypeCount = granted.size,
+                missingTypeCount = missing.size,
+                proposedTokenScope = scope
+            )
         }
 
+        val observations = mutableListOf<CompanionObservation>()
+        val deleted = mutableListOf<String>()
         var nextToken: String? = token
         var pageToken: String? = token
         try {
@@ -83,7 +128,12 @@ class HealthConnectReader(
                 val response = client.getChanges(pageToken)
                 response.changes.forEach { change ->
                     when (change) {
-                        is UpsertionChange -> observations += mapRecord(change.record)
+                        is UpsertionChange -> {
+                            // Only map granted types (revoked types must never surface).
+                            if (change.record::class in recordTypes) {
+                                observations += mapRecord(change.record)
+                            }
+                        }
                         is DeletionChange -> deleted += change.recordId
                     }
                 }
@@ -91,62 +141,110 @@ class HealthConnectReader(
                 pageToken = if (response.hasMore) response.nextChangesToken else null
             }
         } catch (t: Throwable) {
-            // Changes token invalidation — safe recovery via bounded re-init (do not fabricate)
-            prefs.setChangesToken("")
+            // Changes token invalidation — bounded re-init for currently granted types only.
+            prefs.clearChangesCursor()
             val start = Instant.now().minus(initialHistoryDays, ChronoUnit.DAYS)
-            val recovered = readInitial(client, start)
+            val recovered = readInitial(client, start, recordTypes)
             val freshToken = client.getChangesToken(ChangesTokenRequest(recordTypes))
             return FetchResult(
                 observations = recovered,
                 nextChangesToken = freshToken,
                 deletedRecordIds = emptyList(),
+                queryPerformed = true,
+                disposition = disposition,
+                partialPermissionWarning = partial,
+                grantedTypeCount = granted.size,
+                missingTypeCount = missing.size,
+                proposedTokenScope = scope,
                 error = "changes_token_invalidated_reinitialized"
             )
         }
-        return FetchResult(observations, nextToken, deleted)
+        return FetchResult(
+            observations = observations,
+            nextChangesToken = nextToken,
+            deletedRecordIds = deleted,
+            queryPerformed = true,
+            disposition = disposition,
+            partialPermissionWarning = partial,
+            grantedTypeCount = granted.size,
+            missingTypeCount = missing.size,
+            proposedTokenScope = scope
+        )
     }
 
-    fun acknowledgeCursor(nextChangesToken: String?) {
-        if (!nextChangesToken.isNullOrBlank()) {
-            prefs.setChangesToken(nextChangesToken)
-        }
+    /**
+     * Persist token + scope only after durable host acknowledgement.
+     * Both must be non-blank; otherwise fail closed (leave prior cursor untouched).
+     */
+    fun acknowledgeCursor(nextChangesToken: String?, tokenScope: String?): Boolean {
+        if (nextChangesToken.isNullOrBlank() || tokenScope.isNullOrBlank()) return false
+        if (!GrantedRecordCatalog.isValidScopeFingerprint(tokenScope)) return false
+        return prefs.persistChangesCursor(nextChangesToken, tokenScope)
     }
+
+    private fun fatal(
+        error: String,
+        permissionRequired: Boolean = false,
+        granted: Int,
+        missing: Int
+    ): FetchResult = FetchResult(
+        observations = emptyList(),
+        nextChangesToken = null,
+        deletedRecordIds = emptyList(),
+        permissionRequired = permissionRequired,
+        error = error,
+        queryPerformed = false,
+        disposition = QueryDisposition.NOT_PERFORMED_FATAL,
+        grantedTypeCount = granted,
+        missingTypeCount = missing,
+        proposedTokenScope = null
+    )
 
     private suspend fun readInitial(
         client: HealthConnectClient,
-        start: Instant
+        start: Instant,
+        allowed: Set<KClass<out Record>>
     ): List<CompanionObservation> {
         val out = mutableListOf<CompanionObservation>()
         val filter = TimeRangeFilter.between(start, Instant.now())
 
-        client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
-                // HeartRate Sample has no zoneOffset; use series startZoneOffset.
-                val zone = r.startZoneOffset
-                r.samples.forEachIndexed { idx, sample ->
-                    out += ObservationMapper.heartRate(
-                        recordId = r.metadata.id + ":$idx",
-                        bpm = sample.beatsPerMinute,
-                        time = sample.time,
-                        dataOrigin = r.metadata.dataOrigin.packageName,
-                        zoneOffset = zone
-                    )
+        if (HeartRateRecord::class in allowed) {
+            client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = filter))
+                .records.forEach { r ->
+                    val zone = r.startZoneOffset
+                    r.samples.forEachIndexed { idx, sample ->
+                        out += ObservationMapper.heartRate(
+                            recordId = r.metadata.id + ":$idx",
+                            bpm = sample.beatsPerMinute,
+                            time = sample.time,
+                            dataOrigin = r.metadata.dataOrigin.packageName,
+                            zoneOffset = zone
+                        )
+                    }
                 }
-            }
-        client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
+        }
+        if (RestingHeartRateRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(RestingHeartRateRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
                 out += ObservationMapper.restingHeartRate(
                     r.metadata.id, r.beatsPerMinute, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
                 )
             }
-        client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
+        }
+        if (OxygenSaturationRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
                 out += ObservationMapper.spo2(
                     r.metadata.id, r.percentage.value, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
                 )
             }
-        client.readRecords(ReadRecordsRequest(BloodPressureRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
+        }
+        if (BloodPressureRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(BloodPressureRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
                 out += ObservationMapper.bloodPressure(
                     r.metadata.id,
                     r.systolic.inMillimetersOfMercury,
@@ -156,28 +254,37 @@ class HealthConnectReader(
                     r.zoneOffset
                 )
             }
-        client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
-                out += ObservationMapper.steps(
-                    r.metadata.id, r.count, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
-                )
-            }
-        client.readRecords(ReadRecordsRequest(WeightRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
-                out += ObservationMapper.weightKg(
-                    r.metadata.id, r.weight.inKilograms, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
-                )
-            }
-        client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
+        }
+        if (StepsRecord::class in allowed) {
+            client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = filter))
+                .records.forEach { r ->
+                    out += ObservationMapper.steps(
+                        r.metadata.id, r.count, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
+                    )
+                }
+        }
+        if (WeightRecord::class in allowed) {
+            client.readRecords(ReadRecordsRequest(WeightRecord::class, timeRangeFilter = filter))
+                .records.forEach { r ->
+                    out += ObservationMapper.weightKg(
+                        r.metadata.id, r.weight.inKilograms, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
+                    )
+                }
+        }
+        if (SleepSessionRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
                 val hours = java.time.Duration.between(r.startTime, r.endTime).toMinutes() / 60.0
                 out += ObservationMapper.sleepDurationHours(
                     r.metadata.id, hours, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
                 )
             }
-        // Exercise sessions: map duration minutes as exercise_minutes
-        client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, timeRangeFilter = filter))
-            .records.forEach { r ->
+        }
+        if (ExerciseSessionRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(ExerciseSessionRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
                 val minutes = java.time.Duration.between(r.startTime, r.endTime).toMinutes().toDouble()
                 out += CompanionObservation(
                     observationId = java.util.UUID.nameUUIDFromBytes(("ex:" + r.metadata.id).toByteArray()).toString(),
@@ -190,6 +297,7 @@ class HealthConnectReader(
                     device = mapOf("data_origin" to r.metadata.dataOrigin.packageName)
                 )
             }
+        }
         return out
     }
 

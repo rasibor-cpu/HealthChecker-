@@ -27,7 +27,13 @@ class PendingBatchTest {
 
     @Test
     fun roundTripPreservesStableIdentity() {
-        val batch = PendingBatch.create(listOf(obs()), "tok-1", listOf("del-1"), nowEpochMs = 42L)
+        val batch = PendingBatch.create(
+            listOf(obs()),
+            "tok-1",
+            listOf("del-1"),
+            tokenScope = "steps",
+            nowEpochMs = 42L
+        )
         val restored = PendingBatch.fromJson(batch.toJson())
         assertNotNull(restored)
         assertEquals(batch.batchId, restored!!.batchId)
@@ -35,6 +41,37 @@ class PendingBatchTest {
         assertEquals(1, restored.observations().size)
         assertEquals(listOf("del-1"), restored.deletedRecordIds())
         assertTrue(restored.nextChangesToken == "tok-1")
+        assertEquals("steps", restored.tokenScope)
+        assertFalse(restored.partialPermissionWarning)
+    }
+
+    @Test
+    fun partialWarningSurvivesRoundTripForRetryIdentity() {
+        val batch = PendingBatch.create(
+            listOf(obs()),
+            "tok-partial",
+            emptyList(),
+            tokenScope = "steps",
+            partialPermissionWarning = true,
+            nowEpochMs = 7L
+        )
+        val restored = PendingBatch.fromJson(batch.toJson())!!
+        assertTrue(restored.partialPermissionWarning)
+        assertEquals("steps", restored.tokenScope)
+        assertEquals(batch.batchId, restored.batchId)
+        assertEquals(batch.nonce, restored.nonce)
+    }
+
+    @Test
+    fun legacyJsonWithoutTokenScopeStillParses() {
+        val legacy = PendingBatch.create(listOf(obs()), "tok-legacy", emptyList(), nowEpochMs = 9L)
+        // Strip token_scope key to simulate pre-R3 payload
+        val o = org.json.JSONObject(legacy.toJson())
+        o.remove("token_scope")
+        val restored = PendingBatch.fromJson(o.toString())
+        assertNotNull(restored)
+        assertNull(restored!!.tokenScope)
+        assertEquals(legacy.batchId, restored.batchId)
     }
 
     @Test
