@@ -44,9 +44,10 @@ HOST_ENV_PATH = PROGRAMDATA_ROOT / "companion_host" / "host.env"
 CADDYFILE_PATH = PROGRAMDATA_ROOT / "companion_host" / "Caddyfile"
 LOG_DIR = PROGRAMDATA_ROOT / "logs"
 TOOLS_ROOT = PROGRAMDATA_ROOT / "tools"
-# SYSTEM-safe tool locations required before privileged task install:
-FIXED_PYTHON_PATH = TOOLS_ROOT / "python" / "python.exe"
-FIXED_CADDY_PATH = TOOLS_ROOT / "caddy" / "caddy.exe"
+# Fixed versioned tool paths (must match config/companion_runtime.json; no env override).
+FIXED_PYTHON_PATH = TOOLS_ROOT / "python" / "3.12.10" / "python.exe"
+FIXED_CADDY_PATH = TOOLS_ROOT / "caddy" / "2.11.4" / "caddy.exe"
+FIXED_CADDY_SHA256 = "5CB9AB71E5756CE72840B8234177A2F40C8B4AB47A806B8E841E2B784E9DF62B"
 
 # Ports — never touch CSS / HC-303D reserved listeners from these tasks
 COMPANION_PORT_DEFAULT = 8743
@@ -129,6 +130,9 @@ _EXCLUDE_NAME_FRAGMENTS: tuple[str, ...] = (
 RELEASE_INCLUDE_PREFIXES: tuple[str, ...] = (
     "backend/__init__.py",
     "backend/health_vault/",
+    "config/companion_runtime.json",
+    "requirements/production.in",
+    "requirements/production.txt",
 )
 
 RELEASE_INCLUDE_SCRIPT_NAMES: tuple[str, ...] = (
@@ -148,7 +152,11 @@ REQUIRED_RELEASE_REL_PATHS: frozenset[str] = frozenset(
         "scripts/companion_host/host_env_loader.ps1",
         "backend/health_vault/companion_host/__main__.py",
         "backend/health_vault/companion_host/scheduled_host.py",
+        "backend/health_vault/companion_host/runtime_contract.py",
         "backend/__init__.py",
+        "config/companion_runtime.json",
+        "requirements/production.txt",
+        "requirements/production.in",
     }
 )
 REASON_CODES: frozenset[str] = frozenset(
@@ -709,7 +717,23 @@ def public_policy_dict() -> dict[str, Any]:
         "allowed_host_env_keys": sorted(ALLOWED_HOST_ENV_KEYS),
         "approval_env": APPROVAL_SCHEDULED_HOST,
         "approval_value": APPROVAL_VALUE,
+        "python_version": "3.12.10",
+        "caddy_version": "2.11.4",
+        "caddy_sha256": FIXED_CADDY_SHA256,
     }
+
+
+def assert_fixed_paths_match_runtime_contract(repo_root: Path | None = None) -> None:
+    """Fail closed if scheduled_host fixed paths diverge from companion_runtime.json."""
+    from backend.health_vault.companion_host.runtime_contract import load_runtime_contract
+
+    contract = load_runtime_contract(repo_root)
+    if Path(contract.python_exe) != FIXED_PYTHON_PATH:
+        raise ScheduledHostError("manifest_mismatch")
+    if Path(contract.caddy_exe) != FIXED_CADDY_PATH:
+        raise ScheduledHostError("manifest_mismatch")
+    if contract.caddy_sha256.upper() != FIXED_CADDY_SHA256:
+        raise ScheduledHostError("manifest_mismatch")
 
 
 def filter_os_environ_allowlist(environ: Mapping[str, str] | None = None) -> dict[str, str]:

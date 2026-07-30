@@ -1,0 +1,6 @@
+# HC-306F-R1 production direct dependencies for Companion Host (Windows x86-64 CPython 3.12)
+# Generated for target: CPython 3.12.10 Windows amd64
+# Do not float versions. Lock with pip-compile --generate-hashes.
+fastapi==0.141.1
+uvicorn==0.52.0
+tzdata==2026.3

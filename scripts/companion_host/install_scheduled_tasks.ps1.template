@@ -40,8 +40,8 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 Import-Module ScheduledTasks -ErrorAction Stop
 
 $ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
-$ToolsPython = 'C:\ProgramData\HealthChecker\tools\python\python.exe'
-$ToolsCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\caddy.exe'
+$ToolsPython = 'C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe'
+$ToolsCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\2.11.4\caddy.exe'
 $HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
 $Pwsh = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 

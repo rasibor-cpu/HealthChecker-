@@ -30,7 +30,7 @@ if (-not (Test-Path -LiteralPath $Loader)) {
 
 $LogDir = 'C:\ProgramData\HealthChecker\logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-$FixedCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\caddy.exe'
+$FixedCaddy = 'C:\ProgramData\HealthChecker\tools\caddy\2.11.4\caddy.exe'
 $Caddyfile = 'C:\ProgramData\HealthChecker\companion_host\Caddyfile'
 $HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
 $HealthTimeoutSec = 60

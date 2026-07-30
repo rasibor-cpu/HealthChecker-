@@ -61,7 +61,7 @@ if ($releasesFull -ne $expectedReleases) {
 }
 
 $pyCandidates = @(
-    'C:\ProgramData\HealthChecker\tools\python\python.exe'
+    'C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe'
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 if (-not $pyCandidates) {
     Write-Host 'hc_scheduled_host:executable_privilege_risk'

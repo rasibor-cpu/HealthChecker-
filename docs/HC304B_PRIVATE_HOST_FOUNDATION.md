@@ -23,7 +23,12 @@ See also: `docs/HC304A_PERMANENT_HOST_READINESS.md`.
 
 **Rejected:** NSSM, WinSW, and any third-party service wrapper. Historical NSSM sketches in `install_service.ps1.template` are marked rejected only.
 
-Privileged tasks must run from an immutable release copy under `C:\ProgramData\HealthChecker\releases\<commit>\` with SHA-256 manifest verification. Python and Caddy for SYSTEM tasks must be staged under `C:\ProgramData\HealthChecker\tools\` (Admin/SYSTEM-owned) — user-profile interpreters are a privilege risk and block install.
+Privileged tasks must run from an immutable release copy under `C:\ProgramData\HealthChecker\releases\<commit>\` with SHA-256 manifest verification. Python and Caddy for SYSTEM tasks must be staged under versioned Admin/SYSTEM-owned paths from `config/companion_runtime.json`:
+
+- `C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe`
+- `C:\ProgramData\HealthChecker\tools\caddy\2.11.4\caddy.exe`
+
+Production dependencies are pinned with hashes in `requirements/production.txt` (`pip install --require-hashes --only-binary=:all:`). User-profile interpreters are forbidden for SYSTEM tasks.
 
 ---
 
@@ -100,6 +105,7 @@ Shutdown in reverse. Health checks: `/healthz` on companion and proxy loopback U
 | Serve status Funnel parse | `backend/health_vault/companion_host/serve_status.py` |
 | Topology control template | `scripts/companion_host/topology_control.ps1.template` |
 | Scheduled-host policy + packaging | `backend/health_vault/companion_host/scheduled_host.py` |
+| Production runtime contract | `config/companion_runtime.json`, `requirements/production.in`, `requirements/production.txt`, `runtime_contract.py` |
 | Task Scheduler templates (inert) | `scripts/companion_host/install_scheduled_tasks.ps1.template`, `control_scheduled_tasks.ps1.template`, `package_verified_release.ps1.template`, bootstraps |
 | NSSM install template (REJECTED) | `scripts/companion_host/install_service.ps1.template` (historical; exits rejected) |
 | Adversarial tests | `tests/test_hc304b_private_host_foundation.py`, `tests/test_hc304br1_proxy_topology.py`, `tests/test_hc306e_scheduled_host_foundation.py` |

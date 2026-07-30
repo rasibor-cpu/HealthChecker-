@@ -1,0 +1,67 @@
+{
+  "schema_version": "hc.companion_runtime.v1",
+  "mechanism": "windows_task_scheduler",
+  "python": {
+    "implementation": "CPython",
+    "version": "3.12.10",
+    "version_info": [3, 12, 10],
+    "arch": "win_amd64",
+    "programdata_exe": "C:\\ProgramData\\HealthChecker\\tools\\python\\3.12.10\\python.exe",
+    "installer": {
+      "filename": "python-3.12.10-amd64.exe",
+      "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe",
+      "download_page": "https://www.python.org/downloads/release/python-31210/",
+      "size_bytes": 26964224,
+      "md5": "5eddb0b6f12c852725de071ae681dde4",
+      "integrity_mechanisms": [
+        "md5_official_release_page",
+        "sigstore_bundle",
+        "authenticode_python_software_foundation"
+      ],
+      "notes": "Last CPython 3.12 release with official Windows x86-64 binary installers; later 3.12.x are source-only security fixes."
+    }
+  },
+  "caddy": {
+    "version": "2.11.4",
+    "programdata_exe": "C:\\ProgramData\\HealthChecker\\tools\\caddy\\2.11.4\\caddy.exe",
+    "sha256": "5CB9AB71E5756CE72840B8234177A2F40C8B4AB47A806B8E841E2B784E9DF62B"
+  },
+  "dependencies": {
+    "requirements_in": "requirements/production.in",
+    "requirements_lock": "requirements/production.txt",
+    "direct_pins": [
+      "fastapi==0.141.1",
+      "uvicorn==0.52.0",
+      "tzdata==2026.3"
+    ],
+    "requires_tzdata": true,
+    "pip_install_args": [
+      "--require-hashes",
+      "--only-binary=:all:",
+      "--disable-pip-version-check"
+    ],
+    "lock_generation": {
+      "tool": "pip-tools",
+      "tool_version": "7.4.1",
+      "pip_version": "25.0.1",
+      "command": "pip-compile --generate-hashes --resolver=backtracking --pip-args \"--only-binary=:all:\" -o requirements/production.txt requirements/production.in"
+    },
+    "forbidden_packages": [
+      "pytest",
+      "pytest-asyncio",
+      "httpx",
+      "coverage",
+      "ruff",
+      "mypy",
+      "black",
+      "pip-tools",
+      "ipython"
+    ]
+  },
+  "tools_root": "C:\\ProgramData\\HealthChecker\\tools",
+  "path_policy": {
+    "allow_env_override": false,
+    "allow_symlink_or_reparse": false,
+    "require_versioned_tool_paths": true
+  }
+}

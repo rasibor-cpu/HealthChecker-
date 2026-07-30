@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath $Loader)) {
 
 $LogDir = 'C:\ProgramData\HealthChecker\logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-$FixedPython = 'C:\ProgramData\HealthChecker\tools\python\python.exe'
+$FixedPython = 'C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe'
 $HostEnv = 'C:\ProgramData\HealthChecker\companion_host\host.env'
 
 try {
