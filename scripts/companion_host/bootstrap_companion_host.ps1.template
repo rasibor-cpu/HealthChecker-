@@ -51,8 +51,11 @@ try {
 
     Set-Location -LiteralPath $ReleaseRoot
     $env:PYTHONPATH = $ReleaseRoot
+    # Immutable release: never write __pycache__ / .pyc under ProgramData releases.
+    $env:PYTHONDONTWRITEBYTECODE = '1'
     # Fixed argv only — never accept caller-controlled executable or arguments.
-    $argList = @('-m', 'backend.health_vault.companion_host')
+    # -B mirrors PYTHONDONTWRITEBYTECODE (does not alter executable path selection).
+    $argList = @('-B', '-m', 'backend.health_vault.companion_host')
     Write-HcReason 'ok'
     $p = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $ReleaseRoot -NoNewWindow -Wait -PassThru `
         -RedirectStandardOutput (Join-Path $LogDir 'companion_host.out.log') `

@@ -134,7 +134,9 @@ function Assert-HcReleaseManifest {
         'scripts/companion_host/host_env_loader.ps1',
         'backend/health_vault/companion_host/__main__.py',
         'backend/health_vault/companion_host/scheduled_host.py',
-        'backend/__init__.py'
+        'backend/__init__.py',
+        'backend/health_vault/config/monitoring_thresholds.json',
+        'backend/health_vault/config/guardian_rules.json'
     )
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $manifest.files) {
@@ -175,6 +177,14 @@ function Assert-HcReleaseManifest {
         }
         $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToUpperInvariant()
         if ($hash -ne $expected) {
+            Write-HcReason 'release_file_modified'
+            throw 'release_file_modified'
+        }
+    }
+    # Reject bytecode / cache contamination under the immutable release.
+    Get-ChildItem -LiteralPath $releaseFull -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        $n = $_.Name
+        if ($n -eq '__pycache__' -or $n -like '*.pyc' -or $n -like '*.pyo') {
             Write-HcReason 'release_file_modified'
             throw 'release_file_modified'
         }

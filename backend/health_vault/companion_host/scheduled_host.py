@@ -142,8 +142,27 @@ RELEASE_INCLUDE_SCRIPT_NAMES: tuple[str, ...] = (
     "Caddyfile.template",
 )
 
+# Explicit non-Python runtime assets (category A). Never glob "all JSON".
+# Companion status/delivery constructs ContinuousMonitoringBridge → MonitoringEngine
+# + HealthGuardian; these configs are required at the repository-relative paths.
+RELEASE_RUNTIME_ASSETS: tuple[str, ...] = (
+    "backend/health_vault/config/monitoring_thresholds.json",
+    "backend/health_vault/config/monitoring_config.json",
+    "backend/health_vault/config/guardian_rules.json",
+    "backend/health_vault/config/baseline_config.json",
+    "backend/health_vault/config/cgm_continuity.json",
+    "backend/health_vault/config/clinical_rules.json",
+)
+
+# Allowed suffixes for explicitly allowlisted non-Python assets only.
+_RUNTIME_ASSET_SUFFIXES: frozenset[str] = frozenset({".json"})
+
 MANIFEST_FILENAME = "RELEASE_MANIFEST.json"
 SOURCE_COMMIT_FILENAME = "SOURCE_COMMIT.txt"
+# Files permitted on disk outside the hashed manifest (never runtime code/assets).
+_RELEASE_META_FILENAMES: frozenset[str] = frozenset(
+    {MANIFEST_FILENAME, SOURCE_COMMIT_FILENAME}
+)
 # Required after .template → .ps1 packaging (fail closed if omitted from manifest)
 REQUIRED_RELEASE_REL_PATHS: frozenset[str] = frozenset(
     {
@@ -157,6 +176,9 @@ REQUIRED_RELEASE_REL_PATHS: frozenset[str] = frozenset(
         "config/companion_runtime.json",
         "requirements/production.txt",
         "requirements/production.in",
+        # HC-306H-R1: hard-required companion/monitoring runtime asset
+        "backend/health_vault/config/monitoring_thresholds.json",
+        "backend/health_vault/config/guardian_rules.json",
     }
 )
 REASON_CODES: frozenset[str] = frozenset(
@@ -298,7 +320,7 @@ def path_is_excluded(rel_posix: str) -> bool:
             # handle .pyc file suffix
             if f.startswith(".") and any(p.endswith(f) for p in parts):
                 return True
-    if low.endswith(".pyc") or low.endswith(".apk"):
+    if low.endswith((".pyc", ".pyo", ".apk")):
         return True
     # Exclude test modules by filename
     name = parts[-1] if parts else ""
@@ -307,8 +329,42 @@ def path_is_excluded(rel_posix: str) -> bool:
     return False
 
 
+def _assert_safe_packaging_source(path: Path, *, root: Path) -> None:
+    """Reject reparse/symlink sources and paths that escape the repo root."""
+    root_res = root.resolve()
+    try:
+        resolved = path.resolve()
+        resolved.relative_to(root_res)
+    except (OSError, ValueError) as exc:
+        raise ScheduledHostError("manifest_mismatch", "source_path_escape") from exc
+    if _path_or_ancestor_is_symlink(resolved, stop_at=root_res):
+        raise ScheduledHostError("release_file_modified", "source_reparse")
+
+
+def _assert_runtime_asset_rel(rel: str) -> None:
+    """Fail closed on absolute/traversal/escaping or unapproved asset types."""
+    if not isinstance(rel, str) or not rel.strip():
+        raise ScheduledHostError("manifest_mismatch", "asset_rel_empty")
+    norm = rel.replace("\\", "/").strip()
+    if norm.startswith("/") or re.match(r"^[A-Za-z]:", norm):
+        raise ScheduledHostError("manifest_mismatch", "asset_absolute")
+    parts = [p for p in norm.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        raise ScheduledHostError("manifest_mismatch", "asset_traversal")
+    if path_is_excluded(norm):
+        raise ScheduledHostError("manifest_mismatch", "asset_excluded")
+    suffix = Path(norm).suffix.lower()
+    if suffix not in _RUNTIME_ASSET_SUFFIXES:
+        raise ScheduledHostError("manifest_mismatch", "asset_type_unapproved")
+
+
 def iter_release_source_files(repo_root: Path) -> list[Path]:
-    """Return committed runtime files approved for immutable release packaging."""
+    """
+    Return committed runtime files approved for immutable release packaging.
+
+    Python modules are selected from allowlisted prefixes. Non-Python assets are
+    taken ONLY from RELEASE_RUNTIME_ASSETS (explicit allowlist — no broad globs).
+    """
     root = repo_root.resolve()
     selected: list[Path] = []
     for prefix in RELEASE_INCLUDE_PREFIXES:
@@ -316,27 +372,36 @@ def iter_release_source_files(repo_root: Path) -> list[Path]:
         if candidate.is_file():
             rel = _normalize_rel(candidate, root)
             if not path_is_excluded(rel):
+                _assert_safe_packaging_source(candidate, root=root)
                 selected.append(candidate)
             continue
         if candidate.is_dir():
             for path in sorted(candidate.rglob("*")):
                 if not path.is_file():
                     continue
-                if path.suffix.lower() not in {".py", ".pyi"} and "health_vault" in prefix:
-                    # Only Python runtime modules under health_vault
-                    if path.suffix.lower() != ".py":
-                        continue
+                # Only Python runtime modules under health_vault prefixes.
+                if path.suffix.lower() != ".py":
+                    continue
                 rel = _normalize_rel(path, root)
                 if path_is_excluded(rel):
                     continue
-                if not rel.endswith(".py"):
-                    continue
+                _assert_safe_packaging_source(path, root=root)
                 selected.append(path)
+    # Explicit non-Python runtime assets (fail if missing).
+    for rel in RELEASE_RUNTIME_ASSETS:
+        _assert_runtime_asset_rel(rel)
+        path = root.joinpath(*rel.split("/"))
+        if not path.is_file():
+            raise ScheduledHostError("release_file_missing", rel)
+        _assert_safe_packaging_source(path, root=root)
+        selected.append(path)
     scripts_dir = root / "scripts" / "companion_host"
     for name in RELEASE_INCLUDE_SCRIPT_NAMES:
         path = scripts_dir / name
-        if path.is_file():
-            selected.append(path)
+        if not path.is_file():
+            raise ScheduledHostError("release_file_missing", name)
+        _assert_safe_packaging_source(path, root=root)
+        selected.append(path)
     # Deduplicate while preserving order
     seen: set[str] = set()
     out: list[Path] = []
@@ -347,6 +412,33 @@ def iter_release_source_files(repo_root: Path) -> list[Path]:
         seen.add(key)
         out.append(path)
     return out
+
+
+def assert_release_tree_has_no_bytecode(release_dir: Path) -> None:
+    """Fail closed if __pycache__ / .pyc / .pyo appear under a release tree."""
+    release = release_dir.resolve()
+    for path in release.rglob("*"):
+        name = path.name.lower()
+        if name == "__pycache__" or name.endswith((".pyc", ".pyo")):
+            raise ScheduledHostError("release_file_modified", "bytecode_present")
+
+
+def assert_release_no_unmanifested_files(
+    release_dir: Path, *, manifested: set[str]
+) -> None:
+    """
+    Fail closed if any on-disk file is outside the manifest (+ meta filenames).
+
+    Prevents cache/contamination and unexpected assets from surviving packaging.
+    """
+    release = release_dir.resolve()
+    allowed = set(manifested) | set(_RELEASE_META_FILENAMES)
+    for path in release.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(release).as_posix()
+        if rel not in allowed:
+            raise ScheduledHostError("manifest_mismatch", "unmanifested_file")
 
 
 def build_release_manifest(
@@ -406,16 +498,23 @@ def write_release_copy(
         rel = _normalize_rel(src, root)
         if path_is_excluded(rel):
             continue
+        _assert_safe_packaging_source(src, root=root)
         # Place scripts without .template suffix for fixed bootstrap execution
         dest_rel = rel
         if dest_rel.endswith(".ps1.template"):
             dest_rel = dest_rel[: -len(".template")]
         elif dest_rel.endswith("Caddyfile.template"):
             dest_rel = dest_rel[: -len(".template")]
+        dest_rel = dest_rel.replace("\\", "/")
         dest = release_dir / dest_rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
-        copied[dest_rel.replace("\\", "/")] = sha256_file(dest)
+        copied[dest_rel] = sha256_file(dest)
+
+    # Fail closed if required dest paths missing from the packaged set.
+    missing_required = REQUIRED_RELEASE_REL_PATHS - set(copied)
+    if missing_required:
+        raise ScheduledHostError("manifest_mismatch", "required_missing")
 
     manifest = {
         "schema_version": "hc.scheduled_host.release.v1",
@@ -429,6 +528,8 @@ def write_release_copy(
         encoding="utf-8",
     )
     (release_dir / SOURCE_COMMIT_FILENAME).write_text(commit + "\n", encoding="utf-8")
+    assert_release_tree_has_no_bytecode(release_dir)
+    assert_release_no_unmanifested_files(release_dir, manifested=set(copied))
     return release_dir
 
 
@@ -505,6 +606,8 @@ def verify_release_manifest(release_dir: Path) -> dict[str, Any]:
         expected_commit = str(manifest.get("source_commit", "")).strip().lower()
         if recorded != expected_commit:
             raise ScheduledHostError("manifest_mismatch")
+    assert_release_tree_has_no_bytecode(release)
+    assert_release_no_unmanifested_files(release, manifested=present)
     return manifest
 
 

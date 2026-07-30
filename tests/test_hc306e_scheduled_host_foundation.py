@@ -366,6 +366,9 @@ def test_packaging_excludes_private_records_and_artifacts(tmp_path: Path):
     rels = [p.relative_to(ROOT).as_posix() for p in files]
     assert any(r.startswith("backend/health_vault/companion_host/") for r in rels)
     assert any(r.endswith("bootstrap_companion_host.ps1.template") for r in rels)
+    assert "backend/health_vault/config/monitoring_thresholds.json" in rels
+    assert "backend/health_vault/config/guardian_rules.json" in rels
+    assert "backend/health_vault/config/executive_dashboard.json" not in rels
     for r in rels:
         assert "vault_storage" not in r
         assert "private_imports" not in r

@@ -74,6 +74,8 @@ $python = $pyCandidates[0]
 $env:HC_PKG_REPO_ROOT = $RepoRoot
 $env:HC_PKG_SOURCE_COMMIT = $SourceCommit
 $env:HC_PKG_RELEASES_ROOT = $releasesFull
+$env:PYTHONDONTWRITEBYTECODE = '1'
+$env:PYTHONNOUSERSITE = '1'
 $helper = @'
 import os, sys
 from pathlib import Path
@@ -92,7 +94,7 @@ print(str(release))
 '@
 
 try {
-    $out = & $python -c $helper
+    $out = & $python -B -c $helper
     if ($LASTEXITCODE -ne 0) {
         Write-Host 'hc_scheduled_host:manifest_mismatch'
         exit 1
