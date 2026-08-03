@@ -8,6 +8,22 @@ evidence validation engine.
 
 **HC-307 generates evidence only. It NEVER activates the companion host.**
 
+HC-309 offline policy evaluation is documented in
+`docs/governance/HC-309_PROTECTED_RUNTIME_CERTIFICATION.md`; it is not live
+provenance certification. Privileged HC-309 collection remains BLOCKED until an
+independently trusted immutable collector is installed through the governed
+release process and integrated with this authenticated HC-307 architecture.
+Mutable repository code must never be elevated. Neither result authorizes
+runtime activation.
+
+HC-309 currently has no trusted live collector or trusted-envelope validator.
+Its offline evaluator cannot authenticate evidence and cannot produce PASS;
+PASS is reserved for a future separately reviewed integration. The privileged
+HC-309 wrapper always returns BLOCKED with exit code 20. The protected
+executable digest must remain absent until independently established through
+that future governed path. Offline evaluation is not live, clinical, or
+medical-device certification.
+
 ## Depends on
 
 - HC-306B-R1 (external privileged evidence architecture)
