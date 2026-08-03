@@ -40,6 +40,17 @@ LOCK_PATH = ROOT / "requirements" / "production.txt"
 IN_PATH = ROOT / "requirements" / "production.in"
 
 
+def _protected_interpreter_is_file(path: Path) -> bool:
+    """Return staged-interpreter availability or block on protected-path I/O."""
+    try:
+        return path.is_file()
+    except OSError:
+        pytest.skip(
+            "clean-environment install BLOCKED: protected staged interpreter "
+            "availability cannot be determined"
+        )
+
+
 def _ps_parse(path: Path) -> None:
     cmd = (
         "$e=$null; $t=$null; "
@@ -206,13 +217,22 @@ def test_powershell_templates_parse_cleanly():
         _ps_parse(path)
 
 
+def test_protected_interpreter_probe_blocks_on_inaccessible_path():
+    class InaccessiblePath:
+        def is_file(self) -> bool:
+            raise PermissionError("protected path")
+
+    with pytest.raises(pytest.skip.Exception, match="BLOCKED"):
+        _protected_interpreter_is_file(InaccessiblePath())  # type: ignore[arg-type]
+
+
 def test_temp_clean_venv_hash_install_blocked_or_passes():
     """
     Prefer TEMP install with --require-hashes when a matching interpreter exists.
     Do not install into user/ProgramData. If selected 3.12.10 is unavailable, mark blocked.
     """
     staged = Path(r"C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe")
-    if staged.is_file():
+    if _protected_interpreter_is_file(staged):
         pytest.skip("ProgramData staging must not be used in this repo-only gate")
     # Use current 3.12 only to validate the lock installs cleanly in TEMP (same major.minor).
     ver = sys.version_info
