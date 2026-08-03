@@ -437,26 +437,29 @@ BLOCKED.
 
 ## 11. Operator decision register for Robert
 
-Robert must explicitly approve each choice before R4C concludes:
+Robert approved this complete package in R4C. The authoritative decision record
+is `docs/governance/HC-309-R4C_OPERATOR_SIGNING_AND_PROVENANCE_DECISIONS.md`.
 
 | Decision | Recommended default | Approval state |
 |---|---|---|
-| Pilot signing model | Governed internal PKI, not a self-signed leaf | UNDECIDED |
-| Production signing model | Public CA code signing or formally governed enterprise PKI | UNDECIDED |
-| Code/evidence key separation | Separate keys in pilot and production | UNDECIDED |
-| Issuer/trust model | Pinned policy/issuer/allowlist in addition to chain trust | UNDECIDED |
-| Private-key storage | Non-exportable HSM/TPM/managed provider | UNDECIDED |
-| Timestamping | Approved RFC 3161 Authenticode timestamp authority | UNDECIDED |
-| Revocation | Online chain revocation with documented fail-closed outage policy | UNDECIDED |
-| Controlled reinstall | Authorize only after R4F passes | UNDECIDED |
-| Current runtime disposition | Retain untouched for rollback; exclude from new selection | UNDECIDED |
-| Independent reviewer | Mandatory reviewer distinct from evidence collector | UNDECIDED |
-| Evidence retention | Append-only minimum one year or approved regulatory/operational period | UNDECIDED |
+| Pilot signing model | Private HealthChecker pilot PKI; pilot-only trust | APPROVED |
+| Production signing model | Recognized public code-signing CA at commercialization; evidence trust separately governed | APPROVED |
+| Code/evidence key separation | Separate certificates and private keys | APPROVED |
+| Issuer/trust model | Offline pilot root; approved policy/issuer/signer allowlists | APPROVED |
+| Code-signing key | RSA 3072, SHA-256, Code Signing EKU, non-exportable | APPROVED |
+| Evidence-signing key | ECDSA P-256, SHA-256, dedicated policy/EKU, non-exportable | APPROVED |
+| Private-key storage | LocalMachine context; TPM/CNG where supported; least privilege | APPROVED |
+| Timestamping | Trusted RFC 3161 timestamp required for collector signatures | APPROVED |
+| Revocation | Full-chain policy; invalid is FAIL, indeterminate is BLOCKED | APPROVED |
+| Controlled reinstall | Approved in principle only after R4F and separate R4G authorization | APPROVED |
+| Current runtime disposition | Retain inactive for rollback/evidence; never trust observed hash | APPROVED |
+| Independent reviewer | Independent phase review; Robert final authority; human production review | APPROVED |
+| Evidence retention | Pilot 2 years; production 7 years subject to legal/privacy review | APPROVED |
 
-Recommendations are not approvals. Until the decisions are recorded and the
-next phase is explicitly authorized, collector implementation, certificate
-provisioning, reinstall, evidence collection, digest adoption, and live
-certification remain BLOCKED.
+These approvals authorize governance recording only. Until a later phase is
+explicitly authorized, collector implementation, certificate provisioning,
+reinstall, evidence collection, digest adoption, and live certification remain
+BLOCKED.
 
 ## 12. Relationship to existing governance
 
