@@ -95,3 +95,8 @@ explicit approval after successful observation.
 
 R4G execution, R4H evidence collection, R4I digest adoption and R4J live
 certification remain unauthorized.
+
+The operator-supplied fixed SignTool and SDK-installer readiness evidence recorded
+by HC-309-R4F-EXEC-P1 does not authorize signing, installer execution, or this
+reinstall runbook. PEN assignment, reviewed OIDs, offline ceremony readiness, and
+separate R4F/R4G approval remain mandatory.

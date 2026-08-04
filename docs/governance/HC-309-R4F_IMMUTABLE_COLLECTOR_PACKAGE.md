@@ -123,3 +123,7 @@ version or evidence is deleted without separate retention and deletion approval.
 
 R4F-EXEC must independently review the frozen signed package and installer
 before any ProgramData mutation. R4G remains unauthorized.
+
+HC-309-R4F-EXEC-P1 records fixed toolchain details as operator-supplied reviewed
+readiness evidence only. It creates no signature or package and does not authorize
+SignTool execution, staging, installation, activation, or candidate-package trust.

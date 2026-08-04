@@ -1,0 +1,128 @@
+{
+  "schema_version": "hc.r4f_exec_pending_pen_readiness.v1",
+  "owner": "Robert Asibor",
+  "environment": "pilot",
+  "production_use": "prohibited",
+  "pen": {
+    "assignee": "Robert Asibor",
+    "status": "pending_assignment",
+    "iana_confirmation_status": "confirmed",
+    "assigned_pen": null,
+    "certificate_policy_oid": null,
+    "evidence_eku_oid": null,
+    "oid_materialization": "prohibited_until_assigned_pen_independently_verified"
+  },
+  "custodians": {
+    "model": "two_custodian_approved",
+    "owner_custodian": "designated",
+    "independent_second_custodian": "designated",
+    "personal_identities_location": "protected_offline_ceremony_record_outside_git"
+  },
+  "profiles": {
+    "root": {
+      "algorithm": "RSA",
+      "key_size": 4096,
+      "digest": "SHA-256",
+      "validity_years": 15,
+      "is_ca": true,
+      "path_length": 1,
+      "placement": "offline_only"
+    },
+    "issuing": {
+      "algorithm": "RSA",
+      "key_size": 3072,
+      "digest": "SHA-256",
+      "validity_years": 5,
+      "is_ca": true,
+      "path_length": 0,
+      "placement": "offline_only"
+    },
+    "code_signer": {
+      "algorithm": "RSA",
+      "key_size": 3072,
+      "digest": "SHA-256",
+      "eku": "code_signing_only",
+      "maximum_validity_months": 18,
+      "exportable": false,
+      "key_role": "code_signing"
+    },
+    "evidence_signer": {
+      "algorithm": "ECDSA",
+      "curve": "P-256",
+      "digest": "SHA-256",
+      "eku": "private_evidence_signing",
+      "maximum_validity_months": 12,
+      "exportable": false,
+      "key_role": "evidence_signing"
+    }
+  },
+  "provider_policy": {
+    "tpm_provider": "Microsoft Platform Crypto Provider",
+    "software_fallback": "prohibited",
+    "code_key_access_class": "Local Administrators",
+    "evidence_key_access_class": "SYSTEM",
+    "private_keys_exist": false
+  },
+  "timestamp_policy": {
+    "provider": "DigiCert pilot",
+    "endpoint": "http://timestamp.digicert.com",
+    "endpoint_is_trust_anchor": false,
+    "validate_full_returned_chain": true
+  },
+  "revocation_policy": {
+    "mode": "fail_closed",
+    "stale_or_unavailable": "BLOCKED",
+    "revoked_invalid_wrong_purpose_or_policy": "FAIL",
+    "evidence_freshness_minutes": 10,
+    "clock_skew_ceiling_seconds": 120
+  },
+  "locations": {
+    "trust_policy_root": "C:\\ProgramData\\HealthChecker\\trust\\policy\\v1\\",
+    "crl_incoming": "C:\\ProgramData\\HealthChecker\\trust\\crl\\incoming\\",
+    "crl_active": "C:\\ProgramData\\HealthChecker\\trust\\crl\\active\\",
+    "evidence_retention_root": "C:\\ProgramData\\HealthChecker\\evidence\\protected-runtime\\"
+  },
+  "retention_and_rollback": {
+    "pilot_evidence_retention_years": 2,
+    "rollback_authority": "owner"
+  },
+  "runtime_state": {
+    "existing_runtime_action": "retain_do_not_delete_or_overwrite",
+    "health_status": "healthy",
+    "certification_status": "BLOCKED",
+    "certification_pass_reachable": false,
+    "active_tasks_binding": "older_immutable_releases",
+    "repository_head_is_active_release": false
+  },
+  "toolchain_evidence": {
+    "evidence_class": "operator_supplied_reviewed",
+    "sdk_display_version": "10.1.26100.8876",
+    "sdk_publisher": "Microsoft",
+    "signtool_path": "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe",
+    "signtool_authenticode_status": "Valid",
+    "signtool_microsoft_signer": true,
+    "signtool_sha256": "0f82273275b175dc5e417aeedf96b749d49f71f8cd24c128334bfecb779e1231",
+    "installer_source_class": "official_microsoft",
+    "installer_authenticode_status": "Valid",
+    "installer_sha256": "098d545e516b7e7745e07cb92c879c59bc35621fdc331dc631bc99d2aec5f8ee"
+  },
+  "authorization": {
+    "pki_mutation_authorized": false,
+    "key_creation_authorized": false,
+    "certificate_creation_authorized": false,
+    "signing_authorized": false,
+    "runtime_reinstall_authorized": false,
+    "certification_pass_reachable": false,
+    "live_execution_status": "BLOCKED"
+  },
+  "mandatory_checks": {
+    "operator_decisions": "READY",
+    "toolchain_evidence": "READY",
+    "pen_assignment": "BLOCKED",
+    "oid_materialization": "BLOCKED",
+    "pki_mutation": "BLOCKED",
+    "signing": "BLOCKED",
+    "runtime_reinstall": "BLOCKED",
+    "certification_pass": "BLOCKED"
+  }
+}

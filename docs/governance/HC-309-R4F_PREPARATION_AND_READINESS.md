@@ -97,16 +97,21 @@ is FAIL.
 
 ## Unresolved prerequisites
 
-1. Prove TPM readiness and approved algorithm/provider behavior in a separately
+P1 records reviewed pending-PEN and toolchain-readiness decisions in
+`config/hc309_r4f_exec_pending_pen_readiness.json`. The IANA request is confirmed,
+but no PEN or OIDs are assigned and no mutation is authorized.
+
+1. Independently verify the assigned PEN when issued, then establish and review
+   the enterprise policy arc in a separate repository change.
+2. Prove TPM readiness and approved algorithm/provider behavior in a separately
    authorized non-production ceremony.
-2. Assign private policy OIDs under an organization-controlled enterprise arc.
-3. Approve exact signing and collector identities and least-privilege key ACLs.
-4. Select/procure or operate an approved pilot RFC 3161 timestamp service.
-5. Approve CRL publication, offline transfer, freshness and incident handling.
-6. Install and independently verify a fixed Windows SDK SignTool toolchain, or
-   approve an equivalent fixed signing implementation.
+3. Complete the protected offline identity and two-custodian ceremony record.
+4. Independently verify the approved timestamp chain and revocation operation.
+5. Complete the offline CA and CRL ceremony and transfer-readiness review.
+6. Independently verify the operator-supplied fixed SignTool evidence before any
+   signing operation.
 7. Independently review frozen certificate templates, package schema and later
-   mutation tooling before R4F-EXEC.
+   mutation tooling before R4F-EXEC mutation.
 
 Related designs:
 

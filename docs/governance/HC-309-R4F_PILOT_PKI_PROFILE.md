@@ -143,3 +143,8 @@ the committed minimum collector version.
 
 R4F-EXEC and R4G remain unauthorized. No pilot trust may silently become
 production trust.
+
+HC-309-R4F-EXEC-P1 records that the IANA request is confirmed while the PEN
+remains `pending_assignment`. No enterprise policy arc, certificate-policy OID,
+or evidence-EKU OID has been assigned. The exact post-assignment transition and
+independent review remain mandatory before any PKI ceremony or mutation.

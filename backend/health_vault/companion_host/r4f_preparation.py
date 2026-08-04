@@ -55,6 +55,111 @@ EXPECTED_REINSTALL_GATES = (
     "activation_separately_authorized",
 )
 
+PENDING_PEN_SCHEMA = "hc.r4f_exec_pending_pen_readiness.v1"
+PENDING_PEN_RESULT_SCHEMA = "hc.r4f_exec_pending_pen_result.v1"
+_PENDING_PEN_CHECKS = (
+    ("operator_decisions", "READY"),
+    ("toolchain_evidence", "READY"),
+    ("pen_assignment", "BLOCKED"),
+    ("oid_materialization", "BLOCKED"),
+    ("pki_mutation", "BLOCKED"),
+    ("signing", "BLOCKED"),
+    ("runtime_reinstall", "BLOCKED"),
+    ("certification_pass", "BLOCKED"),
+)
+
+
+def _pending_pen_expected() -> dict[str, Any]:
+    """Build one fresh expected record from immutable source values."""
+
+    return {
+        "schema_version": PENDING_PEN_SCHEMA,
+        "owner": "Robert Asibor",
+        "environment": "pilot",
+        "production_use": "prohibited",
+        "pen": {
+            "assignee": "Robert Asibor",
+            "status": "pending_assignment",
+            "iana_confirmation_status": "confirmed",
+            "assigned_pen": None,
+            "certificate_policy_oid": None,
+            "evidence_eku_oid": None,
+            "oid_materialization": "prohibited_until_assigned_pen_independently_verified",
+        },
+        "custodians": {
+            "model": "two_custodian_approved",
+            "owner_custodian": "designated",
+            "independent_second_custodian": "designated",
+            "personal_identities_location": "protected_offline_ceremony_record_outside_git",
+        },
+        "profiles": {
+            "root": {"algorithm": "RSA", "key_size": 4096, "digest": "SHA-256", "validity_years": 15, "is_ca": True, "path_length": 1, "placement": "offline_only"},
+            "issuing": {"algorithm": "RSA", "key_size": 3072, "digest": "SHA-256", "validity_years": 5, "is_ca": True, "path_length": 0, "placement": "offline_only"},
+            "code_signer": {"algorithm": "RSA", "key_size": 3072, "digest": "SHA-256", "eku": "code_signing_only", "maximum_validity_months": 18, "exportable": False, "key_role": "code_signing"},
+            "evidence_signer": {"algorithm": "ECDSA", "curve": "P-256", "digest": "SHA-256", "eku": "private_evidence_signing", "maximum_validity_months": 12, "exportable": False, "key_role": "evidence_signing"},
+        },
+        "provider_policy": {
+            "tpm_provider": "Microsoft Platform Crypto Provider",
+            "software_fallback": "prohibited",
+            "code_key_access_class": "Local Administrators",
+            "evidence_key_access_class": "SYSTEM",
+            "private_keys_exist": False,
+        },
+        "timestamp_policy": {
+            "provider": "DigiCert pilot",
+            "endpoint": "http://timestamp.digicert.com",
+            "endpoint_is_trust_anchor": False,
+            "validate_full_returned_chain": True,
+        },
+        "revocation_policy": {
+            "mode": "fail_closed",
+            "stale_or_unavailable": "BLOCKED",
+            "revoked_invalid_wrong_purpose_or_policy": "FAIL",
+            "evidence_freshness_minutes": 10,
+            "clock_skew_ceiling_seconds": 120,
+        },
+        "locations": {
+            "trust_policy_root": "C:\\ProgramData\\HealthChecker\\trust\\policy\\v1\\",
+            "crl_incoming": "C:\\ProgramData\\HealthChecker\\trust\\crl\\incoming\\",
+            "crl_active": "C:\\ProgramData\\HealthChecker\\trust\\crl\\active\\",
+            "evidence_retention_root": "C:\\ProgramData\\HealthChecker\\evidence\\protected-runtime\\",
+        },
+        "retention_and_rollback": {
+            "pilot_evidence_retention_years": 2,
+            "rollback_authority": "owner",
+        },
+        "runtime_state": {
+            "existing_runtime_action": "retain_do_not_delete_or_overwrite",
+            "health_status": "healthy",
+            "certification_status": "BLOCKED",
+            "certification_pass_reachable": False,
+            "active_tasks_binding": "older_immutable_releases",
+            "repository_head_is_active_release": False,
+        },
+        "toolchain_evidence": {
+            "evidence_class": "operator_supplied_reviewed",
+            "sdk_display_version": "10.1.26100.8876",
+            "sdk_publisher": "Microsoft",
+            "signtool_path": "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe",
+            "signtool_authenticode_status": "Valid",
+            "signtool_microsoft_signer": True,
+            "signtool_sha256": "0f82273275b175dc5e417aeedf96b749d49f71f8cd24c128334bfecb779e1231",
+            "installer_source_class": "official_microsoft",
+            "installer_authenticode_status": "Valid",
+            "installer_sha256": "098d545e516b7e7745e07cb92c879c59bc35621fdc331dc631bc99d2aec5f8ee",
+        },
+        "authorization": {
+            "pki_mutation_authorized": False,
+            "key_creation_authorized": False,
+            "certificate_creation_authorized": False,
+            "signing_authorized": False,
+            "runtime_reinstall_authorized": False,
+            "certification_pass_reachable": False,
+            "live_execution_status": "BLOCKED",
+        },
+        "mandatory_checks": dict(_PENDING_PEN_CHECKS),
+    }
+
 
 class PreparationError(ValueError):
     """Fixed-code error for untrusted synthetic preparation input."""
@@ -420,6 +525,101 @@ def _validate_reinstall(value: Any) -> str:
         raise PreparationError("acceptance_gate_order_invalid")
     _yes(plan["rollback_on_failure"], "rollback_decision_invalid")
     return "READY_FOR_REINSTALL_REVIEW"
+
+
+def _require_pending_pen_shape(value: Any, expected: Any) -> None:
+    """Require the exact bounded readiness shape without accepting bools as ints."""
+
+    if type(value) is not type(expected):
+        raise PreparationError("pending_pen_schema_invalid")
+    if type(expected) is dict:
+        if set(value) != set(expected):
+            raise PreparationError("pending_pen_schema_invalid")
+        for key in expected:
+            _require_pending_pen_shape(value[key], expected[key])
+    elif type(expected) is list:
+        if len(value) != len(expected):
+            raise PreparationError("pending_pen_schema_invalid")
+        for item, expected_item in zip(value, expected):
+            _require_pending_pen_shape(item, expected_item)
+
+
+def parse_pending_pen_readiness(raw: bytes) -> dict[str, Any]:
+    """Parse one bounded repository readiness record without host inspection."""
+
+    if type(raw) is not bytes or len(raw) > MAX_INPUT_BYTES:
+        raise PreparationError("pending_pen_input_invalid")
+    try:
+        value = json.loads(
+            raw.decode("utf-8-sig", errors="strict"),
+            object_pairs_hook=_object,
+            parse_int=_integer,
+            parse_float=lambda _value: (_ for _ in ()).throw(PreparationError("json_float_invalid")),
+            parse_constant=lambda _value: (_ for _ in ()).throw(PreparationError("json_constant_invalid")),
+        )
+        _validate_structure(value)
+    except (UnicodeError, json.JSONDecodeError, RecursionError, MemoryError) as error:
+        raise PreparationError("pending_pen_input_invalid") from None
+    if type(value) is not dict:
+        raise PreparationError("pending_pen_schema_invalid")
+    return value
+
+
+def validate_pending_pen_readiness(value: Any) -> dict[str, Any]:
+    """Evaluate the pending-PEN record; PASS and mutation are unreachable."""
+
+    expected = _pending_pen_expected()
+    _require_pending_pen_shape(value, expected)
+    if value["schema_version"] != PENDING_PEN_SCHEMA:
+        raise PreparationError("pending_pen_schema_invalid")
+    section_names = (
+        "owner", "environment", "production_use", "custodians", "profiles",
+        "provider_policy", "timestamp_policy", "revocation_policy", "locations",
+        "retention_and_rollback", "runtime_state",
+    )
+    decisions_match = all(value[name] == expected[name] for name in section_names)
+    pen_match = value["pen"] == expected["pen"]
+    toolchain_match = value["toolchain_evidence"] == expected["toolchain_evidence"]
+    authorization_match = value["authorization"] == expected["authorization"]
+    registry_match = value["mandatory_checks"] == dict(_PENDING_PEN_CHECKS)
+    checks = (
+        ("operator_decisions", "READY" if decisions_match else "FAIL"),
+        ("toolchain_evidence", "READY" if toolchain_match else "FAIL"),
+        ("pen_assignment", "BLOCKED" if pen_match else "FAIL"),
+        ("oid_materialization", "BLOCKED" if pen_match else "FAIL"),
+        ("pki_mutation", "BLOCKED" if authorization_match else "FAIL"),
+        ("signing", "BLOCKED" if authorization_match else "FAIL"),
+        ("runtime_reinstall", "BLOCKED" if authorization_match else "FAIL"),
+        ("certification_pass", "BLOCKED" if authorization_match else "FAIL"),
+        ("mandatory_check_registry", "READY" if registry_match else "FAIL"),
+    )
+    status = "FAIL" if any(check_status == "FAIL" for _, check_status in checks) else "BLOCKED"
+    return {
+        "authorization": "readiness_only",
+        "certification_status": status,
+        "checks": [{"name": name, "status": check_status} for name, check_status in checks],
+        "environment": "pilot",
+        "exit_code": EXIT_FAIL if status == "FAIL" else EXIT_BLOCKED,
+        "live_execution_status": "BLOCKED",
+        "schema_version": PENDING_PEN_RESULT_SCHEMA,
+    }
+
+
+def evaluate_pending_pen_readiness(raw: bytes) -> dict[str, Any]:
+    """Return one fixed readiness result for bounded bytes; never raise details."""
+
+    try:
+        return validate_pending_pen_readiness(parse_pending_pen_readiness(raw))
+    except PreparationError:
+        return {
+            "authorization": "readiness_only",
+            "certification_status": "FAIL",
+            "environment": "pilot",
+            "error": "readiness_configuration_invalid",
+            "exit_code": EXIT_INVOCATION,
+            "live_execution_status": "BLOCKED",
+            "schema_version": PENDING_PEN_RESULT_SCHEMA,
+        }
 
 
 def validate_preparation(value: Any) -> dict[str, Any]:
