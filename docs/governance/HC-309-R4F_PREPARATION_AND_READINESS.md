@@ -113,6 +113,11 @@ but no PEN or OIDs are assigned and no mutation is authorized.
 7. Independently review frozen certificate templates, package schema and later
    mutation tooling before R4F-EXEC mutation.
 
+P2 prepares a bounded validator for the future assigned-PEN transition proposal.
+It establishes no authoritative identifier, performs no IANA lookup, and leaves
+all live and mutation gates BLOCKED. See
+`HC-309-R4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md`.
+
 Related designs:
 
 - `HC-309-R4D_SYNTHETIC_COLLECTOR_IMPLEMENTATION.md`

@@ -98,3 +98,7 @@ PEN assignment alone cannot authorize mutation. The next transition requires:
 
 Only a later separately authorized phase may consider PKI mutation or runtime
 replacement after those gates pass.
+
+The fail-closed validator prepared for that future proposal is documented in
+`HC-309-R4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md`. P2 does not record or
+claim an assigned PEN and does not change this pending state.
