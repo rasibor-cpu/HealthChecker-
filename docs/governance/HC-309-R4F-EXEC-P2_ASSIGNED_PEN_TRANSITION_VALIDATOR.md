@@ -71,3 +71,7 @@ Then prepare a new transition proposal using the exact profile above, review it
 with the owner and distinct independent reviewer, run the validator tests, and
 submit it as a separate commit. Even an accepted transition remains BLOCKED until
 the offline ceremony-readiness gate is separately approved.
+
+The repository-only ceremony-readiness validator is documented in
+`HC-309-R4F-EXEC-P3_OFFLINE_CEREMONY_READINESS.md`. P3 prepares policy checks but
+does not approve an assigned-PEN transition or authorize an actual ceremony.

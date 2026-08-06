@@ -118,6 +118,12 @@ It establishes no authoritative identifier, performs no IANA lookup, and leaves
 all live and mutation gates BLOCKED. See
 `HC-309-R4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md`.
 
+P3 prepares the two-custodian, offline-equipment, transfer-media, TPM capability,
+backup, revocation, sequence, and abort-policy validator described in
+`HC-309-R4F-EXEC-P3_OFFLINE_CEREMONY_READINESS.md`. It validates reviewed
+assertions only; actual evidence, ceremony authorization, and all mutation remain
+outside Git and BLOCKED.
+
 Related designs:
 
 - `HC-309-R4D_SYNTHETIC_COLLECTOR_IMPLEMENTATION.md`
