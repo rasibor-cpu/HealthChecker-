@@ -1,6 +1,7 @@
 ﻿__pycache__/
 *.py[cod]
 .pytest_cache/
+.healthchecker-pytest-*/
 .venv/
 venv/
 vault_storage/documents/
