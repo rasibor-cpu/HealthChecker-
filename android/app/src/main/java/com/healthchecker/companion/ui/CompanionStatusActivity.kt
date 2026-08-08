@@ -29,6 +29,7 @@ import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.sync.CompanionSyncRunner
 import com.healthchecker.companion.util.SafeLog
 import com.healthchecker.companion.work.MonitoringSyncWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -174,27 +175,8 @@ class CompanionStatusActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnSchedule).setOnClickListener {
             lifecycleScope.launch {
-                val report = try {
-                    withContext(Dispatchers.IO) {
-                        HealthConnectCapability(
-                            this@CompanionStatusActivity
-                        ).report()
-                    }
-                } catch (t: Throwable) {
-                    val message =
-                        "Unable to verify background Health Connect access."
-                    permissionActionMessage = message
-                    SafeLog.e(
-                        "background_capability_check_failed",
-                        t
-                    )
-                    Toast.makeText(
-                        this@CompanionStatusActivity,
-                        message,
-                        Toast.LENGTH_LONG
-                    ).show()
-                    return@launch
-                }
+                val report =
+                    loadCapabilityReportSafely() ?: return@launch
 
                 permissionActionMessage = when (
                     BackgroundReadPolicy.scheduleDecision(
@@ -237,9 +219,8 @@ class CompanionStatusActivity : AppCompatActivity() {
             )
         }
         lifecycleScope.launch {
-            val report = withContext(Dispatchers.IO) {
-                HealthConnectCapability(this@CompanionStatusActivity).report()
-            }
+            val report =
+                loadCapabilityReportSafely() ?: return@launch
             val assessment = PermissionLaunchMonitor.assessResume(
                 attempt = attempt,
                 missingAfter =
@@ -279,9 +260,8 @@ class CompanionStatusActivity : AppCompatActivity() {
             return
         }
         lifecycleScope.launch {
-            val report = withContext(Dispatchers.IO) {
-                HealthConnectCapability(this@CompanionStatusActivity).report()
-            }
+            val report =
+                loadCapabilityReportSafely() ?: return@launch
             val plan = PermissionRequestPlanner.plan(
                 availability = report.availability,
                 missingPermissions =
@@ -346,11 +326,37 @@ class CompanionStatusActivity : AppCompatActivity() {
         }
     }
 
+    private suspend fun loadCapabilityReportSafely(): CapabilityReport? {
+        return try {
+            withContext(Dispatchers.IO) {
+                HealthConnectCapability(
+                    this@CompanionStatusActivity
+                ).report()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (t: Throwable) {
+            val message =
+                "Unable to verify Health Connect access."
+            permissionActionMessage = message
+            SafeLog.e(
+                "background_capability_check_failed",
+                t
+            )
+            statusBody.text = message
+            Toast.makeText(
+                this@CompanionStatusActivity,
+                message,
+                Toast.LENGTH_LONG
+            ).show()
+            null
+        }
+    }
+
     private fun refreshStatus() {
         lifecycleScope.launch {
-            val report = withContext(Dispatchers.IO) {
-                HealthConnectCapability(this@CompanionStatusActivity).report()
-            }
+            val report =
+                loadCapabilityReportSafely() ?: return@launch
             applyStatusReport(report)
         }
     }

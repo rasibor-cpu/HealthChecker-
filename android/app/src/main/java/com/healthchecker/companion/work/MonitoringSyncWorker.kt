@@ -14,6 +14,7 @@ import com.healthchecker.companion.healthconnect.HealthConnectCapability
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.sync.CompanionSyncRunner
 import com.healthchecker.companion.util.SafeLog
+import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -39,6 +40,8 @@ class MonitoringSyncWorker(
             HealthConnectCapability(
                 applicationContext
             ).report()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (t: Throwable) {
             SafeLog.e("background_capability_check_failed", t)
             prefs.setLastError(
