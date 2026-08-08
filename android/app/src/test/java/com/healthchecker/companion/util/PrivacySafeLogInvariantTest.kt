@@ -36,4 +36,22 @@ class PrivacySafeLogInvariantTest {
             assertEquals(line, PrivacyRedactor.redact(line))
         }
     }
+
+    @Test
+    fun boundedErrorMessageExcludesThrowableDetails() {
+        val sentinel = "SENTINEL_PRIVATE_EXCEPTION_DETAIL"
+        val throwable = IllegalStateException(sentinel)
+
+        val formatted = SafeLog.boundedErrorMessage(
+            "background_capability_check_failed",
+            throwable
+        )
+
+        assertEquals(
+            "background_capability_check_failed class=IllegalStateException",
+            formatted
+        )
+        assertFalse(formatted.contains(sentinel))
+        assertFalse(formatted.contains("IllegalStateException:"))
+    }
 }

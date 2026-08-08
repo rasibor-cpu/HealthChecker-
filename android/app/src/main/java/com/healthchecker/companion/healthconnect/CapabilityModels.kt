@@ -18,5 +18,7 @@ data class CapabilityReport(
     val message: String,
     val permissionsGranted: Set<String> = emptySet(),
     val permissionsMissing: Set<String> = emptySet(),
+    val backgroundReadFeatureAvailable: Boolean = false,
+    val backgroundReadPermissionGranted: Boolean = false,
     val ecgSupported: Boolean = false
 )
