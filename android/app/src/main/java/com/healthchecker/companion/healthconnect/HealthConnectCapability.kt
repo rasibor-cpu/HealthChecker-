@@ -1,7 +1,9 @@
 package com.healthchecker.companion.healthconnect
 
 import android.content.Context
+import androidx.health.connect.client.feature.ExperimentalFeatureAvailabilityApi
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
 
 /**
  * Discover Health Connect availability and permission deltas.
@@ -14,6 +16,7 @@ class HealthConnectCapability(private val context: Context) {
 
     fun requiredPermissions(): Set<String> = GrantedRecordCatalog.allReadPermissions()
 
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
     suspend fun report(): CapabilityReport {
         val status = HealthConnectClient.getSdkStatus(context)
         return when (status) {
@@ -30,6 +33,13 @@ class HealthConnectCapability(private val context: Context) {
             HealthConnectClient.SDK_AVAILABLE -> {
                 val client = HealthConnectClient.getOrCreate(context)
                 val grantedRaw = client.permissionController.getGrantedPermissions()
+                val backgroundFeatureAvailable =
+                    client.features.getFeatureStatus(
+                        HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND
+                    ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+                val backgroundPermissionGranted =
+                    backgroundFeatureAvailable &&
+                        BackgroundReadPolicy.PERMISSION in grantedRaw
                 val required = requiredPermissions()
                 val granted = grantedRaw.intersect(required)
                 val missing = required - granted
@@ -47,6 +57,10 @@ class HealthConnectCapability(private val context: Context) {
                     },
                     permissionsGranted = granted,
                     permissionsMissing = missing,
+                    backgroundReadFeatureAvailable =
+                        backgroundFeatureAvailable,
+                    backgroundReadPermissionGranted =
+                        backgroundPermissionGranted,
                     ecgSupported = false
                 )
             }

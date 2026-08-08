@@ -17,6 +17,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
 import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
+import com.healthchecker.companion.healthconnect.BackgroundReadPolicy
+import com.healthchecker.companion.healthconnect.CapabilityReport
 import com.healthchecker.companion.healthconnect.HealthConnectAvailability
 import com.healthchecker.companion.healthconnect.HealthConnectCapability
 import com.healthchecker.companion.host.HostClient
@@ -171,8 +173,51 @@ class CompanionStatusActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnSchedule).setOnClickListener {
-            MonitoringSyncWorker.schedule(this)
-            refreshStatus()
+            lifecycleScope.launch {
+                val report = try {
+                    withContext(Dispatchers.IO) {
+                        HealthConnectCapability(
+                            this@CompanionStatusActivity
+                        ).report()
+                    }
+                } catch (t: Throwable) {
+                    val message =
+                        "Unable to verify background Health Connect access."
+                    permissionActionMessage = message
+                    SafeLog.e(
+                        "background_capability_check_failed",
+                        t
+                    )
+                    Toast.makeText(
+                        this@CompanionStatusActivity,
+                        message,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
+
+                permissionActionMessage = when (
+                    BackgroundReadPolicy.scheduleDecision(
+                        featureAvailable =
+                            report.backgroundReadFeatureAvailable,
+                        backgroundPermissionGranted =
+                            report.backgroundReadPermissionGranted
+                    )
+                ) {
+                    BackgroundReadPolicy.ScheduleDecision.READY -> {
+                        MonitoringSyncWorker.schedule(
+                            this@CompanionStatusActivity
+                        )
+                        "Background monitoring schedule enabled."
+                    }
+                    BackgroundReadPolicy.ScheduleDecision.FEATURE_UNAVAILABLE ->
+                        "Background Health Connect reads are unavailable on this device."
+                    BackgroundReadPolicy.ScheduleDecision.PERMISSION_REQUIRED ->
+                        "Background permission is required. Tap REQUEST HEALTH CONNECT PERMISSIONS."
+                }
+
+                applyStatusReport(report)
+            }
         }
 
         findViewById<Button>(R.id.btnSyncNow).setOnClickListener {
@@ -197,7 +242,8 @@ class CompanionStatusActivity : AppCompatActivity() {
             }
             val assessment = PermissionLaunchMonitor.assessResume(
                 attempt = attempt,
-                missingAfter = report.permissionsMissing,
+                missingAfter =
+                    requestableMissingPermissions(report),
                 stillMarkedInProgress = stillInProgress
             )
             if (assessment.silentOrNoResult || assessment.userMessage != null) {
@@ -238,7 +284,8 @@ class CompanionStatusActivity : AppCompatActivity() {
             }
             val plan = PermissionRequestPlanner.plan(
                 availability = report.availability,
-                missingPermissions = report.permissionsMissing,
+                missingPermissions =
+                    requestableMissingPermissions(report),
                 requestInProgress = permissionRequestInProgress
             )
             permissionActionMessage = plan.userMessage
@@ -308,7 +355,16 @@ class CompanionStatusActivity : AppCompatActivity() {
         }
     }
 
-    private fun applyStatusReport(report: com.healthchecker.companion.healthconnect.CapabilityReport) {
+    private fun requestableMissingPermissions(
+        report: CapabilityReport
+    ): Set<String> = BackgroundReadPolicy.permissionsToRequest(
+        missingRecordPermissions = report.permissionsMissing,
+        featureAvailable = report.backgroundReadFeatureAvailable,
+        backgroundPermissionGranted =
+            report.backgroundReadPermissionGranted
+    )
+
+    private fun applyStatusReport(report: CapabilityReport) {
         val text = buildString {
             appendLine("Health Connect: ${report.availability}")
             appendLine(report.message)
@@ -322,8 +378,38 @@ class CompanionStatusActivity : AppCompatActivity() {
             } else {
                 appendLine("Partial permissions warning: no")
             }
+            appendLine(
+                "Background read feature: " +
+                    if (report.backgroundReadFeatureAvailable) {
+                        "available"
+                    } else {
+                        "unavailable"
+                    }
+            )
+            appendLine(
+                "Background read permission: " +
+                    when {
+                        !report.backgroundReadFeatureAvailable ->
+                            "not available"
+                        report.backgroundReadPermissionGranted ->
+                            "granted"
+                        else -> "missing"
+                    }
+            )
+            appendLine(
+                "Background schedule readiness: " +
+                    BackgroundReadPolicy.scheduleDecision(
+                        report.backgroundReadFeatureAvailable,
+                        report.backgroundReadPermissionGranted
+                    ).name.lowercase()
+            )
             when {
-                prefs.getLastError()?.let { it == "no_granted_permissions" || it == "query_not_performed" || it == "permission_required" } == true ->
+                prefs.getLastError()?.let {
+                    it == "no_granted_permissions" ||
+                        it == "query_not_performed" ||
+                        it == "permission_required" ||
+                        it == "background_permission_required"
+                } == true ->
                     appendLine("Last fetch: query not performed (permission action required)")
                 prefs.getLastQueryPerformed() ->
                     appendLine("Last fetch: query performed")
@@ -357,9 +443,17 @@ class CompanionStatusActivity : AppCompatActivity() {
             if (report.availability == HealthConnectAvailability.UPDATE_REQUIRED) {
                 appendLine("Action required: update Health Connect provider.")
             }
-            if (report.permissionsMissing.isNotEmpty()) {
-                appendLine("Tip: REQUEST asks only for missing types. MANAGE opens Health Connect settings.")
+            if (requestableMissingPermissions(report).isNotEmpty()) {
+                appendLine("Tip: REQUEST asks only for missing access. MANAGE opens Health Connect settings.")
                 appendLine(getString(R.string.hc_settings_android16_note))
+            }
+            if (
+                report.backgroundReadFeatureAvailable &&
+                !report.backgroundReadPermissionGranted
+            ) {
+                appendLine(
+                    "Action required: grant background Health Connect access before enabling the schedule."
+                )
             }
         }
         statusBody.text = text

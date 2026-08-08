@@ -9,6 +9,8 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.healthchecker.companion.healthconnect.BackgroundReadPolicy
+import com.healthchecker.companion.healthconnect.HealthConnectCapability
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.sync.CompanionSyncRunner
 import com.healthchecker.companion.util.SafeLog
@@ -32,6 +34,45 @@ class MonitoringSyncWorker(
         val prefs = SecurePrefs(applicationContext)
         val now = Instant.now().toString()
         prefs.setLastAttempt(now)
+
+        val capability = try {
+            HealthConnectCapability(
+                applicationContext
+            ).report()
+        } catch (t: Throwable) {
+            SafeLog.e("background_capability_check_failed", t)
+            prefs.setLastError(
+                "background_capability_check_failed"
+            )
+            prefs.setLastQueryPerformed(false)
+            return Result.success()
+        }
+
+        when (
+            BackgroundReadPolicy.scheduleDecision(
+                featureAvailable =
+                    capability.backgroundReadFeatureAvailable,
+                backgroundPermissionGranted =
+                    capability.backgroundReadPermissionGranted
+            )
+        ) {
+            BackgroundReadPolicy.ScheduleDecision.FEATURE_UNAVAILABLE -> {
+                prefs.setLastError(
+                    "background_read_feature_unavailable"
+                )
+                prefs.setLastQueryPerformed(false)
+                return Result.success()
+            }
+            BackgroundReadPolicy.ScheduleDecision.PERMISSION_REQUIRED -> {
+                prefs.setLastError(
+                    "background_permission_required"
+                )
+                prefs.setLastQueryPerformed(false)
+                return Result.success()
+            }
+            BackgroundReadPolicy.ScheduleDecision.READY -> Unit
+        }
+
         val lease = prefs.syncMutex.tryAcquire(OWNER)
         if (!lease.acquired) {
             prefs.setLastError(lease.reason)
