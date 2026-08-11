@@ -138,7 +138,7 @@ http://:{topo.proxy_listen_port} {{
 \t\theader_up X-HC-Proxy-Token {{env.HC_PROXY_SHARED_TOKEN}}
 \t\ttransport http {{
 \t\t\tdial_timeout 5s
-\t\t\tresponse_header_timeout 60s
+\t\t\tresponse_header_timeout 210s
 \t\t}}
 \t}}
 \tlog {{

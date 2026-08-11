@@ -749,3 +749,11 @@ def test_healthz_readyz_no_sensitive_config(monitoring_vault: Path):
         assert config.admin_token not in body
         assert config.pepper not in body
         assert "phone-host.example.ts.net" not in body
+
+def test_caddy_response_header_timeout_exceeds_android_call_bound():
+    monitoring_vault = Path("C:/HealthChecker/test-monitoring-vault")
+    text = render_caddyfile(environ=_base_env(monitoring_vault)).caddyfile
+    assert "response_header_timeout 210s" in text
+
+    template = (SCRIPTS / "Caddyfile.template").read_text(encoding="utf-8")
+    assert "response_header_timeout 210s" in template

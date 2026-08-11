@@ -63,7 +63,7 @@ http://:8744 {
 		header_up X-HC-Proxy-Token {env.HC_PROXY_SHARED_TOKEN}
 		transport http {
 			dial_timeout 5s
-			response_header_timeout 60s
+			response_header_timeout 210s
 		}
 	}
 	# Privacy-safe: access logs discarded by default (does not hide startup failures).
