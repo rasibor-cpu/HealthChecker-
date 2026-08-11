@@ -469,9 +469,39 @@ class CompanionDeliveryService:
 
         # Mark observation keys seen only after durable acceptance AND status persist.
         if durable:
-            for row in validated:
-                obs_key = str(row.get("observation_id") or row.get("source_record_id"))
-                self.store.mark_companion_observation_seen(device.get("device_id"), obs_key, batch_id)
+            obs_keys = [
+                str(row.get("observation_id") or row.get("source_record_id"))
+                for row in validated
+            ]
+            try:
+                self.store.mark_companion_observations_seen(
+                    device.get("device_id"), obs_keys, batch_id
+                )
+            except Exception:
+                # Fail closed: seen-state persistence is part of the durable delivery
+                # contract and must complete before any cursor advancement.
+                fail = {
+                    "ok": False,
+                    "status": "seen_state_persist_failed",
+                    "batch_id": batch_id,
+                    "nonce": nonce,
+                    "device_id": device.get("device_id"),
+                    "payload_fp": payload_fp,
+                    "accepted": [],
+                    "rejected": rejected,
+                    "stored": ingest.get("stored") or 0,
+                    "skipped": ingest.get("skipped") or 0,
+                    "errors": ["seen_state_persist_failed"],
+                    "cursor": prior_cursor,
+                    "cursor_advanced": False,
+                    "monitoring_ran": mon is not None,
+                }
+                self.store.save_companion_batch_ack(fail)
+                self.bus.publish(
+                    COMPANION_BATCH_REJECTED,
+                    redact_companion_log({"batch_id": batch_id}),
+                )
+                return fail
 
         if durable and not rejected and cursor_mode == "present" and requested_cursor is not None:
             self.ingestion.save_cursor("health_connect", requested_cursor, patient_id=patient_id)

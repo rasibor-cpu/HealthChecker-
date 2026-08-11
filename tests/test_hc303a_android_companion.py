@@ -725,3 +725,196 @@ def test_gradle_wrapper_sha256_pinned():
     assert "distributionSha256Sum=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d" in props
     assert (ANDROID_ROOT / "gradlew.bat").is_file()
     assert (ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.jar").is_file()
+
+
+# ---------------------------------------------------------------------------
+# HC-310E R34F regression coverage:
+# batched companion seen-state persistence
+# ---------------------------------------------------------------------------
+
+
+def test_batch_seen_state_is_persisted_in_one_store_write(
+    store: VaultStore, monkeypatch: pytest.MonkeyPatch
+):
+    _, token = _pair(store)
+
+    calls = []
+    original = store.mark_companion_observations_seen
+
+    def capture(device_id, obs_keys, batch_id):
+        calls.append((device_id, list(obs_keys), batch_id))
+        return original(device_id, obs_keys, batch_id)
+
+    monkeypatch.setattr(
+        store,
+        "mark_companion_observations_seen",
+        capture,
+    )
+
+    observations = [
+        _obs(observation_id="batch-seen-1", source_record_id="src-seen-1"),
+        _obs(observation_id="batch-seen-2", source_record_id="src-seen-2"),
+        _obs(observation_id="batch-seen-3", source_record_id="src-seen-3"),
+    ]
+
+    out = companion_observations_handler(
+        _body(
+            batch_id="batch-seen-write",
+            nonce="nonce-seen-write",
+            observations=observations,
+        ),
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+
+    assert out["ok"] is True
+    assert len(calls) == 1
+
+    _, keys, batch_id = calls[0]
+
+    assert batch_id == "batch-seen-write"
+    assert keys == [
+        "batch-seen-1",
+        "batch-seen-2",
+        "batch-seen-3",
+    ]
+
+
+def test_batch_seen_state_records_all_accepted_observation_keys(
+    store: VaultStore,
+):
+    device_id, token = _pair(store)
+
+    observations = [
+        _obs(observation_id="accepted-a", source_record_id="source-a"),
+        _obs(observation_id="accepted-b", source_record_id="source-b"),
+        _obs(observation_id="accepted-c", source_record_id="source-c"),
+    ]
+
+    out = companion_observations_handler(
+        _body(
+            batch_id="batch-all-accepted",
+            nonce="nonce-all-accepted",
+            observations=observations,
+        ),
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+
+    assert out["ok"] is True
+
+    index = store._read_index()
+    seen = index.get("companion_seen_observations") or {}
+    bucket = seen.get(device_id) or {}
+
+    assert "accepted-a" in bucket
+    assert "accepted-b" in bucket
+    assert "accepted-c" in bucket
+
+    assert bucket["accepted-a"]["batch_id"] == "batch-all-accepted"
+    assert bucket["accepted-b"]["batch_id"] == "batch-all-accepted"
+    assert bucket["accepted-c"]["batch_id"] == "batch-all-accepted"
+
+
+def test_batch_seen_state_excludes_rejected_observation_keys(
+    store: VaultStore,
+):
+    device_id, token = _pair(store)
+
+    out = companion_observations_handler(
+        _body(
+            batch_id="batch-partial-seen",
+            nonce="nonce-partial-seen",
+            next_cursor={"changes_token": "must-hold"},
+            observations=[
+                _obs(
+                    observation_id="accepted-seen",
+                    source_record_id="accepted-source",
+                ),
+                _obs(
+                    observation_id="rejected-seen",
+                    source_record_id="rejected-source",
+                    metric_type="ecg",
+                ),
+            ],
+        ),
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+
+    assert out["cursor_advanced"] is False
+
+    index = store._read_index()
+    seen = index.get("companion_seen_observations") or {}
+    bucket = seen.get(device_id) or {}
+
+    assert "accepted-seen" in bucket
+    assert "rejected-seen" not in bucket
+
+
+def test_batch_seen_state_trimming_preserves_5000_entry_bound(
+    store: VaultStore,
+):
+    device_id = "trim-device"
+
+    store.mark_companion_observations_seen(
+        device_id,
+        [f"old-{i:04d}" for i in range(5000)],
+        "seed-batch",
+    )
+
+    store.mark_companion_observations_seen(
+        device_id,
+        [f"new-{i:04d}" for i in range(25)],
+        "new-batch",
+    )
+
+    index = store._read_index()
+    seen = index.get("companion_seen_observations") or {}
+    bucket = seen.get(device_id) or {}
+
+    assert len(bucket) <= 5000
+
+    for i in range(25):
+        assert f"new-{i:04d}" in bucket
+        assert bucket[f"new-{i:04d}"]["batch_id"] == "new-batch"
+
+
+def test_batch_seen_persist_failure_holds_cursor(
+    store: VaultStore, monkeypatch: pytest.MonkeyPatch
+):
+    _, token = _pair(store)
+
+    def boom(device_id, obs_keys, batch_id):
+        raise RuntimeError("seen_state_persist_failed")
+
+    monkeypatch.setattr(
+        store,
+        "mark_companion_observations_seen",
+        boom,
+    )
+
+    out = companion_observations_handler(
+        _body(
+            batch_id="batch-seen-fail",
+            nonce="nonce-seen-fail",
+            next_cursor={"changes_token": "must-not-advance"},
+            observations=[
+                _obs(
+                    observation_id="seen-fail-1",
+                    source_record_id="seen-fail-source-1",
+                )
+            ],
+        ),
+        authorization="Bearer " + token,
+        store=store,
+        local_dev=True,
+    )
+
+    assert out["ok"] is False
+    assert out["status"] == "seen_state_persist_failed"
+    assert out["errors"] == ["seen_state_persist_failed"]
+    assert out["cursor_advanced"] is False

@@ -923,14 +923,21 @@ class VaultStore:
     def mark_companion_observation_seen(
         self, device_id: str | None, obs_key: str, batch_id: str
     ) -> None:
+        self.mark_companion_observations_seen(device_id, [obs_key], batch_id)
+
+    def mark_companion_observations_seen(
+        self, device_id: str | None, obs_keys: list[str], batch_id: str
+    ) -> None:
         with self.companion_lock():
             data = self._read_index()
             seen = dict(data.get("companion_seen_observations") or {})
             did = str(device_id or "")
             bucket = dict(seen.get(did) or {})
-            bucket[str(obs_key)] = {"batch_id": batch_id, "at": utc_now()}
+            for obs_key in obs_keys:
+                bucket[str(obs_key)] = {"batch_id": batch_id, "at": utc_now()}
             if len(bucket) > 5000:
-                for k in list(bucket.keys())[:1000]:
+                trim_count = max(1000, len(bucket) - 5000)
+                for k in list(bucket.keys())[:trim_count]:
                     bucket.pop(k, None)
             seen[did] = bucket
             data["companion_seen_observations"] = seen
