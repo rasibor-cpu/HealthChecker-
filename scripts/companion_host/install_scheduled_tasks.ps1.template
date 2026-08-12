@@ -98,6 +98,33 @@ foreach ($p in @($companionBootstrap, $proxyBootstrap, $loader)) {
 Assert-HcReleaseManifest -ReleaseDir $releaseDir
 Assert-HcFixedExecutable -Path $ToolsPython -AllowedPath $ToolsPython | Out-Null
 Assert-HcFixedExecutable -Path $ToolsCaddy -AllowedPath $ToolsCaddy | Out-Null
+# Materialize the release-verified Caddyfile into the fixed live location.
+$releaseCaddyfile = Join-Path $releaseDir 'scripts\companion_host\Caddyfile'
+$liveCaddyfile = 'C:\ProgramData\HealthChecker\companion_host\Caddyfile'
+
+if (-not (Test-Path -LiteralPath $releaseCaddyfile)) {
+    Write-Host 'hc_scheduled_host:release_file_missing'
+    exit 1
+}
+
+$liveCaddyDir = Split-Path -Parent $liveCaddyfile
+if (-not (Test-Path -LiteralPath $liveCaddyDir)) {
+    New-Item -ItemType Directory -Path $liveCaddyDir -Force | Out-Null
+}
+
+Copy-Item -LiteralPath $releaseCaddyfile -Destination $liveCaddyfile -Force
+
+$releaseCaddyHash = (
+    Get-FileHash -LiteralPath $releaseCaddyfile -Algorithm SHA256
+).Hash
+$liveCaddyHash = (
+    Get-FileHash -LiteralPath $liveCaddyfile -Algorithm SHA256
+).Hash
+
+if ($releaseCaddyHash -ne $liveCaddyHash) {
+    Write-Host 'hc_scheduled_host:caddy_materialization_hash_mismatch'
+    exit 1
+}
 function New-HcStartupTask {
     param(
         [string]$TaskName,

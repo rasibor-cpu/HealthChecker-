@@ -435,3 +435,18 @@ def test_docs_mark_nssm_rejected_task_scheduler_active():
         assert "REJECTED" in doc or "Rejected" in doc
     assert "HealthCheckerCompanionHost" in doc_b
     assert "HealthCheckerCompanionProxy" in doc_b
+
+
+def test_install_scheduled_tasks_materializes_verified_release_caddyfile():
+    script = (
+        SCRIPTS / "install_scheduled_tasks.ps1.template"
+    ).read_text(encoding="utf-8")
+
+    assert "scripts\\companion_host\\Caddyfile" in script
+    assert "C:\\ProgramData\\HealthChecker\\companion_host\\Caddyfile" in script
+    assert "Copy-Item" in script
+    assert "-LiteralPath $releaseCaddyfile" in script
+    assert "-Destination $liveCaddyfile" in script
+    assert "Get-FileHash -LiteralPath $releaseCaddyfile -Algorithm SHA256" in script
+    assert "Get-FileHash -LiteralPath $liveCaddyfile -Algorithm SHA256" in script
+    assert "if ($releaseCaddyHash -ne $liveCaddyHash)" in script
