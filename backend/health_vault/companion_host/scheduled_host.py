@@ -139,6 +139,7 @@ RELEASE_INCLUDE_SCRIPT_NAMES: tuple[str, ...] = (
     "host_env_loader.ps1.template",
     "bootstrap_companion_host.ps1.template",
     "bootstrap_companion_proxy.ps1.template",
+    "install_scheduled_tasks.ps1.template",
     "Caddyfile.template",
 )
 
@@ -169,6 +170,7 @@ REQUIRED_RELEASE_REL_PATHS: frozenset[str] = frozenset(
         "scripts/companion_host/bootstrap_companion_host.ps1",
         "scripts/companion_host/bootstrap_companion_proxy.ps1",
         "scripts/companion_host/host_env_loader.ps1",
+        "scripts/companion_host/install_scheduled_tasks.ps1",
         "backend/health_vault/companion_host/__main__.py",
         "backend/health_vault/companion_host/scheduled_host.py",
         "backend/health_vault/companion_host/runtime_contract.py",

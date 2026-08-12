@@ -366,6 +366,7 @@ def test_packaging_excludes_private_records_and_artifacts(tmp_path: Path):
     rels = [p.relative_to(ROOT).as_posix() for p in files]
     assert any(r.startswith("backend/health_vault/companion_host/") for r in rels)
     assert any(r.endswith("bootstrap_companion_host.ps1.template") for r in rels)
+    assert any(r.endswith("install_scheduled_tasks.ps1.template") for r in rels)
     assert "backend/health_vault/config/monitoring_thresholds.json" in rels
     assert "backend/health_vault/config/guardian_rules.json" in rels
     assert "backend/health_vault/config/executive_dashboard.json" not in rels
@@ -385,6 +386,7 @@ def test_packaging_excludes_private_records_and_artifacts(tmp_path: Path):
     # Bootstraps present without .template suffix
     assert (release / "scripts/companion_host/bootstrap_companion_host.ps1").is_file()
     assert (release / "scripts/companion_host/host_env_loader.ps1").is_file()
+    assert (release / "scripts/companion_host/install_scheduled_tasks.ps1").is_file()
     built = build_release_manifest(repo_root=ROOT, source_commit=COMMIT_40)
     assert built["rejected_wrappers"] == list(REJECTED_SERVICE_WRAPPERS)
     # Dirty working tree must fail closed when require_clean_commit=True
