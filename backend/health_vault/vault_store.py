@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -213,6 +214,222 @@ class VaultStore:
                     pass
             raise
         return {"document": document.to_dict(), "import_record": import_record, "index": data}
+
+
+    @contextmanager
+    def observation_batch(self):
+        """
+        HC-310E bounded observation ingestion transaction.
+
+        Holds the existing per-index RLock, reads/parses index.json once,
+        allows multiple monitoring observation mutations against one in-memory
+        index, then performs one atomic index write.
+
+        Any payload files created by the batch are removed if the final index
+        commit fails. Persistent schema is unchanged.
+        """
+        with _index_lock(self.index_path):
+            data = self._read_index()
+            observation_rows = data.get("observations") or []
+            document_rows = data.get("documents") or []
+
+            batch = {
+                "data": data,
+                "written_paths": [],
+                "fingerprints": {
+                    (
+                        str(row.get("patient_id") or "default-patient"),
+                        str(row.get("fingerprint") or ""),
+                    ): row
+                    for row in observation_rows
+                    if row.get("fingerprint")
+                },
+                "observation_positions": {
+                    str(row.get("observation_id")): i
+                    for i, row in enumerate(observation_rows)
+                    if row.get("observation_id")
+                },
+                "fingerprint_positions": {
+                    (
+                        str(row.get("patient_id") or "default-patient"),
+                        str(row.get("fingerprint")),
+                    ): i
+                    for i, row in enumerate(observation_rows)
+                    if row.get("fingerprint")
+                },
+                "documents_by_sha256": {
+                    str(row.get("sha256")): row
+                    for row in document_rows
+                    if row.get("sha256")
+                },
+            }
+            try:
+                yield batch
+                self._write_index(data)
+            except Exception:
+                for raw_path in reversed(batch["written_paths"]):
+                    try:
+                        path = Path(raw_path)
+                        if path.exists():
+                            path.unlink()
+                    except OSError:
+                        pass
+                raise
+
+    def batch_get_observation_by_fingerprint(
+        self,
+        batch: dict[str, Any],
+        fingerprint: str,
+        patient_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if not fingerprint:
+            return None
+        patient_key = str(patient_id or "default-patient")
+        row = batch["fingerprints"].get((patient_key, str(fingerprint)))
+        return dict(row) if isinstance(row, dict) else None
+
+    def batch_store(
+        self,
+        batch: dict[str, Any],
+        *,
+        document: MedicalDocument,
+        measurements: list[Measurement],
+        content: bytes | None = None,
+        interpretation: str | None = None,
+        parser: dict[str, Any] | None = None,
+        import_meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        In-memory equivalent of store() for observation_batch().
+
+        Does not write index.json. Payload bytes retain the existing append-only
+        behavior and are tracked for rollback if the batch index commit fails.
+        """
+        data = batch["data"]
+
+        if any(d.get("id") == document.id for d in data["documents"]):
+            raise ValueError("Document id already exists — refuse overwrite")
+
+        existing = None
+        if document.sha256:
+            existing = batch["documents_by_sha256"].get(str(document.sha256))
+
+        wrote_path: Path | None = None
+        try:
+            if content is not None and existing is None:
+                dest = self.documents_dir / f"{document.id}.bin"
+                if dest.exists():
+                    raise ValueError("Storage path exists — refuse overwrite")
+                dest.write_bytes(content)
+                wrote_path = dest
+                document.storage_uri = f"vault://documents/{document.id}.bin"
+                document.size_bytes = len(content)
+            elif existing is not None:
+                document.storage_uri = existing.get("storage_uri")
+                document.duplicate_of = existing.get("id")
+                tags = list(document.tags or [])
+                if "duplicate_content" not in tags:
+                    tags.append("duplicate_content")
+                document.tags = tags
+
+            if interpretation:
+                document.interpretation = interpretation
+
+            doc_row = document.to_dict()
+            measurement_rows: list[dict[str, Any]] = []
+            for measurement in measurements:
+                if not measurement.document_id:
+                    measurement.document_id = document.id
+                measurement_rows.append(measurement.to_dict())
+
+            import_record = {
+                "import_id": str(uuid4()),
+                "document_id": document.id,
+                "imported_at": document.imported_at,
+                "parser": parser,
+                "confidence": document.parser_confidence,
+                "sha256": document.sha256,
+                "measurement_count": len(measurements),
+                "duplicate_content": existing is not None,
+                "meta": import_meta or {},
+            }
+
+            data["documents"].append(doc_row)
+            data["measurements"].extend(measurement_rows)
+            data["imports"].append(import_record)
+
+            if document.sha256 and existing is None:
+                batch["documents_by_sha256"][str(document.sha256)] = doc_row
+
+            self._audit(
+                data,
+                "document_imported",
+                {
+                    "document_id": document.id,
+                    "sha256": document.sha256,
+                    "parser": parser,
+                    "duplicate_content": existing is not None,
+                },
+            )
+
+            if wrote_path is not None:
+                batch["written_paths"].append(str(wrote_path))
+
+            return {
+                "document": document.to_dict(),
+                "import_record": import_record,
+                "index": data,
+            }
+        except Exception:
+            if wrote_path is not None and wrote_path.exists():
+                try:
+                    wrote_path.unlink()
+                except OSError:
+                    pass
+            raise
+
+    def batch_upsert_observation(
+        self,
+        batch: dict[str, Any],
+        observation: dict[str, Any],
+    ) -> dict[str, Any]:
+        """In-memory equivalent of upsert_observation() for observation_batch()."""
+        data = batch["data"]
+        rows = data.setdefault("observations", [])
+
+        oid = str(observation.get("observation_id") or uuid4())
+        row = dict(observation)
+        row["observation_id"] = oid
+        fp = str(row.get("fingerprint") or "")
+        patient_key = str(row.get("patient_id") or "default-patient")
+
+        position = batch["observation_positions"].get(oid)
+        if position is None and fp:
+            position = batch["fingerprint_positions"].get((patient_key, fp))
+
+        if position is None:
+            position = len(rows)
+            rows.append(row)
+        else:
+            rows[position] = row
+
+        batch["observation_positions"][oid] = position
+        if fp:
+            batch["fingerprint_positions"][(patient_key, fp)] = position
+            batch["fingerprints"][(patient_key, fp)] = row
+
+        self._audit(
+            data,
+            "observation_upserted",
+            {
+                "observation_id": oid,
+                "metric_type": row.get("metric_type"),
+                "acquisition_mode": row.get("acquisition_mode"),
+                "fingerprint": row.get("fingerprint"),
+            },
+        )
+
+        return row
 
     def list_documents(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("documents") or [])

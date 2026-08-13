@@ -369,6 +369,7 @@ class CompanionDeliveryService:
                     allow_simulated=False,
                     default_tz=body.get("default_tz"),
                     now=now_ts,
+                    batch_persist=True,
                 )
             except Exception:
                 fail = {

@@ -64,7 +64,19 @@ class IngestionCoordinator:
         default_tz: str | None = None,
         evaluate_freshness: bool = True,
         now: str | None = None,
+        batch_persist: bool = False,
     ) -> dict[str, Any]:
+        if batch_persist and connector_id == "health_connect":
+            return self._ingest_health_connect_batched(
+                observations,
+                connector_id=connector_id,
+                patient_id=patient_id,
+                allow_simulated=allow_simulated,
+                default_tz=default_tz,
+                evaluate_freshness=evaluate_freshness,
+                now=now,
+            )
+
         now_ts = now or utc_now()
         stored: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
@@ -137,11 +149,132 @@ class IngestionCoordinator:
             "durable_success": not errors and (len(stored) + len(skipped)) == len(observations or []),
         }
 
-    def _persist_one(self, obs: CanonicalObservation, *, connector_id: str) -> dict[str, Any]:
-        existing = self.store.get_observation_by_fingerprint(
-            obs.fingerprint or "",
-            patient_id=obs.patient_id,
+
+    def _ingest_health_connect_batched(
+        self,
+        observations: list[dict[str, Any] | CanonicalObservation],
+        *,
+        connector_id: str,
+        patient_id: str = "default-patient",
+        allow_simulated: bool = False,
+        default_tz: str | None = None,
+        evaluate_freshness: bool = True,
+        now: str | None = None,
+    ) -> dict[str, Any]:
+        now_ts = now or utc_now()
+        stored: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        errors: list[str] = []
+        pending_events: list[dict[str, Any]] = []
+
+        with self.store.observation_batch() as batch:
+            for raw in observations or []:
+                try:
+                    if isinstance(raw, CanonicalObservation):
+                        obs = raw
+                    else:
+                        payload = dict(raw)
+                        payload.setdefault("patient_id", patient_id)
+                        if (
+                            allow_simulated
+                            and str(
+                                payload.get("acquisition_mode") or ""
+                            ).upper()
+                            == "SIMULATED_TEST_ONLY"
+                        ):
+                            payload["allow_simulated"] = True
+                        obs = build_observation(payload, default_tz=default_tz)
+
+                    if (
+                        obs.acquisition_mode == "SIMULATED_TEST_ONLY"
+                        and not allow_simulated
+                    ):
+                        errors.append("simulated_rejected_in_production_path")
+                        continue
+
+                    obs.patient_id = patient_id
+
+                    if evaluate_freshness:
+                        if not obs.measured_at:
+                            obs.freshness_status = "missing"
+                        else:
+                            obs.freshness_status = self.compute_freshness(
+                                metric=obs.metric_type,
+                                measured_at=obs.measured_at,
+                                now=now_ts,
+                                acquisition_mode=obs.acquisition_mode,
+                            )
+
+                    result = self._persist_one(
+                        obs,
+                        connector_id=connector_id,
+                        batch=batch,
+                    )
+
+                    if result.get("skipped"):
+                        skipped.append(result)
+                    else:
+                        stored.append(result)
+                        pending_events.append(
+                            {
+                                "observation_id": obs.observation_id,
+                                "metric_type": obs.metric_type,
+                                "acquisition_mode": obs.acquisition_mode,
+                                "freshness_status": obs.freshness_status,
+                                "connector_id": connector_id,
+                                "measured_at": obs.measured_at,
+                                "patient_id": patient_id,
+                            }
+                        )
+                except ValueError as exc:
+                    errors.append(str(exc))
+                except Exception as exc:  # pragma: no cover
+                    errors.append(f"ingest_error:{type(exc).__name__}")
+
+        for event in pending_events:
+            self.bus.publish(
+                MONITORING_INGESTED,
+                redact_for_log(event),
+            )
+
+        summary = safe_sync_summary(
+            connector_id=connector_id,
+            status="ok"
+            if not errors
+            else ("partial" if stored or skipped else "error"),
+            fetched=len(observations or []),
+            stored=len(stored),
+            skipped=len(skipped),
+            errors=errors,
         )
+
+        return {
+            **summary,
+            "stored_observations": stored,
+            "skipped_observations": skipped,
+            "at": now_ts,
+            "durable_success": not errors
+            and (len(stored) + len(skipped)) == len(observations or []),
+        }
+
+    def _persist_one(
+        self,
+        obs: CanonicalObservation,
+        *,
+        connector_id: str,
+        batch: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if batch is None:
+            existing = self.store.get_observation_by_fingerprint(
+                obs.fingerprint or "",
+                patient_id=obs.patient_id,
+            )
+        else:
+            existing = self.store.batch_get_observation_by_fingerprint(
+                batch,
+                obs.fingerprint or "",
+                patient_id=obs.patient_id,
+            )
         if existing:
             return {
                 "skipped": True,
@@ -157,7 +290,11 @@ class IngestionCoordinator:
         # Simulated: observation index only — never clinical vault measurements
         if obs.acquisition_mode == "SIMULATED_TEST_ONLY":
             row["clinical_persist"] = False
-            saved = self.store.upsert_observation(row)
+            saved = (
+                self.store.upsert_observation(row)
+                if batch is None
+                else self.store.batch_upsert_observation(batch, row)
+            )
             return {"skipped": False, "observation": saved, "clinical_persist": False}
 
         content = json.dumps(
@@ -200,25 +337,37 @@ class IngestionCoordinator:
             confidence=obs.confidence,
             document_id=doc.id,
         )
-        stored_doc = self.store.store(
-            document=doc,
-            measurements=[measurement],
-            content=content,
-            interpretation=None,
-            parser={"version": "hc302.ingestion.v1", "connector_id": connector_id},
-            import_meta={
+        store_kwargs = {
+            "document": doc,
+            "measurements": [measurement],
+            "content": content,
+            "interpretation": None,
+            "parser": {
+                "version": "hc302.ingestion.v1",
+                "connector_id": connector_id,
+            },
+            "import_meta": {
                 "source": "hc302_continuous_monitoring",
                 "acquisition_mode": obs.acquisition_mode,
                 "fingerprint": obs.fingerprint,
             },
-        )
+        }
+
+        if batch is None:
+            stored_doc = self.store.store(**store_kwargs)
+        else:
+            stored_doc = self.store.batch_store(batch, **store_kwargs)
 
         doc_row = stored_doc.get("document") or {}
         if doc_row.get("duplicate_of") or (stored_doc.get("import_record") or {}).get("duplicate_content"):
             # Still record observation linkage for idempotent cursor progress
             row["document_id"] = doc_row.get("duplicate_of") or doc_row.get("id")
             row["measurement_id"] = measurement.measurement_id
-            saved = self.store.upsert_observation(row)
+            saved = (
+                self.store.upsert_observation(row)
+                if batch is None
+                else self.store.batch_upsert_observation(batch, row)
+            )
             return {
                 "skipped": True,
                 "reason": "duplicate_document_content",
@@ -229,7 +378,11 @@ class IngestionCoordinator:
         row["document_id"] = doc_row.get("id") or doc.id
         row["measurement_id"] = measurement.measurement_id
         row["clinical_persist"] = True
-        saved = self.store.upsert_observation(row)
+        saved = (
+            self.store.upsert_observation(row)
+            if batch is None
+            else self.store.batch_upsert_observation(batch, row)
+        )
         return {"skipped": False, "observation": saved, "clinical_persist": True}
 
     def compute_freshness(
