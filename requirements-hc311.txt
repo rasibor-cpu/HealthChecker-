@@ -1,0 +1,3 @@
+# HC311 encrypted Health Vault cryptographic dependency.
+# Exact pin required for reproducible security review and deployment packaging.
+cryptography==45.0.7

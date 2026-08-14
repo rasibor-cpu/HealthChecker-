@@ -13,6 +13,12 @@ from typing import Any
 from uuid import uuid4
 
 from backend.health_vault.models import MedicalDocument, Measurement, utc_now
+from backend.health_vault.vault_crypto import (
+    KEY_BYTES as VAULT_KEY_BYTES,
+    VaultCryptoKeyError,
+    decrypt_bytes,
+    encrypt_bytes,
+)
 
 # Per-index locks for HC-303A atomic pair consume / batch reservation
 _INDEX_LOCKS: dict[str, threading.RLock] = {}
@@ -32,13 +38,40 @@ def _index_lock(path: Path) -> threading.RLock:
 class VaultStore:
     """Permanent vault under vault_storage/ — originals + JSON indexes."""
 
-    def __init__(self, root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        root: str | Path | None = None,
+        *,
+        encryption_key: bytes | None = None,
+    ) -> None:
         self.root = Path(root or Path(__file__).resolve().parents[2] / "vault_storage")
         self.documents_dir = self.root / "documents"
         self.index_path = self.root / "index.json"
+
+        if encryption_key is not None:
+            if not isinstance(encryption_key, bytes):
+                raise VaultCryptoKeyError("vault_key_must_be_bytes")
+            if len(encryption_key) != VAULT_KEY_BYTES:
+                raise VaultCryptoKeyError("vault_key_must_be_32_bytes")
+            self._encryption_key: bytes | None = bytes(encryption_key)
+        else:
+            self._encryption_key = None
+
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         if not self.index_path.exists():
             self._write_index(self._empty())
+
+    @property
+    def encrypted(self) -> bool:
+        return self._encryption_key is not None
+
+    @staticmethod
+    def _index_crypto_context() -> bytes:
+        return b"index.json"
+
+    @staticmethod
+    def _document_crypto_context(document_id: str) -> bytes:
+        return f"documents/{document_id}.bin".encode("utf-8")
 
     def _empty(self) -> dict[str, Any]:
         return {
@@ -85,9 +118,20 @@ class VaultStore:
 
     def _read_index(self) -> dict[str, Any]:
         with _index_lock(self.index_path):
+            if self.encrypted:
+                raw = self.index_path.read_bytes()
+                plaintext = decrypt_bytes(
+                    raw,
+                    key=self._encryption_key,
+                    context=self._index_crypto_context(),
+                )
+                return json.loads(plaintext.decode("utf-8"))
+
             try:
                 return json.loads(self.index_path.read_text(encoding="utf-8"))
             except Exception:
+                # Legacy plaintext compatibility only.
+                # Encrypted mode above always fails closed.
                 return self._empty()
 
     def _write_index(self, data: dict[str, Any]) -> None:
@@ -96,12 +140,22 @@ class VaultStore:
 
         with _index_lock(self.index_path):
             self.index_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = json.dumps(data, indent=2)
+            payload = json.dumps(data, indent=2).encode("utf-8")
+
+            if self.encrypted:
+                persisted = encrypt_bytes(
+                    payload,
+                    key=self._encryption_key,
+                    context=self._index_crypto_context(),
+                )
+            else:
+                persisted = payload
+
             last_err: Exception | None = None
             for attempt in range(10):
                 tmp = self.index_path.with_suffix(f".tmp.{os.getpid()}.{attempt}")
                 try:
-                    tmp.write_text(payload, encoding="utf-8")
+                    tmp.write_bytes(persisted)
                     os.replace(tmp, self.index_path)
                     return
                 except PermissionError as exc:
@@ -161,7 +215,16 @@ class VaultStore:
                 dest = self.documents_dir / f"{document.id}.bin"
                 if dest.exists():
                     raise ValueError("Storage path exists — refuse overwrite")
-                dest.write_bytes(content)
+                persisted_content = (
+                    encrypt_bytes(
+                        content,
+                        key=self._encryption_key,
+                        context=self._document_crypto_context(document.id),
+                    )
+                    if self.encrypted
+                    else content
+                )
+                dest.write_bytes(persisted_content)
                 wrote_path = dest
                 # Public URI is vault-relative — never require absolute filesystem exposure.
                 document.storage_uri = f"vault://documents/{document.id}.bin"
@@ -320,7 +383,16 @@ class VaultStore:
                 dest = self.documents_dir / f"{document.id}.bin"
                 if dest.exists():
                     raise ValueError("Storage path exists — refuse overwrite")
-                dest.write_bytes(content)
+                persisted_content = (
+                    encrypt_bytes(
+                        content,
+                        key=self._encryption_key,
+                        context=self._document_crypto_context(document.id),
+                    )
+                    if self.encrypted
+                    else content
+                )
+                dest.write_bytes(persisted_content)
                 wrote_path = dest
                 document.storage_uri = f"vault://documents/{document.id}.bin"
                 document.size_bytes = len(content)
@@ -547,6 +619,35 @@ class VaultStore:
 
     def health_intelligence(self) -> dict[str, Any]:
         return dict(self._read_index().get("health_intelligence") or {})
+
+    def read_document_bytes(
+        self,
+        storage_uri: str | None,
+        document_id: str | None = None,
+    ) -> bytes:
+        """Read a stored document, decrypting HCVE content when enabled.
+
+        The filesystem path remains a ciphertext path in encrypted mode.
+        Callers requiring document content must use this controlled API.
+        """
+
+        path = self.resolve_storage_path(storage_uri, document_id)
+
+        if path is None or not path.is_file():
+            raise FileNotFoundError("vault_document_not_found")
+
+        raw = path.read_bytes()
+
+        if not self.encrypted:
+            return raw
+
+        effective_id = str(document_id or path.stem)
+
+        return decrypt_bytes(
+            raw,
+            key=self._encryption_key,
+            context=self._document_crypto_context(effective_id),
+        )
 
     def resolve_storage_path(self, storage_uri: str | None, document_id: str | None = None) -> Path | None:
         """Map public vault:// URI (or legacy absolute path) to local blob path."""
