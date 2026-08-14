@@ -32,6 +32,18 @@ materialization, PKI mutation, signing, runtime reinstall, and certification PAS
 are unavailable. It has no state transition that can enable mutation by editing
 JSON, never returns PASS, and never returns exit 0.
 
+The read-only repository wrapper resolves its fixed record independently of the
+working directory. From the repository root, run:
+
+```powershell
+python scripts/check_hc309_pending_pen_readiness.py
+```
+
+It accepts no arguments, reads only the fixed record above, emits one compact JSON
+result, and returns exit 20 for the accepted BLOCKED state. Missing or invalid
+configuration and every attempted argument fail closed with exit 22. The wrapper
+does not query IANA, inspect the host, or provide any mutation capability.
+
 ## Pending PEN and OID boundary
 
 - PEN state: `pending_assignment`.
@@ -86,3 +98,7 @@ PEN assignment alone cannot authorize mutation. The next transition requires:
 
 Only a later separately authorized phase may consider PKI mutation or runtime
 replacement after those gates pass.
+
+The fail-closed validator prepared for that future proposal is documented in
+`HC-309-R4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md`. P2 does not record or
+claim an assigned PEN and does not change this pending state.

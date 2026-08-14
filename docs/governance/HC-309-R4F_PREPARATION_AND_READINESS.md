@@ -113,6 +113,17 @@ but no PEN or OIDs are assigned and no mutation is authorized.
 7. Independently review frozen certificate templates, package schema and later
    mutation tooling before R4F-EXEC mutation.
 
+P2 prepares a bounded validator for the future assigned-PEN transition proposal.
+It establishes no authoritative identifier, performs no IANA lookup, and leaves
+all live and mutation gates BLOCKED. See
+`HC-309-R4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md`.
+
+P3 prepares the two-custodian, offline-equipment, transfer-media, TPM capability,
+backup, revocation, sequence, and abort-policy validator described in
+`HC-309-R4F-EXEC-P3_OFFLINE_CEREMONY_READINESS.md`. It validates reviewed
+assertions only; actual evidence, ceremony authorization, and all mutation remain
+outside Git and BLOCKED.
+
 Related designs:
 
 - `HC-309-R4D_SYNTHETIC_COLLECTOR_IMPLEMENTATION.md`

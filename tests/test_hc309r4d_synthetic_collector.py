@@ -157,13 +157,16 @@ def test_total_deadline_is_not_reset_by_reads_or_hostile_session():
     while process.poll() is None and time.monotonic() - started < INPUT_DEADLINE_TOLERANCE[1] + 5:
         try:
             process.stdin.write(b" "); process.stdin.flush()
-        except BrokenPipeError:
+        except (BrokenPipeError, OSError):
             break
         time.sleep(0.5)
     elapsed = time.monotonic() - started
     if process.poll() is None:
         process.kill(); pytest.fail("partial reads reset or defeated the total deadline")
-    process.stdin.close()
+    try:
+        process.stdin.close()
+    except OSError:
+        pass
     result = subprocess.CompletedProcess(command, process.returncode, process.stdout.read(), process.stderr.read())
     _assert_error(result)
     assert INPUT_DEADLINE_TOLERANCE[0] <= elapsed <= INPUT_DEADLINE_TOLERANCE[1]
