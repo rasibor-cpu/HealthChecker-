@@ -150,7 +150,7 @@ class ChunkAckDecisionTest {
 
     @Test
     fun clientTimeoutConstantsAreFiniteAndRaised() {
-        assertEquals(180L, HostClient.CALL_TIMEOUT_SECONDS)
+        assertEquals(240L, HostClient.CALL_TIMEOUT_SECONDS)
         assertTrue(HostClient.CALL_TIMEOUT_SECONDS < Long.MAX_VALUE)
         assertTrue(HostClient.CONNECT_TIMEOUT_SECONDS > 0L)
         assertTrue(HostClient.WRITE_TIMEOUT_SECONDS > 0L)

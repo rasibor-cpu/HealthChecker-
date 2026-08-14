@@ -203,7 +203,7 @@ class HostClient(
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         /** Finite permanent-host delivery bound (HC-306I-R11). Not infinite. */
-        const val CALL_TIMEOUT_SECONDS: Long = 180L
+        const val CALL_TIMEOUT_SECONDS: Long = 240L
         const val CONNECT_TIMEOUT_SECONDS: Long = 30L
         const val WRITE_TIMEOUT_SECONDS: Long = 60L
     }
