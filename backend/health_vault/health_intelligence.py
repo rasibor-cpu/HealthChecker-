@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 from uuid import uuid4
 
@@ -20,17 +21,26 @@ logger = logging.getLogger("hc315.health_intelligence")
 
 # Metric → human observational phrasing
 _LABELS = {
-    "egfr": "Kidney function",
+    "egfr": "Kidney function (eGFR)",
     "creatinine": "Creatinine",
     "glucose": "Glucose",
-    "hba1c": "HbA1c / diabetes marker",
-    "systolic": "Blood pressure (systolic)",
-    "diastolic": "Blood pressure (diastolic)",
-    "sleep_score": "Sleep",
-    "energy_score": "Energy score",
+    "hba1c": "HbA1c",
+    "systolic": "Systolic blood pressure",
+    "diastolic": "Diastolic blood pressure",
+    "sleep_score": "Sleep score",
+    "sleep_duration": "Sleep duration",
     "resting_hr": "Resting heart rate",
+    "pulse": "Pulse rate",
     "hrv": "HRV",
     "heart_rhythm": "Heart rhythm",
+    "weight": "Weight",
+    "steps": "Step count",
+    "uacr": "UACR (kidney protein)",
+    "protein": "Proteinuria",
+    "ldl": "LDL Cholesterol",
+    "hdl": "HDL Cholesterol",
+    "cholesterol": "Total Cholesterol",
+    "triglycerides": "Triglycerides",
 }
 
 
@@ -48,33 +58,294 @@ class HealthIntelligenceEngine:
         obs = hi.get("observations") or []
         return [o for o in obs if o.get("patient_id") == patient_id]
 
+    def _get_metric_series(self, metric: str, patient_id: str) -> list[dict[str, Any]]:
+        """Fetch all eligible measurement objects for a metric and patient, sorted chronologically."""
+        canon = canonicalize_metric(metric)
+        docs = self.trends._docs_by_id()
+        items = []
+        for m in self.store.list_measurements():
+            if canonicalize_metric(m.get("metric")) == canon and self.trends._eligible(m, docs):
+                doc = docs.get(str(m.get("document_id") or ""))
+                if doc and doc.get("patient_id", "default-patient") == patient_id:
+                    items.append(m)
+        
+        # Sort chronologically based on measured_at
+        items.sort(
+            key=lambda x: str(
+                x.get("measured_at")
+                or (docs.get(str(x.get("document_id") or ""), {}) or {}).get("measured_at")
+                or ""
+            )
+        )
+        return items
+
     def generate_observations(self, patient_id: str = "default-patient") -> list[dict[str, Any]]:
-        """Generate and persist patient-specific observations using structured models."""
+        """Generate and persist patient-specific observations using clinical trend metrics."""
         trend_map = self.trends.recompute(patient_id=patient_id)
         observations: list[dict[str, Any]] = []
+        processed_metrics: set[str] = set()
 
-        docs = self.trends._docs_by_id()
+        # 1. DIABETES/GLYCEMIC ANALYSIS
+        glucose_items = self._get_metric_series("glucose", patient_id)
+        if glucose_items:
+            processed_metrics.add("glucose")
+            values = [float(item["value"]) for item in glucose_items]
+            evidence = [
+                EvidenceReference(
+                    source_type="measurement",
+                    document_id=item.get("document_id"),
+                    measurement_id=item.get("measurement_id") or item.get("id"),
+                ) for item in glucose_items
+            ]
 
+            mean_val = sum(values) / len(values)
+            variance = sum((x - mean_val) ** 2 for x in values) / len(values)
+            std_dev = math.sqrt(variance)
+
+            fact = f"Mean glucose is {mean_val:.1f} mg/dL with standard deviation of {std_dev:.1f} mg/dL."
+            
+            # Interpret variability & trend direction
+            direction = trend_map.get("glucose", {}).get("direction", "stable")
+            if std_dev > 20:
+                interpretation = f"Glucose levels show high variability ({direction} trend)."
+            else:
+                interpretation = f"Glucose levels are stable with normal variability ({direction} trend)."
+            
+            explanation = (
+                f"Calculated glycemic standard deviation over {len(values)} measurements. "
+                "Higher variability can suggest blood sugar fluctuations."
+            )
+            
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="glycemic",
+                metric="glucose",
+                fact=fact,
+                interpretation=interpretation,
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(
+                    value=0.9 if len(values) >= 3 else 0.6,
+                    method="statistical_analysis",
+                    version="1.1.0",
+                ),
+                evidence=evidence,
+                explanation=explanation,
+            )
+            observations.append(obs.to_dict())
+
+        # HbA1c Check
+        hba1c_items = self._get_metric_series("hba1c", patient_id)
+        if hba1c_items:
+            processed_metrics.add("hba1c")
+            values = [float(item["value"]) for item in hba1c_items]
+            evidence = [
+                EvidenceReference(
+                    source_type="measurement",
+                    document_id=item.get("document_id"),
+                    measurement_id=item.get("measurement_id") or item.get("id"),
+                ) for item in hba1c_items
+            ]
+            direction = trend_map.get("hba1c", {}).get("direction", "stable")
+            fact = f"Latest HbA1c is {values[-1]:.1f}% (prior values: {', '.join(f'{v:.1f}%' for v in values[:-1])})."
+            interpretation = f"HbA1c levels show a {direction} pattern."
+            explanation = f"Evaluated chronological trend direction over {len(values)} points."
+            
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="glycemic",
+                metric="hba1c",
+                fact=fact,
+                interpretation=interpretation,
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(
+                    value=0.85 if len(values) >= 3 else 0.5,
+                    method="rule_based",
+                    version="1.1.0",
+                ),
+                evidence=evidence,
+                explanation=explanation,
+            )
+            observations.append(obs.to_dict())
+
+        # 2. KIDNEY/RENAL ANALYSIS
+        egfr_items = self._get_metric_series("egfr", patient_id)
+        if egfr_items:
+            processed_metrics.add("egfr")
+            values = [float(item["value"]) for item in egfr_items]
+            evidence = [
+                EvidenceReference(
+                    source_type="measurement",
+                    document_id=item.get("document_id"),
+                    measurement_id=item.get("measurement_id") or item.get("id"),
+                ) for item in egfr_items
+            ]
+            direction = trend_map.get("egfr", {}).get("direction", "stable")
+            change = values[-1] - values[0]
+            fact = f"eGFR changed from {values[0]:.1f} to {values[-1]:.1f} mL/min/1.73m2."
+            interpretation = f"Kidney filtration rate is stable ({direction} trend)."
+            if direction == "worsening" or change < -5:
+                interpretation = f"Kidney filtration rate shows worsening trend ({direction})."
+
+            explanation = f"Calculated absolute change of {change:+.1f} mL/min/1.73m2 over {len(values)} readings."
+
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="renal",
+                metric="egfr",
+                fact=fact,
+                interpretation=interpretation,
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(
+                    value=0.85 if len(values) >= 3 else 0.5,
+                    method="statistical_analysis",
+                    version="1.1.0",
+                ),
+                evidence=evidence,
+                explanation=explanation,
+            )
+            observations.append(obs.to_dict())
+
+        # Creatinine & Proteinuria Check
+        for metric, category in [("creatinine", "renal"), ("uacr", "renal"), ("protein", "renal")]:
+            items = self._get_metric_series(metric, patient_id)
+            if items:
+                processed_metrics.add(metric)
+                values = [float(item["value"]) for item in items]
+                evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
+                direction = trend_map.get(metric, {}).get("direction", "stable")
+                
+                obs = HealthObservation(
+                    patient_id=patient_id,
+                    observation_id=str(uuid4()),
+                    category=category,
+                    metric=metric,
+                    fact=f"Latest {metric} is {values[-1]} (prior values: {', '.join(map(str, values[:-1]))}).",
+                    interpretation=f"Trends show a {direction} pattern.",
+                    measured_at=utc_now(),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    evidence=evidence,
+                    explanation=f"Evaluated trend direction over {len(values)} points.",
+                )
+                observations.append(obs.to_dict())
+
+        # 3. CARDIOVASCULAR BP / PULSE
+        systolic_items = self._get_metric_series("systolic", patient_id)
+        diastolic_items = self._get_metric_series("diastolic", patient_id)
+        if systolic_items and diastolic_items:
+            processed_metrics.add("systolic")
+            processed_metrics.add("diastolic")
+            
+            s_vals = [float(x["value"]) for x in systolic_items]
+            d_vals = [float(x["value"]) for x in diastolic_items]
+            
+            evidence = []
+            for item in (systolic_items + diastolic_items):
+                ref = EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id"))
+                if ref not in evidence:
+                    evidence.append(ref)
+
+            latest_s = s_vals[-1]
+            latest_d = d_vals[-1]
+            fact = f"Latest blood pressure is {latest_s:.0f}/{latest_d:.0f} mmHg."
+            
+            direction_s = trend_map.get("systolic", {}).get("direction", "stable")
+            direction_d = trend_map.get("diastolic", {}).get("direction", "stable")
+            
+            if latest_s > 130 or latest_d > 80:
+                interpretation = f"Blood pressure is elevated ({direction_s}/{direction_d} trend)."
+            else:
+                interpretation = f"Blood pressure is stable within normal limits ({direction_s}/{direction_d} trend)."
+                
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="cardiovascular",
+                metric="systolic",
+                fact=fact,
+                interpretation=interpretation,
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(0.85 if len(s_vals) >= 3 else 0.5, "rule_based", "1.1.0"),
+                evidence=evidence,
+                explanation=f"Evaluated latest systolic/diastolic values against hypertensive threshold (130/80 mmHg) over {len(s_vals)} readings.",
+            )
+            observations.append(obs.to_dict())
+
+        # Other cardiovascular metrics: pulse, lipid metrics
+        for metric, category in [
+            ("pulse", "cardiovascular"),
+            ("resting_hr", "cardiovascular"),
+            ("hrv", "cardiovascular"),
+            ("ldl", "cardiovascular"),
+            ("hdl", "cardiovascular"),
+            ("cholesterol", "cardiovascular"),
+            ("triglycerides", "cardiovascular")
+        ]:
+            items = self._get_metric_series(metric, patient_id)
+            if items:
+                processed_metrics.add(metric)
+                values = [float(item["value"]) for item in items]
+                evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
+                direction = trend_map.get(metric, {}).get("direction", "stable")
+                
+                obs = HealthObservation(
+                    patient_id=patient_id,
+                    observation_id=str(uuid4()),
+                    category=category,
+                    metric=metric,
+                    fact=f"Latest {metric} is {values[-1]} (range: {min(values)}-{max(values)}).",
+                    interpretation=f"Trends show a {direction} pattern.",
+                    measured_at=utc_now(),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    evidence=evidence,
+                    explanation=f"Tracked clinical trend path for {metric} across {len(values)} readings.",
+                )
+                observations.append(obs.to_dict())
+
+        # 4. LIFESTYLE (WEIGHT / SLEEP / ACTIVITY)
+        for metric, category in [
+            ("weight", "general"),
+            ("sleep_score", "sleep"),
+            ("sleep_duration", "sleep"),
+            ("steps", "general")
+        ]:
+            items = self._get_metric_series(metric, patient_id)
+            if items:
+                processed_metrics.add(metric)
+                values = [float(item["value"]) for item in items]
+                evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
+                direction = trend_map.get(metric, {}).get("direction", "stable")
+                
+                obs = HealthObservation(
+                    patient_id=patient_id,
+                    observation_id=str(uuid4()),
+                    category=category,
+                    metric=metric,
+                    fact=f"Latest {metric} is {values[-1]} (prior average: {sum(values[:-1])/max(1, len(values)-1):.1f}).",
+                    interpretation=f"Trend direction is {direction}.",
+                    measured_at=utc_now(),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    evidence=evidence,
+                    explanation=f"Evaluated lifestyle trend direction for {metric} across {len(values)} points.",
+                )
+                observations.append(obs.to_dict())
+
+        # 5. REGRESSION FALLBACK
+        # For any metrics computed in trend_map that were NOT processed by the specialized checks, 
+        # generate a generic fallback observation so that we preserve prior functionality.
         for metric, t in trend_map.items():
+            canon_metric = canonicalize_metric(metric)
+            if canon_metric in processed_metrics or metric in processed_metrics:
+                continue
+
             label = _LABELS.get(metric, metric.replace("_", " ").title())
             direction = t.get("direction")
             sample_count = t.get("sample_count") or 0
 
-            # Map category
-            canon_metric = canonicalize_metric(metric)
-            if canon_metric in {"egfr", "creatinine"}:
-                category = "renal"
-            elif canon_metric in {"glucose", "hba1c"}:
-                category = "glycemic"
-            elif canon_metric in {"systolic", "diastolic"}:
-                category = "cardiovascular"
-            elif canon_metric in {"sleep_score", "sleep_duration"}:
-                category = "sleep"
-            else:
-                category = "general"
-
-            # Gather evidence trace
             evidence = []
+            docs = self.trends._docs_by_id()
             for m in self.store.list_measurements():
                 if canonicalize_metric(m.get("metric")) == canon_metric:
                     doc = docs.get(str(m.get("document_id") or ""))
@@ -84,32 +355,29 @@ class HealthIntelligenceEngine:
                                 source_type="measurement",
                                 document_id=m.get("document_id"),
                                 measurement_id=m.get("measurement_id") or m.get("id"),
-                                sha256=doc.get("sha256"),
                             )
                         )
-
-            # Traceability constraint: observations MUST trace back to source evidence
+            
             if not evidence:
                 continue
 
             text = self._phrase(label, metric, direction)
             
-            # Construct using the canonical HealthObservation data model
-            score = ConfidenceScore(
-                value=0.85 if sample_count >= 3 else 0.5,
-                method="rule_based",
-                version="1.0.0",
-            )
             obs = HealthObservation(
                 patient_id=patient_id,
                 observation_id=str(uuid4()),
-                category=category,
+                category="general",
                 metric=metric,
                 fact=text,
                 interpretation=direction or "stable",
                 measured_at=utc_now(),
-                confidence=score,
+                confidence=ConfidenceScore(
+                    value=0.85 if sample_count >= 3 else 0.5,
+                    method="rule_based",
+                    version="1.1.0",
+                ),
                 evidence=evidence,
+                explanation=f"Evaluated trend direction for {metric} across {sample_count} points.",
             )
             observations.append(obs.to_dict())
 

@@ -312,6 +312,7 @@ class HealthObservation:
     confidence: ConfidenceScore
     evidence: list[EvidenceReference] = field(default_factory=list)
     safety_boundary_disclaimer: str = "Observational findings only — not a medical diagnosis. Consult a doctor."
+    explanation: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -325,5 +326,6 @@ class HealthObservation:
             "confidence": self.confidence.to_dict(),
             "evidence": [e.to_dict() for e in self.evidence],
             "safety_boundary_disclaimer": self.safety_boundary_disclaimer,
+            "explanation": self.explanation,
         }
 
