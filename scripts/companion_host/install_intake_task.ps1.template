@@ -1,0 +1,154 @@
+# HC-312B — Install HealthChecker automatic intake scheduled task (INERT TEMPLATE)
+#
+# Mechanism: Microsoft Windows Task Scheduler (repeating task — NOT Windows service).
+# REJECTED: NSSM, WinSW, and any third-party service wrapper.
+#
+# Task name : HealthCheckerIntake
+# Entry     : python -m backend.health_vault.intake.runner
+# Trigger   : AtLogon + Repetition every 5 minutes (PT5M)
+# Instance  : IgnoreNew (single instance at a time)
+# Restart   : 3 times, 2-minute interval; NEVER reboot Windows on failure
+# Time limit: PT10M (10 minutes per execution)
+# Secrets   : NONE in task XML or arguments
+#
+# Requires:
+#   - HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND
+#   - Elevation (Administrator)
+#   - Fixed Python under C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+#   - Verified release under C:\ProgramData\HealthChecker\releases\<commit>
+#
+# This template is INERT until HC_312B_ALLOW_INTAKE_TASK is set.
+# Do NOT commit with the approval env var already exported.
+# Do NOT pass secrets in task arguments or task XML.
+# Do NOT use NSSM, WinSW, or any Windows Service wrapper.
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$ReleaseCommit = '',
+
+    [Parameter(Mandatory = $false)]
+    [string]$IntakeRoot = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+# ── Approval gate (same pattern as HC-306E install_scheduled_tasks) ──────────
+
+if ($env:HC_312B_ALLOW_INTAKE_TASK -ne 'I_UNDERSTAND') {
+    Write-Host 'REFUSING: install_intake_task is inert until HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND'
+    Write-Host 'NSSM/WinSW REJECTED. Use Windows Task Scheduler only after privilege audit passes.'
+    exit 2
+}
+
+# ── Elevation gate ───────────────────────────────────────────────────────────
+
+$identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]$identity
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host 'hc312b_intake_task:elevation_required'
+    exit 2
+}
+
+Import-Module ScheduledTasks -ErrorAction Stop
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+
+$ReleasesRoot = 'C:\ProgramData\HealthChecker\releases'
+$ToolsPython  = 'C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe'
+$TaskName     = 'HealthCheckerIntake'
+
+function Test-HcUnderTools([string]$Path) {
+    $full = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetFullPath('C:\ProgramData\HealthChecker\tools')
+    return $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $full)
+}
+
+if (-not (Test-HcUnderTools $ToolsPython)) {
+    Write-Host 'hc312b_intake_task:executable_privilege_risk'
+    Write-Host 'STOP: stage Admin/SYSTEM-owned python.exe under ProgramData\HealthChecker\tools before install.'
+    Write-Host 'User-profile interpreters (LocalAppData / Users) are forbidden for SYSTEM scheduled tasks.'
+    exit 1
+}
+
+# ── Resolve release commit ────────────────────────────────────────────────────
+
+if ([string]::IsNullOrWhiteSpace($ReleaseCommit)) {
+    $pointer = Join-Path $ReleasesRoot 'CURRENT'
+    if (-not (Test-Path -LiteralPath $pointer)) {
+        Write-Host 'hc312b_intake_task:manifest_missing'
+        exit 1
+    }
+    $ReleaseCommit = (Get-Content -LiteralPath $pointer -Raw).Trim().ToLowerInvariant()
+}
+
+$releaseDir   = Join-Path $ReleasesRoot $ReleaseCommit
+$releaseFull  = [System.IO.Path]::GetFullPath($releaseDir)
+$releasesFull = [System.IO.Path]::GetFullPath($ReleasesRoot)
+
+if (-not $releaseFull.StartsWith($releasesFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host 'hc312b_intake_task:git_tree_execution_forbidden'
+    exit 1
+}
+
+$manifest = Join-Path $releaseDir 'RELEASE_MANIFEST.json'
+if (-not (Test-Path -LiteralPath $manifest)) {
+    Write-Host 'hc312b_intake_task:manifest_missing'
+    exit 1
+}
+
+# ── Build task arguments (NO secrets) ────────────────────────────────────────
+
+# Entry point: python -m backend.health_vault.intake.runner
+# The runner reads IntakeConfig from defaults or HC_INTAKE_ROOT env var.
+# No secrets, tokens, or keys are passed as arguments.
+$moduleArg = '-m backend.health_vault.intake.runner'
+
+# Optionally forward the intake root via environment — not as a CLI argument.
+# The task principal reads it from the fixed host.env loaded by the bootstrap.
+$taskArgs = "-NoProfile -ExecutionPolicy Bypass -Command `"& '$ToolsPython' $moduleArg`""
+
+if ($taskArgs -match '(?i)token=|pepper=|HC_COMPANION_|HC_PROXY_SHARED|HC_312B_ALLOW') {
+    Write-Host 'hc312b_intake_task:env_injection_rejected'
+    throw 'secret_in_task_arguments'
+}
+
+# ── Register task ─────────────────────────────────────────────────────────────
+
+$Pwsh = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$action = New-ScheduledTaskAction -Execute $Pwsh -Argument $taskArgs
+
+# AtLogon trigger + 5-minute repetition keeps the intake running continuously
+# while the user is logged in.  For always-on (SYSTEM/AtStartup) extend this
+# section after the full release-signing ceremony is complete.
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$trigger.Repetition = New-ScheduledTaskRepetitionPattern `
+    -RepetitionInterval  (New-TimeSpan -Minutes 5) `
+    -RepetitionDuration  ([TimeSpan]::MaxValue)
+
+# IgnoreNew = single instance policy; bounded restart; NEVER reboot on failure.
+$settings = New-ScheduledTaskSettingsSet `
+    -MultipleInstances IgnoreNew `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 2) `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable
+
+$principal = New-ScheduledTaskPrincipal `
+    -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+    -LogonType Interactive `
+    -RunLevel Highest
+
+Register-ScheduledTask `
+    -TaskName $TaskName `
+    -Action   $action   `
+    -Trigger  $trigger  `
+    -Settings $settings `
+    -Principal $principal `
+    -Force | Out-Null
+
+Write-Host ('hc312b_intake_task:ok task_registered name=' + $TaskName)
+Write-Host 'NOTE: This is a scheduled task, not a Windows service. No NSSM/WinSW used.'
+Write-Host ('release=' + $ReleaseCommit)
+exit 0

@@ -139,31 +139,43 @@ class MonitoringScheduler:
     ) -> dict[str, Any]:
         """Execute sync_fn when due. Never loops. Rejects overlapping runs."""
         now_ts = now or utc_now()
-        if self._state.get("running"):
-            return {
-                "ran": False,
-                "reason": "already_running",
-                "scheduler": self.status(),
-            }
-        if not force and not self.is_due(now=now_ts):
-            return {
-                "ran": False,
-                "reason": "not_due",
-                "scheduler": self.status(),
-            }
-        self._state["status"] = "running"
-        self._state["running"] = True
-        self._state["last_attempt_at"] = now_ts
-        # Explicit lease so overlap detection does not depend on wall-clock vs fixture dates
+
+        lock = self.store.companion_lock() if self.store else None
+        if lock:
+            lock.acquire()
         try:
-            text = now_ts[:-1] + "+00:00" if now_ts.endswith("Z") else now_ts
-            lease_end = datetime.fromisoformat(text) + timedelta(seconds=900)
-            self._state["lease_expires_at"] = (
-                lease_end.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-            )
-        except Exception:
-            self._state["lease_expires_at"] = None
-        self._persist()
+            # Re-read state under lock to prevent TOC/TOU race condition
+            self._state = self._load_or_default()
+
+            if self._state.get("running"):
+                return {
+                    "ran": False,
+                    "reason": "already_running",
+                    "scheduler": self.status(),
+                }
+            if not force and not self.is_due(now=now_ts):
+                return {
+                    "ran": False,
+                    "reason": "not_due",
+                    "scheduler": self.status(),
+                }
+            self._state["status"] = "running"
+            self._state["running"] = True
+            self._state["last_attempt_at"] = now_ts
+            # Explicit lease so overlap detection does not depend on wall-clock vs fixture dates
+            try:
+                text = now_ts[:-1] + "+00:00" if now_ts.endswith("Z") else now_ts
+                lease_end = datetime.fromisoformat(text) + timedelta(seconds=900)
+                self._state["lease_expires_at"] = (
+                    lease_end.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                )
+            except Exception:
+                self._state["lease_expires_at"] = None
+            self._persist()
+        finally:
+            if lock:
+                lock.release()
+
         try:
             result = sync_fn() or {}
             ok = bool(result.get("ok", result.get("success", False)))
