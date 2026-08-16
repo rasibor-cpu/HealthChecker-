@@ -42,6 +42,14 @@ _SUPPORTED_MIME_PREFIXES: tuple[str, ...] = (
 
 _MAX_ATTACHMENT_BYTES: int = 20 * 1024 * 1024  # 20 MB — mirrors HC-312
 
+# ---------------------------------------------------------------------------
+# Scheduler constants
+# ---------------------------------------------------------------------------
+DEFAULT_INTERVAL_SECONDS = 300  # 5 minutes
+MIN_INTERVAL_SECONDS = 60
+MAX_INTERVAL_SECONDS = 3600
+MAX_BACKOFF_SECONDS = 1800
+
 
 # ---------------------------------------------------------------------------
 # Config dataclass

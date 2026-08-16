@@ -119,6 +119,21 @@ class AcquisitionStateStore:
         with self._lock:
             return len(self._state.get("attachments", {}))
 
+    def get_monitoring_scheduler_state(self, patient_id: str) -> dict[str, Any]:
+        """Bridge for MonitoringScheduler. (patient_id is ignored since this is a global task)."""
+        with self._lock:
+            return dict(self._state.get("scheduler", {}))
+
+    def save_monitoring_scheduler_state(self, patient_id: str, state: dict[str, Any]) -> None:
+        """Bridge for MonitoringScheduler. (patient_id is ignored)."""
+        with self._lock:
+            self._state["scheduler"] = dict(state)
+            self._persist()
+
+    def companion_lock(self) -> threading.Lock:
+        """Bridge for MonitoringScheduler."""
+        return self._lock
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -142,12 +157,17 @@ class AcquisitionStateStore:
 
     def _persist(self) -> None:
         """Atomically persist the in-memory state to disk."""
+        logger.info("hc314a_persist_called path=%s", self._path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_name(f"{self._path.name}.tmp.{os.getpid()}")
         try:
             payload = json.dumps(self._state, indent=2, ensure_ascii=False)
             tmp.write_text(payload, encoding="utf-8")
             os.replace(tmp, self._path)
+            import os as _os
+            mtime = _os.stat(self._path).st_mtime
+            running = self._state.get("scheduler", {}).get("running")
+            logger.info("hc314a_state_persist_success path=%s mtime=%s running=%s", self._path, mtime, running)
         except Exception as exc:
             logger.error("hc313a_state_persist_failed path=%s error=%s", self._path, exc)
             try:
