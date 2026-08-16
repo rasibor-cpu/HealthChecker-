@@ -62,7 +62,7 @@ try {
         -Principal $principal `
         -Force | Out-Null
 } catch {
-    Write-Host "hc314b_provisioning_gate: S4U task registration failed. You may need 'Log on as a batch job' rights or must provision the password manually."
+    Write-Host "hc314b_provisioning_gate: S4U task registration failed. You may need 'Log on as a batch job' rights or must provision credentials manually."
     exit 3
 }
 

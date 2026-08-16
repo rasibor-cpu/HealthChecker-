@@ -101,6 +101,9 @@ class GmailAcquisitionConfig:
     acquisition_method: str = "hc313a_gmail_acquisition"
     gmail_label_filter: str = ""
     max_messages_per_scan: int = 200
+    gmail_token_path: Path = field(
+        default_factory=lambda: Path(r"C:\ProgramData\HealthChecker\config\gmail_token.json")
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +116,7 @@ class GmailAcquisitionConfig:
             "acquisition_method": self.acquisition_method,
             "gmail_label_filter": self.gmail_label_filter,
             "max_messages_per_scan": self.max_messages_per_scan,
+            "gmail_token_path": str(self.gmail_token_path),
         }
 
 
@@ -129,6 +133,7 @@ def get_default_config(**overrides: Any) -> GmailAcquisitionConfig:
         "acquisition_method": "hc313a_gmail_acquisition",
         "gmail_label_filter": "",
         "max_messages_per_scan": 200,
+        "gmail_token_path": Path(r"C:\ProgramData\HealthChecker\config\gmail_token.json"),
     }
     for k, v in overrides.items():
         if k in base:
@@ -136,7 +141,7 @@ def get_default_config(**overrides: Any) -> GmailAcquisitionConfig:
     for key in ("allowed_extensions", "allowed_mime_prefixes"):
         if isinstance(base.get(key), list):
             base[key] = tuple(base[key])
-    for key in ("intake_incoming_dir", "acquisition_state_path"):
+    for key in ("intake_incoming_dir", "acquisition_state_path", "gmail_token_path"):
         if isinstance(base.get(key), str):
             base[key] = Path(base[key])
     return GmailAcquisitionConfig(**base)

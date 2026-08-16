@@ -47,7 +47,7 @@ class AcquisitionStateStore:
 
     def __init__(self, state_path: Path) -> None:
         self._path = Path(state_path)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._state: dict[str, Any] = self._load()
 
     # ------------------------------------------------------------------
@@ -130,7 +130,7 @@ class AcquisitionStateStore:
             self._state["scheduler"] = dict(state)
             self._persist()
 
-    def companion_lock(self) -> threading.Lock:
+    def companion_lock(self) -> threading.RLock:
         """Bridge for MonitoringScheduler."""
         return self._lock
 

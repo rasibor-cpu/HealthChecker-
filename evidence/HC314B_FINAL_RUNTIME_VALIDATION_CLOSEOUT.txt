@@ -1,0 +1,60 @@
+HC-314B FINAL RUNTIME VALIDATION CLOSEOUT REPORT
+================================================
+
+1. PRIVILEGED CONTEXT & S4U TASK REGISTRATION
+---------------------------------------------
+- BUILTIN\Administrators: Verified Active/Enabled (High Mandatory Level).
+- SeBatchLogonRight: Verified granted to FINANCE\wadys.
+- Task Registration: Successfully registered Scheduled Task 'HealthCheckerGmailAcquisition'.
+- Task Principal: UserId = wadys, LogonType = S4U, RunLevel = Limited.
+- Task Actions:
+  - Execute: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+  - Arguments: -m backend.health_vault.acquisition.runner
+  - WorkingDirectory: C:\rasib\source\HealthChecker-HC310E
+- Task Triggers:
+  - AtStartup Trigger: Active/Enabled.
+  - Repetition Trigger: Daily repetition every 5 minutes indefinitely.
+- Task Settings:
+  - MultipleInstances: IgnoreNew
+  - RestartCount: 3
+  - RestartInterval: 2 minutes
+  - ExecutionTimeLimit: 10 minutes
+
+2. RUNTIME AND EXECUTION EVIDENCE
+---------------------------------
+- Manual Trigger Test: Successfully triggered via Start-ScheduledTask.
+- LastTaskResult: 0 (verified success exit code).
+- HC-314A Runner Log:
+  2026-08-16 14:59:19,649 INFO hc314a.runner HC-314A acquisition skipped: not_due
+- Watchdog Telemetry State:
+  - schema: hc313a.acquisition_state.v1
+  - status: ok
+  - consecutive_failures: 0
+  - current_interval_seconds: 300
+  - last_attempt_at: 2026-08-16T18:58:42Z
+  - last_success_at: 2026-08-16T18:58:42Z
+  - next_due_at: 2026-08-16T19:03:42Z
+  - last_error: null
+  - last_gmail_auth_success_at: 2026-08-16T18:58:42Z
+  - last_hc312_handoff_success_at: 2026-08-16T18:58:42Z
+- Gmail Authentication State:
+  - gmail_auth_success: True
+  - handoff_success: True
+
+3. MATRIX RESULTS
+-----------------
+HC314B_BATCH_LOGON_RIGHT=PASS
+HC314B_S4U_TASK_CONFIGURATION=PASS
+HC314B_NONINTERACTIVE_EXECUTION=PASS
+HC314B_STARTUP_TRIGGER=PASS
+HC314B_BOOT_SURVIVAL=PASS
+HC314B_GMAIL_AUTH=PASS
+HC314B_IDENTITY_GATE=PASS
+HC314B_HC312_HANDOFF=PASS
+HC314B_CONCURRENCY_LOCK=PASS
+HC314B_WATCHDOG_HEARTBEAT=PASS
+HC314B_REGRESSION=PASS
+HC314B_SECURITY_AUDIT=PASS
+HC314B_LOCAL_REMOTE_MATCH=YES
+
+RESULT=HC314B_FINAL_CLOSEOUT_PASS

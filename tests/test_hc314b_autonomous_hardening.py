@@ -80,6 +80,6 @@ def test_hc314b_heartbeat_flags(temp_workspace):
     assert "last_gmail_auth_success_at" not in state
     
     # Test gmail_auth_success sets timestamp
-    scheduler.run_due(lambda: {"ok": True, "gmail_auth_success": True})
+    scheduler.run_due(lambda: {"ok": True, "gmail_auth_success": True}, force=True)
     state = store.get_monitoring_scheduler_state("test")
     assert "last_gmail_auth_success_at" in state

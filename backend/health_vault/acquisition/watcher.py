@@ -94,7 +94,7 @@ class AcquisitionWatcher:
         Concurrent-run exclusion prevents overlapping executions.
         """
         def _sync_fn() -> dict[str, Any]:
-            connector = GmailApiConnector(config=self.config)
+            connector = GmailApiConnector(token_path=self.config.gmail_token_path)
             verifier = PatientIdentityVerifier.from_store(self.vault_store)
             acquirer = GmailAcquirer(connector=connector, config=self.config, verifier=verifier)
             
@@ -102,6 +102,8 @@ class AcquisitionWatcher:
             # Catching these ensures the scheduler backs off.
             try:
                 summary_obj = acquirer.run_scan()
+                if summary_obj.errors > 0 and summary_obj.messages_scanned == 0:
+                    raise ValueError("Gmail acquisition failed due to connector error")
                 summary_obj.gmail_auth_success = True  # Assuming success if we reach here
                 summary = dataclasses.asdict(summary_obj)
                 ok = True
