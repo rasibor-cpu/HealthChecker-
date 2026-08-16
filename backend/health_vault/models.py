@@ -219,3 +219,111 @@ def classify_document_type(filename: str | None, mime: str | None, hint: str | N
     if "json" in type_ or name.endswith(".json"):
         return "json_measurements"
     return "unknown"
+
+
+@dataclass(frozen=True)
+class EvidenceReference:
+    """Explicit trace to original source documents or measurements in the vault."""
+
+    source_type: str        # 'document' | 'measurement' | 'wearable_sync' | 'external_ai'
+    document_id: str | None = None
+    measurement_id: str | None = None
+    sha256: str | None = None  # Original file integrity verification
+
+    def to_dict(self) -> dict[str, Any]:
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass(frozen=True)
+class ConfidenceScore:
+    """Standardized confidence scoring across parsing and evaluation methods."""
+
+    value: float            # 0.0 to 1.0
+    method: str             # 'rule_based' | 'statistical_model' | 'llm_extraction' | 'user_reported'
+    version: str            # Parser or algorithm version
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class HealthMetric:
+    """Computed physiological trends and summary indicators over time."""
+
+    patient_id: str
+    metric: str             # e.g., 'egfr_slope', 'hba1c_tracker', 'blood_pressure_variability'
+    value: Any              # Scalar or structure (e.g. {'slope': -0.15, 'interval_days': 90})
+    units: str | None
+    measured_at: str        # ISO8601 UTC timestamp
+    confidence: ConfidenceScore
+    evidence: list[EvidenceReference] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_id": self.patient_id,
+            "metric": self.metric,
+            "value": self.value,
+            "units": self.units,
+            "measured_at": self.measured_at,
+            "confidence": self.confidence.to_dict(),
+            "evidence": [e.to_dict() for e in self.evidence],
+        }
+
+
+@dataclass
+class HealthEvent:
+    """A distinct milestone on the chronological health timeline (maps toward FHIR Procedure/Condition)."""
+
+    patient_id: str
+    event_id: str           # UUID
+    event_type: str         # 'medication_change' | 'abnormal_lab' | 'wearable_milestone' | 'procedure'
+    summary: str
+    measured_at: str        # ISO8601 UTC timestamp
+    severity: str           # 'normal' | 'borderline' | 'abnormal' | 'critical'
+    provenance: str         # Origin reference (e.g. 'libre_live', 'galaxy_watch', 'lifelabs')
+    payload: dict[str, Any] = field(default_factory=dict)  # Extensible context
+    evidence: list[EvidenceReference] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_id": self.patient_id,
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "summary": self.summary,
+            "measured_at": self.measured_at,
+            "severity": self.severity,
+            "provenance": self.provenance,
+            "payload": self.payload,
+            "evidence": [e.to_dict() for e in self.evidence],
+        }
+
+
+@dataclass
+class HealthObservation:
+    """Derived medical observation (maps toward FHIR ClinicalImpression)."""
+
+    patient_id: str
+    observation_id: str     # UUID
+    category: str           # 'renal' | 'glycemic' | 'cardiovascular' | 'sleep' | 'general'
+    metric: str | None      # Associated metric (e.g., 'egfr', 'hba1c')
+    fact: str               # Direct evidence-based statement (e.g., "eGFR decreased from 92 to 84 mL/min/1.73m2")
+    interpretation: str     # Clinical contextualization (e.g., "Filtration rate shows worsening pattern")
+    measured_at: str        # ISO8601 UTC timestamp
+    confidence: ConfidenceScore
+    evidence: list[EvidenceReference] = field(default_factory=list)
+    safety_boundary_disclaimer: str = "Observational findings only — not a medical diagnosis. Consult a doctor."
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_id": self.patient_id,
+            "observation_id": self.observation_id,
+            "category": self.category,
+            "metric": self.metric,
+            "fact": self.fact,
+            "interpretation": self.interpretation,
+            "measured_at": self.measured_at,
+            "confidence": self.confidence.to_dict(),
+            "evidence": [e.to_dict() for e in self.evidence],
+            "safety_boundary_disclaimer": self.safety_boundary_disclaimer,
+        }
+

@@ -514,15 +514,26 @@ class VaultStore:
             items = [m for m in items if m.get("metric") == filters["metric"]]
         return items
 
-    def save_trends(self, trends: dict[str, Any]) -> dict[str, Any]:
+    def save_trends(self, trends: dict[str, Any], patient_id: str = "default-patient") -> dict[str, Any]:
         data = self._read_index()
-        data["trends"] = trends
-        self._audit(data, "trends_updated", {"keys": list(trends.keys())})
+        all_trends = dict(data.get("trends") or {})
+        
+        # Check if legacy flat schema is present
+        if all_trends and any(isinstance(v, dict) and "metric" in v for v in all_trends.values()):
+            all_trends = {"default-patient": all_trends}
+            
+        all_trends[patient_id] = trends
+        data["trends"] = all_trends
+        self._audit(data, "trends_updated", {"patient_id": patient_id, "keys": list(trends.keys())})
         self._write_index(data)
         return trends
 
-    def get_trends(self) -> dict[str, Any]:
-        return dict(self._read_index().get("trends") or {})
+    def get_trends(self, patient_id: str = "default-patient") -> dict[str, Any]:
+        all_trends = self._read_index().get("trends") or {}
+        # Check if legacy flat schema is present
+        if all_trends and any(isinstance(v, dict) and "metric" in v for v in all_trends.values()):
+            return dict(all_trends) if patient_id == "default-patient" else {}
+        return dict(all_trends.get(patient_id) or {})
 
     def update_profile(self, partial: dict[str, Any]) -> dict[str, Any]:
         data = self._read_index()

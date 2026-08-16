@@ -18,6 +18,7 @@ def build_timeline(
     severity: str | None = None,
     include_guardian_events: bool = False,
     include_hc_v6: bool = False,
+    patient_id: str = "default-patient",
 ) -> list[dict[str, Any]]:
     """
     Document timeline (HC-201 compatible by default).
@@ -25,10 +26,12 @@ def build_timeline(
     Pass include_guardian_events=True / include_hc_v6=True or use
     build_unified_timeline() for HC-301 merged views.
     """
-    trends = store.get_trends()
+    trends = store.get_trends(patient_id=patient_id)
     entries: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
     for doc in store.list_documents():
+        if doc.get("patient_id", "default-patient") != patient_id:
+            continue
         if category and category != "all":
             primary = doc.get("primary_category")
             secondary = doc.get("secondary_categories") or []
@@ -80,6 +83,8 @@ def build_timeline(
 
     if include_guardian_events:
         for ev in store.list_timeline_events():
+            if ev.get("patient_id", "default-patient") != patient_id:
+                continue
             if category and category != "all":
                 if ev.get("category") != category and ev.get("kind") != category:
                     continue

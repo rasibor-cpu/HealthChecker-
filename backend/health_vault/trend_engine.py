@@ -83,13 +83,17 @@ class TrendEngine:
             return False
         return True
 
-    def series(self, metric: str) -> list[float]:
+    def series(self, metric: str, patient_id: str = "default-patient") -> list[float]:
         canonical = canonicalize_metric(metric)
         docs = self._docs_by_id()
         items = [
             m
             for m in self.store.list_measurements()
             if canonicalize_metric(m.get("metric")) == canonical and self._eligible(m, docs)
+        ]
+        items = [
+            m for m in items
+            if (docs.get(str(m.get("document_id") or ""), {}) or {}).get("patient_id", "default-patient") == patient_id
         ]
         items.sort(
             key=lambda x: str(
@@ -139,26 +143,35 @@ class TrendEngine:
         }
         return {"direction": direction, "label": labels[direction], "reason": "auto", "window": a}
 
-    def recompute(self) -> dict[str, Any]:
+    def recompute(self, patient_id: str = "default-patient") -> dict[str, Any]:
         docs = self._docs_by_id()
         metrics = {
             canonicalize_metric(m.get("metric"))
             for m in self.store.list_measurements()
             if m.get("metric") and self._eligible(m, docs)
         }
-        metrics = {m for m in metrics if m in TREND_METRICS}
+        # Filter metrics by whether they have any measurements for this patient
+        active_metrics = set()
+        for m in self.store.list_measurements():
+            metric = canonicalize_metric(m.get("metric"))
+            if metric in metrics:
+                doc = docs.get(str(m.get("document_id") or ""))
+                if doc and doc.get("patient_id", "default-patient") == patient_id:
+                    active_metrics.add(metric)
+        
+        active_metrics = {m for m in active_metrics if m in TREND_METRICS}
         trends: dict[str, Any] = {}
-        for metric in metrics:
-            series = self.series(metric)
+        for metric in active_metrics:
+            series = self.series(metric, patient_id=patient_id)
             result = self.classify(metric, series)
-            # Category from first eligible measurement's document
+            # Category from first eligible measurement's document for this patient
             category = None
             for m in self.store.list_measurements():
                 if canonicalize_metric(m.get("metric")) == metric and self._eligible(m, docs):
-                    category = (docs.get(str(m.get("document_id") or "")) or {}).get(
-                        "primary_category"
-                    )
-                    break
+                    doc = docs.get(str(m.get("document_id") or ""))
+                    if doc and doc.get("patient_id", "default-patient") == patient_id:
+                        category = doc.get("primary_category")
+                        break
             trends[metric] = {
                 "metric": metric,
                 "direction": result["direction"],
@@ -170,5 +183,5 @@ class TrendEngine:
                 "updated_at": utc_now(),
                 "fhir_resource": "Observation",
             }
-        self.store.save_trends(trends)
+        self.store.save_trends(trends, patient_id=patient_id)
         return trends

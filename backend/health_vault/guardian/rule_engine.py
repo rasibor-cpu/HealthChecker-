@@ -138,9 +138,8 @@ class ExpandedClinicalRulesEngine:
             if str(pid) != patient_id:
                 continue
             measurements.append(m)
-        trends = {}
         try:
-            trends = dict(self.store.get_trends() or {})
+            trends = dict(self.store.get_trends(patient_id=patient_id) or {})
         except Exception:
             trends = {}
         continuity = ctx.get("continuity") or {}
