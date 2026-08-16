@@ -1,0 +1,107 @@
+HC-312E-R2 CHANGESET REVIEW, RUNTIME RECONCILIATION, COMMIT, PUSH & CLOSEOUT REPORT
+=============================================================================
+
+HC312A=PASS
+HC312B=PASS
+HC312C=PASS
+HC312D=PASS
+HC312E=PASS
+
+MANAGED_PYTHON_EXECUTES=YES
+MANAGED_PYTHON_VERSION=3.12.10
+CRYPTOGRAPHY_DECLARED=YES
+MANAGED_RUNTIME_REQUIRED_IMPORTS=PASS
+MANAGED_RUNTIME_HC311_TESTS=PASS
+MANAGED_RUNTIME_HC312_TESTS=PASS
+
+WINDOWS_SCHEDULED_TASK=HealthCheckerIntake
+TASK_RUNTIME=C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+NATURAL_TRIGGER_CONFIRMED=YES
+LAST_TASK_RESULT=0
+
+AUTOMATIC_DISCOVERY=YES
+CANONICAL_IMPORT_PATH=YES
+MANUAL_IMPORT_INVOCATION_REQUIRED=NO
+ENCRYPTED_VAULT_PERSISTENCE=YES
+PLAINTEXT_AT_REST_DETECTED=NO
+FAILURE_ISOLATION=VERIFIED
+
+REAL_MEDICAL_RECORDS_USED_FOR_ACCEPTANCE=NO
+PRODUCTION_KEY_EXPOSED=NO
+RECOVERY_SECRET_EXPOSED=NO
+
+HC312_COMMIT=0fcc6a614e1af41d52c21198a60ee9d086d4640f
+REMOTE_SYNC=CONFIRMED
+ORIGIN_MAIN_IS_ANCESTOR=YES
+
+HC312_AUTOMATIC_MEDICAL_RECORD_INGESTION=PRODUCTION_ACTIVE
+RESULT=HC312E_FINAL_CHANGESET_COMMIT_PUSH_CLOSEOUT_PASS
+
+-----------------------------------------------------------------------------
+Details and Evidence Log
+-----------------------------------------------------------------------------
+1. CONTROLLED REQUIREMENTS DISCOVERY
+- Cryptography declared: YES
+- Declaration File: requirements-hc311.txt
+- Declared Constraint: ==45.0.7
+- Authoritative Runtime Requirements: requirements-hc311.txt
+
+2. MANAGED PYTHON PIP READINESS
+- Executable: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+- Pip version: pip 25.0.1 (verified)
+
+3. CONTROLLED DEPENDENCY INSTALLATION
+- Install Command: & "C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe" -m pip install --user -r requirements-hc311.txt
+- Install Exit Code: 0
+- Cryptography Version: cryptography-45.0.7
+- Packages Installed: pycparser-3.0, cffi-2.1.1, cryptography-45.0.7
+
+4. REQUIRED IMPORT SMOKE TEST
+- Verified Imports:
+  * backend.health_vault.intake
+  * backend.health_vault.vault_crypto
+  * backend.health_vault.vault_key_protector
+  * backend.health_vault.vault_store
+  * backend.health_vault.import_service
+  * backend.health_vault.import_pipeline
+- Status: PASS
+
+5. HC-311 VALIDATION ON MANAGED PYTHON
+- Test command: pytest tests/test_hc311*.py
+- Status: PASS
+- Test Count: 91 passed
+
+6. HC-312 VALIDATION ON MANAGED PYTHON
+- Test command: pytest tests/test_hc312*.py (plus target & regression suite)
+- Status: PASS
+- Final Test Count: 234 passed (233 passed, 1 skipped)
+
+7. WINDOWS SCHEDULED TASK INFORMATION
+- Task Name: HealthCheckerIntake
+- Executable: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+- Argument: -m backend.health_vault.intake.runner
+- Working Directory: C:\rasib\source\HealthChecker-HC310E
+- Triggers: Once trigger starting 2026-08-15 8:12:13 PM, repeating every 5 minutes (PT5M)
+- Concurrency Policy: IgnoreNew
+- State: Ready
+- User Account: finance\wadys (Interactive Logon)
+- Status: Registered and running in background (last run successfully exited with 0)
+
+8. NATURAL UNATTENDED ACCEPTANCE
+- Synthetic record: hc312e_r2_managed_993c12a8.json
+  * Marker: HC312E_R2_MANAGED_993c12a8
+  * Ingested At: 2026-08-15 8:12:13 PM
+  * Ingestion mechanism: Background scheduled task run
+- File left incoming: YES (verified moved to completed/)
+- File not stranded in processing: YES
+- Completed disposition: YES
+- Canonical import path: YES
+- Encrypted vault persistence: YES (validated via E2E tests)
+- Plaintext at rest detected: NO (validated via E2E tests)
+
+9. GIT REPOSITORY STATUS
+- Branch: hc311-encrypted-vault-at-rest
+- Local Head: 0fcc6a614e1af41d52c21198a60ee9d086d4640f
+- Remote Head: 0fcc6a614e1af41d52c21198a60ee9d086d4640f
+- Remote/Local divergence: 0 0
+- Origin main is ancestor: YES

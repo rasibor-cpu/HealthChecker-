@@ -34,8 +34,10 @@ $action = New-ScheduledTaskAction -Execute $ToolsPython -Argument $moduleArg -Wo
 
 # ── Register task ─────────────────────────────────────────────────────────────
 
+# -AtStartup trigger runs on machine boot.
+$bootTrigger = New-ScheduledTaskTrigger -AtStartup
 # -Once trigger starts now, repeats every 5 minutes indefinitely.
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+$intervalTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
 
 # IgnoreNew = single instance policy; bounded restart; NEVER reboot on failure.
 $settings = New-ScheduledTaskSettingsSet `
@@ -49,15 +51,20 @@ $settings = New-ScheduledTaskSettingsSet `
 
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-    -LogonType Interactive
+    -LogonType S4U
 
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Action   $action   `
-    -Trigger  $trigger  `
-    -Settings $settings `
-    -Principal $principal `
-    -Force | Out-Null
+try {
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action   $action   `
+        -Trigger  @($bootTrigger, $intervalTrigger) `
+        -Settings $settings `
+        -Principal $principal `
+        -Force | Out-Null
+} catch {
+    Write-Host "hc314b_provisioning_gate: S4U task registration failed. You may need 'Log on as a batch job' rights or must provision the password manually."
+    exit 3
+}
 
 Write-Host ('hc314a_acquisition_task:ok task_registered name=' + $TaskName)
 exit 0

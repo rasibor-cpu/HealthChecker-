@@ -1,0 +1,235 @@
+HC-312A AUTOMATIC MEDICAL RECORD INTAKE — IMPLEMENTATION REPORT
+===============================================================
+Generated : 2026-08-15T15:27:00Z (local 2026-08-15T11:27:00-04:00)
+Report    : evidence/HC312A_AUTOMATIC_MEDICAL_RECORD_INTAKE.txt
+
+────────────────────────────────────────────────────────────────
+1. REPOSITORY IDENTITY
+────────────────────────────────────────────────────────────────
+REPOSITORY_PATH   = C:/rasib/source/HealthChecker-HC310E
+GIT_REPOSITORY    = true
+BRANCH            = hc311-encrypted-vault-at-rest
+HEAD              = 87a360582804a358005985d43d4af7de6aab61ae
+TREE_HASH         = 016e8ce803cb0b8357012d20d7b227bd0af40a2e
+ORIGIN            = https://github.com/rasibor-cpu/HealthChecker-.git
+
+────────────────────────────────────────────────────────────────
+2. FILES CHANGED
+────────────────────────────────────────────────────────────────
+NEW  backend/health_vault/intake/__init__.py
+NEW  backend/health_vault/intake/intake_config.py
+NEW  backend/health_vault/intake/lifecycle.py
+NEW  backend/health_vault/intake/file_scanner.py
+NEW  backend/health_vault/intake/file_processor.py
+NEW  backend/health_vault/intake/runner.py
+NEW  tests/test_hc312a_automatic_intake.py
+
+No existing tracked files were modified.
+
+────────────────────────────────────────────────────────────────
+3. ARCHITECTURE IMPLEMENTED
+────────────────────────────────────────────────────────────────
+A narrowly-scoped automatic intake layer was added as a new package
+(backend/health_vault/intake/) that sits in front of the existing
+canonical ImportService/ImportPipeline without modifying it.
+
+Components:
+  IntakeConfig       — configuration dataclass (root path, limits,
+                       allowed extensions, provenance tags, source
+                       system, stale-recovery flag)
+  LifecycleManager   — atomic claim (rename), terminal moves,
+                       stale-processing recovery, path-traversal guard
+  scan_incoming()    — non-recursive enumeration of incoming/,
+                       extension / size / MIME / path-safety checks
+  FileProcessor      — per-file: claim → ImportService.import_file()
+                       → completed or quarantine; never raises
+  IntakeRunner       — one-shot orchestrator: ensure dirs → recover
+                       stale → scan → quarantine pre-rejections →
+                       process each → emit privacy-safe summary
+
+────────────────────────────────────────────────────────────────
+4. CONTROLLED INTAKE DIRECTORY / STATE MODEL
+────────────────────────────────────────────────────────────────
+Intake root: <repo>/hc_intake/  (configurable per IntakeConfig)
+
+  hc_intake/
+    incoming/     INCOMING    — user-placed files awaiting claim
+    processing/   PROCESSING  — atomically claimed (in-flight)
+    completed/    COMPLETED   — successfully ingested or canonical
+                               duplicate; terminal
+    quarantine/   QUARANTINE  — failed, unsupported, unsafe; terminal
+                               + privacy-safe .reason sidecar
+
+Only top-level files in incoming/ are ever examined (non-recursive).
+Subdirectories are silently skipped.
+
+────────────────────────────────────────────────────────────────
+5. CANONICAL INGESTION ENTRY POINT
+────────────────────────────────────────────────────────────────
+Exact call:
+
+    ImportService.import_file(
+        processing_path,
+        mime_type=<guessed from extension>,
+        provenance=config.provenance_tag,       # "hc312a_automatic_intake"
+        source_system=config.source_system,     # "hc312a_intake"
+        acquisition_method="hc312a_automatic_intake",
+    )
+
+This delegates to ImportPipeline.run() → VaultStore internally.
+No second parsing, OCR, validation, or persistence path was created.
+
+────────────────────────────────────────────────────────────────
+6. ATOMIC-CLAIM STRATEGY
+────────────────────────────────────────────────────────────────
+LifecycleManager.claim(incoming_path) performs:
+
+  1. Resolve incoming_path and verify it is inside incoming_dir
+     (path-traversal guard, raises → reason=path_traversal).
+  2. Path.rename(processing_dir / name)
+     On Windows NTFS within the same volume this rename is atomic.
+     Only one caller succeeds; concurrent callers see FileNotFoundError
+     and receive ClaimResult(claimed=False, reason="already_claimed").
+  3. Returns ClaimResult(claimed=True, processing_path=...) on success.
+
+No lock files, no advisory locks, no external coordination needed.
+
+────────────────────────────────────────────────────────────────
+7. IDEMPOTENCY STRATEGY
+────────────────────────────────────────────────────────────────
+ImportPipeline.run() performs SHA-256 content hashing and calls
+ImportPipeline._find_duplicate() before any vault write.
+
+If the same file content is re-presented:
+  • Pipeline returns {"ok": True, "duplicate": True, ...}
+  • FileProcessor moves the file to completed/ with status="duplicate"
+  • No new document, measurement, timeline entry, or trend is created
+  • Duplicate count is incremented in the run summary
+
+This reuses the existing duplicate detection without duplicating it.
+
+────────────────────────────────────────────────────────────────
+8. RESTART / STALE-PROCESSING STRATEGY
+────────────────────────────────────────────────────────────────
+At the start of every IntakeRunner.run() (before scanning), when
+config.stale_recovery=True (the default):
+
+  LifecycleManager.recover_stale_processing()
+    → lists processing/ directory
+    → for each file found: rename to incoming/
+    → logs each recovery (privacy-safe: basename only)
+    → returns list of recovered basenames for summary
+
+On the next scan pass (same run) the recovered files appear in
+incoming/ and are processed normally.
+
+If recover fails for a specific file (OSError), that file is logged
+as a warning and left in processing/ (not silently dropped).
+
+────────────────────────────────────────────────────────────────
+9. PRIVACY / LOGGING SAFEGUARDS
+────────────────────────────────────────────────────────────────
+NEVER logged or persisted in any HC-312A code path:
+  - raw medical content / document bytes
+  - OCR-extracted text
+  - patient clinical values or metric values
+  - vault encryption keys
+  - recovery passphrases or answers
+
+PERMITTED in logs and operational summary (per existing repo policy):
+  - filename (basename only)
+  - status codes and reason codes
+  - SHA-256 content hash
+  - counts (completed, quarantine, duplicate, stale_recovered, etc.)
+  - timestamps (ISO-8601 UTC)
+  - document_id (UUID, no clinical content)
+
+Test J (test_j_no_medical_content_in_summary) verifies that specific
+measurement values, metric names, and units do not appear in the
+serialised run summary.
+
+────────────────────────────────────────────────────────────────
+10. TESTS EXECUTED AND EXACT RESULTS
+────────────────────────────────────────────────────────────────
+
+HC-312A tests (tests/test_hc312a_automatic_intake.py)
+─────────────────────────────────────────────────────
+PASSED  test_a_supported_document_is_imported
+PASSED  test_b_canonical_import_service_is_called
+PASSED  test_c_successful_file_reaches_completed
+PASSED  test_d_duplicate_does_not_create_second_record
+PASSED  test_e_unsupported_extension_quarantined
+PASSED  test_f_malformed_document_quarantined
+PASSED  test_g_importer_exception_quarantined
+PASSED  test_h_concurrent_double_claim_prevented
+PASSED  test_i_path_traversal_rejected
+PASSED  test_j_no_medical_content_in_summary
+PASSED  test_k_failed_file_reaches_quarantine
+PASSED  test_l_one_failure_does_not_block_others
+PASSED  test_m_stale_processing_recovered_and_reingested
+PASSED  test_n_no_production_key_or_live_vault_side_effects
+PASSED  test_lifecycle_state_enum_values
+PASSED  test_scan_incoming_empty_dir
+PASSED  test_scan_incoming_non_existent_dir
+PASSED  test_quarantine_reason_sidecar_written
+PASSED  test_unique_dest_no_collision
+PASSED  test_intake_config_dirs_are_under_root
+PASSED  test_runner_summary_has_required_keys
+RESULT: 21 passed, 0 failed in 0.80s
+
+Validation suite
+────────────────
+tests/test_hc201g_batch_import.py        17 passed, 0 failed
+tests/test_hc201h_confirmed_ingestion.py 12 passed, 0 failed
+tests/test_hc201_health_vault.py         17 passed, 0 failed
+tests/test_hc310e_batch_ingestion.py      5 passed, 0 failed
+  Subtotal                               51 passed, 0 failed  (6.43s)
+
+HC-311 vault/recovery tests
+────────────────────────────
+tests/test_hc311a_vault_crypto.py                   passed
+tests/test_hc311b_vault_key_protector.py            passed
+tests/test_hc311c_encrypted_vault_store.py          passed
+tests/test_hc311f8b_vault_recovery.py               passed
+tests/test_hc311f8d_qr4_private_answer_enrollment.py passed
+tests/test_hc311f8d_question_recovery.py            passed
+tests/test_hc311f8d_recovery_enrollment.py          passed
+tests/test_hc311f8d_recovery_profiles.py            passed
+tests/test_hc311f8d_recovery_question_bank.py       passed
+  Subtotal                               91 passed, 0 failed  (5.11s)
+
+GRAND TOTAL: 163 passed, 0 failed
+
+────────────────────────────────────────────────────────────────
+11. GIT DIFF --CHECK RESULT
+────────────────────────────────────────────────────────────────
+Command : git diff --check
+Exit code: 0
+Output  : (empty — no whitespace errors)
+RESULT  : PASSED
+
+────────────────────────────────────────────────────────────────
+12. GIT STATUS --SHORT
+────────────────────────────────────────────────────────────────
+?? backend/health_vault/intake/
+?? evidence/
+?? tests/test_hc312a_automatic_intake.py
+
+Status: All new files are UNTRACKED (??) — no tracked files modified,
+no staged changes, no commits performed.
+The evidence/ directory remains untracked as required.
+
+────────────────────────────────────────────────────────────────
+13. EXPLICIT CONFIRMATIONS
+────────────────────────────────────────────────────────────────
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+LIVE_VAULT_MODIFIED=NO
+SCHEDULED_TASK_INSTALLED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+
+────────────────────────────────────────────────────────────────
+RESULT=HC312A_AUTOMATIC_MEDICAL_RECORD_INTAKE_IMPLEMENTATION_PASS
+────────────────────────────────────────────────────────────────

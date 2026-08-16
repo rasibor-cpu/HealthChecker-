@@ -1,0 +1,272 @@
+HC-313A GMAIL MEDICAL-RECORD ACQUISITION
+CONTROLLED IMPLEMENTATION & VALIDATION REPORT
+================================================================================
+
+DATE:        2026-08-16
+BRANCH:      hc311-encrypted-vault-at-rest
+HEAD:        0fcc6a614e1af41d52c21198a60ee9d086d4640f
+REPOSITORY:  C:\rasib\source\HealthChecker-HC310E
+MODE:        CONTROLLED_IMPLEMENTATION_AND_VALIDATION
+
+ACTIVATION STATUS
+-----------------
+SCHEDULED_GMAIL_POLLING_INSTALLED=NO
+LIVE_GMAIL_ACQUISITION_ACTIVATED=NO
+PRODUCTION_GMAIL_CREDENTIAL_CREATED=NO
+COMMIT=NOT_AUTHORIZED
+PUSH=NOT_AUTHORIZED
+
+================================================================================
+1. IMPLEMENTATION GATE
+================================================================================
+
+HC-312A=PASS (90 tests)
+HC-312B=PASS (included in HC-312 suite)
+HC-312C=PASS (included in HC-312 suite)
+HC-312D=PASS (production activation)
+HC-312E=PASS (closeout)
+HC-313A=PASS (58 tests, 5 subtests)
+
+================================================================================
+2. FILES CREATED (HC-313A)
+================================================================================
+
+backend/health_vault/acquisition/__init__.py
+    Package init with complete public API exports.
+
+backend/health_vault/acquisition/gmail_models.py
+    Data models: AcquisitionDecision, MedicalClassification, IdentityReasonCode,
+    GmailMessage, GmailAttachment, PatientIdentityResult, AcquisitionRecord,
+    GmailConnectorError, GmailAttachmentRetrievalError.
+
+backend/health_vault/acquisition/gmail_config.py
+    GmailAcquisitionConfig dataclass.
+    Supported extensions bounded to HC-312's set: .pdf .png .jpg .jpeg .json
+    Max attachment: 20 MB (mirrors HC-312).
+
+backend/health_vault/acquisition/patient_identity.py
+    PatientIdentityVerifier — profile-driven identity gate.
+    normalize_name() — deterministic: lower, strip, collapse spaces.
+    parse_name_parts() — handles "LAST, FIRST MIDDLE" and "FIRST LAST".
+    Zero hard-coded patient names in production code.
+    Returns structured IdentityReasonCode values.
+
+backend/health_vault/acquisition/gmail_classifier.py
+    GmailClassifier — medical document classification.
+    CONFIRMED requires >= 2 strong TEXT signals OR
+        >= 1 text + >= 2 filename signals + medical MIME.
+    Filename/subject/sender/recipient alone = never CONFIRMED.
+
+backend/health_vault/acquisition/acquisition_state.py
+    AcquisitionStateStore — idempotency ledger (JSON, atomic writes).
+    Tracks: message_id + attachment_id AND content SHA-256.
+    Survives process restart (disk-backed).
+
+backend/health_vault/acquisition/provenance.py
+    log_provenance() — structured INFO + DEBUG log records.
+    No PHI, no clinical content, no credentials in log fields.
+
+backend/health_vault/acquisition/gmail_acquirer.py
+    GmailAcquirer — main orchestration (GmailConnectorProtocol abstraction).
+    MockGmailConnector — test double.
+    9-gate pipeline per attachment.
+    Atomic handoff to hc_intake/incoming/ via write-to-temp + os.replace().
+
+tests/test_hc313a_gmail_medical_record_acquisition.py
+    58 test cases (A–AI + unit tests).
+    No live Gmail. No hard-coded production patient identity.
+
+================================================================================
+3. SAFETY INVARIANTS VERIFIED
+================================================================================
+
+[PASS] ACCEPT requires BOTH MEDICAL_DOCUMENT_CONFIRMED AND PATIENT_IDENTITY_MATCH
+[PASS] NEITHER alone is sufficient for ACCEPT
+[PASS] Gmail mailbox recipient is NOT a patient identity signal (TestO)
+[PASS] Email subject is NOT a patient identity signal (TestP)
+[PASS] Attachment filename is NOT a patient identity signal (TestQ)
+[PASS] Filename alone does NOT produce CONFIRMED classification (TestGmailClassifier)
+[PASS] Production code contains zero hard-coded patient names (TestAG)
+[PASS] No OAuth tokens/credentials in repository source (TestAF)
+[PASS] GmailAcquirer does NOT import vault_store (TestAC)
+[PASS] GmailAcquirer does NOT import vault_crypto (TestAC)
+[PASS] No VaultStore direct writes from acquisition layer
+[PASS] Gmail outage fails closed — no silent data loss (TestW)
+[PASS] One failed attachment does NOT block other candidates (TestV)
+[PASS] Idempotency survives restart — state persisted to disk (TestAD)
+[PASS] Content SHA-256 deduplication across different messages (TestU)
+[PASS] No PHI or clinical content in provenance log records (TestY)
+[PASS] No credential fields on AcquisitionRecord (TestY)
+[PASS] Temp files cleaned up after atomic handoff (TestZ)
+[PASS] ACCEPT writes correct content to hc_intake/incoming/ (TestAA)
+[PASS] HC-312 scanner discovers acquisition-dropped files (TestAB)
+[PASS] Different registered users get different decisions for same document (TestAH)
+
+================================================================================
+4. PATIENT IDENTITY GATE DETAIL
+================================================================================
+
+The PatientIdentityVerifier implements a FAIL-CLOSED policy:
+
+Reason Code                     Decision    Condition
+------------------------------  ----------  --------------------------------
+PATIENT_NAME_MISSING            REVIEW      No name found in document
+PATIENT_IDENTITY_AMBIGUOUS      REVIEW      Profile has no name configured
+PATIENT_NAME_MISMATCH           REJECT      Normalized names differ
+PATIENT_DOB_CONFLICT            REVIEW      Name matches but DOB conflicts
+PATIENT_SECONDARY_ID_CONFLICT   REVIEW      Name matches but sex/MRN conflicts
+PATIENT_IDENTITY_MATCH          ACCEPT*     Name + secondaries all corroborate
+
+* ACCEPT-eligible only — still requires MEDICAL_DOCUMENT_CONFIRMED classification.
+
+Name normalization rules:
+  - NFC Unicode normalization
+  - Lowercase
+  - Strip punctuation: , . - ' "
+  - Collapse whitespace to single spaces
+  - Handles "LAST, FIRST MIDDLE" and "FIRST LAST" formats
+  - Middle-name omission tolerance (one side absent → tolerated)
+  - Both sides have conflicting middles → MISMATCH
+  - NO fuzzy/edit-distance matching
+
+================================================================================
+5. MEDICAL CLASSIFIER DETAIL
+================================================================================
+
+CONFIRMED requires:
+  >= 2 distinct strong TEXT signals (from 50+ clinical keywords)
+  OR >= 1 text + >= 2 filename + medical MIME
+
+UNCERTAIN: intermediate evidence — always REVIEW, never ACCEPT
+
+NOT_MEDICAL: no strong signals — REJECT
+
+Strong text signals include (partial list):
+  laboratory results, lab results, blood test, complete blood count,
+  creatinine, hemoglobin, hba1c, reference range, specimen type,
+  ordering physician, ecg, electrocardiogram, radiology report,
+  discharge summary, lifelabs, labcorp, icd-10, ...
+
+Weak-only signals (never trigger CONFIRMED):
+  report, results, medical, health, hospital, clinic, doctor, patient
+
+================================================================================
+6. ACQUISITION PIPELINE
+================================================================================
+
+Per-attachment pipeline (9 gates):
+  Gate 1: Extension check (rejects .zip, .exe, .docx, etc.)
+  Gate 2: Size check (> 20 MB → REJECT)
+  Gate 3: Pre-retrieval idempotency (message_id + attachment_id)
+  Gate 4: Content retrieval (GmailConnectorProtocol.get_attachment_bytes)
+  Gate 5: SHA-256 computation + content idempotency
+  Gate 6: Medical classification (GmailClassifier)
+  Gate 7: Patient identity field extraction from document text/JSON
+  Gate 8: Patient identity verification (PatientIdentityVerifier)
+  Gate 9: Atomic handoff to hc_intake/incoming/ (accepted only)
+
+Handoff mechanism:
+  Write to .hc313a_tmp_<pid>_<filename> in incoming/
+  os.replace() to final filename (atomic on Windows NTFS same-volume)
+  On failure: temp file deleted, attachment NOT marked acquired → retry on next scan
+
+================================================================================
+7. HC-312 / HC-311 BOUNDARY PRESERVATION
+================================================================================
+
+HC-313A writes ONLY to hc_intake/incoming/
+HC-312's existing intake runner (runner.py) discovers and processes the file.
+HC-312's lifecycle (claim → process → complete/quarantine) is preserved.
+HC-312's ImportService.import_file() canonical path is preserved.
+HC-311's VaultStore encryption boundary is NOT touched.
+HC-313A never calls VaultStore, vault_crypto, or vault_key_protector.
+
+================================================================================
+8. PRODUCTION GMAIL CONNECTOR ASSESSMENT
+================================================================================
+
+RESULT=HC313A_GMAIL_RUNTIME_CONNECTOR_REQUIRED
+
+The GmailConnectorProtocol is defined and ready for a production connector.
+
+PACKAGES REQUIRED (NOT INSTALLED):
+  google-auth          → NOT_INSTALLED
+  google-api-python-client → NOT_INSTALLED
+  google.oauth2        → NOT_INSTALLED
+
+To activate production Gmail acquisition:
+  1. Install packages:
+     pip install google-auth google-auth-oauthlib google-api-python-client
+  2. Create OAuth 2.0 credential via Google Cloud Console
+     (Desktop application, Gmail API scope: gmail.readonly)
+  3. Download credentials.json — DO NOT commit to repository
+  4. Implement a production GmailConnector(GmailConnectorProtocol)
+     using google.oauth2.credentials + googleapiclient.discovery
+  5. Store credential at a user-scoped path outside the repository
+  6. Configure scheduled task to call GmailAcquirer.run_scan()
+
+ACTIVATION IS NOT AUTHORIZED until the above steps are completed
+and reviewed per HC-313A activation policy.
+
+================================================================================
+9. HC-313A TEST RESULTS
+================================================================================
+
+HC-313A TESTS (test_hc313a_gmail_medical_record_acquisition.py):
+  TestA  Trusted medical PDF + matching user          → PASS
+  TestB  Unrelated PDF (invoice)                      → PASS
+  TestC  Generic "report.pdf" false positive          → PASS
+  TestD  Medical record for another patient           → PASS
+  TestE  Missing patient name → REVIEW                → PASS
+  TestF  Profile has no name → ambiguous              → PASS
+  TestG  Exact normalized name match                  → PASS
+  TestH  Capitalization / whitespace / comma format   → PASS (3 sub)
+  TestI  Middle name omission / conflict              → PASS (2 sub)
+  TestJ  Different name → MISMATCH                   → PASS
+  TestK  Name matches but DOB conflicts               → PASS
+  TestL  Name + DOB corroborate                       → PASS
+  TestM  Sex corroboration / conflict                 → PASS (2 sub)
+  TestN  MRN secondary conflict                       → PASS
+  TestO  Recipient ignored for identity               → PASS
+  TestP  Subject ignored for identity                 → PASS
+  TestQ  Filename ignored for identity                → PASS
+  TestR  JSON medical record accepted                 → PASS
+  TestS  Unsupported ZIP rejected                     → PASS
+  TestT  Duplicate attachment → already_acquired      → PASS
+  TestU  Same SHA-256 from different message          → PASS
+  TestV  Retrieval failure isolated                   → PASS
+  TestW  Gmail outage fails closed                    → PASS
+  TestX  Provenance record completeness               → PASS
+  TestY  PHI absent from logs / no credential fields  → PASS (2 sub)
+  TestZ  Temp file cleanup after accept               → PASS
+  TestAA Atomic handoff to hc_intake/incoming/        → PASS
+  TestAB HC-312 scanner discovers acquisition file    → PASS
+  TestAC HC-311 vault boundary not touched            → PASS (2 sub)
+  TestAD Restart preserves acquisition state          → PASS
+  TestAE Malformed attachment isolated                → PASS
+  TestAF No credential files in repository            → PASS (2 sub)
+  TestAG No hard-coded patient identity in source     → PASS (2 sub)
+  TestAH Two different users get different decisions  → PASS
+  TestAI No merge without identity match              → PASS (2 sub)
+  (+ normalize_name unit tests: 6 PASS)
+  (+ GmailClassifier unit tests: 5 PASS)
+  (+ AcquisitionStateStore unit tests: 3 PASS)
+
+HC-313A TOTAL: 58 PASSED, 5 SUBTESTS PASSED, 0 FAILED
+
+HC-312 REGRESSION:
+  test_hc312a_automatic_intake.py    21 PASSED
+  test_hc312b_automatic_intake_runtime.py 32 PASSED
+  test_hc312c_e2e_acceptance.py      37 PASSED
+  HC-312 TOTAL: 90 PASSED, 0 FAILED
+
+git diff --check: PASSED (no whitespace errors)
+
+================================================================================
+HC313A_IMPLEMENTATION_COMPLETE=YES
+HC313A_TOTAL_TESTS_PASSED=58
+HC313A_SUBTESTS_PASSED=5
+HC313A_GMAIL_RUNTIME_CONNECTOR_REQUIRED=YES
+HC313A_LIVE_ACTIVATION=NOT_AUTHORIZED
+ACTIVATION_GATED_BY=GMAIL_OAUTH_CREDENTIAL + PRODUCTION_CONNECTOR_IMPLEMENTATION
+================================================================================

@@ -1,0 +1,103 @@
+============================================================
+ HC311-F8D — POST-PUSH CLOSEOUT & MAINLINE RECONCILIATION
+============================================================
+TIME=2026-08-15T10:57:32.5793148-04:00
+MACHINE=FINANCE
+MODE=READ_ONLY_CLOSEOUT_AND_INTEGRATION_DISCOVERY
+============================================================
+
+=== 1. FETCH ===
+
+FETCH_EXIT=0
+
+=== 2. HC311 IDENTITY ===
+BRANCH=hc311-encrypted-vault-at-rest
+EXPECTED_BRANCH=hc311-encrypted-vault-at-rest
+LOCAL_HEAD=6cef3ef75111fc0aa8a1bb1db52adc3571c4fbc5
+REMOTE_HEAD=6cef3ef75111fc0aa8a1bb1db52adc3571c4fbc5
+EXPECTED_COMMIT=6cef3ef75111fc0aa8a1bb1db52adc3571c4fbc5
+LOCAL_REMOTE_MATCH=True
+
+=== 3. MAINLINE IDENTITY ===
+ORIGIN_MAIN=755a7e7b009f7d012dca73ac6b493b2a30e28ef8
+MERGE_BASE=93498244c05772d14836a0b99f4678274455ac96
+
+=== 4. BRANCH DIVERGENCE ===
+ORIGIN_MAIN_VS_HC311=1	14
+HC311_BEHIND_MAIN=1
+HC311_AHEAD_MAIN=14
+
+=== 5. COMMITS UNIQUE TO MAIN ===
+755a7e7 (origin/main, origin/HEAD) HC-310E: gate Health Connect background synchronization (#1)
+
+=== 6. COMMITS UNIQUE TO HC311 ===
+6cef3ef (HEAD -> hc311-encrypted-vault-at-rest, origin/hc311-encrypted-vault-at-rest) HC-311 F8D: add recovery enrollment and question recovery
+b2c9d1d HC-311: add encrypted vault-at-rest foundation
+7ac2296 (origin/hc309-hc310e-integration) Integrate HC-309 R4F execution readiness with HC-310E
+5875fdc (origin/hc310e-background-health-connect, hc310e-background-health-connect) HC-310E: align Android delivery timeout with proxy bound
+88666d9 HC-310E: batch companion observation persistence
+672b9ba HC-310E: include scheduled task installer in verified release
+c53a82a fix(companion): materialize verified Caddy config on install
+c597add fix(companion): align proxy timeout with Android delivery bound
+c044f38 HC-310E batch companion seen-state persistence
+7b4ba77 HC-310E-R1: bound capability failures and lifecycle handling
+aa7b792 HC-310E: gate Health Connect background synchronization
+92ab918 (main) HC-309-R4F-EXEC-P3: prepare offline ceremony readiness gate
+f115f08 HC-309-R4F-EXEC-P2: prepare assigned-PEN transition validator
+7e701a7 HC-309-R4F-EXEC-P1: add readiness CLI and stabilize pytest
+
+=== 7. FILE-LEVEL OVERLAP DISCOVERY ===
+MAIN_ONLY_CHANGED_FILE_COUNT=9
+HC311_CHANGED_FILE_COUNT=54
+OVERLAP_FILE_COUNT=9
+OVERLAP=android/app/src/main/AndroidManifest.xml
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicy.kt
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/healthconnect/CapabilityModels.kt
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/healthconnect/HealthConnectCapability.kt
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/ui/CompanionStatusActivity.kt
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/util/SafeLog.kt
+OVERLAP=android/app/src/main/java/com/healthchecker/companion/work/MonitoringSyncWorker.kt
+OVERLAP=android/app/src/test/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicyTest.kt
+OVERLAP=android/app/src/test/java/com/healthchecker/companion/util/PrivacySafeLogInvariantTest.kt
+
+=== 8. WORKTREE SAFETY ===
+?? evidence/
+TRACKED_DIRTY_COUNT=0
+
+=== 9. HC311-F8D CLOSEOUT STATUS ===
+RECOVERY_DESIGN_RECONCILIATION=PASS
+SECURITY_MODEL_AND_ENROLLMENT_CLOSEOUT=PASS
+SECRET_FINDING_RECONCILIATION=PASS
+EXPLICIT_STAGE_REVIEW=PASS
+FINAL_PRECOMMIT=PASS
+COMMIT_CREATED=YES
+REMOTE_SYNC=CONFIRMED
+FINAL_TARGETED_TESTS=56_PASSED
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+LIVE_VAULT_MODIFIED=NO
+
+=== 10. DECISION ===
+HC311_F8D_IMPLEMENTATION_CLOSEOUT=PASS
+MAINLINE_RECONCILIATION_REQUIRED=YES
+MAINLINE_BEHIND_COUNT=1
+MAINLINE_AHEAD_COUNT=14
+MERGE_OR_REBASE_PERFORMED=NO
+NEXT_GATE=HC311_F8D_CONTROLLED_MAINLINE_RECONCILIATION
+RESULT=HC311_F8D_POST_PUSH_CLOSEOUT_REQUIRES_MAINLINE_RECONCILIATION
+
+=== 11. SAFETY ===
+SOURCE_MODIFIED=NO
+FILES_STAGED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+MERGE_PERFORMED=NO
+REBASE_PERFORMED=NO
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+LIVE_VAULT_MODIFIED=NO
+RUNTIME_RESTARTED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_F8D_POST_PUSH_CLOSEOUT_AND_MAINLINE_RECONCILIATION.txt

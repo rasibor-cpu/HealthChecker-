@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+import os
+import platform
 from backend.health_vault.models import utc_now
 from backend.health_vault.monitoring.ingestion import load_monitoring_config
 from backend.health_vault.vault_store import VaultStore
@@ -91,11 +93,20 @@ class MonitoringScheduler:
         now: str | None = None,
         error: str | None = None,
         degraded: bool = False,
+        metrics: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now_ts = now or utc_now()
         self._state["last_attempt_at"] = now_ts
         self._state["running"] = False
         self._state["lease_expires_at"] = None
+        self._state["pid"] = None
+        
+        metrics = metrics or {}
+        if isinstance(metrics, dict):
+            if metrics.get("gmail_auth_success"):
+                self._state["last_gmail_auth_success_at"] = now_ts
+            if metrics.get("handoff_success"):
+                self._state["last_hc312_handoff_success_at"] = now_ts
         if success:
             self._state["consecutive_failures"] = 0
             self._state["current_interval_seconds"] = self.default_interval
@@ -162,6 +173,9 @@ class MonitoringScheduler:
             self._state["status"] = "running"
             self._state["running"] = True
             self._state["last_attempt_at"] = now_ts
+            self._state["lease_acquired_at"] = now_ts
+            self._state["pid"] = os.getpid()
+            self._state["machine_name"] = platform.node()
             # Explicit lease so overlap detection does not depend on wall-clock vs fixture dates
             try:
                 text = now_ts[:-1] + "+00:00" if now_ts.endswith("Z") else now_ts
@@ -185,6 +199,7 @@ class MonitoringScheduler:
                 now=now_ts,
                 error=None if ok else str(result.get("error") or "sync_failed"),
                 degraded=degraded,
+                metrics=result,
             )
             return {"ran": True, "result": result, "scheduler": self.status()}
         except Exception as exc:

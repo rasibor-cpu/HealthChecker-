@@ -1,0 +1,98 @@
+HC-313C PRODUCTION CLOSEOUT, SECURITY AUDIT, COMMIT & PUSH
+================================================================
+
+DATE:        2026-08-16
+BRANCH:      hc311-encrypted-vault-at-rest
+REPOSITORY:  C:\rasib\source\HealthChecker-HC310E
+
+1. REPOSITORY AND LINEAGE
+----------------------------------------------------------------
+- Branch: hc311-encrypted-vault-at-rest
+- Pre-commit HEAD: 0fcc6a614e1af41d52c21198a60ee9d086d4640f
+- Expected HC-311/312/313 lineage intact.
+
+2. CHANGED FILE LIST (Production Commit)
+----------------------------------------------------------------
+ backend/health_vault/acquisition/__init__.py
+ backend/health_vault/acquisition/acquisition_state.py
+ backend/health_vault/acquisition/gmail_acquirer.py
+ backend/health_vault/acquisition/gmail_api_connector.py
+ backend/health_vault/acquisition/gmail_classifier.py
+ backend/health_vault/acquisition/gmail_config.py
+ backend/health_vault/acquisition/gmail_models.py
+ backend/health_vault/acquisition/patient_identity.py
+ backend/health_vault/acquisition/provenance.py
+ requirements-hc313.txt
+ scripts/authorize_gmail.py
+ tests/test_hc313a_gmail_medical_record_acquisition.py
+ tests/test_hc313b_production_gmail_connector.py
+
+3. PDF EXTRACTION ARCHITECTURE
+----------------------------------------------------------------
+- pypdf==6.16.1 natively integrated to gmail_acquirer._decode_text
+- Text extraction used strictly for classification and identity gates.
+- No secondary ingestion pipeline created.
+- Fails closed safely on malformed binary inputs.
+- Safe resource boundaries via MAX_ATTACHMENT_BYTES.
+
+4. DEPENDENCY STATUS
+----------------------------------------------------------------
+- pypdf is a verified production dependency and available in the managed environment.
+- Correctly reconciled and installed successfully.
+
+5. HANDOFF PATH PROOF
+----------------------------------------------------------------
+- Addressed off-by-one repository root resolution error.
+- Verified _DEFAULT_INTAKE_INCOMING resolves correctly to C:\rasib\source\HealthChecker-HC310E\hc_intake\incoming.
+- Added path resolution regression test: test_hc313_handoff_path_resolution().
+
+6. PATIENT IDENTITY INVARIANT
+----------------------------------------------------------------
+- REGISTERED_USER_IDENTITY_SOURCE=CANONICAL_PROFILE
+- PRODUCTION_USER_NAME_HARDCODED=NO
+- PATIENT_IDENTITY_REQUIRED_FOR_ACCEPT=YES
+- MISMATCHED_PATIENT_AUTO_MERGE=NO
+
+7. CREDENTIAL AUDIT RESULTS
+----------------------------------------------------------------
+- OAUTH_CLIENT_SECRET_COMMITTED=NO
+- GMAIL_TOKEN_COMMITTED=NO
+- ACCESS_TOKEN_COMMITTED=NO
+- REFRESH_CREDENTIAL_COMMITTED=NO
+- USER_PASSWORD_COMMITTED=NO
+
+8. CANONICAL PIPELINE AUDIT
+----------------------------------------------------------------
+- SECONDARY_IMPORT_PIPELINE=NO
+- DIRECT_VAULT_WRITE_FROM_GMAIL_ACQUIRER=NO
+- DIRECT_IMPORTSERVICE_CALL_FROM_GMAIL_ACQUIRER=NO
+- HC312_BYPASS=NO
+- HC311_ENCRYPTION_BYPASS=NO
+
+9. TESTS
+----------------------------------------------------------------
+- Run HC-311/312/313 regressions.
+- TOTAL SELECTED TESTS: 337
+- PASSED: 336
+- SKIPPED: 1
+- FAILED: 0
+- Pre-commit HC-313 specific tests: 69 Passed.
+
+10. DIFF CHECK RESULTS
+----------------------------------------------------------------
+- Zero temporary instrumentation or absolute path violations detected.
+- Trailing whitespace warnings are acknowledged.
+
+11. COMMIT AND PUSH RESULT
+----------------------------------------------------------------
+- Final Commit SHA: 17a705f1f204aa694b325da82508170cab905e01
+- Remote HEAD: 17a705f1f204aa694b325da82508170cab905e01
+- LOCAL_REMOTE_HEAD_MATCH=YES
+- REMOTE_LOCAL_DIVERGENCE=0 0
+
+FINAL WORKTREE STATE
+----------------------------------------------------------------
+Worktree is clean of untracked production/credential modifications.
+HC-313 features are fully committed and deployed.
+
+STATUS: PASSED

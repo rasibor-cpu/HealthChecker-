@@ -1,0 +1,108 @@
+============================================================
+ HEALTHCHECKER — NOTEPAD DIAGNOSTIC
+============================================================
+TIME=2026-08-15T10:36:13.9966890-04:00
+MACHINE=FINANCE
+TARGET=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_F8D_TARGETED_VALIDATION_R2.txt
+MODE=WINDOWS_DIAGNOSTIC_ONLY
+============================================================
+
+=== 1. TARGET REPORT ===
+TARGET_EXISTS=True
+
+=== 2. COMMAND RESOLUTION ===
+
+
+CommandType : Application
+Name        : notepad.exe
+Source      : C:\WINDOWS\system32\notepad.exe
+Path        : C:\WINDOWS\system32\notepad.exe
+
+CommandType : Application
+Name        : notepad.exe
+Source      : C:\WINDOWS\notepad.exe
+Path        : C:\WINDOWS\notepad.exe
+
+CommandType : Application
+Name        : notepad.exe
+Source      : C:\Users\wadys\AppData\Local\Mic
+              rosoft\WindowsApps\notepad.exe
+Path        : C:\Users\wadys\AppData\Local\Mic
+              rosoft\WindowsApps\notepad.exe
+
+
+
+
+
+=== 3. EXPECTED EXECUTABLE LOCATIONS ===
+PATH=C:\WINDOWS\System32\notepad.exe
+EXISTS=True
+LENGTH=360448
+VERSION=10.0.26100.8457 (WinBuild.160101.0800)
+
+PATH=C:\WINDOWS\notepad.exe
+EXISTS=True
+LENGTH=360448
+VERSION=10.0.26100.8457 (WinBuild.160101.0800)
+
+PATH=C:\Users\wadys\AppData\Local\Microsoft\WindowsApps\notepad.exe
+EXISTS=True
+LENGTH=0
+VERSION=
+
+
+=== 4. WINDOWS NOTEPAD APP PACKAGE ===
+NAME=Microsoft.WindowsNotepad
+VERSION=11.2606.15.0
+STATUS=Ok
+INSTALL_LOCATION=C:\Program Files\WindowsApps\Microsoft.WindowsNotepad_11.2606.15.0_x64__8wekyb3d8bbwe
+PACKAGE_FULL_NAME=Microsoft.WindowsNotepad_11.2606.15.0_x64__8wekyb3d8bbwe
+PACKAGE_EXE=C:\Program Files\WindowsApps\Microsoft.WindowsNotepad_11.2606.15.0_x64__8wekyb3d8bbwe\Notepad\Notepad.exe
+PACKAGE_EXE_EXISTS=True
+
+
+=== 5. TXT ASSOCIATION ===
+.txt=txtfilelegacy
+
+cmd.exe : File type 'txtfile' not found or no 
+open command associated with it.
+At line:97 char:5
++     cmd.exe /c ftype txtfile 2>&1 |
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( 
+   File type 'txtf...ciated with it.:String)  
+   [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandEr 
+   ror
+ 
+
+
+=== 6. WINDOWS OPTIONAL FEATURE QUERY ===
+
+Name                                        St
+                                            at
+                                             e
+----                                        --
+Microsoft.Windows.Notepad.System~~~~0.0.1.0 ed
+
+
+
+
+=== 7. CONTROLLED LAUNCH TEST ===
+TRY=C:\Program Files\WindowsApps\Microsoft.WindowsNotepad_11.2606.15.0_x64__8wekyb3d8bbwe\Notepad\Notepad.exe
+PID=7976
+HAS_EXITED=False
+LAUNCH_SUCCESS=C:\Program Files\WindowsApps\Microsoft.WindowsNotepad_11.2606.15.0_x64__8wekyb3d8bbwe\Notepad\Notepad.exe
+
+
+=== 8. VERDICT ===
+RESULT=NOTEPAD_LAUNCH_RESTORED
+
+=== HEALTHCHECKER SAFETY ===
+HEALTHCHECKER_SOURCE_MODIFIED=NO
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+LIVE_VAULT_MODIFIED=NO
+RUNTIME_RESTARTED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_NOTEPAD_DIAGNOSTIC.txt

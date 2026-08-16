@@ -1,0 +1,271 @@
+HC-312B AUTOMATIC INTAKE RUNTIME — IMPLEMENTATION REPORT
+==========================================================
+Generated : 2026-08-15T15:37:00Z (local 2026-08-15T11:37:00-04:00)
+Report    : evidence/HC312B_AUTOMATIC_INTAKE_RUNTIME.txt
+
+────────────────────────────────────────────────────────────────
+1. REPOSITORY IDENTITY
+────────────────────────────────────────────────────────────────
+REPOSITORY_PATH   = C:/rasib/source/HealthChecker-HC310E
+GIT_REPOSITORY    = true
+BRANCH            = hc311-encrypted-vault-at-rest
+HEAD              = 87a360582804a358005985d43d4af7de6aab61ae
+TREE_HASH         = 016e8ce803cb0b8357012d20d7b227bd0af40a2e
+
+────────────────────────────────────────────────────────────────
+2. FILES CHANGED (HC-312B additions, no existing files modified)
+────────────────────────────────────────────────────────────────
+NEW  backend/health_vault/intake/scheduled_intake.py
+NEW  backend/health_vault/intake/watcher.py
+NEW  scripts/companion_host/install_intake_task.ps1.template
+NEW  tests/test_hc312b_automatic_intake_runtime.py
+MOD  backend/health_vault/intake/__init__.py  (added IntakeWatcher export)
+
+HC-312A files (unchanged since HC-312A):
+  backend/health_vault/intake/__init__.py    (updated above)
+  backend/health_vault/intake/intake_config.py
+  backend/health_vault/intake/lifecycle.py
+  backend/health_vault/intake/file_scanner.py
+  backend/health_vault/intake/file_processor.py
+  backend/health_vault/intake/runner.py
+  tests/test_hc312a_automatic_intake.py
+
+────────────────────────────────────────────────────────────────
+3. ARCHITECTURE IMPLEMENTED
+────────────────────────────────────────────────────────────────
+HC-312B adds a minimum production-capable automatic execution
+mechanism on top of the validated HC-312A one-shot runner.
+
+Existing infrastructure reused
+───────────────────────────────
+  MonitoringScheduler (HC-302, monitoring/scheduler.py)
+    — interval scheduling, lease-based concurrency exclusion,
+      exponential backoff, persistent state via VaultStore,
+      stale-lease recovery on reinstantiation.
+      No new scheduler implementation was created.
+
+  Windows Task Scheduler pattern (HC-306E-R2, scheduled_host.py)
+    — approval gate (HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND),
+      IgnoreNew concurrency policy, bounded restart, no secrets in
+      XML/arguments, inert-template pattern.
+      New task name: HealthCheckerIntake.
+
+New components
+──────────────
+  scheduled_intake.py
+    Policy constants and task settings contract (task name, approval
+    gate, intervals, restart policy, reason codes). Mirrors
+    scheduled_host.py pattern. POLICY ONLY — no task registration.
+
+  watcher.py (IntakeWatcher)
+    Wraps MonitoringScheduler around IntakeRunner.
+    Provides: interval scheduling, lease-based concurrent-run
+    exclusion, exponential backoff, persistent state, stale recovery.
+    Entry: IntakeWatcher.run_if_due().
+
+  install_intake_task.ps1.template
+    Inert Windows Task Scheduler registration template.
+    REFUSED until HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND + elevation.
+    Registers HealthCheckerIntake with 5-minute AT_LOGON repetition,
+    IgnoreNew, bounded restart, no secrets in XML.
+
+────────────────────────────────────────────────────────────────
+4. ACCEPTANCE CRITERION MET (HOW)
+────────────────────────────────────────────────────────────────
+"After installation/activation, placing a supported medical-record
+file in the configured incoming directory must cause HealthChecker
+to discover and process it automatically without a user manually
+invoking Python."
+
+Mechanism:
+  1. Operator runs install_intake_task.ps1.template (with approval env
+     var set and elevation) — registers HealthCheckerIntake as a
+     Windows Scheduled Task with 5-minute AT_LOGON repetition.
+  2. Task calls: python -m backend.health_vault.intake.runner
+  3. runner.main() creates IntakeRunner (which internally uses
+     IntakeWatcher wrapping MonitoringScheduler for timing control).
+  4. IntakeRunner scans incoming/, claims eligible files atomically,
+     calls ImportService.import_file() for each, and moves each to
+     completed/ or quarantine/.
+  5. Every 5 minutes (by repetition trigger) the task fires again.
+     MonitoringScheduler's lease prevents concurrent instances.
+
+Not yet activated: task not registered in this session per task spec.
+
+────────────────────────────────────────────────────────────────
+5. SCHEDULING MECHANISM (EXISTING INFRASTRUCTURE REUSED)
+────────────────────────────────────────────────────────────────
+  Mechanism        : Windows Task Scheduler (existing HC-306E pattern)
+  Task name        : HealthCheckerIntake
+  Python scheduler : MonitoringScheduler (existing HC-302 component)
+  Concurrency      : IgnoreNew (Task Scheduler) +
+                     MonitoringScheduler lease (Python layer)
+  Interval         : 5 minutes (TASK_REPEAT_INTERVAL_MINUTES=5)
+  Backoff          : MIN=60s, MAX=3600s, MAX_BACKOFF=1800s
+  Lease duration   : 900s
+  Rejected wrappers: NSSM, WinSW (same as HC-306E-R2)
+  Approval gate    : HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND
+  Secrets in XML   : NO (SECRETS_IN_TASK_XML=False)
+  Reboot on failure: NO (REBOOT_ON_FAILURE=False)
+
+────────────────────────────────────────────────────────────────
+6. CONCURRENT-RUN EXCLUSION
+────────────────────────────────────────────────────────────────
+Two independent layers:
+
+Layer 1 — Windows Task Scheduler IgnoreNew policy
+  If the previous task instance is still running when the next
+  5-minute trigger fires, IgnoreNew causes the new instance to be
+  silently discarded.
+
+Layer 2 — MonitoringScheduler Python lease
+  Before executing the sync function, MonitoringScheduler sets
+  running=True with a lease_expires_at timestamp persisted in
+  VaultStore. A second watcher reading the same store sees
+  running=True and returns {ran: False, reason: "already_running"}.
+  Stale leases (past expiry) are cleared on reinstantiation.
+
+Layer 3 — Atomic Path.rename() file claim (HC-312A, unchanged)
+  Even if two processes reach the file-processing step, only one
+  can rename incoming/<file> to processing/<file>.
+
+────────────────────────────────────────────────────────────────
+7. RESTART / REBOOT PERSISTENCE
+────────────────────────────────────────────────────────────────
+Windows Task Scheduler persistence:
+  AtLogon trigger ensures the task resumes automatically after
+  reboot when the user logs in.  No action needed by the user.
+
+MonitoringScheduler state persistence:
+  Scheduler state (last_success_at, next_due_at, consecutive_failures,
+  lease) is persisted in VaultStore index.json. A fresh process
+  reinstantiating IntakeWatcher with the same VaultStore reads back
+  the prior state, clears stale leases, and continues from the
+  correct interval.
+
+HC-312A stale-processing recovery (unchanged):
+  Files stranded in processing/ from a prior crash are moved back to
+  incoming/ before the next scan.
+
+────────────────────────────────────────────────────────────────
+8. HC-311 ENCRYPTION / SECURITY BOUNDARIES PRESERVED
+────────────────────────────────────────────────────────────────
+  - All persistence continues through VaultStore (unchanged)
+  - HC-311 encryption key handling not touched
+  - No production keys created or rotated
+  - No recovery packages created
+  - No real recovery answers entered
+  - ImportService.import_file() remains the sole ingestion entry point
+
+────────────────────────────────────────────────────────────────
+9. PRIVACY / LOGGING SAFEGUARDS (HC-312B additions)
+────────────────────────────────────────────────────────────────
+  IntakeWatcher.run_if_due() returns only:
+    ran (bool), reason (code string), scheduler (state dict with
+    timestamps and counts only), intake_summary (count-only dict).
+
+  Never logged or returned by any HC-312B code:
+    - raw medical content, clinical values, OCR text
+    - vault keys, recovery passphrases
+    - patient identifiers beyond document_id (UUID)
+
+  Test 11 (test_11_no_medical_content_in_watcher_summary) verifies
+  that measurement values, metric names, units do not appear in the
+  serialised watcher result.
+
+────────────────────────────────────────────────────────────────
+10. TESTS EXECUTED AND EXACT RESULTS
+────────────────────────────────────────────────────────────────
+
+HC-312B tests (tests/test_hc312b_automatic_intake_runtime.py)
+──────────────────────────────────────────────────────────────
+PASSED  test_1_task_name_and_entry_module
+PASSED  test_1_approval_env_var
+PASSED  test_1_interval_bounds
+PASSED  test_1_safety_constants
+PASSED  test_1_settings_contract_keys
+PASSED  test_1_approval_gate_raises_without_env
+PASSED  test_1_approval_gate_passes_with_env
+PASSED  test_2_watcher_runs_intake_on_force
+PASSED  test_2_watcher_runs_twice_consecutively
+PASSED  test_3_concurrent_run_excluded
+PASSED  test_3_concurrent_run_exclusion_via_threading
+PASSED  test_4_scheduler_state_persists_across_reinstantiation
+PASSED  test_5_stale_lease_recovered_on_next_run
+PASSED  test_5_stale_processing_files_recovered
+PASSED  test_6_one_failure_does_not_prevent_next_scheduled_run
+PASSED  test_7_same_file_twice_produces_one_document
+PASSED  test_8_template_script_is_inert
+PASSED  test_8_assert_approval_set_inert_without_env
+PASSED  test_9_no_live_vault_side_effects
+PASSED  test_10_not_due_when_recent_run
+PASSED  test_10_force_flag_overrides_interval
+PASSED  test_11_no_medical_content_in_watcher_summary
+PASSED  test_12_policy_constants_not_weakened
+PASSED  test_13_runner_module_importable
+PASSED  test_14_run_if_due_schema
+PASSED  test_14_scheduler_status_schema
+PASSED  test_15_hc312a_runner_still_works
+PASSED  test_watcher_with_no_store_is_stateless
+PASSED  test_watcher_interval_clamped_to_min
+PASSED  test_watcher_interval_clamped_to_max
+PASSED  test_scheduled_intake_error_code_normalised
+PASSED  test_scheduled_intake_error_known_code
+RESULT: 32 passed, 0 failed in 0.90s
+
+HC-312A regression (tests/test_hc312a_automatic_intake.py)
+───────────────────────────────────────────────────────────
+RESULT: 21 passed, 0 failed in 0.80s  (all A-N cases + extras)
+
+Validation suite
+────────────────
+tests/test_hc201g_batch_import.py        17 passed, 0 failed
+tests/test_hc201h_confirmed_ingestion.py 12 passed, 0 failed
+tests/test_hc201_health_vault.py         17 passed, 0 failed
+tests/test_hc310e_batch_ingestion.py      5 passed, 0 failed
+  Subtotal                               51 passed, 0 failed
+
+HC-311 vault/recovery tests
+────────────────────────────
+tests/test_hc311a_vault_crypto.py + 8 others
+  Subtotal                               91 passed, 0 failed  (5.05s)
+
+GRAND TOTAL: 195 passed, 0 failed, 0 regressions
+
+────────────────────────────────────────────────────────────────
+11. GIT DIFF --CHECK RESULT
+────────────────────────────────────────────────────────────────
+Command  : git diff --check
+Exit code: 0
+Output   : (empty — no whitespace errors)
+RESULT   : PASSED
+
+────────────────────────────────────────────────────────────────
+12. GIT STATUS --SHORT
+────────────────────────────────────────────────────────────────
+?? backend/health_vault/intake/
+?? evidence/
+?? scripts/companion_host/install_intake_task.ps1.template
+?? tests/test_hc312a_automatic_intake.py
+?? tests/test_hc312b_automatic_intake_runtime.py
+
+Status: All new files are UNTRACKED (??) — no tracked files modified
+(except the intake __init__.py which is also untracked as part of the
+new intake/ package), no staged changes, no commits performed.
+evidence/ remains untracked.
+
+────────────────────────────────────────────────────────────────
+13. EXPLICIT CONFIRMATIONS
+────────────────────────────────────────────────────────────────
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+LIVE_VAULT_MODIFIED=NO
+SCHEDULED_TASK_INSTALLED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+ANDROID_PHONE_MODIFIED=NO
+
+────────────────────────────────────────────────────────────────
+RESULT=HC312B_AUTOMATIC_INTAKE_RUNTIME_PASS
+────────────────────────────────────────────────────────────────

@@ -1,0 +1,375 @@
+﻿HC-312E-R2 — MANAGED RUNTIME DEPENDENCY PROVISIONING & FINAL CLOSEOUT
+
+Proceed immediately.
+
+REPOSITORY
+C:\rasib\source\HealthChecker-HC310E
+
+EXPECTED BRANCH
+hc311-encrypted-vault-at-rest
+
+EXPECTED HEAD
+87a360582804a358005985d43d4af7de6aab61ae
+
+CURRENT VERIFIED STATE
+- HC-312A=PASS
+- HC-312B=PASS
+- HC-312C=PASS
+- HC-312D=PASS
+- Automatic scheduled ingestion on FINANCE already proven.
+- Managed Python ACL access has now been repaired.
+- Managed Python executes successfully:
+  C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+- Python version=3.12.10
+- Current blocker:
+  ModuleNotFoundError: No module named 'cryptography'
+
+PRIOR RESULT
+RESULT=STOP_HC312E_MANAGED_RUNTIME_DEPENDENCY_MISSING
+
+IMPORTANT SAFETY
+Do NOT use fodhelper, eventvwr, SilentCleanup, registry hijacking,
+UAC bypass techniques, or privilege-escalation workarounds.
+
+If administrative rights are required, use normal Windows UAC elevation only.
+
+Do not use real medical records.
+Do not expose vault keys or recovery secrets.
+Do not fall back to the user-local Python as the final runtime.
+
+============================================================
+1. CONTROLLED REQUIREMENTS DISCOVERY
+============================================================
+
+Inspect repository-controlled dependency declarations, including where present:
+
+requirements-hc311.txt
+requirements.txt
+requirements\
+pyproject.toml
+
+Determine whether cryptography is already explicitly declared.
+
+Report:
+
+CRYPTOGRAPHY_DECLARED=
+DECLARATION_FILE=
+DECLARED_CONSTRAINT=
+AUTHORITATIVE_RUNTIME_REQUIREMENTS=
+
+If cryptography is NOT declared, STOP:
+
+RESULT=STOP_HC312E_CRYPTOGRAPHY_NOT_DECLARED
+
+Do not invent a package version.
+
+============================================================
+2. MANAGED PYTHON PIP READINESS
+============================================================
+
+Use exactly:
+
+C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+
+Run:
+
+& "C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe" -m pip --version
+
+If pip is unavailable, determine whether ensurepip is appropriate for this
+managed Python installation.
+
+Do not replace the interpreter.
+
+============================================================
+3. CONTROLLED DEPENDENCY INSTALLATION
+============================================================
+
+If cryptography is declared in the repository requirements, install from the
+AUTHORITATIVE requirements file.
+
+Prefer:
+
+managed-python -m pip install -r <repository-controlled-requirements-file>
+
+Do NOT install an arbitrary latest cryptography release.
+
+Do NOT upgrade unrelated packages beyond the declared requirements.
+
+If ProgramData write permissions require elevation, use normal UAC elevation.
+
+Capture:
+INSTALL_COMMAND=
+INSTALL_EXIT=
+CRYPTOGRAPHY_VERSION=
+PACKAGES_INSTALLED=
+
+============================================================
+4. REQUIRED IMPORT SMOKE TEST
+============================================================
+
+Using ONLY the managed Python interpreter, require successful imports of:
+
+backend.health_vault.intake
+backend.health_vault.vault_crypto
+backend.health_vault.vault_key_protector
+backend.health_vault.vault_store
+backend.health_vault.import_service
+backend.health_vault.import_pipeline
+
+Report:
+
+MANAGED_RUNTIME_REQUIRED_IMPORTS=PASS
+
+If any import fails, STOP with the exact missing module.
+
+============================================================
+5. HC-311 VALIDATION ON MANAGED PYTHON
+============================================================
+
+Using the managed Python interpreter, run the HC-311 vault/encryption/recovery
+tests.
+
+Require zero failures.
+
+Report:
+
+MANAGED_RUNTIME_HC311_TESTS=PASS
+HC311_TEST_COUNT=
+
+============================================================
+6. HC-312 VALIDATION ON MANAGED PYTHON
+============================================================
+
+Using the managed Python interpreter, run:
+
+tests/test_hc312a_automatic_intake.py
+tests/test_hc312b_automatic_intake_runtime.py
+tests/test_hc312c_e2e_acceptance.py
+
+Then run the established HC-201, HC-310E and HC-311 regression suite.
+
+Require zero failures.
+
+Report:
+
+MANAGED_RUNTIME_HC312_TESTS=PASS
+FINAL_REGRESSION_TESTS=PASS
+FINAL_TEST_COUNT=
+
+============================================================
+7. MIGRATE HEALTHCHECKERINTAKE TO MANAGED PYTHON
+============================================================
+
+Only after all managed-runtime validation passes.
+
+Update/reinstall the existing scheduled task:
+
+HealthCheckerIntake
+
+Executable must become exactly:
+
+C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+
+Preserve:
+- existing module/arguments
+- working directory
+- five-minute cadence
+- PT10M runtime limit
+- MultipleInstances=IgnoreNew
+- existing task identity/security context
+
+Verify the registered task no longer references:
+
+C:\Users\wadys\AppData\Local\Programs\Python\Python312\python.exe
+
+Report:
+
+TASK_RUNTIME=
+TASK_ARGUMENTS=
+TASK_INTERVAL=
+TASK_MULTIPLE_INSTANCES_POLICY=
+TASK_ENABLED=
+
+============================================================
+8. NATURAL UNATTENDED ACCEPTANCE
+============================================================
+
+Create ONE new synthetic JSON medical record with a unique marker:
+
+HC312E_R2_MANAGED_<unique-id>
+
+Place it into:
+
+C:\rasib\source\HealthChecker-HC310E\hc_intake\incoming
+
+Then DO NOT manually invoke:
+- Python ingestion
+- IntakeRunner
+- IntakeWatcher
+- ImportService
+- Start-ScheduledTask
+
+Wait for the normal scheduled execution.
+
+Verify:
+
+NATURAL_TRIGGER_CONFIRMED=YES
+LAST_TASK_RESULT=0
+MANAGED_RUNTIME_CONFIRMED=YES
+AUTOMATIC_DISCOVERY=YES
+FILE_LEFT_INCOMING=YES
+FILE_NOT_STRANDED_IN_PROCESSING=YES
+COMPLETED_DISPOSITION=YES
+CANONICAL_IMPORT_PATH=YES
+ENCRYPTED_VAULT_PERSISTENCE=YES
+PLAINTEXT_AT_REST_DETECTED=NO
+MANUAL_IMPORT_INVOCATION_REQUIRED=NO
+
+============================================================
+9. FINAL HC-312 CHANGESET
+============================================================
+
+After operational acceptance passes:
+
+Inspect:
+git status --short
+git diff
+git ls-files --others --exclude-standard
+git diff --check
+
+Classify every changed/untracked file.
+
+Commit ONLY genuine HC-312 source, tests and Scheduled Task configuration.
+
+Explicitly EXCLUDE:
+
+evidence/
+scratch/
+hc_intake/
+vault_storage/
+.pytest_cache/
+__pycache__/
+synthetic acceptance fixtures
+temporary probes
+generated runtime files
+unrelated files
+
+Do NOT use:
+
+git add .
+git add -A
+
+Stage approved files by exact path only.
+
+Then inspect:
+
+git diff --cached --name-status
+git diff --cached --stat
+git diff --cached --check
+
+Search staged content for secrets, keys, tokens, real PHI, recovery answers,
+and acceptance payloads.
+
+Require zero high-confidence secret findings.
+
+============================================================
+10. COMMIT
+============================================================
+
+Only after every gate passes.
+
+Commit exactly:
+
+HC-312: activate automatic medical record intake
+
+Capture full commit SHA.
+
+============================================================
+11. PUSH / REMOTE VERIFICATION
+============================================================
+
+Push ONLY:
+
+hc311-encrypted-vault-at-rest
+
+Then fetch and require:
+
+LOCAL_HEAD == origin/hc311-encrypted-vault-at-rest
+
+REMOTE_LOCAL_DIVERGENCE=0 0
+
+Verify:
+
+origin/main is ancestor of HEAD
+
+============================================================
+12. FINAL OPERATIONAL VERIFICATION
+============================================================
+
+After commit/push verify HealthCheckerIntake remains installed and enabled.
+
+Require its executable still equals:
+
+C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+
+Require:
+
+LastTaskResult=0
+
+Do not ingest another real or synthetic record unless necessary to diagnose a
+failure.
+
+============================================================
+13. FINAL EVIDENCE
+============================================================
+
+Update:
+
+C:\rasib\source\HealthChecker-HC310E\evidence\
+HC312E_FINAL_CHANGESET_COMMIT_PUSH_CLOSEOUT.txt
+
+Open automatically in Notepad.
+
+Successful report must contain:
+
+HC312A=PASS
+HC312B=PASS
+HC312C=PASS
+HC312D=PASS
+HC312E=PASS
+
+MANAGED_PYTHON_EXECUTES=YES
+MANAGED_PYTHON_VERSION=3.12.10
+CRYPTOGRAPHY_DECLARED=YES
+MANAGED_RUNTIME_REQUIRED_IMPORTS=PASS
+MANAGED_RUNTIME_HC311_TESTS=PASS
+MANAGED_RUNTIME_HC312_TESTS=PASS
+
+WINDOWS_SCHEDULED_TASK=HealthCheckerIntake
+TASK_RUNTIME=C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+NATURAL_TRIGGER_CONFIRMED=YES
+LAST_TASK_RESULT=0
+
+AUTOMATIC_DISCOVERY=YES
+CANONICAL_IMPORT_PATH=YES
+MANUAL_IMPORT_INVOCATION_REQUIRED=NO
+ENCRYPTED_VAULT_PERSISTENCE=YES
+PLAINTEXT_AT_REST_DETECTED=NO
+FAILURE_ISOLATION=VERIFIED
+
+REAL_MEDICAL_RECORDS_USED_FOR_ACCEPTANCE=NO
+PRODUCTION_KEY_EXPOSED=NO
+RECOVERY_SECRET_EXPOSED=NO
+
+HC312_COMMIT=<full SHA>
+REMOTE_SYNC=CONFIRMED
+ORIGIN_MAIN_IS_ANCESTOR=YES
+
+HC312_AUTOMATIC_MEDICAL_RECORD_INGESTION=PRODUCTION_ACTIVE
+RESULT=HC312E_FINAL_CHANGESET_COMMIT_PUSH_CLOSEOUT_PASS
+
+On any mandatory failure:
+
+RESULT=STOP_HC312E_<EXPLICIT_REASON>
+
+Proceed immediately.

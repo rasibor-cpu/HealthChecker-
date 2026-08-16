@@ -263,6 +263,8 @@ class AcquisitionSummary:
     accepted: int = 0
     errors: int = 0
     records: list[dict[str, Any]] = field(default_factory=list)
+    gmail_auth_success: bool = False
+    handoff_success: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -577,6 +579,7 @@ class GmailAcquirer:
         record.final_decision = AcquisitionDecision.ACCEPT
         record.intake_filename = intake_filename
         summary.accepted += 1
+        summary.handoff_success = True
         self._state.mark_acquired(
             message_id=message.message_id,
             attachment_id=stub.attachment_id,

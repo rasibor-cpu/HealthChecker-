@@ -1,0 +1,164 @@
+============================================================
+1. INVENTORY ALL HEALTHCHECKER WORKSPACES
+============================================================
+
+PATH=C:\rasib\source\HealthChecker-
+REMOTE=https://github.com/rasibor-cpu/HealthChecker-.git
+CURRENT_BRANCH=main
+HEAD=92ab918909c0b9280bfd666f208ceeaf6c83e79b
+STATUS=
+ M docs/governance/HC-309-R4F_PREPARATION_AND_READINESS.md
+?? config/hc309_r4f_exec_assigned_pen_transition_proposal.json
+?? docs/governance/HC-309-R4F-EXEC-P4_ASSIGNED_PEN_66447_TRANSITION_PROPOSAL.md
+?? docs/governance/HC-309-R4F-EXEC-P5_INDEPENDENT_REVIEW_PREPARATION_AND_AUTONOMOUS_CLOSEOUT.md
+?? docs/governance/HC-309-R4F-EXEC-P6_INDEPENDENT_REVIEW_GATE.md
+TRACKED_DIRTY_COUNT=1
+STAGED_COUNT=0
+UNTRACKED_COUNT=4
+
+PATH=C:\rasib\source\HealthChecker-HC310E
+REMOTE=https://github.com/rasibor-cpu/HealthChecker-.git
+CURRENT_BRANCH=hc311-encrypted-vault-at-rest
+HEAD=17a705f1f204aa694b325da82508170cab905e01
+STATUS=
+ M backend/health_vault/acquisition/acquisition_state.py
+ M backend/health_vault/acquisition/gmail_config.py
+?? HC312D_ANTIGRAVITY_PROMPT.txt
+?? HC312E_R2_ANTIGRAVITY_PROMPT.txt
+?? backend/health_vault/acquisition/runner.py
+?? backend/health_vault/acquisition/watcher.py
+?? current_release.txt
+?? evidence/
+?? hc313a_state/
+?? hc_intake/
+?? python_exists.txt
+?? scratch/
+?? scripts/companion_host/install_acquisition_task.ps1
+?? tests/test_hc314a_unattended_acquisition_runtime.py
+TRACKED_DIRTY_COUNT=2
+STAGED_COUNT=0
+UNTRACKED_COUNT=85
+
+PATH=C:\rasib\source\HealthChecker-HC310E-MERGED
+REMOTE=https://github.com/rasibor-cpu/HealthChecker-.git
+CURRENT_BRANCH=(detached HEAD)
+HEAD=755a7e7b009f7d012dca73ac6b493b2a30e28ef8
+STATUS=
+TRACKED_DIRTY_COUNT=0
+STAGED_COUNT=0
+UNTRACKED_COUNT=0
+
+GIT WORKTREE LIST:
+C:/rasib/source/HealthChecker-              92ab918 [main]
+C:/rasib/source/HealthChecker-HC310E        17a705f [hc311-encrypted-vault-at-rest]
+C:/rasib/source/HealthChecker-HC310E-MERGED 755a7e7 (detached HEAD)
+
+GIT REMOTE -V:
+origin	https://github.com/rasibor-cpu/HealthChecker-.git (fetch)
+origin	https://github.com/rasibor-cpu/HealthChecker-.git (push)
+
+GIT BRANCH -A --CONTAINS HEAD (in HealthChecker-HC310E):
+* hc311-encrypted-vault-at-rest
+  remotes/origin/hc311-encrypted-vault-at-rest
+
+============================================================
+2. INVENTORY ALL BRANCHES
+============================================================
+BRANCH=css-unified-consolidation-2026-07-13
+HEAD=1eec83850dc3d98b133e211f90665a293836cee2
+SUBJECT=Restore Trend Intelligence and preserve foot pain dashboard integration
+AHEAD_BEHIND_ORIGIN_MAIN=UNKNOWN (Not tracking)
+MERGED_INTO_CURRENT_HEAD=NO
+
+BRANCH=feature/hc201-health-vault
+HEAD=708ec6e8f23cc12087bba189ae2389aa3988e31d
+SUBJECT=HC-201D Finalize Health Vault merge readiness
+MERGED_INTO_CURRENT_HEAD=NO
+
+BRANCH=hc-306i-r3-android-validation
+HEAD=8aee3d27ea3648dfbf8f067632c91a6ababedb08
+SUBJECT=HC-306I-R3: support partial Health Connect permission sync
+MERGED_INTO_CURRENT_HEAD=NO
+
+BRANCH=hc309-hc310e-integration
+HEAD=0b538cc05b3b648eff3b812de183f5c63b74abd4
+SUBJECT=Merge remote-tracking branch 'origin/main' into hc309-hc310e-integration
+MERGED_INTO_CURRENT_HEAD=NO (Missing merge commit 0b538cc, but base commits are included)
+
+BRANCH=hc310e-background-health-connect
+HEAD=5875fdcf12efe9a827b2ae6bb8448d4e47523e09
+SUBJECT=HC-310E: align Android delivery timeout with proxy bound
+MERGED_INTO_CURRENT_HEAD=YES
+
+BRANCH=hc311-encrypted-vault-at-rest
+HEAD=17a705f1f204aa694b325da82508170cab905e01
+SUBJECT=HC-313: add identity-gated Gmail medical record acquisition
+MERGED_INTO_CURRENT_HEAD=YES (This is current HEAD)
+
+BRANCH=main
+HEAD=92ab918909c0b9280bfd666f208ceeaf6c83e79b
+SUBJECT=HC-309-R4F-EXEC-P3: prepare offline ceremony readiness gate
+MERGED_INTO_CURRENT_HEAD=YES
+
+============================================================
+3. PRESERVE CURRENT HC-314A WORKTREE
+============================================================
+git branch --show-current:
+hc311-encrypted-vault-at-rest
+
+git rev-parse HEAD:
+17a705f1f204aa694b325da82508170cab905e01
+
+git status --short:
+ M backend/health_vault/acquisition/acquisition_state.py
+ M backend/health_vault/acquisition/gmail_config.py
+?? HC312D_ANTIGRAVITY_PROMPT.txt
+?? HC312E_R2_ANTIGRAVITY_PROMPT.txt
+?? backend/health_vault/acquisition/runner.py
+?? backend/health_vault/acquisition/watcher.py
+?? current_release.txt
+?? evidence/
+?? hc313a_state/
+?? hc_intake/
+?? python_exists.txt
+?? scratch/
+?? scripts/companion_host/install_acquisition_task.ps1
+?? tests/test_hc314a_unattended_acquisition_runtime.py
+
+HC314A_UNCOMMITTED_MANIFEST=
+- backend/health_vault/acquisition/acquisition_state.py (Modified)
+- backend/health_vault/acquisition/gmail_config.py (Modified)
+- backend/health_vault/acquisition/runner.py (New)
+- backend/health_vault/acquisition/watcher.py (New)
+- scripts/companion_host/install_acquisition_task.ps1 (New)
+- tests/test_hc314a_unattended_acquisition_runtime.py (New)
+
+============================================================
+4. COMMIT-LINEAGE COMPARISON
+============================================================
+ALREADY_REPRESENTED:
+- HC-309 (in main)
+- HC-310/310E (in hc310e-background-health-connect, merged into main/hc311)
+- HC-311 (in hc311-encrypted-vault-at-rest)
+- HC-312 (in hc311-encrypted-vault-at-rest)
+- HC-313 (in hc311-encrypted-vault-at-rest)
+
+UNIQUE_USEFUL:
+- None identified that are not already in hc311-encrypted-vault-at-rest.
+
+OBSOLETE/SUPERSEDED:
+- The merge commit `0b538cc` on `hc309-hc310e-integration` is unique but superseded since its ancestors are merged into hc311-encrypted-vault-at-rest.
+
+UNKNOWN_REVIEW_REQUIRED:
+- `origin/copilot/task-245718444...` (Cursor config commit, missing but unrelated to main workstreams).
+
+============================================================
+5. AUTHORITATIVE-BRANCH RECOMMENDATION
+============================================================
+RECOMMENDED_AUTHORITATIVE_BRANCH=hc311-encrypted-vault-at-rest
+RECOMMENDED_BASE_HEAD=17a705f1f204aa694b325da82508170cab905e01
+UNIQUE_COMMITS_TO_RECONCILE=0 (None required for authoritative lineage)
+CONFLICT_RISK=NONE
+HC314A_WORKTREE_PRESERVATION_METHOD=In-place development on hc311-encrypted-vault-at-rest without switching branches, or a new branch (e.g. hc314-gmail-acquisition) branched from 17a705f.
+
+RESULT=HEALTHCHECKER_CONSOLIDATION_PRECHECK_COMPLETE

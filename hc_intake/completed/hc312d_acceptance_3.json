@@ -1,0 +1,20 @@
+{
+  "hc312d_marker": "HC312D_FINAL_ACCEPTANCE_9A8B7C6D_3",
+  "source": "synthetic_lab_hc312d",
+  "patient_ref": "SYNTHETIC_PATIENT_HC312D_3",
+  "measured_at": "2026-08-15T11:45:00Z",
+  "lab_order_id": "LAB-HC312D-0003",
+  "ordering_clinician": "Dr. Synthetic HC312D",
+  "extracted_measurements": [
+    {
+      "metric": "glucose",
+      "value": 5.0,
+      "units": "mmol/L",
+      "reference_range": "3.9-5.8 mmol/L",
+      "flag": "normal",
+      "hc312d_marker": "HC312D_FINAL_ACCEPTANCE_9A8B7C6D_3"
+    }
+  ],
+  "document_type": "lab_result",
+  "provenance": "hc312d_acceptance_test"
+}

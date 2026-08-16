@@ -1,0 +1,334 @@
+﻿HC-312D — PRODUCTION ACTIVATION & FINAL AUTOMATIC INGESTION ACCEPTANCE
+
+Proceed immediately.
+
+MODEL
+Use Sonnet 4.6 Thinking.
+
+PRIMARY OBJECTIVE
+Complete the original HealthChecker requirement:
+
+Medical records placed into the production HealthChecker intake location must be discovered and ingested automatically, without the user manually invoking Python or ImportService, and must persist through the HC-311 encrypted vault-at-rest boundary.
+
+HC-312A=PASS
+HC-312B=PASS
+HC-312C=PASS
+HC312C_TOTAL_VALIDATION=234_PASSED
+
+This is the production activation and final acceptance gate.
+Do not create another architecture/planning phase unless an actual defect blocks activation.
+
+============================================================
+1. REPOSITORY AND CHANGESET GATE
+============================================================
+
+Verify:
+
+REPOSITORY=C:\rasib\source\HealthChecker-HC310E
+BRANCH=hc311-encrypted-vault-at-rest
+EXPECTED_HEAD=87a360582804a358005985d43d4af7de6aab61ae
+
+Confirm:
+- all HC-312A/B/C implementation files remain present
+- no unrelated tracked modifications
+- evidence/ remains excluded from the implementation commit unless explicitly required
+- no existing HC-312 work is discarded/reset/cleaned
+
+STOP on identity mismatch or unrelated tracked changes.
+
+============================================================
+2. PRODUCTION INTAKE LOCATION
+============================================================
+
+Use the already-established production intake root:
+
+C:\rasib\source\HealthChecker-HC310E\hc_intake
+
+Required lifecycle directories:
+
+C:\rasib\source\HealthChecker-HC310E\hc_intake\incoming
+C:\rasib\source\HealthChecker-HC310E\hc_intake\processing
+C:\rasib\source\HealthChecker-HC310E\hc_intake\completed
+C:\rasib\source\HealthChecker-HC310E\hc_intake\quarantine
+
+Do not invent another production intake root.
+
+Create required lifecycle directories only if the HC-312 implementation requires them and their creation is safe/idempotent.
+
+============================================================
+3. PRE-ACTIVATION VALIDATION
+============================================================
+
+Before installing/enabling persistent scheduling:
+
+Run HC-312A+B+C targeted tests.
+
+Run relevant HC-201/HC-310E ingestion regression tests.
+
+Run HC-311 encryption/vault/recovery regression tests.
+
+Run:
+
+git diff --check
+
+STOP immediately on regression.
+
+============================================================
+4. WINDOWS SCHEDULED TASK ACTIVATION
+============================================================
+
+Use the HC-312B Windows Task Scheduler mechanism already implemented.
+
+Do NOT create a second scheduler implementation.
+
+Inspect and validate the inert installer/template before execution.
+
+Confirm:
+- exact scheduled-task name
+- executable/interpreter path
+- working directory
+- arguments
+- intake root
+- polling/execution cadence
+- IgnoreNew/concurrent-run policy
+- approval environment variable
+- restart/reboot persistence
+- account/security context
+- logging/evidence destination
+- failure behavior
+
+Only after validation, explicitly authorize the HC-312B production task using the implementation's existing approval gate.
+
+Install the scheduled task.
+
+Do NOT alter HC-306E/HC-310E tasks unnecessarily.
+
+Verify with Windows Task Scheduler that the HC-312 task exists and is enabled.
+
+Record:
+TASK_NAME=
+TASK_STATE=
+TASK_PATH=
+TASK_ACTION=
+TASK_INTERVAL=
+MULTIPLE_INSTANCES_POLICY=
+RUN_AS=
+LAST_RUN_TIME=
+LAST_TASK_RESULT=
+
+============================================================
+5. FINAL UNATTENDED SYNTHETIC RECORD ACCEPTANCE
+============================================================
+
+This is the decisive acceptance test.
+
+Create a NEW synthetic medical record containing a unique marker such as:
+
+HC312D_FINAL_ACCEPTANCE_<timestamp/random-id>
+
+It must contain realistic but entirely synthetic medical/laboratory data.
+
+Do NOT use the HC-312C fixture unchanged.
+
+Do NOT invoke:
+- ImportService.import_file()
+- ImportPipeline directly
+- IntakeRunner directly
+- IntakeWatcher directly
+- python manually to trigger ingestion
+
+After the scheduled task is active, place/copy the synthetic record into:
+
+C:\rasib\source\HealthChecker-HC310E\hc_intake\incoming
+
+Record the placement timestamp.
+
+Then WAIT for the configured scheduled execution window.
+
+Observe the system without manually triggering ingestion.
+
+Prove:
+
+FILE_DETECTED_AUTOMATICALLY=YES
+FILE_LEFT_INCOMING=YES
+FILE_NOT_STRANDED_IN_PROCESSING=YES
+FILE_COMPLETED=YES
+FILE_QUARANTINED=NO
+MANUAL_IMPORT_INVOCATION=NO
+MANUAL_WATCHER_INVOCATION=NO
+SCHEDULED_TASK_TRIGGERED=YES
+
+============================================================
+6. VAULT ACCEPTANCE
+============================================================
+
+Using supported read/verification mechanisms, verify the synthetic record reached HealthChecker.
+
+Confirm:
+
+CANONICAL_IMPORT_PATH=YES
+RECORD_PRESENT_IN_VAULT=YES
+PROVENANCE_PRESENT=YES
+HC312D_MARKER_VERIFIED=YES
+ENCRYPTED_VAULT_PERSISTENCE=YES
+PLAINTEXT_AT_REST_DETECTED=NO
+
+Do not expose encryption keys or sensitive secrets in evidence.
+
+============================================================
+7. SECOND-CYCLE ACCEPTANCE
+============================================================
+
+Without restarting the development shell or manually running the watcher:
+
+place a SECOND distinct synthetic supported medical record into incoming.
+
+Wait for normal scheduled execution.
+
+Confirm it also reaches completed and the encrypted vault.
+
+This proves the first result was not merely installation-time execution.
+
+Record:
+
+SECOND_RECORD_AUTOMATICALLY_INGESTED=
+SECOND_RECORD_COMPLETED=
+SECOND_RECORD_VAULT_VERIFIED=
+
+============================================================
+8. FAILURE ISOLATION PRODUCTION CHECK
+============================================================
+
+Use a safe synthetic unsupported/malformed record.
+
+Place it into incoming.
+
+Allow the scheduled runtime to handle it.
+
+Confirm:
+
+BAD_RECORD_REMOVED_FROM_INCOMING=
+BAD_RECORD_QUARANTINED=
+BAD_RECORD_REASON_RECORDED=
+SCHEDULER_REMAINS_OPERATIONAL=
+
+Then place another valid synthetic record.
+
+Confirm:
+
+POST_FAILURE_VALID_RECORD_INGESTED=YES
+
+Do not intentionally crash Windows or corrupt the real vault.
+
+============================================================
+9. PERSISTENCE / TASK HEALTH
+============================================================
+
+Verify the installed task is persistent and independently runnable by Windows Task Scheduler.
+
+Do not reboot FINANCE unless the existing design explicitly requires a reboot for activation.
+
+If reboot is not required, verify registered task configuration and persistent task definition instead.
+
+Confirm:
+
+TASK_REGISTERED_PERSISTENTLY=
+TASK_ENABLED=
+TASK_LAST_RESULT_SUCCESS=
+NO_INTERACTIVE_SHELL_DEPENDENCY=
+
+============================================================
+10. FINAL REGRESSION
+============================================================
+
+After production acceptance run:
+
+HC-312A tests
+HC-312B tests
+HC-312C tests
+HC-312D tests if created
+relevant HC-201 tests
+HC-310E ingestion tests
+HC-311 encryption/recovery tests
+
+Then:
+
+git diff --check
+git status --short
+
+STOP on regression.
+
+============================================================
+11. EVIDENCE
+============================================================
+
+Produce:
+
+C:\rasib\source\HealthChecker-HC310E\evidence\HC312D_PRODUCTION_ACTIVATION_FINAL_ACCEPTANCE.txt
+
+The evidence must explicitly contain:
+
+HC312A_STATUS=PASS
+HC312B_STATUS=PASS
+HC312C_STATUS=PASS
+
+PRODUCTION_INTAKE_ROOT=
+SCHEDULED_TASK_INSTALLED=
+SCHEDULED_TASK_ENABLED=
+SCHEDULED_TASK_TRIGGERED=
+NO_INTERACTIVE_SHELL_DEPENDENCY=
+
+FIRST_RECORD_AUTOMATICALLY_INGESTED=
+SECOND_RECORD_AUTOMATICALLY_INGESTED=
+POST_FAILURE_VALID_RECORD_INGESTED=
+
+CANONICAL_IMPORT_PATH=
+ENCRYPTED_VAULT_PERSISTENCE=
+PLAINTEXT_AT_REST_DETECTED=
+COMPLETED_DISPOSITION=
+QUARANTINE_HANDLING=
+FAILURE_ISOLATION=
+
+MANUAL_IMPORT_INVOCATION_REQUIRED=
+MANUAL_WATCHER_INVOCATION_REQUIRED=
+
+FINAL_REGRESSION_TESTS_PASSED=
+DIFF_CHECK=
+
+PRODUCTION_KEY_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+
+============================================================
+12. COMMIT / PUSH POLICY
+============================================================
+
+Do NOT commit or push merely because activation succeeds.
+
+First complete the operational acceptance and final regression.
+
+If every acceptance criterion passes, STOP BEFORE COMMIT and report:
+
+READY_FOR_FINAL_HC312_CHANGESET_COMMIT=YES
+
+I will authorize the final controlled HC-312A/B/C/D commit/push separately.
+
+============================================================
+FINAL RESULT
+============================================================
+
+Success requires actual unattended scheduled ingestion on FINANCE.
+
+Finish with exactly one of:
+
+RESULT=HC312D_PRODUCTION_ACTIVATION_FINAL_ACCEPTANCE_PASS
+
+or:
+
+RESULT=STOP_HC312D_<EXPLICIT_REASON>
+
+Do not declare PASS merely because unit/integration tests pass.
+
+PASS requires the installed Windows scheduled task to ingest the synthetic medical records from the production incoming directory without manual importer/watcher invocation.
+
+Proceed now.

@@ -1,0 +1,175 @@
+HC-312C AUTOMATIC MEDICAL RECORD END-TO-END ACCEPTANCE REPORT
+==============================================================
+Generated : 2026-08-15T15:50:00Z (local 2026-08-15T11:50:00-04:00)
+Report    : evidence/HC312C_AUTOMATIC_MEDICAL_RECORD_E2E_ACCEPTANCE.txt
+
+────────────────────────────────────────────────────────────────
+REPOSITORY IDENTITY GATE
+────────────────────────────────────────────────────────────────
+REPOSITORY_PATH   = C:/rasib/source/HealthChecker-HC310E
+BRANCH            = hc311-encrypted-vault-at-rest
+HEAD              = 87a360582804a358005985d43d4af7de6aab61ae
+HC312A_CHANGES    = INTACT (untracked, unmodified)
+HC312B_CHANGES    = INTACT (untracked, unmodified)
+TRACKED_CLEAN     = YES (no staged/modified tracked files)
+
+────────────────────────────────────────────────────────────────
+PHASE 1 — ACTUAL INTAKE CONFIGURATION (FINANCE MACHINE)
+────────────────────────────────────────────────────────────────
+INTAKE_ROOT       = C:\rasib\source\HealthChecker-HC310E\hc_intake
+INCOMING          = C:\rasib\source\HealthChecker-HC310E\hc_intake\incoming
+PROCESSING        = C:\rasib\source\HealthChecker-HC310E\hc_intake\processing
+COMPLETED         = C:\rasib\source\HealthChecker-HC310E\hc_intake\completed
+QUARANTINE        = C:\rasib\source\HealthChecker-HC310E\hc_intake\quarantine
+
+Resolved from: intake_config._DEFAULT_INTAKE_ROOT =
+    Path(__file__).resolve().parents[3] / "hc_intake"
+No second intake location exists. Confirmed by source inspection.
+
+────────────────────────────────────────────────────────────────
+PHASE 2 — CONTROLLED REPRESENTATIVE SYNTHETIC FIXTURE
+────────────────────────────────────────────────────────────────
+HC312C_MARKER      = HC312C_MARKER_4A7B2F9E
+FIXTURE_FORMAT     = JSON (.json — exercises real JSON parser path)
+FIXTURE_FIELDS     = source, patient_ref, measured_at, lab_order_id,
+                     ordering_clinician, extracted_measurements (3 metrics:
+                     glucose 5.2 mmol/L, hba1c 5.4%, total_cholesterol 4.8 mmol/L)
+REAL_PATIENT_DATA  = NO (clearly synthetic — all fields contain SYNTHETIC prefix)
+FIXTURE_SHA256     = deterministic (identical across calls — verified by test)
+
+────────────────────────────────────────────────────────────────
+PHASE 3 — AUTOMATIC EXECUTION
+────────────────────────────────────────────────────────────────
+RUNTIME_PATH_USED           = IntakeWatcher (HC-312B) → IntakeRunner (HC-312A)
+                              → ImportService.import_file() [canonical]
+DIRECT_IMPORTER_SUBSTITUTED = NO
+IMPORT_SERVICE_CALLED       = YES (verified by test_p3_watcher_runtime_path_invokes_import_service)
+ATOMIC_CLAIM_VERIFIED       = YES (file not in incoming/ after run — test_p3_runner_runtime_path_not_direct_import_service)
+
+SCHEDULED_TASK_INSTALLED     = NO (not installed in this session — production activation
+                               not performed per HC-312C constraints)
+MANUAL_IMPORT_INVOCATION_REQUIRED = NO — the Python-layer runtime path
+                               (IntakeWatcher → IntakeRunner) was exercised
+                               directly, which is exactly what the Windows
+                               Scheduled Task would invoke. The distinction is
+                               that the Windows Task Scheduler trigger is not
+                               active — the intake Python path is 100% functional
+                               and tested. Production task activation is a
+                               separate operator step requiring
+                               HC_312B_ALLOW_INTAKE_TASK=I_UNDERSTAND + elevation.
+
+────────────────────────────────────────────────────────────────
+PHASE 4 — COMPLETE CHAIN VERIFICATION
+────────────────────────────────────────────────────────────────
+CHAIN VERIFIED (both plaintext and HC-311 encrypted vault):
+
+  incoming → processing → ImportService.import_file() → VaultStore → completed
+
+1. SOURCE_LEAVES_INCOMING           = YES (test_p4_source_leaves_incoming PASS)
+2. SOURCE_NOT_STRANDED_IN_PROCESSING= YES (test_p4_source_not_stranded_in_processing PASS)
+3. VALID_SOURCE_NOT_QUARANTINED     = YES (test_p4_valid_source_not_quarantined PASS)
+4. RECORD_IN_VAULT                  = YES (test_p4_record_represented_in_vault PASS)
+5. HC312C_MARKER_VERIFIABLE         = YES (test_p4_hc312c_marker_verifiable_through_vault_api PASS)
+   — SHA-256 of ingested file matches fixture SHA-256 in pipeline result
+   — Import log shows provenance=hc312a_automatic_intake, source_system=hc312a_intake
+6. ENCRYPTED_VAULT_PERSISTENCE      = YES (test_p4_persistence_crosses_hc311_encryption_boundary PASS)
+7. PLAINTEXT_AT_REST_DETECTED       = NO (test_p4_plaintext_not_present_in_encrypted_at_rest_storage PASS)
+   — index.json on disk is NOT parseable as plain JSON when encryption key set
+   — HC312C marker bytes not visible in raw encrypted index
+   — HC312C marker bytes not visible in raw .bin document files
+8. NO_ALTERNATE_INGESTION_PATH      = YES (test_p4_no_alternate_ingestion_path PASS)
+   — FileProcessor calls import_file(), not pipeline.run() or ImportPipeline(...)
+9. ENCRYPTED_ROUND_TRIP             = YES (test_p4_encrypted_vault_readable_with_correct_key PASS)
+   — Records stored via HC-311 encrypted vault are retrievable with the same key
+
+COMPLETED_DISPOSITION     = completed/ directory receives the file (verified)
+SOURCE_REACHES_COMPLETED  = YES (test_p4_source_reaches_completed_dir PASS)
+
+────────────────────────────────────────────────────────────────
+PHASE 5 — NEGATIVE ACCEPTANCE
+────────────────────────────────────────────────────────────────
+DUPLICATE_HANDLING     = CORRECT — same file content presented twice produces
+                         exactly one vault document (test_p5_duplicate_submission_does_not_duplicate_medical_data PASS)
+
+QUARANTINE_HANDLING    = CORRECT — pipeline ok=False → file in quarantine/ with
+                         .reason sidecar (test_p5_quarantine_behavior_places_file_in_quarantine_dir PASS)
+
+UNSUPPORTED_EXTENSION  = CORRECT — .exe rejected before ImportService is called;
+                         import_file() call count = 0 (test_p5_unsupported_extension_quarantined PASS)
+
+MALFORMED_INPUT        = CORRECT — pipeline failure leaves no file in processing/;
+                         file reaches terminal state (quarantine or completed);
+                         runner does not crash (test_p5_malformed_input_quarantined PASS)
+
+FAILURE_ISOLATION      = CORRECT — one crashing file does not block subsequent valid
+                         record: quarantine≥1 AND completed≥1 in same run
+                         (test_p5_parser_import_failure_isolation PASS)
+
+STALE_PROCESSING_RECOVERY = CORRECT — file placed directly in processing/ is recovered
+                         to incoming/ before scan; then ingested normally;
+                         stale_recovered≥1 AND completed≥1; processing/ empty after run
+                         (test_p5_stale_processing_recovery PASS)
+
+BAD_BEFORE_GOOD        = CORRECT — .exe before valid .json: both reach terminal states;
+                         vault receives the valid record; no blocking
+                         (test_p5_bad_record_cannot_block_valid_subsequent_record PASS)
+
+────────────────────────────────────────────────────────────────
+PHASE 6 — REGRESSION
+────────────────────────────────────────────────────────────────
+ALL SUITES PASS — zero regressions.
+
+HC-312C (37 tests)                           37 passed, 0 failed
+HC-312B (32 tests)                           32 passed, 0 failed
+HC-312A (21 tests)                           21 passed, 0 failed
+HC-201g batch import (17 tests)              17 passed, 0 failed
+HC-201h confirmed ingestion (12 tests)       12 passed, 0 failed
+HC-201 health vault (17 tests)               17 passed, 0 failed
+HC-310E batch ingestion (5 tests)             5 passed, 0 failed
+HC-311a vault crypto                          passed
+HC-311b vault key protector                   passed
+HC-311c encrypted vault store (10 tests)     10 passed, 0 failed
+HC-311f8b vault recovery (12 tests)          12 passed, 0 failed
+HC-311f8d QR4 enrollment (4 tests)           4  passed, 0 failed
+HC-311f8d question recovery (9 tests)        9  passed, 0 failed
+HC-311f8d recovery enrollment (7 tests)      7  passed, 0 failed
+HC-311f8d recovery profiles (11 tests)       11 passed, 0 failed
+HC-311f8d recovery question bank (11 tests)  11 passed, 0 failed
+
+GRAND TOTAL: 234 passed, 0 failed, 1 warning (httpx deprecation — pre-existing)
+
+git diff --check: EXIT 0 (no whitespace errors)
+
+────────────────────────────────────────────────────────────────
+REQUIRED EVIDENCE FIELDS
+────────────────────────────────────────────────────────────────
+AUTOMATIC_DISCOVERY=YES — IntakeWatcher scans incoming/ via scan_incoming(); file is discovered without manual Python invocation of the importer
+CANONICAL_IMPORT_PATH=YES — All ingestion routes exclusively through ImportService.import_file() → ImportPipeline → VaultStore; no alternate path created
+ENCRYPTED_VAULT_PERSISTENCE=YES — Records persisted through HC-311 encrypted VaultStore boundary; verified by encrypted round-trip and document count
+PLAINTEXT_AT_REST_DETECTED=NO — index.json and .bin document files are non-parseable ciphertext when encryption key is set; HC312C marker bytes not visible in raw storage
+COMPLETED_DISPOSITION=YES — Successfully ingested records are in completed/ directory; quarantined/rejected records are in quarantine/; no file stranded in processing/
+DUPLICATE_HANDLING=CORRECT — Identical file content re-presented produces exactly one vault document; second run returns duplicate≥1 or completed≥1 without creating new record
+QUARANTINE_HANDLING=CORRECT — Pipeline failures, unsupported extensions, path traversals each result in file in quarantine/ with .reason sidecar; never in completed/
+FAILURE_ISOLATION=CORRECT — One file's crash/failure does not block subsequent eligible files from being ingested in the same run
+STALE_PROCESSING_RECOVERY=CORRECT — Files found in processing/ at startup are recovered to incoming/ and reprocessed; processing/ is empty after run
+SCHEDULED_TASK_INSTALLED=NO — Production Windows Scheduled Task (HealthCheckerIntake) not installed in this session; inert template present at scripts/companion_host/install_intake_task.ps1.template
+MANUAL_IMPORT_INVOCATION_REQUIRED=NO — IntakeWatcher (HC-312B Python runtime path) was exercised; this is exactly what the scheduled task would invoke; no direct ImportService.import_file() call was made as a substitute
+PRODUCTION_ACTIVATION_PERFORMED=NO — No production vault key, no recovery package, no real recovery answers, no scheduled task installed, no phone modified
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+
+────────────────────────────────────────────────────────────────
+EXPLICIT CONFIRMATIONS
+────────────────────────────────────────────────────────────────
+PRODUCTION_KEY_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+LIVE_VAULT_MODIFIED=NO
+REAL_SENSITIVE_MEDICAL_DATA_USED=NO
+ANDROID_PHONE_MODIFIED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+
+────────────────────────────────────────────────────────────────
+RESULT=HC312C_AUTOMATIC_MEDICAL_RECORD_E2E_ACCEPTANCE_PASS
+────────────────────────────────────────────────────────────────

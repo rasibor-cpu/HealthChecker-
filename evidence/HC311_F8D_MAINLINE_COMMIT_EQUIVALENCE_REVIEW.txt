@@ -1,0 +1,185 @@
+============================================================
+ HC311-F8D — MAINLINE COMMIT EQUIVALENCE REVIEW
+============================================================
+TIME=2026-08-15T10:58:09.5627303-04:00
+MACHINE=FINANCE
+MODE=READ_ONLY_PATCH_EQUIVALENCE_ANALYSIS
+============================================================
+
+=== 1. REPOSITORY GATE ===
+BRANCH=hc311-encrypted-vault-at-rest
+EXPECTED_BRANCH=hc311-encrypted-vault-at-rest
+HEAD=6cef3ef75111fc0aa8a1bb1db52adc3571c4fbc5
+
+=== 2. COMMIT IDENTITIES ===
+MAIN_COMMIT=755a7e7b009f7d012dca73ac6b493b2a30e28ef8
+MAIN_PARENT=93498244c05772d14836a0b99f4678274455ac96
+MAIN_SUBJECT=HC-310E: gate Health Connect background synchronization (#1)
+
+CANDIDATE_COMMIT=aa7b7929ac983d618ea3290c0f41c0d5fe0f4a59
+CANDIDATE_PARENT=93498244c05772d14836a0b99f4678274455ac96
+CANDIDATE_SUBJECT=HC-310E: gate Health Connect background synchronization
+
+=== 3. MAIN COMMIT FILES ===
+MAIN_FILE=android/app/src/main/AndroidManifest.xml
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicy.kt
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/CapabilityModels.kt
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/HealthConnectCapability.kt
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/ui/CompanionStatusActivity.kt
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/util/SafeLog.kt
+MAIN_FILE=android/app/src/main/java/com/healthchecker/companion/work/MonitoringSyncWorker.kt
+MAIN_FILE=android/app/src/test/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicyTest.kt
+MAIN_FILE=android/app/src/test/java/com/healthchecker/companion/util/PrivacySafeLogInvariantTest.kt
+MAIN_FILE_COUNT=9
+
+=== 4. CANDIDATE COMMIT FILES ===
+CANDIDATE_FILE=android/app/src/main/AndroidManifest.xml
+CANDIDATE_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicy.kt
+CANDIDATE_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/CapabilityModels.kt
+CANDIDATE_FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/HealthConnectCapability.kt
+CANDIDATE_FILE=android/app/src/main/java/com/healthchecker/companion/ui/CompanionStatusActivity.kt
+CANDIDATE_FILE=android/app/src/main/java/com/healthchecker/companion/work/MonitoringSyncWorker.kt
+CANDIDATE_FILE=android/app/src/test/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicyTest.kt
+CANDIDATE_FILE_COUNT=7
+FILE_SETS_MATCH=False
+
+=== 5. PATCH-ID EQUIVALENCE ===
+MAIN_PATCH_ID=0a3504df12ec5e0c8cedd81c4c944d33e50ee5be 0000000000000000000000000000000000000000
+CANDIDATE_PATCH_ID=a3734fcd1007847484b007bc265a28ed0fe0fcad 0000000000000000000000000000000000000000
+PATCH_EQUIVALENT=False
+
+=== 6. CURRENT-TREE CONTENT COMPARISON ===
+FILE=android/app/src/main/AndroidManifest.xml
+MAIN_BLOB=0b8a8b74ba7c30bbd6f618a4c8d5ebe7441f300a
+HEAD_BLOB=0b8a8b74ba7c30bbd6f618a4c8d5ebe7441f300a
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicy.kt
+MAIN_BLOB=2a21f0eda7eba38d946c8962318d59b4cf1e2a40
+HEAD_BLOB=2a21f0eda7eba38d946c8962318d59b4cf1e2a40
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/CapabilityModels.kt
+MAIN_BLOB=c23226061a3c56b9f38bdfaac1bf47e772afc797
+HEAD_BLOB=c23226061a3c56b9f38bdfaac1bf47e772afc797
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/healthconnect/HealthConnectCapability.kt
+MAIN_BLOB=a8be837c8e62026da89c4be36fc6c33ef2ff5f00
+HEAD_BLOB=a8be837c8e62026da89c4be36fc6c33ef2ff5f00
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/ui/CompanionStatusActivity.kt
+MAIN_BLOB=4e47eed79ec0edecaa3e6b294f0c96e00d954e42
+HEAD_BLOB=4e47eed79ec0edecaa3e6b294f0c96e00d954e42
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/util/SafeLog.kt
+MAIN_BLOB=a6cffd12b3f4acf5899eef82783994fc4a38728a
+HEAD_BLOB=a6cffd12b3f4acf5899eef82783994fc4a38728a
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/main/java/com/healthchecker/companion/work/MonitoringSyncWorker.kt
+MAIN_BLOB=b3196a2fed9e4563ea198d8fc898e75de2570185
+HEAD_BLOB=b3196a2fed9e4563ea198d8fc898e75de2570185
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/test/java/com/healthchecker/companion/healthconnect/BackgroundReadPolicyTest.kt
+MAIN_BLOB=0c71e5a4cf1f112b066a4fad6204f98f309e85d8
+HEAD_BLOB=0c71e5a4cf1f112b066a4fad6204f98f309e85d8
+CURRENT_CONTENT_IDENTICAL=True
+FILE=android/app/src/test/java/com/healthchecker/companion/util/PrivacySafeLogInvariantTest.kt
+MAIN_BLOB=3b5df928ce0d010edff041424126faa38a79e362
+HEAD_BLOB=3b5df928ce0d010edff041424126faa38a79e362
+CURRENT_CONTENT_IDENTICAL=True
+CURRENT_TREE_DIFFERENCE_COUNT=0
+
+=== 7. RANGE-DIFF / CHERRY ANALYSIS ===
++ 7e701a7b5acac03cdfc4c8e0a8ff632dc2b227a3
++ f115f08988b86d96eb5dc048380c209e5ba06f5b
++ 92ab918909c0b9280bfd666f208ceeaf6c83e79b
++ aa7b7929ac983d618ea3290c0f41c0d5fe0f4a59
++ 7b4ba77e961e8f31b0fa92fdb9e8d0d465b2e8be
++ c044f38d3c5af8e398e3df66ab7776a4db2070b0
++ c597add2d79f7ac07dc812e14f48a9e8aa4822d8
++ c53a82a5341ec1d455021febe2ee10861aeedf86
++ 672b9ba7f0a78f78e9f13f0d351d21e323086f90
++ 88666d9632e9a9add421684a4665c2fe12066d6a
++ 5875fdcf12efe9a827b2ae6bb8448d4e47523e09
++ b2c9d1dad5c2f34061572b469218249f623922e5
++ 6cef3ef75111fc0aa8a1bb1db52adc3571c4fbc5
+
+--- MAIN VS HC311 DIFF STAT ---
+ .gitignore                                         |   2 +
+ .../com/healthchecker/companion/host/HostClient.kt |   2 +-
+ .../companion/sync/ChunkAckDecisionTest.kt         |   2 +-
+ backend/health_vault/companion/delivery.py         |  37 +-
+ .../companion_host/assigned_pen_transition.py      | 226 +++++++++++
+ .../health_vault/companion_host/caddy_config.py    |   2 +-
+ .../companion_host/offline_ceremony_readiness.py   | 350 ++++++++++++++++
+ .../health_vault/companion_host/scheduled_host.py  |   2 +
+ backend/health_vault/monitoring/ingestion.py       | 183 ++++++++-
+ backend/health_vault/recovery_enrollment.py        | 155 +++++++
+ backend/health_vault/recovery_profiles.py          | 253 ++++++++++++
+ backend/health_vault/recovery_question_bank.py     | 341 ++++++++++++++++
+ backend/health_vault/vault_crypto.py               | 204 ++++++++++
+ backend/health_vault/vault_key_protector.py        | 305 ++++++++++++++
+ backend/health_vault/vault_question_recovery.py    | 115 ++++++
+ backend/health_vault/vault_recovery.py             | 233 +++++++++++
+ backend/health_vault/vault_store.py                | 337 ++++++++++++++-
+ conftest.py                                        |  69 ++++
+ .../HC-309-R4F-EXEC-P1_PENDING_PEN_READINESS.md    |  16 +
+ ...4F-EXEC-P2_ASSIGNED_PEN_TRANSITION_VALIDATOR.md |  77 ++++
+ ...C-309-R4F-EXEC-P3_OFFLINE_CEREMONY_READINESS.md |  94 +++++
+ .../HC-309-R4F_PREPARATION_AND_READINESS.md        |  11 +
+ requirements-hc311.txt                             |   3 +
+ scripts/check_hc309_pending_pen_readiness.py       |  55 +++
+ scripts/companion_host/Caddyfile.template          |   2 +-
+ .../install_scheduled_tasks.ps1.template           |  27 ++
+ tests/test_hc303a_android_companion.py             | 193 +++++++++
+ tests/test_hc304br1_proxy_topology.py              |   8 +
+ tests/test_hc306e_scheduled_host_foundation.py     |  17 +
+ tests/test_hc309r4d_synthetic_collector.py         |   7 +-
+ .../test_hc309r4f_exec_assigned_pen_transition.py  | 213 ++++++++++
+ ...est_hc309r4f_exec_offline_ceremony_readiness.py | 282 +++++++++++++
+ tests/test_hc309r4f_pending_pen_cli.py             |  63 +++
+ tests/test_hc310e_batch_ingestion.py               | 199 +++++++++
+ tests/test_hc311a_vault_crypto.py                  | 246 +++++++++++
+ tests/test_hc311b_vault_key_protector.py           | 125 ++++++
+ tests/test_hc311c_encrypted_vault_store.py         | 297 ++++++++++++++
+ tests/test_hc311f8b_vault_recovery.py              | 123 ++++++
+ .../test_hc311f8d_qr4_private_answer_enrollment.py |  82 ++++
+ tests/test_hc311f8d_question_recovery.py           | 114 ++++++
+ tests/test_hc311f8d_recovery_enrollment.py         | 151 +++++++
+ tests/test_hc311f8d_recovery_profiles.py           | 121 ++++++
+ tests/test_hc311f8d_recovery_question_bank.py      |  72 ++++
+ tools/hc311_private_answer_enrollment.py           | 451 +++++++++++++++++++++
+ tools/hc311_recovery_question_selector.py          | 239 +++++++++++
+ 45 files changed, 6076 insertions(+), 30 deletions(-)
+
+=== 8. MERGE CONFLICT PREDICTION ===
+MERGE_BASE=93498244c05772d14836a0b99f4678274455ac96
+MERGE_TREE_CONFLICT_MARKER_COUNT=0
+
+=== 9. WORKTREE SAFETY ===
+?? evidence/
+TRACKED_DIRTY_COUNT=0
+
+=== 10. DECISION ===
+MAIN_COMMIT_PATCH_ALREADY_REPRESENTED=False
+CURRENT_TREE_DIFFERENCE_COUNT=0
+MERGE_TREE_CONFLICT_MARKER_COUNT=0
+MERGE_PERFORMED=NO
+REBASE_PERFORMED=NO
+NEXT_GATE=HC311_F8D_MAINLINE_DIFFERENCE_REVIEW
+RESULT=HC311_F8D_MAINLINE_COMMIT_EQUIVALENCE_REQUIRES_REVIEW
+
+=== 11. SAFETY ===
+SOURCE_MODIFIED=NO
+FILES_STAGED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+MERGE_PERFORMED=NO
+REBASE_PERFORMED=NO
+PRODUCTION_KEY_CREATED=NO
+PRODUCTION_KEY_FILE_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+LIVE_VAULT_MODIFIED=NO
+RUNTIME_RESTARTED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_F8D_MAINLINE_COMMIT_EQUIVALENCE_REVIEW.txt

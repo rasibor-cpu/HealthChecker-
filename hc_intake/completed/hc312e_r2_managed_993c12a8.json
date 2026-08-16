@@ -1,0 +1,14 @@
+{
+  "document_type": "patient_health_summary",
+  "patient_id": "default-patient",
+  "measured_date": "2026-08-15T20:00:00Z",
+  "measurements": [
+    {
+      "name": "systolic",
+      "value": 120.0,
+      "unit": "mmHg",
+      "confidence": 1.0
+    }
+  ],
+  "marker": "HC312E_R2_MANAGED_993c12a8"
+}

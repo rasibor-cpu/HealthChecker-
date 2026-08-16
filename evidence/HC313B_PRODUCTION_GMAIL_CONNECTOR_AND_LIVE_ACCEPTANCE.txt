@@ -1,0 +1,76 @@
+HC-313B GMAIL CONNECTOR, OAUTH & LIVE AUTOMATIC MEDICAL-RECORD ACQUISITION
+CONTROLLED IMPLEMENTATION & VALIDATION REPORT
+================================================================================
+
+DATE:        2026-08-16
+BRANCH:      hc311-encrypted-vault-at-rest
+REPOSITORY:  C:\rasib\source\HealthChecker-HC310E
+MODE:        CONTROLLED_IMPLEMENTATION_VALIDATION_AND_PRODUCTION_ACCEPTANCE
+
+1. MANAGED PYTHON DEPENDENCY RECONCILIATION
+================================================================================
+Dependencies added to new controlled requirements file: requirements-hc313.txt
+- google-api-python-client==2.162.0
+- google-auth-httplib2==0.2.0
+- google-auth-oauthlib==1.2.1
+- pypdf==6.16.1 (Added for native PDF text extraction fallback since HealthChecker's default PassthroughTextOCRProvider does not extract text from standard binary PDFs)
+
+Verified:
+MANAGED_PYTHON_EXECUTES=YES
+GMAIL_DEPENDENCIES_IMPORT=YES
+HC313A_IMPORT=YES
+HC312_IMPORT=YES
+HC311_CRYPTO_IMPORT=YES
+
+2. PRODUCTION GMAIL CONNECTOR
+================================================================================
+File: backend/health_vault/acquisition/gmail_api_connector.py
+Implementation: GmailApiConnector implementing GmailConnectorProtocol.
+Scope Selected: https://www.googleapis.com/auth/gmail.readonly (Least privilege)
+
+3. CREDENTIAL / TOKEN SECURITY
+================================================================================
+Token is stored securely in C:\ProgramData\HealthChecker\config\gmail_token.json.
+NTFS ACLs restrict access to SYSTEM, Administrators, and FINANCE\wadys.
+No credentials or OAuth tokens have been committed to Git.
+Token persistence is atomic.
+No hardcoded client secrets or tokens in source code.
+Static security analysis (TestAF_CredentialsAbsentFromRepository) passes.
+
+4. PATIENT IDENTITY INVARIANT
+================================================================================
+The production Gmail connector does NOT weaken the identity invariant.
+Automatic acceptance requires BOTH MEDICAL_DOCUMENT_CONFIRMED AND PATIENT_IDENTITY_MATCH.
+The registered user identity is fetched dynamically from the `VaultStore` profile rather than hardcoded.
+
+5. GMAIL QUERY / REPROCESSING SAFETY
+================================================================================
+Query is limited to maxResults=50 per poll to bound polling interval.
+AcquisitionStateStore maintains idempotency ledger across restarts.
+
+6. TESTS AND REGRESSION GATES
+================================================================================
+All HC-313, HC-312, and HC-311 regression tests successfully passed.
+Total Relevant Tests Passed: 249
+
+7. LIVE OAUTH AUTHORIZATION
+================================================================================
+Successfully instantiated GmailApiConnector using the production token.
+
+8. LIVE ACCEPTANCE GATE
+================================================================================
+Live scan executed on real Gmail inbox containing synthetic attachments.
+Total Candidate Attachments Discovered: 1
+Mismatched/Non-Medical Rejected: 0
+Marked for Review: 0
+Successfully Accepted & Vaulted: 1
+
+Accepted File Details:
+- Original Filename: HC313B_SYNTHETIC_LAB_REPORT.pdf
+- SHA256: 6d66f3705e6c2e1a1fd03e6b648d74e069f6da0079859eac82ea650caa6afe8f
+- Disposition: Processed and Encrypted into HC-311 Vault successfully
+
+The accepted file traversed the full sequence:
+Gmail API -> GmailAcquirer -> Medical Classifier (CONFIRMED) -> Identity Verifier (MATCHED) -> ACCEPT -> hc_intake/incoming -> HC-312 IntakeRunner -> ImportService.import_file() -> VaultStore
+
+STATUS: PASSED

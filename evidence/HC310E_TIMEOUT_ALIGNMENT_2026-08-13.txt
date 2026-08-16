@@ -1,0 +1,40 @@
+﻿=== HC310E TIMEOUT ALIGNMENT VALIDATION ===
+Date: 2026-08-13 06:58:44 -04:00
+
+Branch: hc310e-background-health-connect
+HEAD: 672b9ba7f0a78f78e9f13f0d351d21e323086f90
+
+TIMEOUT ARCHITECTURE
+Backend processing target: <=180 seconds
+Caddy response_header_timeout: 210 seconds
+Android call/read timeout: 240 seconds
+Android connect timeout: 30 seconds
+Android write timeout: 60 seconds
+
+VALIDATION RESULTS
+Targeted ChunkAckDecisionTest: PASS (exit 0)
+Full Android unit test suite: PASS (exit 0)
+Debug APK build: PASS (exit 0)
+git diff --check: PASS
+
+MODIFIED FILES
+ M android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt  M android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt
+
+DIFF STAT
+ .../app/src/main/java/com/healthchecker/companion/host/HostClient.kt    | 2 +-  .../test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt  | 2 +-  2 files changed, 2 insertions(+), 2 deletions(-)
+
+APK
+
+
+FullName      : C:\rasib\source\HealthChecker-HC310E\android\app\build\outputs\apk\debug\app-debug.apk
+Length        : 22079157
+LastWriteTime : 2026-08-13 6:56:51 AM
+
+
+
+
+
+APK SHA256
+D3B9FA19E0C32A41FB369727A4E7EFC38F73337A8858857C062681D07B503EC5
+
+VALIDATION=COMPLETE

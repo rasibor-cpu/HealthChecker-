@@ -1,0 +1,41 @@
+=== HC310E ANDROID REMAINDER AUDIT ===
+TIME=2026-08-14T09:53:27.7407941-04:00
+BRANCH=hc310e-background-health-connect
+HEAD=88666d9632e9a9add421684a4665c2fe12066d6a
+CURRENT_RELEASE=88666d9632e9a9add421684a4665c2fe12066d6a
+
+=== STATUS ===
+ M android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt
+ M android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt
+?? evidence/
+=== HOSTCLIENT DIFF ===
+diff --git a/android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt b/android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt
+index 9bca9bf..ffd5294 100644
+--- a/android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt
++++ b/android/app/src/main/java/com/healthchecker/companion/host/HostClient.kt
+@@ -203,7 +203,7 @@ class HostClient(
+         private val JSON = "application/json; charset=utf-8".toMediaType()
+ 
+         /** Finite permanent-host delivery bound (HC-306I-R11). Not infinite. */
+-        const val CALL_TIMEOUT_SECONDS: Long = 180L
++        const val CALL_TIMEOUT_SECONDS: Long = 240L
+         const val CONNECT_TIMEOUT_SECONDS: Long = 30L
+         const val WRITE_TIMEOUT_SECONDS: Long = 60L
+     }
+=== ACK TEST DIFF ===
+diff --git a/android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt b/android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt
+index bb31c76..488ff97 100644
+--- a/android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt
++++ b/android/app/src/test/java/com/healthchecker/companion/sync/ChunkAckDecisionTest.kt
+@@ -150,7 +150,7 @@ class ChunkAckDecisionTest {
+ 
+     @Test
+     fun clientTimeoutConstantsAreFiniteAndRaised() {
+-        assertEquals(180L, HostClient.CALL_TIMEOUT_SECONDS)
++        assertEquals(240L, HostClient.CALL_TIMEOUT_SECONDS)
+         assertTrue(HostClient.CALL_TIMEOUT_SECONDS < Long.MAX_VALUE)
+         assertTrue(HostClient.CONNECT_TIMEOUT_SECONDS > 0L)
+         assertTrue(HostClient.WRITE_TIMEOUT_SECONDS > 0L)
+=== DIFF CHECK ===
+DIFF_CHECK_EXIT=0
+RESULT=ANDROID_REMAINDER_AUDIT_COMPLETE

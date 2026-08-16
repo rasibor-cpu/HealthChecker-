@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import dataclasses
 
 from backend.health_vault.acquisition.acquisition_state import AcquisitionStateStore
 from backend.health_vault.acquisition.gmail_acquirer import GmailAcquirer
+from backend.health_vault.acquisition.gmail_api_connector import GmailApiConnector
+from backend.health_vault.acquisition.patient_identity import PatientIdentityVerifier
 from backend.health_vault.acquisition.gmail_config import (
     DEFAULT_INTERVAL_SECONDS,
     MAX_BACKOFF_SECONDS,
@@ -28,6 +31,7 @@ from backend.health_vault.acquisition.gmail_config import (
     get_default_config,
 )
 from backend.health_vault.monitoring.scheduler import MonitoringScheduler
+from backend.health_vault.vault_store import VaultStore
 
 logger = logging.getLogger("hc314a.watcher")
 
@@ -51,6 +55,7 @@ class AcquisitionWatcher:
         self,
         config: GmailAcquisitionConfig | None = None,
         store: AcquisitionStateStore | None = None,
+        vault_store: VaultStore | None = None,
         *,
         interval_seconds: int = DEFAULT_INTERVAL_SECONDS,
         force: bool = False,
@@ -58,6 +63,7 @@ class AcquisitionWatcher:
         self.config = config or get_default_config()
         # Default store path from config if not provided
         self.store = store or AcquisitionStateStore(self.config.acquisition_state_path)
+        self.vault_store = vault_store or VaultStore()
         self.interval_seconds = max(MIN_INTERVAL_SECONDS, min(MAX_INTERVAL_SECONDS, interval_seconds))
         self.force = force
 
@@ -88,31 +94,40 @@ class AcquisitionWatcher:
         Concurrent-run exclusion prevents overlapping executions.
         """
         def _sync_fn() -> dict[str, Any]:
-            acquirer = GmailAcquirer(config=self.config, state_store=self.store)
+            connector = GmailApiConnector(config=self.config)
+            verifier = PatientIdentityVerifier.from_store(self.vault_store)
+            acquirer = GmailAcquirer(connector=connector, config=self.config, verifier=verifier)
             
             # The acquirer might raise transient HTTP/Auth errors.
             # Catching these ensures the scheduler backs off.
             try:
-                summary = acquirer.scan_and_acquire()
+                summary_obj = acquirer.run_scan()
+                summary_obj.gmail_auth_success = True  # Assuming success if we reach here
+                summary = dataclasses.asdict(summary_obj)
                 ok = True
                 error_msg = None
             except Exception as exc:
                 logger.error("hc314a_acquisition_failed error=%s", exc)
-                summary = {}
+                summary = {"error": type(exc).__name__}
                 ok = False
                 error_msg = str(exc)
+
+            if hasattr(self.store, "update_telemetry"):
+                self.store.update_telemetry(summary)
 
             return {
                 "ok": ok,
                 "success": ok,
                 "error": error_msg,
                 "acquisition_summary": summary,
-                "messages_discovered": summary.get("messages_discovered", 0),
-                "attachments_discovered": summary.get("attachments_discovered", 0),
-                "accept_count": summary.get("accept_count", 0),
-                "review_count": summary.get("review_count", 0),
-                "reject_count": summary.get("reject_count", 0),
-                "already_acquired_count": summary.get("already_acquired_count", 0),
+                "gmail_auth_success": summary.get("gmail_auth_success", False),
+                "handoff_success": summary.get("handoff_success", False),
+                "messages_discovered": summary.get("messages_scanned", 0),
+                "attachments_discovered": summary.get("attachments_evaluated", 0),
+                "accept_count": summary.get("accepted", 0),
+                "review_count": summary.get("sent_to_review", 0),
+                "reject_count": summary.get("rejected_format", 0) + summary.get("rejected_classification", 0) + summary.get("rejected_identity", 0),
+                "already_acquired_count": summary.get("already_acquired", 0),
             }
 
         result = self._scheduler.run_due(

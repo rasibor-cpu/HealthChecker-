@@ -1,0 +1,304 @@
+============================================================
+ HC311-F8D — RECOVERY DESIGN RECONCILIATION
+============================================================
+TIME=2026-08-15T10:37:31.7060247-04:00
+MACHINE=FINANCE
+MODE=READ_ONLY_ARCHITECTURE_RECONCILIATION
+============================================================
+
+=== 1. REPOSITORY IDENTITY ===
+BRANCH=hc311-encrypted-vault-at-rest
+HEAD=b2c9d1dad5c2f34061572b469218249f623922e5
+
+=== 2. CURRENT HC311 WORK PRODUCT ===
+FILE=backend/health_vault/vault_recovery.py
+EXISTS=YES
+BYTES=6427
+SHA256=63120D4FB271BDEB23EAA806082F56242B0AA57A07CF702190D7A0446BA62135
+
+FILE=backend/health_vault/recovery_enrollment.py
+EXISTS=YES
+BYTES=3996
+SHA256=B76AD9B44D0856F023876E2D928EA8DE162AA0412C277B3282B903EBF640DE37
+
+FILE=backend/health_vault/recovery_profiles.py
+EXISTS=YES
+BYTES=6964
+SHA256=45CBD47CE51BA89A834913921529CE38A75E77BD0CABAE6DA00DC43394ECB244
+
+FILE=backend/health_vault/recovery_question_bank.py
+EXISTS=YES
+BYTES=11565
+SHA256=C98BEF31A7B6BF50CE828B4DC6ADCB25D9C2607B13C7C04FFD7801A76F11B54A
+
+FILE=backend/health_vault/vault_question_recovery.py
+EXISTS=YES
+BYTES=3163
+SHA256=16DA5248933191FC94D5D5AE2D9B920F36F996A8806318A786718D30A673A59C
+
+FILE=tests/test_hc311f8b_vault_recovery.py
+EXISTS=YES
+BYTES=3669
+SHA256=7AB197DE475FAEAFEA797B897BF8FCAA316DA275CE9034047984D549ED03C57F
+
+FILE=tests/test_hc311f8d_qr4_private_answer_enrollment.py
+EXISTS=YES
+BYTES=1889
+SHA256=67342F8C7700B8381BC829BF3B9B49DF5778C3905BCF402BB39A5F9162D5884D
+
+FILE=tests/test_hc311f8d_question_recovery.py
+EXISTS=YES
+BYTES=2918
+SHA256=8F23C3F3C4DFB6CF45705EDD633E5EDD14E82A33334B2670A9301259713F0746
+
+FILE=tests/test_hc311f8d_recovery_enrollment.py
+EXISTS=YES
+BYTES=3466
+SHA256=B6A7D7D5A7760AC4BC03EDD6F843C9056AF03F342BBB516DAF1BE0D90C1138F9
+
+FILE=tests/test_hc311f8d_recovery_profiles.py
+EXISTS=YES
+BYTES=3076
+SHA256=D0C1070A663AC0564BDFC99C13C1DCAEFB17625781831B18F77062BDE95E789F
+
+FILE=tests/test_hc311f8d_recovery_question_bank.py
+EXISTS=YES
+BYTES=1982
+SHA256=E70965EF9A33837A12EF3D0EB1695D819A67F4AB3E04014B21DF8905AFB200C8
+
+
+=== 3. AST ARCHITECTURE INVENTORY ===
+========================================================================
+MODULE=backend\health_vault\vault_recovery.py
+EXISTS=YES
+Traceback (most recent call last):
+  File "<stdin>", line 22, in <module>
+  File "C:\Users\wadys\AppData\Local\Programs\Python\Python312\Lib\ast.py", line 52, in parse
+    return compile(source, filename, mode, flags,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<unknown>", line 1
+    \ufeff"""HC311 recovery package support.
+    ^
+SyntaxError: invalid non-printable character U+FEFF
+AST_PROBE_EXIT=1
+
+=== 4. TEST CONTRACT INVENTORY ===
+Traceback (most recent call last):
+========================================================================
+TEST_MODULE=tests\test_hc311f8b_vault_recovery.py
+  File "<stdin>", line 21, in <module>
+  File "C:\Users\wadys\AppData\Local\Programs\Python\Python312\Lib\ast.py", line 52, in parse
+    return compile(source, filename, mode, flags,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<unknown>", line 1
+    \ufeffimport os
+    ^
+SyntaxError: invalid non-printable character U+FEFF
+TEST_INVENTORY_EXIT=1
+
+=== 5. CROSS-MODULE DEPENDENCY MAP ===
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:19:from backend.health_vault.recovery_profiles import (
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:26:from backend.health_vault.vault_question_recovery import (
+
+=== 6. SECURITY CONTRACT MARKERS ===
+
+--- PATTERN=scrypt ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:21:from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:24:SCRYPT_N = 32768
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:25:SCRYPT_R = 8
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:26:SCRYPT_P = 1
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:81:return Scrypt(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:84:n=SCRYPT_N,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:85:r=SCRYPT_R,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:86:p=SCRYPT_P,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:20:from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:26:KDF_ID: Final[int] = 1             # scrypt
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:32:SCRYPT_N: Final[int] = 32768
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:33:SCRYPT_R: Final[int] = 8
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:34:SCRYPT_P: Final[int] = 1
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:71:return Scrypt(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:74:n=SCRYPT_N,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:75:r=SCRYPT_R,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:76:p=SCRYPT_P,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:108:"kdf": "scrypt",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:109:"scrypt_n": SCRYPT_N,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:110:"scrypt_r": SCRYPT_R,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:111:"scrypt_p": SCRYPT_P,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:133:SCRYPT_N,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:134:SCRYPT_R,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:135:SCRYPT_P,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:192:if (n, r, p) != (SCRYPT_N, SCRYPT_R, SCRYPT_P):
+
+--- PATTERN=AESGCM ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:19:from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:144:ciphertext = AESGCM(recovery_key).encrypt(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:213:data_key = AESGCM(recovery_key).decrypt(
+
+--- PATTERN=key_check_value ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:60:def key_check_value(data_key: bytes) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:114:"key_check_value": key_check_value(data_key),
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:227:expected = metadata.get("key_check_value")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:228:actual = key_check_value(data_key)
+
+--- PATTERN=salt ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:5:- uses that profile's selected recovery questions and random salt;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:92:salt = bytes.fromhex(profile.question_salt_hex)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:97:salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:102:salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:8:- its own random recovery salt;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:27:RECOVERY_SALT_BYTES: Final[int] = 16
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:135:question_salt_hex: str
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:150:salt = os.urandom(RECOVERY_SALT_BYTES)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:157:question_salt_hex=salt.hex(),
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:206:"question_salt_hex",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:232:salt = bytes.fromhex(raw["question_salt_hex"])
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:235:"invalid_question_salt"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:238:if len(salt) != RECOVERY_SALT_BYTES:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:240:"invalid_question_salt_length"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:248:question_salt_hex=raw["question_salt_hex"],
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:8:- per-package random salt prevents precomputed tables;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:73:salt: bytes,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:75:if not isinstance(salt, bytes) or len(salt) != 16:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:76:raise QuestionRecoveryError("recovery_salt_must_be_16_bytes")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:82:salt=salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:28:SALT_BYTES: Final[int] = 16
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:67:def _derive_key(passphrase: str, salt: bytes) -> bytes:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:72:salt=salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:123:salt = os.urandom(SALT_BYTES)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:126:recovery_key = _derive_key(passphrase, salt)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:136:salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:176:salt,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:209:recovery_key = _derive_key(passphrase, salt)
+
+--- PATTERN=nonce ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:29:NONCE_BYTES: Final[int] = 12
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:124:nonce = os.urandom(NONCE_BYTES)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:137:nonce,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:145:nonce,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:177:nonce,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:214:nonce,
+
+--- PATTERN=hash ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:8:- never stores plaintext answers, answer hashes, or hints.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:16:import hashlib
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:122:return hashlib.sha256(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:175:"answer_hash",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:17:import hashlib
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:113:return hashlib.sha256(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:11:import hashlib
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py:62:return hashlib.sha256(
+
+--- PATTERN=normalize ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:5:- answers are normalized deterministically;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:35:def normalize_answer(answer: str) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:40:value = unicodedata.normalize("NFKC", answer)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:45:# Normalize whitespace without guessing spelling.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:55:normalized = [normalize_answer(a) for a in answers]
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:57:if len(normalized) < MIN_QUESTIONS:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:60:# Length-prefix every normalized answer so boundaries are unambiguous.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:63:for answer in normalized:
+
+--- PATTERN=constant.*time ---
+
+--- PATTERN=compare_digest ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:109:if not hmac.compare_digest(
+
+--- PATTERN=minimum ---
+
+--- PATTERN=threshold ---
+
+--- PATTERN=attempt ---
+
+--- PATTERN=lockout ---
+
+--- PATTERN=rate ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:10:Persistence of profile metadata is separate from recovery secrets.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_question_bank.py:239:"In what city did you celebrate an especially important personal milestone?"
+
+--- PATTERN=plaintext ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:8:- never stores plaintext answers, answer hashes, or hints.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:11:PLAINTEXT ANSWERS ARE NEVER STORED HERE.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:174:"plaintext_answer",
+
+--- PATTERN=answer ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:6:- requires confirmation of all answers during enrollment;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:8:- never stores plaintext answers, answer hashes, or hints.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:48:def _answers_tuple(answers: Iterable[str]) -> tuple[str, ...]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:50:return tuple(answers)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:53:"invalid_recovery_answers"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:60:answers_first: Iterable[str],
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:61:answers_confirm: Iterable[str],
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:65:No answer material is persisted by this function.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:69:first = _answers_tuple(answers_first)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:70:confirm = _answers_tuple(answers_confirm)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:74:"answer_count_does_not_match_questions"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:114:"recovery_answer_confirmation_mismatch"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:142:b'"answer"',
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py:143:b'"answers"',
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:11:PLAINTEXT ANSWERS ARE NEVER STORED HERE.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:170:# Explicitly forbid accidental answer persistence.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:172:"answer",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:173:"answers",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:174:"plaintext_answer",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:175:"answer_hash",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py:176:"answer_hint",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_question_bank.py:8:This module contains NO user answers and NO production secrets.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:4:- answers are never persisted by this module;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:5:- answers are normalized deterministically;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:6:- all enrolled answers are required;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:7:- answers are combined before a memory-hard KDF;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:35:def normalize_answer(answer: str) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:36:if not isinstance(answer, str):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:37:raise QuestionRecoveryError("answer_must_be_string")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py:40:value = unicodedata.normalize("NFKC", answer)
+
+=== 7. EXISTING RECOVERY-PACKAGE CONTRACT ===
+RECOVERY_PACKAGE_BASELINE=PASS_PREVIOUSLY_VALIDATED
+RECOVERY_PACKAGE_KDF=SCRYPT
+RECOVERY_PACKAGE_KDF_N=32768
+RECOVERY_PACKAGE_KDF_R=8
+RECOVERY_PACKAGE_KDF_P=1
+RECOVERY_PACKAGE_AEAD=AES_256_GCM
+RECOVERY_PACKAGE_DATA_KEY_BYTES=32
+RECOVERY_PACKAGE_KEY_CHECK=REQUIRED
+RECOVERY_PACKAGE_FAIL_CLOSED=YES
+
+=== 8. PREVIOUS TEST EVIDENCE ===
+HC311_F8D_TARGETED_TESTS=56_PASSED
+HC311_F8D_TARGETED_TEST_TIME_SECONDS=4.94
+TARGETED_VALIDATION_RESULT=PASS
+TESTS_RERUN_BY_THIS_GATE=NO
+
+=== 9. WORKTREE / DIFF SAFETY ===
+DIFF_CHECK_EXIT=0
+?? backend/health_vault/recovery_enrollment.py
+?? backend/health_vault/recovery_profiles.py
+?? backend/health_vault/recovery_question_bank.py
+?? backend/health_vault/vault_question_recovery.py
+?? backend/health_vault/vault_recovery.py
+?? evidence/
+?? tests/test_hc311f8b_vault_recovery.py
+?? tests/test_hc311f8d_qr4_private_answer_enrollment.py
+?? tests/test_hc311f8d_question_recovery.py
+?? tests/test_hc311f8d_recovery_enrollment.py
+?? tests/test_hc311f8d_recovery_profiles.py
+?? tests/test_hc311f8d_recovery_question_bank.py
+?? tools/
+
+=== 10. RECONCILIATION DECISION ===
+RESULT=STOP_HC311_F8D_RECOVERY_DESIGN_RECONCILIATION
+
+=== 11. SAFETY ===
+SOURCE_MODIFIED=NO
+TESTS_MODIFIED=NO
+PRODUCTION_KEY_CREATED=NO
+PRODUCTION_KEY_FILE_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+LIVE_VAULT_MODIFIED=NO
+RUNTIME_RESTARTED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_F8D_RECOVERY_DESIGN_RECONCILIATION.txt

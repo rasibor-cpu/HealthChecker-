@@ -134,6 +134,19 @@ class AcquisitionStateStore:
         """Bridge for MonitoringScheduler."""
         return self._lock
 
+    def update_telemetry(self, summary: dict[str, Any]) -> None:
+        """Aggregate cumulative metrics into the state."""
+        with self._lock:
+            t = self._state.get("telemetry", {})
+            t["total_accept_count"] = t.get("total_accept_count", 0) + summary.get("accept_count", 0)
+            t["total_review_count"] = t.get("total_review_count", 0) + summary.get("review_count", 0)
+            t["total_reject_count"] = t.get("total_reject_count", 0) + summary.get("reject_count", 0)
+            t["total_already_acquired_count"] = t.get("total_already_acquired_count", 0) + summary.get("already_acquired_count", 0)
+            if summary.get("error"):
+                t["total_failure_count"] = t.get("total_failure_count", 0) + 1
+            self._state["telemetry"] = t
+            self._persist()
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -153,7 +166,7 @@ class AcquisitionStateStore:
             return data
         except Exception as exc:
             logger.warning("hc313a_state_load_failed path=%s error=%s", self._path, exc)
-            return {"schema": "hc313a.acquisition_state.v1", "attachments": {}, "sha256s": []}
+            return {"schema": "hc313a.acquisition_state.v1", "attachments": {}, "sha256s": [], "telemetry": {}}
 
     def _persist(self) -> None:
         """Atomically persist the in-memory state to disk."""

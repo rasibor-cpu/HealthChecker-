@@ -1,0 +1,548 @@
+============================================================
+ HEALTHCHECKER — AUTOMATIC MEDICAL RECORD INGESTION
+ ACTIVATION READINESS
+============================================================
+TIME=2026-08-15T11:06:01.9749162-04:00
+MACHINE=FINANCE
+MODE=READ_ONLY_CRITICAL_PATH
+GOAL=AUTOMATIC_MEDICAL_RECORD_INGESTION
+============================================================
+
+=== 1. REPOSITORY IDENTITY ===
+BRANCH=hc311-encrypted-vault-at-rest
+EXPECTED_BRANCH=hc311-encrypted-vault-at-rest
+HEAD=87a360582804a358005985d43d4af7de6aab61ae
+EXPECTED_HEAD=87a360582804a358005985d43d4af7de6aab61ae
+TRACKED_DIRTY_COUNT=0
+STAGED_COUNT=0
+
+=== 2. HC311 SECURITY FOUNDATION ===
+FILE=backend/health_vault/vault_crypto.py EXISTS=True
+FILE=backend/health_vault/vault_key_protector.py EXISTS=True
+FILE=backend/health_vault/vault_store.py EXISTS=True
+FILE=backend/health_vault/vault_recovery.py EXISTS=True
+FILE=backend/health_vault/recovery_enrollment.py EXISTS=True
+FILE=backend/health_vault/recovery_profiles.py EXISTS=True
+FILE=backend/health_vault/recovery_question_bank.py EXISTS=True
+FILE=backend/health_vault/vault_question_recovery.py EXISTS=True
+MISSING_SECURITY_FILE_COUNT=0
+
+=== 3. MEDICAL RECORD INGESTION DISCOVERY ===
+INGESTION_RELATED_FILE_COUNT=93
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\base.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\chatgpt.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\stubs.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_config.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\category_classifier.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\clinical_rules.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\confidence_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\date_extraction.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\event_bus.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\health_intelligence.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_service.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\metric_normalization.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\ocr.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\parser_registry.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_enrollment.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_profiles.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\recovery_question_bank.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\timeline.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\trend_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\validation_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_crypto.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_key_protector.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_question_recovery.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_recovery.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion\delivery.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion\pairing.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion\security.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\ack_recovery.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\activation.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\app.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\assigned_pen_transition.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\caddy_config.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\evidence_generator.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\logging_safe.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\offline_ceremony_readiness.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_verifier.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\proxy_trust.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\r4f_preparation.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\rate_limit.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\runtime_contract.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\serve_status.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\topology.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\vault_boundary.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\__main__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\config\cgm_continuity.json
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\config\executive_dashboard.json
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\config\guardian_rules.json
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\config\monitoring_config.json
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\config\monitoring_thresholds.json
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\baseline_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\rule_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\bridge.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\ingestion.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\monitoring_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\observation.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\privacy.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\scheduler.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\connectors\base.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\connectors\health_connect.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\connectors\libre.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\connectors\simulated.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\connectors\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\health_vault\parsers\__init__.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\backend\intelligence\foot_pain_engine.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\scripts\check_hc309_pending_pen_readiness.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\scripts\import_recent_hc301_records.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\scripts\seed_browser_vault_from_backfill.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\scripts\operator\Generate-PrivilegedEvidence.ps1
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\scripts\operator\Validate-PrivilegedEvidence.ps1
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\tools\hc311_private_answer_enrollment.py
+INGESTION_RELATED_FILE=C:\rasib\source\HealthChecker-HC310E\tools\hc311_recovery_question_selector.py
+
+=== 4. INGESTION SYMBOLS / ENTRY POINTS ===
+
+--- PATTERN=def .*ingest ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:132:def ingest_evaluation(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:486:def _last_ingestion(self) -> str | None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\ingestion.py:57:def ingest_observations(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\ingestion.py:153:def _ingest_health_connect_batched(
+
+--- PATTERN=def .*import ---
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:52:def __init__(self, store: VaultStore | None = None, pipeline: ImportPipeline | None = None) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:388:def import_history(self, limit: int = 50) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:90:def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:132:async def import_health_record(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:164:async def import_health_records_batch(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:216:async def import_health_records_batch_json(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:227:async def import_health_record_json(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:263:def import_log() -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:298:async def ai_health_import_preview(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:314:async def ai_health_import_confirm(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:327:def ai_health_import_history(limit: int = 50) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:557:def import_health_record_handler(request: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:564:def import_health_records_batch_handler(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:574:def ai_health_import_preview_handler(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:583:def ai_health_import_confirm_handler(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:592:def ai_health_import_history_handler(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_config.py:34:def get_batch_config(**overrides: Any) -> BatchImportConfig:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:39:def _mime_allowed(mime: str, filename: str, config: BatchImportConfig) -> bool:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:235:def import_batch(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:718:def _recent_imports(self, batch_audits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:535:def _append_import_log(self, result: dict[str, Any]) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_service.py:27:def import_health_record(self, request: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_service.py:30:def import_file(self, path: str | Path, **kwargs: Any) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:542:def imports(self) -> list[dict[str, Any]]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:545:def import_log(self) -> list[dict[str, Any]]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:561:def save_ai_import_preview(self, ticket: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:575:def get_ai_import_preview(self, preview_id: str | None) -> dict[str, Any] | None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:582:def consume_ai_import_preview(self, preview_id: str | None) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:594:def record_ai_import_audit(self, audit: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:617:def list_ai_import_audits(self) -> list[dict[str, Any]]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:211:def evaluate_after_import(self, import_result: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\scripts\import_recent_hc301_records.py:106:def import_record(
+
+--- PATTERN=def .*document ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:523:def _attach_confidence(self, document_id: str, confidence: dict[str, Any]) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py:192:def classify_document_type(filename: str | None, mime: str | None, hint: str | None = None) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:73:def _document_crypto_context(document_id: str) -> bytes:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:506:def list_documents(self) -> list[dict[str, Any]]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:623:def read_document_bytes(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:652:def resolve_storage_path(self, storage_uri: str | None, document_id: str | None = None) -> Path | None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\parsers\__init__.py:33:def _from_mapping(obj: Any, document_id: str | None, confidence: float) -> list:
+
+--- PATTERN=def .*record ---
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\chatgpt.py:39:def _fingerprint_record(record: dict[str, Any]) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\chatgpt.py:104:def _normalize_record(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:132:async def import_health_record(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:164:async def import_health_records_batch(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:216:async def import_health_records_batch_json(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:227:async def import_health_record_json(body: dict[str, Any]) -> JSONResponse:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:557:def import_health_record_handler(request: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:564:def import_health_records_batch_handler(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:85:def _stable_content(record: dict[str, Any]) -> bytes:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:154:def record_to_pipeline_request(record: dict[str, Any], patient_id: str) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\category_classifier.py:116:def classify_health_record(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_service.py:27:def import_health_record(self, request: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:548:def record_batch_audit(self, audit: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\vault_store.py:594:def record_ai_import_audit(self, audit: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:266:def append_evidence_record_append_only(*, evidence_bundle: dict[str, Any], audit_dir: Path) -> tuple[Path, Path]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:251:def record_data_gap(self, payload: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\ingestion.py:433:def record_sync_health(self, payload: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\scripts\import_recent_hc301_records.py:106:def import_record(
+C:\rasib\source\HealthChecker-HC310E\scripts\import_recent_hc301_records.py:161:def build_records() -> list[tuple[str, dict[str, Any]]]:
+
+--- PATTERN=class .*Ingest ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\monitoring\ingestion.py:38:class IngestionCoordinator:
+
+--- PATTERN=class .*Import ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_config.py:10:class BatchImportConfig:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:119:class BatchImportService:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:50:class ImportPipeline:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_service.py:13:class ImportService:
+
+--- PATTERN=class .*Document ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py:16:class MedicalDocument:
+
+--- PATTERN=watchdog ---
+
+--- PATTERN=FileSystemEventHandler ---
+
+--- PATTERN=ReadDirectoryChanges ---
+
+--- PATTERN=Get-ChildItem ---
+
+--- PATTERN=glob ---
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\base.py:4:Providers register into a global registry. Connectors normalize AI payloads;
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\ocr.py:86:global _ACTIVE
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\parser_registry.py:71:# Global registry used by ImportService; parsers auto-register on import.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\evidence_generator.py:112:for js in audit_dir.glob("*.json"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:172:ts_global = _parse_utc_timestamp(evidence_bundle.get("timestamp_utc"), "evidence_timestamp_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:245:_assert_fresh(ts_global, current, policy.workspace_max_age, "evidence_workspace_stale")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:570:for sha_file in Path(audit_dir).glob("*.sha256"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:586:for js in Path(audit_dir).glob("*.json"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\privileged_evidence.py:602:for js in Path(audit_dir).glob("*.json"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:146:# Explicit non-Python runtime assets (category A). Never glob "all JSON".
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:368:taken ONLY from RELEASE_RUNTIME_ASSETS (explicit allowlist — no broad globs).
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:381:for path in sorted(candidate.rglob("*")):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:422:for path in release.rglob("*"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:438:for path in release.rglob("*"):
+C:\rasib\source\HealthChecker-HC310E\scripts\operator\Invoke-SyntheticProtectedRuntimeCollector.ps1:132:if (-not [long]::TryParse($match.Value, [Globalization.NumberStyles]::AllowLeadingSign, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)) { throw 'invalid' }
+
+--- PATTERN=rglob ---
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:381:for path in sorted(candidate.rglob("*")):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:422:for path in release.rglob("*"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:438:for path in release.rglob("*"):
+DISCOVERED_SYMBOL_MATCH_COUNT=86
+
+=== 5. INGESTION ? VAULT CONNECTION DISCOVERY ===
+VAULT_INGESTION_REFERENCE_COUNT=150
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:5:Validation ? Classification ? Duplicate Detection ? Timeline ? Trends ?
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:17:from backend.health_vault.category_classifier import classify_health_record
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:18:from backend.health_vault.doctor_visit import DoctorVisitMode
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:19:from backend.health_vault.import_pipeline import ImportPipeline
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:20:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:21:from backend.health_vault.timeline import build_timeline
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:22:from backend.health_vault.trend_engine import TrendEngine
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:23:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:46:return VaultStore.sha256_bytes(_pipeline_content_bytes(rec))
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:52:def __init__(self, store: VaultStore | None = None, pipeline: ImportPipeline | None = None) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:53:self.store = store or VaultStore()
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:63:Requires no confirmation yet. Persists a short-lived preview ticket only
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:293:linkage["timeline"] = True
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:312:timeline = build_timeline(self.store)
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\bridge.py:369:"timeline_entries": len(timeline),
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\base.py:5:they never write to the Health Vault. All persistence goes through ImportPipeline.
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\chatgpt.py:11:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\ai_health\connectors\chatgpt.py:18:"""Keep conversation metadata only — never persist chat body unless explicitly imported."""
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:34:from backend.health_vault.batch_config import get_batch_config
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:35:from backend.health_vault.batch_import import BatchImportService, sanitize_filename
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:36:from backend.health_vault.doctor_visit import DoctorVisitMode
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:37:from backend.health_vault.import_service import ImportService
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:38:from backend.health_vault.timeline import build_timeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:39:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:108:def create_health_vault_app(store: VaultStore | None = None):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:117:vault = store or VaultStore()
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:239:@app.get("/api/health-vault/timeline")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:240:def timeline(unified: bool = False) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:242:from backend.health_vault.timeline import build_unified_timeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:244:return _sanitize_value({"entries": build_unified_timeline(vault), "unified": True})
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:245:return _sanitize_value({"entries": build_timeline(vault), "unified": False})
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:257:from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:274:from backend.health_vault.executive_briefing import ExecutiveHealthBriefingEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:290:from backend.health_vault.executive_briefing import ExecutiveHealthBriefingEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:417:from backend.health_vault.companion.security import MAX_PAYLOAD_BYTES
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:557:def import_health_record_handler(request: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:560:result = ImportService(store=store or VaultStore()).import_health_record(cleaned)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:566:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:570:report = BatchImportService(store=store or VaultStore()).import_batch(items, **kwargs)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:576:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:580:return _sanitize_value(AIHealthBridge(store=store or VaultStore()).preview(_strip_banned_path_keys(body)))
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:585:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:589:return _sanitize_value(AIHealthBridge(store=store or VaultStore()).confirm(_strip_banned_path_keys(body)))
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:593:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:598:return _sanitize_value(AIHealthBridge(store=store or VaultStore()).import_history(limit=limit))
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:604:def _guardian(store: VaultStore | None = None):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:605:from backend.health_vault.guardian.health_guardian import HealthGuardian
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:607:return HealthGuardian(store=store or VaultStore())
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:610:def guardian_status_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:618:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:631:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:640:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:652:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:657:def cgm_sensors_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:661:def cgm_register_handler(body: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:668:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:681:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:689:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:694:def cgm_inventory_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:698:def cgm_inventory_update_handler(body: dict[str, Any], store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:702:def cgm_continuity_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:706:def cgm_data_gaps_handler(patient_id: str = "default-patient", store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:710:def guardian_evaluate_handler(body: dict[str, Any] | None = None, store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:722:def _monitoring(store: VaultStore | None = None):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:723:from backend.health_vault.monitoring.bridge import ContinuousMonitoringBridge
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:725:return ContinuousMonitoringBridge(store=store or VaultStore())
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:730:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:737:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:748:def monitoring_sync_handler(body: dict[str, Any] | None = None, store: VaultStore | None = None) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:782:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:793:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:809:def _companion_pairing(store: VaultStore | None = None):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:810:from backend.health_vault.companion.pairing import CompanionPairingService
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:812:return CompanionPairingService(store=store or VaultStore())
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:815:def _companion_delivery(store: VaultStore | None = None):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:816:from backend.health_vault.companion.delivery import CompanionDeliveryService
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:818:return CompanionDeliveryService(store=store or VaultStore())
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:823:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:826:from backend.health_vault.companion.security import companion_admin_authorized
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:837:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:851:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:854:from backend.health_vault.companion.security import companion_admin_authorized
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:867:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:870:from backend.health_vault.companion.security import companion_admin_authorized
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:881:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:896:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:9:python -m backend.health_vault.backfill --input private_imports/robert_health_backfill.json
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:20:from backend.health_vault.doctor_visit import DoctorVisitMode
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:21:from backend.health_vault.event_bus import EventBus
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:22:from backend.health_vault.import_pipeline import ImportPipeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:23:from backend.health_vault.models import (
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:28:from backend.health_vault.parser_registry import ParserRegistry
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:29:from backend.health_vault.parsers import register_builtin_parsers
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:30:from backend.health_vault.timeline import build_timeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:31:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:33:SCHEMA_VERSION = "hc.health_vault.backfill.v1"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:50:if payload.get("schema_version") not in (SCHEMA_VERSION, "hc.health_vault.backfill.v1"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:120:def apply_profile(store: VaultStore, payload: dict[str, Any]) -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:205:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:218:vault = store or VaultStore()
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:279:report["timeline_entries"] = len(build_timeline(vault))
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\backfill.py:311:store = VaultStore(root=args.vault_root) if args.vault_root else VaultStore()
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_config.py:11:"""Central limits for multi-file Health Vault ingestion."""
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:15:from backend.health_vault.batch_config import BatchImportConfig, get_batch_config
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:16:from backend.health_vault.event_bus import EventBus
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:17:from backend.health_vault.import_pipeline import ImportPipeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:18:from backend.health_vault.models import classify_document_type, utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:19:from backend.health_vault.parser_registry import ParserRegistry
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:20:from backend.health_vault.parsers import register_builtin_parsers
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:21:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:127:store: VaultStore | None = None,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\batch_import.py:131:self.store = store or VaultStore()
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\clinical_rules.py:9:from backend.health_vault.models import Measurement
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\clinical_rules.py:25:`backend.health_vault.guardian.rule_engine.ExpandedClinicalRulesEngine`,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\clinical_rules.py:111:from backend.health_vault.guardian.rule_engine import ExpandedClinicalRulesEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\date_extraction.py:11:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\date_extraction.py:144:def timeline_sort_key(doc: dict[str, Any] | None) -> str:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:7:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:8:from backend.health_vault.timeline import build_timeline
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:9:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:13:def __init__(self, store: VaultStore) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:27:timeline = build_timeline(self.store)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\doctor_visit.py:53:"health_timeline": timeline[:25],
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\event_bus.py:10:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\event_bus.py:22:TIMELINE_UPDATED = "TimelineUpdated"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:15:from backend.health_vault.clinical_rules import ClinicalRulesEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:16:from backend.health_vault.date_extraction import timeline_sort_key
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:17:from backend.health_vault.metric_normalization import canonicalize_metric
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:18:from backend.health_vault.models import utc_now
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:19:from backend.health_vault.trend_engine import TrendEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:20:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:72:store: VaultStore,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:150:dated = sorted(docs, key=timeline_sort_key, reverse=True)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:288:domain_docs.sort(key=timeline_sort_key, reverse=True)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\executive_briefing.py:761:"timeline_link": "#vault",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\health_intelligence.py:7:from backend.health_vault.trend_engine import HIGHER_BETTER, LOWER_BETTER, TrendEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\health_intelligence.py:8:from backend.health_vault.vault_store import VaultStore
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\health_intelligence.py:29:def __init__(self, store: VaultStore, trends: TrendEngine | None = None) -> None:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\health_intelligence.py:63:# Persist snapshot for Doctor Visit / UI
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:5:Store Document ? Store Measurements ? Timeline ? Trends ? Doctor Visit ?
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:15:from backend.health_vault import parsers as _parsers  # noqa: F401
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:16:from backend.health_vault.clinical_rules import ClinicalRulesEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:17:from backend.health_vault.confidence_engine import ConfidenceEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:18:from backend.health_vault.doctor_visit import DoctorVisitMode
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:19:from backend.health_vault.event_bus import (
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:31:TIMELINE_UPDATED,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:37:from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:38:from backend.health_vault.models import MedicalDocument, classify_document_type, utc_now, create_measurement
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:39:from backend.health_vault.ocr import get_ocr_provider
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\import_pipeline.py:40:from backend.health_vault.parser_registry import get_default_registry
+
+=== 6. AUTOMATIC INTAKE CAPABILITY ===
+AUTOMATION_MATCH_COUNT=122
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\api.py:799:return _monitoring(store).run_scheduled_sync(
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\category_classifier.py:98:"galaxy_watch_report": "activity_fitness",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py:177:"galaxy_watch_report",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py:203:if "galaxy" in name or "watch" in name:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\models.py:204:return "galaxy_watch_report"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\app.py:410:# (see autouse fixtures in HC-304* tests) so other suites are not polluted.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py:176:values = _mapping(data.get("scheduled_tasks"), "scheduled_tasks_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py:177:if set(values) != set(TASKS): return [_check(f"task:{n}", "FAIL", "scheduled_task_set_mismatch") for n in TASKS]
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py:180:v = _mapping(values[name], "scheduled_task_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py:181:if v.get("access") == "BLOCKED": out.append(_check(f"task:{name}", "BLOCKED", "scheduled_task_inaccessible")); continue
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\protected_runtime_policy.py:184:out.append(_check(f"task:{name}", "PASS" if ok else "FAIL", "ok" if ok else "scheduled_task_contract_mismatch"))
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:4:Architecture (approved): Microsoft Scheduled Tasks — NOT Windows services, NOT NSSM, NOT WinSW.
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:29:# Exact scheduled-task identities (uninstall must target only these)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:65:COMPANION_HEALTHZ_POLL_SECONDS = 2
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:73:APPROVAL_SCHEDULED_HOST = "HC_306E_ALLOW_SCHEDULED_HOST"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:142:"install_scheduled_tasks.ps1.template",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:173:"scripts/companion_host/install_scheduled_tasks.ps1",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:175:"backend/health_vault/companion_host/scheduled_host.py",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:215:class ScheduledHostError(ValueError):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:216:"""Fail-closed scheduled-host error with privacy-safe reason code only."""
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:261:raise ScheduledHostError("env_malformed", f"control_char_line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:263:raise ScheduledHostError("env_malformed", f"missing_equals_line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:271:raise ScheduledHostError("env_malformed", f"blank_name_line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:273:raise ScheduledHostError("env_malformed", f"bad_key_line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:275:raise ScheduledHostError("env_unknown_key", key)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:277:raise ScheduledHostError("env_duplicate_key", key)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:279:raise ScheduledHostError("env_malformed", f"control_value_line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:281:raise ScheduledHostError("env_injection_rejected", f"line_{lineno}")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:292:raise ScheduledHostError("env_path_forbidden")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:296:raise ScheduledHostError("env_parse_failed") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:341:raise ScheduledHostError("manifest_mismatch", "source_path_escape") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:343:raise ScheduledHostError("release_file_modified", "source_reparse")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:349:raise ScheduledHostError("manifest_mismatch", "asset_rel_empty")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:352:raise ScheduledHostError("manifest_mismatch", "asset_absolute")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:355:raise ScheduledHostError("manifest_mismatch", "asset_traversal")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:357:raise ScheduledHostError("manifest_mismatch", "asset_excluded")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:360:raise ScheduledHostError("manifest_mismatch", "asset_type_unapproved")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:397:raise ScheduledHostError("release_file_missing", rel)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:404:raise ScheduledHostError("release_file_missing", name)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:425:raise ScheduledHostError("release_file_modified", "bytecode_present")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:443:raise ScheduledHostError("manifest_mismatch", "unmanifested_file")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:455:raise ScheduledHostError("manifest_mismatch", "source_commit_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:463:"schema_version": "hc.scheduled_host.release.v1",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:489:raise ScheduledHostError("manifest_mismatch", "source_commit_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:519:raise ScheduledHostError("manifest_mismatch", "required_missing")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:522:"schema_version": "hc.scheduled_host.release.v1",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:541:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:544:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:547:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:554:raise ScheduledHostError("manifest_mismatch") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:582:raise ScheduledHostError("manifest_missing")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:586:raise ScheduledHostError("manifest_mismatch") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:589:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:593:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:596:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:599:raise ScheduledHostError("release_file_missing")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:601:raise ScheduledHostError("release_file_modified")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:604:raise ScheduledHostError("release_file_modified")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:610:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:623:raise ScheduledHostError("git_tree_execution_forbidden") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:625:raise ScheduledHostError("git_tree_execution_forbidden")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:639:raise ScheduledHostError("manifest_mismatch", "source_commit_invalid")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:646:raise ScheduledHostError("manifest_mismatch", "head_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:650:raise ScheduledHostError("manifest_mismatch", "empty_release_set")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:656:raise ScheduledHostError("manifest_mismatch", "dirty_release_sources")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:669:raise ScheduledHostError("git_tree_execution_forbidden")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:682:raise ScheduledHostError("executable_override_rejected")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:688:raise ScheduledHostError("executable_privilege_risk") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:690:raise ScheduledHostError("executable_privilege_risk")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:692:raise ScheduledHostError("executable_override_rejected")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:697:raise ScheduledHostError("executable_privilege_risk") from exc
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:699:raise ScheduledHostError("executable_privilege_risk")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:702:raise ScheduledHostError("executable_privilege_risk")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:782:def scheduled_task_settings_contract() -> dict[str, Any]:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:791:"companion_healthz_poll_seconds": COMPANION_HEALTHZ_POLL_SECONDS,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:814:raise ScheduledHostError("task_name_forbidden")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:821:**scheduled_task_settings_contract(),
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:823:"approval_env": APPROVAL_SCHEDULED_HOST,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:832:"""Fail closed if scheduled_host fixed paths diverge from companion_runtime.json."""
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:837:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:839:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\companion_host\scheduled_host.py:841:raise ScheduledHostError("manifest_mismatch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:17:SEVERITIES = ("informational", "watch", "warning", "urgent", "critical")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:30:severity: str = "watch"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:103:"watch": 180,
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:147:severity = str(evaluation.get("severity") or "watch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:311:prev = str(alert.get("severity") or "watch")
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\alert_engine.py:388:if int(alert["occurrence_count"]) >= 5 and prev in ("watch", "warning", "informational"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:28:"WATCH",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:313:"escalation_status": "watch",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:317:watch = int(self.config.get("data_gap_watch_minutes") or 45)
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:318:if minutes < watch:
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:322:escalation = "watch"
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\cgm_continuity.py:412:"WATCH",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:18:"WATCH",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:29:"Samsung Health / Galaxy Watch data is available only when written into Health Connect and authorized by the user.",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:31:"Galaxy Watch does not measure glucose.",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:32:"Samsung Watch blood pressure is user-initiated, not continuous.",
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:271:elif counts.get("watch") or counts.get("informational"):
+C:\rasib\source\HealthChecker-HC310E\backend\health_vault\guardian\health_guardian.py:273:overall = "WATCH"
+
+=== 7. INGESTION / VAULT TEST INVENTORY ===
+RELEVANT_TEST_FILE_COUNT=13
+TEST=test_hc201g_batch_import.py
+TEST=test_hc201h_confirmed_ingestion.py
+TEST=test_hc201_health_vault.py
+TEST=test_hc310e_batch_ingestion.py
+TEST=test_hc311a_vault_crypto.py
+TEST=test_hc311b_vault_key_protector.py
+TEST=test_hc311c_encrypted_vault_store.py
+TEST=test_hc311f8b_vault_recovery.py
+TEST=test_hc311f8d_qr4_private_answer_enrollment.py
+TEST=test_hc311f8d_question_recovery.py
+TEST=test_hc311f8d_recovery_enrollment.py
+TEST=test_hc311f8d_recovery_profiles.py
+TEST=test_hc311f8d_recovery_question_bank.py
+
+=== 8. HC311 TARGETED VALIDATION ===
+HC311_TEST_FILE_COUNT=9
+........................................................................ [ 79%]
+...................                                                      [100%]
+91 passed in 4.90s
+
+HC311_TEST_EXIT=0
+
+=== 9. SOURCE INTEGRITY ===
+DIFF_CHECK_EXIT=0
+
+=== 10. CRITICAL PATH DECISION ===
+HC311_FOUNDATION_READY=YES
+HC311_TESTS_PASS=YES
+INGESTION_DISCOVERY_COMPLETE=YES
+PRODUCTION_KEY_CREATED=NO
+LIVE_VAULT_MODIFIED=NO
+NEXT_ACTION=CONNECT_EXISTING_INGESTION_TO_AUTOMATIC_INTAKE
+NEXT_GATE=HC_AUTOMATIC_MEDICAL_RECORD_INGESTION_IMPLEMENTATION
+RESULT=HC_AUTO_INGESTION_ACTIVATION_READINESS_PASS
+
+=== 11. SAFETY ===
+SOURCE_MODIFIED=NO
+FILES_STAGED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+PRODUCTION_KEY_CREATED=NO
+PRODUCTION_KEY_FILE_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+LIVE_VAULT_MODIFIED=NO
+LIVE_MIGRATION_PERFORMED=NO
+RUNTIME_RESTARTED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC_AUTO_INGESTION_ACTIVATION_READINESS.txt

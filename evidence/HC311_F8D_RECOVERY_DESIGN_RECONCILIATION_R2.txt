@@ -1,0 +1,303 @@
+============================================================
+ HC311-F8D — RECOVERY DESIGN RECONCILIATION R2
+============================================================
+TIME=2026-08-15T10:48:19.3428604-04:00
+MACHINE=FINANCE
+MODE=READ_ONLY_ARCHITECTURE_RECONCILIATION
+CHANGE_FROM_R1=UTF8_SIG_AST_DECODING
+============================================================
+
+=== 1. REPOSITORY IDENTITY ===
+BRANCH=hc311-encrypted-vault-at-rest
+HEAD=b2c9d1dad5c2f34061572b469218249f623922e5
+
+=== 2. R1 FAILURE RECONCILIATION ===
+R1_RESULT=STOP_HC311_F8D_RECOVERY_DESIGN_RECONCILIATION
+R1_AST_PROBE_EXIT=1
+R1_TEST_INVENTORY_EXIT=1
+R1_ROOT_CAUSE=UTF8_BOM_U+FEFF
+SOURCE_DEFECT_CONFIRMED=NO
+TEST_DEFECT_CONFIRMED=NO
+SOURCE_ENCODING_MODIFIED=NO
+R2_PROBE_DECODER=UTF-8-SIG
+
+=== 3. AST ARCHITECTURE INVENTORY ===
+========================================================================
+MODULE=backend\health_vault\vault_recovery.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+IMPORTS:
+  __future__:annotations
+  cryptography.exceptions:InvalidTag
+  cryptography.hazmat.primitives.ciphers.aead:AESGCM
+  cryptography.hazmat.primitives.kdf.scrypt:Scrypt
+  datetime:datetime,timezone
+  hashlib
+  json
+  os
+  struct
+  typing:Final
+PUBLIC_FUNCTIONS:
+  key_check_value(data_key)
+  create_recovery_package(data_key, passphrase)
+  open_recovery_package(package, passphrase)
+CLASSES:
+  RecoveryPackageError
+CONSTANT_NAMES:
+  ALGORITHM_ID
+  DATA_KEY_BYTES
+  KDF_ID
+  MAGIC
+  NONCE_BYTES
+  SALT_BYTES
+  SCRYPT_N
+  SCRYPT_P
+  SCRYPT_R
+  VERSION
+  _HEADER
+========================================================================
+MODULE=backend\health_vault\recovery_enrollment.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+IMPORTS:
+  __future__:annotations
+  backend.health_vault.recovery_profiles:RecoveryProfile,RecoveryProfileError,create_recovery_profile,serialize_profile
+  backend.health_vault.vault_question_recovery:QuestionRecoveryError,credential_to_passphrase,derive_recovery_credential
+  dataclasses:dataclass
+  hmac
+  typing:Iterable
+PUBLIC_FUNCTIONS:
+  enroll_recovery_profile(profile_id, question_ids, answers_first, answers_confirm)
+  serialize_enrollment_metadata(result)
+CLASSES:
+  RecoveryEnrollmentError
+  RecoveryEnrollmentResult
+CONSTANT_NAMES:
+========================================================================
+MODULE=backend\health_vault\recovery_profiles.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+IMPORTS:
+  __future__:annotations
+  dataclasses:dataclass,asdict
+  datetime:datetime,timezone
+  hashlib
+  json
+  os
+  re
+  typing:Final,Iterable
+PUBLIC_FUNCTIONS:
+  catalog()
+  validate_profile_id(profile_id)
+  question_set_id(question_ids)
+  create_recovery_profile(profile_id, question_ids)
+  serialize_profile(profile)
+  deserialize_profile(payload)
+CLASSES:
+  RecoveryProfileError
+  RecoveryProfile
+CONSTANT_NAMES:
+  MIN_SELECTED_QUESTIONS
+  QUESTION_CATALOG
+  RECOVERY_PROFILE_VERSION
+  RECOVERY_SALT_BYTES
+========================================================================
+MODULE=backend\health_vault\recovery_question_bank.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+IMPORTS:
+  __future__:annotations
+  dataclasses:dataclass
+  typing:Final
+PUBLIC_FUNCTIONS:
+  question_count()
+  categories()
+  questions_for_category(category)
+  question_by_id(question_id)
+CLASSES:
+  RecoveryQuestion
+CONSTANT_NAMES:
+  QUESTION_BANK
+  QUESTION_BANK_VERSION
+  REQUIRED_SELECTION_COUNT
+========================================================================
+MODULE=backend\health_vault\vault_question_recovery.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+IMPORTS:
+  __future__:annotations
+  cryptography.hazmat.primitives.kdf.scrypt:Scrypt
+  hashlib
+  typing:Iterable
+  unicodedata
+PUBLIC_FUNCTIONS:
+  normalize_answer(answer)
+  combine_answers(answers)
+  derive_recovery_credential(answers, salt)
+  credential_to_passphrase(credential)
+  question_set_id(question_ids)
+CLASSES:
+  QuestionRecoveryError
+CONSTANT_NAMES:
+  DERIVED_BYTES
+  MIN_QUESTIONS
+  SCRYPT_N
+  SCRYPT_P
+  SCRYPT_R
+AST_PROBE_EXIT=0
+
+=== 4. TEST CONTRACT INVENTORY ===
+========================================================================
+TEST_MODULE=tests\test_hc311f8b_vault_recovery.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+TEST_COUNT=13
+  test_bad_magic_rejected
+  test_ciphertext_tamper_fails_closed
+  test_key_check_value_is_non_key_digest
+  test_magic
+  test_metadata_tamper_fails_closed
+  test_packages_are_nondeterministic
+  test_passphrase_absent_from_package
+  test_plaintext_key_absent_from_package
+  test_roundtrip
+  test_short_passphrase_rejected
+  test_truncated_package_rejected
+  test_wrong_key_length_rejected
+  test_wrong_passphrase_fails_closed
+========================================================================
+TEST_MODULE=tests\test_hc311f8d_qr4_private_answer_enrollment.py
+EXISTS=YES
+HAS_UTF8_BOM=False
+AST_PARSE=PASS
+TEST_COUNT=4
+  test_case_and_whitespace_normalize
+  test_matching_answers_derive_passphrase
+  test_wrong_answer_count_fails
+  test_wrong_confirmation_fails
+========================================================================
+TEST_MODULE=tests\test_hc311f8d_question_recovery.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+TEST_COUNT=10
+  test_all_questions_required
+  test_changed_answer_changes_credential
+  test_credential_length
+  test_deterministic_same_answers_same_salt
+  test_different_salt_changes_credential
+  test_duplicate_question_ids_rejected
+  test_normalization_case
+  test_normalization_whitespace
+  test_passphrase_representation
+  test_question_set_identifier
+========================================================================
+TEST_MODULE=tests\test_hc311f8d_recovery_enrollment.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+TEST_COUNT=7
+  test_answer_count_mismatch_fails
+  test_matching_confirmation_succeeds
+  test_metadata_contains_no_answers
+  test_metadata_contains_no_recovery_passphrase
+  test_question_order_is_profile_specific
+  test_single_wrong_confirmation_fails
+  test_two_profiles_have_independent_salts
+========================================================================
+TEST_MODULE=tests\test_hc311f8d_recovery_profiles.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+TEST_COUNT=10
+  test_catalog_has_at_least_twenty_questions
+  test_catalog_ids_unique
+  test_duplicate_question_rejected
+  test_invalid_profile_id_rejected
+  test_profile_contains_no_answers
+  test_roundtrip
+  test_same_questions_same_set_identifier
+  test_too_few_questions_rejected
+  test_two_users_get_independent_salts
+  test_unknown_question_rejected
+========================================================================
+TEST_MODULE=tests\test_hc311f8d_recovery_question_bank.py
+EXISTS=YES
+HAS_UTF8_BOM=True
+AST_PARSE=PASS
+TEST_COUNT=12
+  test_catalog_contains_no_crypto_secret
+  test_catalog_contains_no_user_answers
+  test_exact_question_count
+  test_lookup
+  test_no_empty_categories
+  test_no_empty_prompts
+  test_prompts_unique
+  test_question_ids_unique
+  test_required_selection_count
+  test_six_questions_per_category
+  test_ten_categories
+  test_version
+========================================================================
+TOTAL_DISCOVERED_TEST_FUNCTIONS=56
+TEST_INVENTORY_EXIT=0
+
+=== 5. SECURITY MODEL RECONCILIATION ===
+RECOVERY_PACKAGE_KDF=SCRYPT
+RECOVERY_PACKAGE_KDF_N=32768
+RECOVERY_PACKAGE_KDF_R=8
+RECOVERY_PACKAGE_KDF_P=1
+RECOVERY_PACKAGE_AEAD=AES_256_GCM
+RECOVERY_PACKAGE_DATA_KEY_BYTES=32
+RECOVERY_PACKAGE_KEY_CHECK=REQUIRED
+RECOVERY_PACKAGE_FAIL_CLOSED=YES
+QUESTION_RECOVERY_KDF=SCRYPT
+QUESTION_RECOVERY_KDF_N=32768
+QUESTION_RECOVERY_KDF_R=8
+QUESTION_RECOVERY_KDF_P=1
+QUESTION_RECOVERY_NORMALIZATION=NFKC
+QUESTION_RECOVERY_SALT_BYTES=16
+PLAINTEXT_ANSWER_PERSISTENCE=FORBIDDEN
+ANSWER_HASH_PERSISTENCE=FORBIDDEN
+ANSWER_HINT_PERSISTENCE=FORBIDDEN
+ENROLLMENT_CONFIRMATION=REQUIRED
+
+=== 6. PREVIOUS VALIDATION EVIDENCE ===
+TARGETED_TESTS=56_PASSED
+TARGETED_TEST_TIME_SECONDS=4.94
+TARGETED_TEST_EXIT=0
+TESTS_RERUN_BY_R2=NO
+
+=== 7. DIFF SAFETY ===
+DIFF_CHECK_EXIT=0
+
+=== 8. R2 DECISION ===
+R1_STOP_RECONCILED=YES
+RECOVERY_DESIGN_STRUCTURALLY_PARSEABLE=YES
+RECOVERY_PACKAGE_AND_QUESTION_RECOVERY_COEXISTENCE=READY_FOR_SECURITY_CLOSEOUT
+PRODUCTION_KEY_CEREMONY_AUTHORIZED=NO
+LIVE_MIGRATION_AUTHORIZED=NO
+NEXT_GATE=HC311_F8D_SECURITY_MODEL_AND_ENROLLMENT_CLOSEOUT
+RESULT=HC311_F8D_RECOVERY_DESIGN_RECONCILIATION_PASS
+
+=== 9. SAFETY ===
+SOURCE_MODIFIED=NO
+SOURCE_ENCODING_MODIFIED=NO
+TESTS_MODIFIED=NO
+PRODUCTION_KEY_CREATED=NO
+PRODUCTION_KEY_FILE_CREATED=NO
+RECOVERY_PACKAGE_CREATED=NO
+RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+LIVE_VAULT_MODIFIED=NO
+RUNTIME_RESTARTED=NO
+COMMIT_PERFORMED=NO
+PUSH_PERFORMED=NO
+
+REPORT=C:\rasib\source\HealthChecker-HC310E\evidence\HC311_F8D_RECOVERY_DESIGN_RECONCILIATION_R2.txt

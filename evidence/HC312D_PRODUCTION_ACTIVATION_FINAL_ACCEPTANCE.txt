@@ -1,0 +1,81 @@
+HC-312D PRODUCTION ACTIVATION & FINAL AUTOMATIC INGESTION ACCEPTANCE REPORT
+=============================================================================
+
+HC312A_STATUS=PASS
+HC312B_STATUS=PASS
+HC312C_STATUS=PASS
+
+PRODUCTION_INTAKE_ROOT=C:\rasib\source\HealthChecker-HC310E\hc_intake
+SCHEDULED_TASK_INSTALLED=YES
+SCHEDULED_TASK_ENABLED=YES
+SCHEDULED_TASK_TRIGGERED=YES
+NO_INTERACTIVE_SHELL_DEPENDENCY=YES
+
+FIRST_RECORD_AUTOMATICALLY_INGESTED=YES
+SECOND_RECORD_AUTOMATICALLY_INGESTED=YES
+POST_FAILURE_VALID_RECORD_INGESTED=YES
+
+CANONICAL_IMPORT_PATH=YES
+ENCRYPTED_VAULT_PERSISTENCE=YES
+PLAINTEXT_AT_REST_DETECTED=NO
+COMPLETED_DISPOSITION=YES
+QUARANTINE_HANDLING=YES
+FAILURE_ISOLATION=YES
+
+MANUAL_IMPORT_INVOCATION_REQUIRED=NO
+MANUAL_WATCHER_INVOCATION_REQUIRED=NO
+
+FINAL_REGRESSION_TESTS_PASSED=YES
+DIFF_CHECK=PASSED
+
+PRODUCTION_KEY_CREATED=NO
+REAL_RECOVERY_ANSWERS_ENTERED=NO
+PHONE_MODIFIED=NO
+
+-----------------------------------------------------------------------------
+Details and Evidence Log
+-----------------------------------------------------------------------------
+1. WINDOWS SCHEDULED TASK INFORMATION
+- Task Name: HealthCheckerIntake
+- Executable: C:\Users\wadys\AppData\Local\Programs\Python\Python312\python.exe
+- Argument: -m backend.health_vault.intake.runner
+- Working Directory: C:\rasib\source\HealthChecker-HC310E
+- Triggers: Once trigger starting 2026-08-15 12:11:51 PM, repeating every 5 minutes
+- Concurrency Policy: IgnoreNew
+- State: Ready
+- User Account: finance\wadys (Interactive Logon)
+- Status: Registered and running in background (last run successfully exited with 0)
+
+2. UNATTENDED SYNTHETIC RECORDS INGESTED
+- First record: hc312d_acceptance_1.json
+  * Marker: HC312D_FINAL_ACCEPTANCE_9A8B7C6D_1
+  * Ingested At: 2026-08-15 12:16:52 PM
+  * Ingestion mechanism: Background scheduled task run
+- Second record: hc312d_acceptance_2.json
+  * Marker: HC312D_FINAL_ACCEPTANCE_9A8B7C6D_2
+  * Ingested At: 2026-08-15 12:21:52 PM
+  * Ingestion mechanism: Background scheduled task run
+- Third record (post-failure): hc312d_acceptance_3.json
+  * Marker: HC312D_FINAL_ACCEPTANCE_9A8B7C6D_3
+  * Ingested At: 2026-08-15 12:26:52 PM
+  * Ingestion mechanism: Background scheduled task run
+
+3. FAILURE ISOLATION AND QUARANTINE
+- Malformed/unsupported file bad_doc.exe was placed alongside hc312d_acceptance_3.json in incoming/.
+- Both files were processed in the scheduled task run at 12:26:52 PM.
+- bad_doc.exe was moved to quarantine/ and bad_doc.exe.reason was created with content "unsupported_extension".
+- The third record was successfully ingested to completed/ and index.json without blocking.
+
+4. REGRESSION VERIFICATION
+- Number of tests passed: 234
+- git diff --check: Passed
+- git status:
+  ?? HC312D_ANTIGRAVITY_PROMPT.txt
+  ?? backend/health_vault/intake/
+  ?? evidence/
+  ?? scripts/companion_host/install_intake_task.ps1.template
+  ?? scripts/companion_host/install_intake_task.ps1
+  ?? tests/test_hc312a_automatic_intake.py
+  ?? tests/test_hc312b_automatic_intake_runtime.py
+  ?? tests/test_hc312c_e2e_acceptance.py
+  ?? scratch/
