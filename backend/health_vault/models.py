@@ -329,3 +329,66 @@ class HealthObservation:
             "explanation": self.explanation,
         }
 
+
+@dataclass
+class UserDashboardPreferences:
+    """Configurable user preferences for theme, widget layout order and priorities."""
+
+    theme: str = "light"  # 'light' | 'dark'
+    widget_order: list[str] = field(default_factory=lambda: [
+        "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
+    ])
+    visible_widgets: list[str] = field(default_factory=lambda: [
+        "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
+    ])
+    priority_metric: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> UserDashboardPreferences:
+        return cls(
+            theme=data.get("theme", "light"),
+            widget_order=list(data.get("widget_order") or [
+                "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
+            ]),
+            visible_widgets=list(data.get("visible_widgets") or [
+                "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
+            ]),
+            priority_metric=data.get("priority_metric"),
+        )
+
+
+@dataclass
+class DashboardWidget:
+    """Individual serialized dashboard widget payload."""
+
+    widget_id: str
+    title: str
+    widget_type: str
+    priority: int
+    payload: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class DashboardSummary:
+    """Aggregated user landing summary payload."""
+
+    patient_id: str
+    overall_status: str
+    active_warnings_count: int
+    widgets: list[DashboardWidget] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_id": self.patient_id,
+            "overall_status": self.overall_status,
+            "active_warnings_count": self.active_warnings_count,
+            "widgets": [w.to_dict() for w in self.widgets],
+        }
+
+
