@@ -12,6 +12,8 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
+const CACHE_REVISION = "hc317c";
+const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** App-shell URLs safe to precache (relative to SW scope). */
 const APP_SHELL = [
@@ -36,6 +38,8 @@ const APP_SHELL = [
   "./js/health_vault/ai_health_bridge.js",
   "./js/health_vault/doctor_visit.js",
   "./js/health_vault/executive_dashboard.js",
+  "./js/health_vault/dashboard.js",
+  "./js/health_vault/records.js",
   "./js/health_vault/alert_engine.js",
   "./js/health_vault/baseline_engine.js",
   "./js/health_vault/cgm_continuity.js",
@@ -62,7 +66,7 @@ function isForbiddenCacheUrl(url) {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
-      .open(CACHE_NAME)
+      .open(ACTIVE_CACHE_NAME)
       .then((cache) =>
         Promise.all(
           APP_SHELL.map((url) =>
@@ -81,7 +85,7 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+        Promise.all(keys.filter((k) => k !== ACTIVE_CACHE_NAME).map((k) => caches.delete(k)))
       )
       .then(() => self.clients.claim())
   );
@@ -108,7 +112,7 @@ self.addEventListener("fetch", (event) => {
             !isJson
           ) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            caches.open(ACTIVE_CACHE_NAME).then((cache) => cache.put(req, clone));
           }
           return response;
         })

@@ -327,6 +327,9 @@ class HealthObservation:
             "evidence": [e.to_dict() for e in self.evidence],
             "safety_boundary_disclaimer": self.safety_boundary_disclaimer,
             "explanation": self.explanation,
+            "observation": f"{self.fact} {self.interpretation} (observational)",
+            "kind": "observational",
+            "diagnostic": False,
         }
 
 

@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>HealthChecker+ v6 (Trend Intelligence + Foot Pain Analysis + Health Vault)</title>
+<link rel="stylesheet" href="style.css" />
 <style>
 :root{
   --bg:#0b1220;
@@ -104,6 +105,7 @@ textarea{
   <div class="tab active" data="dash">Dashboard</div>
   <div class="tab" data="add">Add</div>
   <div class="tab" data="sym">Symptoms</div>
+  <div class="tab" data="health_records_screen">Health Records</div>
   <div class="tab" data="vault">Health Vault</div>
   <div class="tab" data="guardian">Guardian</div>
   <div class="tab" data="rep">Reports</div>
@@ -158,6 +160,94 @@ textarea{
     <div id="footDash">No foot pain analysis yet.</div>
     <div id="vault_dash_snapshot" class="muted">Open the Health Vault tab to import medical records.</div>
   </details>
+</div>
+
+<div id="health_records_screen" class="screen" aria-labelledby="records_screen_title">
+  <div class="records-header">
+    <div>
+      <h3 id="records_screen_title" class="section-title">Health Records</h3>
+      <p class="muted small records-privacy-note">Your reports are retrieved through the authenticated, encrypted Health Vault boundary.</p>
+    </div>
+    <div class="records-header-actions">
+      <button id="records_refresh_btn" type="button" class="secondary">Refresh</button>
+      <button id="records_add_btn" type="button">Add records</button>
+    </div>
+  </div>
+
+  <div id="records_summary_panel" class="card records-summary-card">
+    <strong><span id="records_count">0</span> records</strong>
+    <span id="records_last_refreshed" class="muted small">Not loaded yet</span>
+  </div>
+
+  <div class="card records-controls" aria-label="Record filters">
+    <label for="records_search" class="small">Search records</label>
+    <input id="records_search" type="search" placeholder="Search filename, category, source, or status" autocomplete="off" />
+    <div class="records-filter-grid">
+      <label class="small" for="records_category_filter">Category
+        <select id="records_category_filter">
+          <option value="">All categories</option>
+          <option value="laboratory_report">Laboratory reports</option>
+          <option value="blood_pressure">Blood pressure</option>
+          <option value="sleep">Sleep</option>
+          <option value="ecg_cardiology">ECG / cardiology</option>
+          <option value="glucose_diabetes">Glucose / diabetes</option>
+          <option value="kidney_renal">Kidney / renal</option>
+          <option value="weight_body_metrics">Weight / body metrics</option>
+          <option value="medication">Medication</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label class="small" for="records_status_filter">Status
+        <select id="records_status_filter">
+          <option value="">All statuses</option>
+          <option value="incoming">Incoming</option>
+          <option value="processing">Processing</option>
+          <option value="imported">Imported</option>
+          <option value="requires_review">Requires review</option>
+          <option value="quarantined">Quarantined</option>
+          <option value="duplicate">Duplicate</option>
+          <option value="failed">Failed</option>
+        </select>
+      </label>
+    </div>
+    <button id="records_clear_filters_btn" type="button" class="secondary records-inline-action">Clear filters</button>
+  </div>
+
+  <section id="records_upload_panel" class="card records-upload-panel" hidden aria-labelledby="records_upload_title">
+    <div class="records-panel-heading">
+      <h4 id="records_upload_title" class="section-title">Upload a medical record</h4>
+      <button id="records_upload_close_btn" type="button" class="secondary records-icon-button" aria-label="Close upload panel">×</button>
+    </div>
+    <div id="records_drop_zone" class="vault-drop-zone records-drop-zone" tabindex="0">
+      <strong>Drop one report here</strong>
+      <span class="muted small">or choose a PDF, JSON, PNG, or JPEG file</span>
+      <input id="records_file_input" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
+    </div>
+    <div id="records_file_preview" class="muted small">No file selected.</div>
+    <div class="records-upload-actions">
+      <button id="records_upload_submit_btn" type="button" disabled>Upload securely</button>
+      <button id="records_upload_cancel_btn" type="button" class="secondary">Cancel</button>
+    </div>
+    <div id="records_upload_status" class="records-state" role="status" aria-live="polite"></div>
+  </section>
+
+  <div id="records_loading" class="card records-state" hidden aria-live="polite">Loading your records…</div>
+  <div id="records_error" class="card records-state bad" hidden role="alert"></div>
+  <div id="records_empty" class="card records-state muted" hidden>
+    <strong>No records found.</strong>
+    <p class="small">Add your first report, or clear the current filters and search.</p>
+  </div>
+  <div id="records_list" class="records-list" aria-live="polite"></div>
+
+  <dialog id="record_detail_dialog" class="records-detail-dialog" aria-labelledby="record_detail_title">
+    <div class="records-panel-heading">
+      <h3 id="record_detail_title" class="section-title">Record details</h3>
+      <button id="record_detail_close_btn" type="button" class="secondary records-icon-button" aria-label="Close record details">×</button>
+    </div>
+    <div id="record_detail_loading" class="records-state" hidden>Loading record details…</div>
+    <div id="record_detail_error" class="records-state bad" hidden role="alert"></div>
+    <div id="record_detail_content"></div>
+  </dialog>
 </div>
 
 <div id="add" class="screen">
@@ -421,6 +511,7 @@ textarea{
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script src="js/health_vault/dashboard.js"></script>
+<script src="js/health_vault/records.js"></script>
 <script>
 const KEY = 'HC_V6';
 
@@ -772,6 +863,9 @@ tabs.forEach(t => t.onclick = () => {
   document.getElementById(t.getAttribute('data')).classList.add('active');
   if (t.getAttribute('data') === 'vault' && window.HCVaultUI) {
     HCVaultUI.refreshVaultViews();
+  }
+  if (t.getAttribute('data') === 'health_records_screen' && window.HCRecordsUI) {
+    HCRecordsUI.refreshRecords();
   }
   if (t.getAttribute('data') === 'dash' && window.HCExecutiveDashboard) {
     HCExecutiveDashboard.refresh();

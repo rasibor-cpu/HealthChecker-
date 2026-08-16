@@ -41,6 +41,7 @@
       this.patientId = patientId;
       this.token = token;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ patientId, token }));
+      document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: true } }));
     }
 
     clearSession() {
@@ -50,6 +51,16 @@
       this.summary = null;
       localStorage.removeItem(STORAGE_KEY);
       document.body.classList.remove("light-theme", "dark-theme");
+      document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: false } }));
+    }
+
+    getAuthorizationHeaders() {
+      return this.token ? { "Authorization": `Bearer ${this.token}` } : {};
+    }
+
+    openScreen(screenId) {
+      const tab = document.querySelector(`[data="${screenId}"]`);
+      if (tab) tab.click();
     }
 
     bindEvents() {
@@ -239,7 +250,6 @@
           </div>
         `;
       }).join("");
-
       // Bind move arrows
       listEl.querySelectorAll("[data-move-up]").forEach(btn => {
         btn.onclick = () => {
@@ -331,6 +341,9 @@
           </div>
         `;
       }).join("");
+      target.querySelectorAll("[data-open-health-records]").forEach(button => {
+        button.onclick = () => this.openScreen("health_records_screen");
+      });
     }
 
     renderWidgetContent(widget) {
@@ -442,11 +455,14 @@
       }
 
       if (type === "import_entry") {
+        const recent = payload.recent_records || [];
         return `
           <div class="small">
-            <p>Upload a new medical record report (PDF or Image screenshot) or wearable JSON export to import data.</p>
+            <p><strong>${Number(payload.records_count || 0)}</strong> health records available.</p>
+            ${recent.length ? `<div class="muted">Recent: ${recent.slice(0, 3).map(r => this.escape(r.original_filename || "Record")).join(" · ")}</div>` : '<div class="muted">No records have been added yet.</div>'}
+            <p>Upload reports and review extracted metrics, provenance, trends, and observations.</p>
             <div style="margin-top: 8px;">
-              <button onclick="document.querySelector('[data=\\'vault\\']').click()" style="width: auto; padding: 6px 12px; margin: 0;">Go to Health Vault Upload</button>
+              <button type="button" data-open-health-records style="width: auto; padding: 6px 12px; margin: 0;">Open Health Records</button>
             </div>
           </div>
         `;
