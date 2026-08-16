@@ -54,6 +54,16 @@ class DashboardService:
             include_guardian_events=True,
             newest_first=True
         )
+        patient_document_ids = {
+            str(document.get("id"))
+            for document in self.store.list_documents()
+            if document.get("id") and document.get("patient_id", "default-patient") == patient_id
+        }
+        patient_measurements = [
+            measurement
+            for measurement in self.store.list_measurements()
+            if str(measurement.get("document_id") or "") in patient_document_ids
+        ]
 
         # 2. Derive overall status & count active warnings
         active_warnings = 0
@@ -76,7 +86,7 @@ class DashboardService:
                 payload={
                     "status": status,
                     "active_warnings": active_warnings,
-                    "measurements_count": len(self.store.list_measurements()),
+                    "measurements_count": len(patient_measurements),
                 }
             ),
             "key_observations": DashboardWidget(

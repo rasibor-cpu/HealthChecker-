@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 
 from backend.health_vault.api import create_health_vault_app
 from backend.health_vault.auth import AuthenticationService, verify_password
-from backend.health_vault.models import create_measurement
+from backend.health_vault.dashboard_service import DashboardService
+from backend.health_vault.models import UserDashboardPreferences, create_measurement
 from backend.health_vault.vault_store import VaultStore
 
 
@@ -136,10 +137,18 @@ def test_new_users_are_empty_and_robert_data_never_leaks(auth_app):
     assert records.status_code == 200
     assert records.json() == {"records": []}
     assert client.get("/api/records/robert-doc", headers=headers).status_code == 404
-    dashboard = json.dumps(client.get("/api/dashboard/summary", headers=headers).json())
+    dashboard_body = client.get("/api/dashboard/summary", headers=headers).json()
+    dashboard = json.dumps(dashboard_body)
+    status_widget = next(widget for widget in dashboard_body["widgets"] if widget["widget_id"] == "status_summary")
+    assert status_widget["payload"]["measurements_count"] == 0
     assert "Robert private" not in dashboard
     assert "robert-private.pdf" not in dashboard
     assert "synthetic.pdf" not in dashboard
+    dashboard_service = DashboardService(store)
+    dashboard_service.save_preferences("00000", UserDashboardPreferences(theme="dark"))
+    dashboard_service.save_preferences("new-user", UserDashboardPreferences(theme="light"))
+    assert dashboard_service.get_preferences("00000").theme == "dark"
+    assert dashboard_service.get_preferences("new-user").theme == "light"
 
 
 def test_account_registry_is_encrypted_and_audits_are_secret_free(auth_app):
