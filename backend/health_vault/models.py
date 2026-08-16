@@ -392,3 +392,108 @@ class DashboardSummary:
         }
 
 
+from enum import Enum
+
+class RecordStatus(str, Enum):
+    INCOMING = "incoming"
+    PROCESSING = "processing"
+    IMPORTED = "imported"
+    REQUIRES_REVIEW = "requires_review"
+    QUARANTINED = "quarantined"
+    DUPLICATE = "duplicate"
+    FAILED = "failed"
+
+
+class RecordCategory(str, Enum):
+    BLOOD_PRESSURE = "blood_pressure"
+    SLEEP = "sleep"
+    ECG = "ecg_cardiology"
+    GLUCOSE = "glucose_diabetes"
+    KIDNEY = "kidney_renal"
+    LABS = "laboratory_report"
+    WEIGHT = "weight_body_metrics"
+    MEDICATION = "medication"
+    OTHER = "other"
+
+
+@dataclass
+class RecordProcessingEvent:
+    event_id: str
+    document_id: str
+    status: RecordStatus
+    timestamp: str
+    event_type: str
+    source: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "document_id": self.document_id,
+            "status": self.status.value if isinstance(self.status, RecordStatus) else self.status,
+            "timestamp": self.timestamp,
+            "event_type": self.event_type,
+            "source": self.source,
+            "details": dict(self.details),
+        }
+
+
+@dataclass
+class RecordLinkage:
+    document_id: str
+    extracted_measurements: list[dict[str, Any]] = field(default_factory=list)
+    timeline_events: list[dict[str, Any]] = field(default_factory=list)
+    trend_references: list[dict[str, Any]] = field(default_factory=list)
+    ai_observations: list[dict[str, Any]] = field(default_factory=list)
+    evidence_references: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class HealthRecord:
+    document_id: str
+    patient_id: str
+    original_filename: str
+    primary_category: RecordCategory
+    status: RecordStatus
+    imported_at: str
+    measured_at: str | None = None
+    size_bytes: int | None = None
+    metrics_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+    source_provenance: dict[str, Any] = field(default_factory=dict)
+    linkage: RecordLinkage | None = None
+    lifecycle: list[RecordProcessingEvent] = field(default_factory=list)
+
+    def to_summary_dict(self) -> dict[str, Any]:
+        return {
+            "document_id": self.document_id,
+            "original_filename": self.original_filename,
+            "primary_category": self.primary_category.value if isinstance(self.primary_category, RecordCategory) else self.primary_category,
+            "status": self.status.value if isinstance(self.status, RecordStatus) else self.status,
+            "measured_at": self.measured_at,
+            "imported_at": self.imported_at,
+            "size_bytes": self.size_bytes,
+            "metrics_count": self.metrics_count,
+            "source_system": self.source_provenance.get("source_system"),
+        }
+
+    def to_detail_dict(self) -> dict[str, Any]:
+        linkage = self.linkage or RecordLinkage(document_id=self.document_id)
+        return {
+            **self.to_summary_dict(),
+            "metadata": dict(self.metadata),
+            "source_provenance": dict(self.source_provenance),
+            "extracted_measurements": list(linkage.extracted_measurements),
+            "timeline_events": list(linkage.timeline_events),
+            "trend_references": list(linkage.trend_references),
+            "ai_observations": list(linkage.ai_observations),
+            "evidence_references": list(linkage.evidence_references),
+            "lifecycle": [event.to_dict() for event in self.lifecycle],
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Explicit full-record serialization retained for service callers."""
+        return self.to_detail_dict()

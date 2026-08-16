@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +88,27 @@ def _strip_banned_path_keys(body: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+def _parse_single_multipart(content_type: str, payload: bytes) -> tuple[str, str, bytes]:
+    """Dependency-free fallback for the single-file HC-317B upload contract."""
+    match = re.search(r"boundary=(?:\"([^\"]+)\"|([^;]+))", content_type)
+    if not match:
+        raise ValueError("multipart_boundary_missing")
+    boundary = (match.group(1) or match.group(2)).encode("ascii", "strict")
+    for part in payload.split(b"--" + boundary):
+        if b"filename=" not in part:
+            continue
+        header_blob, separator, content = part.lstrip(b"\r\n").partition(b"\r\n\r\n")
+        if not separator:
+            continue
+        headers = header_blob.decode("latin-1")
+        name_match = re.search(r'filename="([^\"]*)"', headers)
+        type_match = re.search(r"(?im)^Content-Type:\s*([^\r\n]+)", headers)
+        filename = sanitize_filename(name_match.group(1) if name_match else "upload.bin")
+        mime_type = type_match.group(1).strip() if type_match else "application/octet-stream"
+        return filename, mime_type, content.removesuffix(b"\r\n")
+    raise ValueError("multipart_file_missing")
+
+
 def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> dict[str, Any]:
     meta = _strip_banned_path_keys(body)
     items: list[dict[str, Any]] = []
@@ -120,6 +142,9 @@ def create_health_vault_app(store: VaultStore | None = None):
     doctor = DoctorVisitMode(vault)
     from backend.health_vault.dashboard_service import DashboardService
     dashboard_service = DashboardService(vault)
+    from backend.health_vault.records_service import RecordsService
+    records_service = RecordsService(vault)
+    authenticated_sessions: dict[str, str] = {}
 
     try:
         import multipart  # noqa: F401
@@ -559,13 +584,19 @@ def create_health_vault_app(store: VaultStore | None = None):
         pwd = body.get("password")
         if not pid or pwd != "correct":
             return JSONResponse({"ok": False, "error": "Invalid credentials"}, status_code=401)
-        return JSONResponse({"ok": True, "token": f"token-{pid}", "patient_id": pid})
+        token = secrets.token_urlsafe(32)
+        authenticated_sessions[token] = str(pid)
+        return JSONResponse({"ok": True, "token": token, "patient_id": pid})
 
     def _get_authenticated_patient(request: Request) -> str:
         auth = request.headers.get("Authorization")
-        if not auth or not auth.startswith("Bearer token-"):
+        if not auth or not auth.startswith("Bearer "):
             raise ValueError("Unauthorized")
-        return auth.replace("Bearer token-", "")
+        token = auth[7:]
+        patient_id = authenticated_sessions.get(token)
+        if not patient_id:
+            raise ValueError("Unauthorized")
+        return patient_id
 
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:
@@ -595,6 +626,98 @@ def create_health_vault_app(store: VaultStore | None = None):
         prefs = UserDashboardPreferences.from_dict(body)
         dashboard_service.save_preferences(pid, prefs)
         return JSONResponse(prefs.to_dict())
+
+    @app.get("/api/records")
+    async def list_health_records(
+        request: Request,
+        category: str | None = None,
+        status: str | None = None,
+    ) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        records = records_service.list_records(pid, category=category, status=status)
+        return JSONResponse({"records": [record.to_summary_dict() for record in records]})
+
+    # Register the static upload route before the document-id route so Starlette
+    # does not interpret "upload" as a document identifier and return 405.
+    if multipart_ok:
+        @app.post("/api/records/upload")
+        async def upload_health_record(
+            request: Request,
+            file: UploadFile = File(...)
+        ) -> JSONResponse:
+            try:
+                pid = _get_authenticated_patient(request)
+            except ValueError:
+                return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+            content = await file.read()
+            filename = sanitize_filename(file.filename or "upload.bin")
+            mime_type = file.content_type or "application/octet-stream"
+            result = records_service.upload_record(pid, content, filename, mime_type)
+            code = 200 if result.get("ok") else 400
+            return JSONResponse(_sanitize_value(result), status_code=code)
+    else:
+        @app.post("/api/records/upload")
+        async def upload_health_record_fallback(request: Request) -> JSONResponse:
+            try:
+                pid = _get_authenticated_patient(request)
+            except ValueError:
+                return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+            try:
+                filename, mime_type, content = _parse_single_multipart(
+                    request.headers.get("Content-Type") or "", await request.body()
+                )
+            except ValueError as exc:
+                return JSONResponse({"ok": False, "errors": [str(exc)]}, status_code=400)
+            result = records_service.upload_record(pid, content, filename, mime_type)
+            code = 200 if result.get("ok") else 400
+            return JSONResponse(_sanitize_value(result), status_code=code)
+
+    @app.get("/api/records/{document_id}")
+    async def get_health_record_details(document_id: str, request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        record = records_service.get_record_details(pid, document_id)
+        if not record:
+            return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
+        return JSONResponse(_sanitize_value(record.to_detail_dict()))
+
+    @app.get("/api/records/download/{document_id}")
+    async def download_health_record(document_id: str, request: Request):
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+        docs = vault.list_documents()
+        doc = None
+        for d in docs:
+            if d["id"] == document_id:
+                if d.get("patient_id", "default-patient") == pid:
+                    doc = d
+                break
+        if not doc:
+            return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
+
+        try:
+            content = vault.read_document_bytes(storage_uri=doc.get("storage_uri"), document_id=document_id)
+        except Exception:
+            return JSONResponse({"ok": False, "error": "Failed to decrypt record"}, status_code=500)
+
+        from fastapi.responses import Response
+        filename = sanitize_filename(doc.get("original_filename") or f"{document_id}.bin")
+        media_type = doc.get("mime_type") or "application/octet-stream"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
 
     return app
 

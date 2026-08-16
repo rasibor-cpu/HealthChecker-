@@ -39,6 +39,11 @@ class DashboardService:
     def get_summary(self, patient_id: str) -> DashboardSummary:
         """Synthesize clinical data and construct ordered widgets for landing page view."""
         prefs = self.get_preferences(patient_id)
+        from backend.health_vault.records_service import RecordsService
+        record_summaries = [
+            record.to_summary_dict()
+            for record in RecordsService(self.store).list_records(patient_id)[:5]
+        ]
         
         # 1. Fetch patient intelligence outputs
         observations = self.intel_engine.get_patient_observations(patient_id)
@@ -103,7 +108,11 @@ class DashboardService:
                 title="Import Medical Records",
                 widget_type="import_entry",
                 priority=5,
-                payload={"allowed_formats": ["PDF", "JSON", "PNG"]}
+                payload={
+                    "allowed_formats": ["PDF", "JSON", "PNG"],
+                    "records_count": len(RecordsService(self.store).list_records(patient_id)),
+                    "recent_records": record_summaries,
+                }
             )
         }
 

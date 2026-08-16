@@ -366,18 +366,19 @@ class ImportPipeline:
 
             # --- Timeline / trends / doctor / intelligence ---
             t_tl = time.perf_counter()
-            timeline = build_timeline(self.store)
+            patient_id = str(document.patient_id or "default-patient")
+            timeline = build_timeline(self.store, patient_id=patient_id)
             timings["timeline_ms"] = (time.perf_counter() - t_tl) * 1000
             self.bus.publish(TIMELINE_UPDATED, {"entries": len(timeline)})
 
             t_tr = time.perf_counter()
-            trends = self.trends.recompute()
+            trends = self.trends.recompute(patient_id=patient_id)
             timings["trends_ms"] = (time.perf_counter() - t_tr) * 1000
             self.bus.publish(TREND_UPDATED, {"metrics": list(trends.keys())})
 
             t_doc = time.perf_counter()
             doctor_report = self.doctor.generate()
-            observations = self.intelligence.generate_observations()
+            observations = self.intelligence.generate_observations(patient_id=patient_id)
             timings["doctor_ms"] = (time.perf_counter() - t_doc) * 1000
             self.bus.publish(DOCTOR_REPORT_UPDATED, {"title": doctor_report.get("title")})
 
