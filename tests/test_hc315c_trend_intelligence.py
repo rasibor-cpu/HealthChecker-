@@ -44,8 +44,7 @@ def test_glucose_variability_calculation(test_vault):
     engine = HealthIntelligenceEngine(test_vault)
     obs = engine.generate_observations("patient-1")
     
-    assert len(obs) == 1
-    glucose_obs = obs[0]
+    glucose_obs = [o for o in obs if o["metric"] == "glucose"][0]
     assert glucose_obs["category"] == "glycemic"
     assert glucose_obs["metric"] == "glucose"
     assert "mean" in glucose_obs["fact"].lower()
@@ -152,14 +151,14 @@ def test_evidence_linkage_and_user_isolation(test_vault):
     
     # Generate for Patient A
     obs_a = engine.generate_observations("patient-A")
-    assert len(obs_a) == 1
-    assert obs_a[0]["patient_id"] == "patient-A"
-    assert len(obs_a[0]["evidence"]) == 1
-    assert obs_a[0]["evidence"][0]["document_id"] == "doc-a"
+    weight_obs_a = [o for o in obs_a if o["metric"] == "weight"][0]
+    assert weight_obs_a["patient_id"] == "patient-A"
+    assert len(weight_obs_a["evidence"]) == 1
+    assert weight_obs_a["evidence"][0]["document_id"] == "doc-a"
     
     # Generate for Patient B
     obs_b = engine.generate_observations("patient-B")
-    assert len(obs_b) == 1
-    assert obs_b[0]["patient_id"] == "patient-B"
-    assert len(obs_b[0]["evidence"]) == 1
-    assert obs_b[0]["evidence"][0]["document_id"] == "doc-b"
+    weight_obs_b = [o for o in obs_b if o["metric"] == "weight"][0]
+    assert weight_obs_b["patient_id"] == "patient-B"
+    assert len(weight_obs_b["evidence"]) == 1
+    assert weight_obs_b["evidence"][0]["document_id"] == "doc-b"

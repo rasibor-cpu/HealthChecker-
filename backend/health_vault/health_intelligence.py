@@ -43,6 +43,34 @@ _LABELS = {
     "triglycerides": "Triglycerides",
 }
 
+FORBIDDEN_DIAGNOSES = {
+    "diabetes", "hypertension", "chronic kidney disease", "ckd",
+    "kidney disease", "renal failure", "nephropathy", "neuropathy",
+    "cardiovascular disease", "diabetic", "hypertensive"
+}
+FORBIDDEN_MEDICATIONS = {
+    "insulin", "metformin", "lisinopril", "losartan", "atorvastatin",
+    "statin", "prescribe", "medication recommendation"
+}
+
+
+def _validate_safety_boundaries(obs: HealthObservation) -> None:
+    """Enforces safety rules: no diagnoses, no medication recommendation, no clinical advice."""
+    for text in [obs.fact, obs.interpretation, obs.explanation or ""]:
+        lower_text = text.lower()
+        # Check diagnoses
+        for d in FORBIDDEN_DIAGNOSES:
+            if d in lower_text:
+                raise ValueError(
+                    f"Safety Boundary Violation: Forbidden diagnosis term '{d}' detected in observation."
+                )
+        # Check medications
+        for m in FORBIDDEN_MEDICATIONS:
+            if m in lower_text:
+                raise ValueError(
+                    f"Safety Boundary Violation: Forbidden medication term '{m}' detected in observation."
+                )
+
 
 class HealthIntelligenceEngine:
     """Generate observational intelligence statements from vault trends."""
@@ -85,9 +113,15 @@ class HealthIntelligenceEngine:
         observations: list[dict[str, Any]] = []
         processed_metrics: set[str] = set()
 
+        # Categories tracked for missing-data warnings
+        has_glycemic = False
+        has_renal = False
+        has_cardiovascular = False
+
         # 1. DIABETES/GLYCEMIC ANALYSIS
         glucose_items = self._get_metric_series("glucose", patient_id)
         if glucose_items:
+            has_glycemic = True
             processed_metrics.add("glucose")
             values = [float(item["value"]) for item in glucose_items]
             evidence = [
@@ -127,16 +161,18 @@ class HealthIntelligenceEngine:
                 confidence=ConfidenceScore(
                     value=0.9 if len(values) >= 3 else 0.6,
                     method="statistical_analysis",
-                    version="1.1.0",
+                    version="1.2.0",
                 ),
                 evidence=evidence,
                 explanation=explanation,
             )
+            _validate_safety_boundaries(obs)
             observations.append(obs.to_dict())
 
         # HbA1c Check
         hba1c_items = self._get_metric_series("hba1c", patient_id)
         if hba1c_items:
+            has_glycemic = True
             processed_metrics.add("hba1c")
             values = [float(item["value"]) for item in hba1c_items]
             evidence = [
@@ -162,16 +198,18 @@ class HealthIntelligenceEngine:
                 confidence=ConfidenceScore(
                     value=0.85 if len(values) >= 3 else 0.5,
                     method="rule_based",
-                    version="1.1.0",
+                    version="1.2.0",
                 ),
                 evidence=evidence,
                 explanation=explanation,
             )
+            _validate_safety_boundaries(obs)
             observations.append(obs.to_dict())
 
         # 2. KIDNEY/RENAL ANALYSIS
         egfr_items = self._get_metric_series("egfr", patient_id)
         if egfr_items:
+            has_renal = True
             processed_metrics.add("egfr")
             values = [float(item["value"]) for item in egfr_items]
             evidence = [
@@ -201,17 +239,19 @@ class HealthIntelligenceEngine:
                 confidence=ConfidenceScore(
                     value=0.85 if len(values) >= 3 else 0.5,
                     method="statistical_analysis",
-                    version="1.1.0",
+                    version="1.2.0",
                 ),
                 evidence=evidence,
                 explanation=explanation,
             )
+            _validate_safety_boundaries(obs)
             observations.append(obs.to_dict())
 
         # Creatinine & Proteinuria Check
         for metric, category in [("creatinine", "renal"), ("uacr", "renal"), ("protein", "renal")]:
             items = self._get_metric_series(metric, patient_id)
             if items:
+                has_renal = True
                 processed_metrics.add(metric)
                 values = [float(item["value"]) for item in items]
                 evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
@@ -225,16 +265,18 @@ class HealthIntelligenceEngine:
                     fact=f"Latest {metric} is {values[-1]} (prior values: {', '.join(map(str, values[:-1]))}).",
                     interpretation=f"Trends show a {direction} pattern.",
                     measured_at=utc_now(),
-                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.2.0"),
                     evidence=evidence,
                     explanation=f"Evaluated trend direction over {len(values)} points.",
                 )
+                _validate_safety_boundaries(obs)
                 observations.append(obs.to_dict())
 
         # 3. CARDIOVASCULAR BP / PULSE
         systolic_items = self._get_metric_series("systolic", patient_id)
         diastolic_items = self._get_metric_series("diastolic", patient_id)
         if systolic_items and diastolic_items:
+            has_cardiovascular = True
             processed_metrics.add("systolic")
             processed_metrics.add("diastolic")
             
@@ -267,10 +309,11 @@ class HealthIntelligenceEngine:
                 fact=fact,
                 interpretation=interpretation,
                 measured_at=utc_now(),
-                confidence=ConfidenceScore(0.85 if len(s_vals) >= 3 else 0.5, "rule_based", "1.1.0"),
+                confidence=ConfidenceScore(0.85 if len(s_vals) >= 3 else 0.5, "rule_based", "1.2.0"),
                 evidence=evidence,
-                explanation=f"Evaluated latest systolic/diastolic values against hypertensive threshold (130/80 mmHg) over {len(s_vals)} readings.",
+                explanation=f"Evaluated latest systolic/diastolic values against elevated blood pressure threshold (130/80 mmHg) over {len(s_vals)} readings.",
             )
+            _validate_safety_boundaries(obs)
             observations.append(obs.to_dict())
 
         # Other cardiovascular metrics: pulse, lipid metrics
@@ -285,6 +328,7 @@ class HealthIntelligenceEngine:
         ]:
             items = self._get_metric_series(metric, patient_id)
             if items:
+                has_cardiovascular = True
                 processed_metrics.add(metric)
                 values = [float(item["value"]) for item in items]
                 evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
@@ -298,10 +342,11 @@ class HealthIntelligenceEngine:
                     fact=f"Latest {metric} is {values[-1]} (range: {min(values)}-{max(values)}).",
                     interpretation=f"Trends show a {direction} pattern.",
                     measured_at=utc_now(),
-                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.2.0"),
                     evidence=evidence,
                     explanation=f"Tracked clinical trend path for {metric} across {len(values)} readings.",
                 )
+                _validate_safety_boundaries(obs)
                 observations.append(obs.to_dict())
 
         # 4. LIFESTYLE (WEIGHT / SLEEP / ACTIVITY)
@@ -326,15 +371,64 @@ class HealthIntelligenceEngine:
                     fact=f"Latest {metric} is {values[-1]} (prior average: {sum(values[:-1])/max(1, len(values)-1):.1f}).",
                     interpretation=f"Trend direction is {direction}.",
                     measured_at=utc_now(),
-                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.1.0"),
+                    confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.2.0"),
                     evidence=evidence,
                     explanation=f"Evaluated lifestyle trend direction for {metric} across {len(values)} points.",
                 )
+                _validate_safety_boundaries(obs)
                 observations.append(obs.to_dict())
 
-        # 5. REGRESSION FALLBACK
-        # For any metrics computed in trend_map that were NOT processed by the specialized checks, 
-        # generate a generic fallback observation so that we preserve prior functionality.
+        # 5. MISSING-DATA WARNINGS
+        # Generate warnings if core metrics are absent for a category.
+        if not has_glycemic:
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="glycemic",
+                metric=None,
+                fact="No glycemic measurements found in the vault.",
+                interpretation="Missing data warning",
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(0.0, "rule_based", "1.2.0"),
+                evidence=[],
+                explanation="No glucose or HbA1c metrics exist in the vault for glycemic analysis.",
+            )
+            _validate_safety_boundaries(obs)
+            observations.append(obs.to_dict())
+
+        if not has_renal:
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="renal",
+                metric=None,
+                fact="No renal measurements found in the vault.",
+                interpretation="Missing data warning",
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(0.0, "rule_based", "1.2.0"),
+                evidence=[],
+                explanation="No eGFR or creatinine metrics exist in the vault for renal analysis.",
+            )
+            _validate_safety_boundaries(obs)
+            observations.append(obs.to_dict())
+
+        if not has_cardiovascular:
+            obs = HealthObservation(
+                patient_id=patient_id,
+                observation_id=str(uuid4()),
+                category="cardiovascular",
+                metric=None,
+                fact="No cardiovascular measurements found in the vault.",
+                interpretation="Missing data warning",
+                measured_at=utc_now(),
+                confidence=ConfidenceScore(0.0, "rule_based", "1.2.0"),
+                evidence=[],
+                explanation="No blood pressure or pulse metrics exist in the vault for cardiovascular analysis.",
+            )
+            _validate_safety_boundaries(obs)
+            observations.append(obs.to_dict())
+
+        # 6. REGRESSION FALLBACK
         for metric, t in trend_map.items():
             canon_metric = canonicalize_metric(metric)
             if canon_metric in processed_metrics or metric in processed_metrics:
@@ -374,11 +468,12 @@ class HealthIntelligenceEngine:
                 confidence=ConfidenceScore(
                     value=0.85 if sample_count >= 3 else 0.5,
                     method="rule_based",
-                    version="1.1.0",
+                    version="1.2.0",
                 ),
                 evidence=evidence,
                 explanation=f"Evaluated trend direction for {metric} across {sample_count} points.",
             )
+            _validate_safety_boundaries(obs)
             observations.append(obs.to_dict())
 
         # Persist snapshot for Doctor Visit / UI
