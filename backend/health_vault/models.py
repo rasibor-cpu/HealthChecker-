@@ -334,6 +334,43 @@ class HealthObservation:
 
 
 @dataclass
+class UserAccount:
+    """HC-318B immutable identity and password-lifecycle state."""
+
+    user_id: str
+    name: str
+    email_identifier: str
+    password_hash: str
+    password_changed_at: str | None
+    password_expiry_date: str | None
+    must_change_password: bool
+    account_status: str
+    role: str
+    password_version: int = 1
+
+    def to_dict(self, *, include_secret: bool = False) -> dict[str, Any]:
+        data = asdict(self)
+        if not include_secret:
+            data.pop("password_hash", None)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UserAccount":
+        return cls(
+            user_id=str(data["user_id"]),
+            name=str(data.get("name") or ""),
+            email_identifier=str(data.get("email_identifier") or data["user_id"]),
+            password_hash=str(data.get("password_hash") or ""),
+            password_changed_at=data.get("password_changed_at"),
+            password_expiry_date=data.get("password_expiry_date"),
+            must_change_password=bool(data.get("must_change_password")),
+            account_status=str(data.get("account_status") or "disabled"),
+            role=str(data.get("role") or "user"),
+            password_version=int(data.get("password_version", 1)),
+        )
+
+
+@dataclass
 class UserDashboardPreferences:
     """Configurable user preferences for theme, widget layout order and priorities."""
 

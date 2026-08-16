@@ -215,9 +215,9 @@ class PatientIdentityVerifier:
         self._profile = dict(profile or {})
 
     @classmethod
-    def from_store(cls, store: Any) -> "PatientIdentityVerifier":
+    def from_store(cls, store: Any, patient_id: str | None = None) -> "PatientIdentityVerifier":
         """Construct from a live VaultStore instance."""
-        profile = store.get_profile()
+        profile = store.get_profile(patient_id=patient_id)
         return cls(profile)
 
     # ------------------------------------------------------------------

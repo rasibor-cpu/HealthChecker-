@@ -18,7 +18,9 @@ from backend.health_vault.vault_store import VaultStore
 def records_app():
     with tempfile.TemporaryDirectory() as td:
         store = VaultStore(root=Path(td), encryption_key=b"R" * 32)
-        client = TestClient(create_health_vault_app(store))
+        client = TestClient(create_health_vault_app(store, test_users={
+            "patient-A": "correct", "patient-B": "correct", "patient-1": "correct"
+        }))
         yield store, client
 
 

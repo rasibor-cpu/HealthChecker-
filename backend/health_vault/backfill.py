@@ -120,7 +120,8 @@ def _format_medication(entry: Any) -> str:
 def apply_profile(store: VaultStore, payload: dict[str, Any]) -> dict[str, Any]:
     """Merge diagnoses/medications into vault profile (idempotent set-union)."""
     profile_in = payload.get("profile") or {}
-    current = store.get_profile() or {"diagnoses": [], "medications": []}
+    patient_id = str((payload.get("patient") or {}).get("patient_id") or "default-patient")
+    current = store.get_profile(patient_id=patient_id) or {"diagnoses": [], "medications": []}
     diagnoses = list(current.get("diagnoses") or [])
     medications = list(current.get("medications") or [])
 
@@ -147,8 +148,8 @@ def apply_profile(store: VaultStore, payload: dict[str, Any]) -> dict[str, Any]:
     if patient.get("display_name"):
         partial["display_name"] = patient["display_name"]
 
-    store.update_profile(partial)
-    return store.get_profile()
+    store.update_profile(partial, patient_id=patient_id)
+    return store.get_profile(patient_id=patient_id)
 
 
 def record_to_pipeline_request(record: dict[str, Any], patient_id: str) -> dict[str, Any]:
@@ -273,7 +274,7 @@ def run_backfill(
             report["failed"] += 1
             report["ok"] = False
 
-    report["profile"] = vault.get_profile()
+    report["profile"] = vault.get_profile(patient_id=patient_id)
     report["final_document_count"] = len(vault.list_documents())
     report["final_measurement_count"] = len(vault.list_measurements())
     report["timeline_entries"] = len(build_timeline(vault))

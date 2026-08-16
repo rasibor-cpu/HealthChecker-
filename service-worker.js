@@ -12,7 +12,7 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
-const CACHE_REVISION = "hc317c";
+const CACHE_REVISION = "hc318b";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** App-shell URLs safe to precache (relative to SW scope). */

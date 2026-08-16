@@ -26,7 +26,7 @@
 
     loadSession() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = sessionStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
           this.patientId = parsed.patientId;
@@ -40,7 +40,7 @@
     saveSession(patientId, token) {
       this.patientId = patientId;
       this.token = token;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ patientId, token }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ patientId, token }));
       document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: true } }));
     }
 
@@ -49,7 +49,7 @@
       this.token = null;
       this.preferences = null;
       this.summary = null;
-      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
       document.body.classList.remove("light-theme", "dark-theme");
       document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: false } }));
     }
@@ -88,6 +88,12 @@
       if (saveConfigBtn) {
         saveConfigBtn.onclick = () => this.savePreferencesFromUI();
       }
+
+      const passwordForm = document.getElementById("password_change_form");
+      if (passwordForm) passwordForm.onsubmit = event => {
+        event.preventDefault();
+        this.handlePasswordChange();
+      };
     }
 
     updateUIVisibility() {
@@ -144,6 +150,10 @@
         if (pidEl) pidEl.value = "";
         if (pwdEl) pwdEl.value = "";
 
+        if (data.must_change_password) {
+          this.showPasswordChange();
+          return;
+        }
         this.updateUIVisibility();
         
         // Switch active tab to dashboard
@@ -159,8 +169,49 @@
     }
 
     handleLogout() {
+      if (this.token) fetch("/api/auth/logout", { method: "POST", headers: this.getAuthorizationHeaders() }).catch(() => {});
       this.clearSession();
       this.updateUIVisibility();
+    }
+
+    showPasswordChange() {
+      const loginScreen = document.getElementById("login_screen");
+      const form = document.getElementById("password_change_form");
+      if (loginScreen) loginScreen.style.display = "block";
+      if (form) form.hidden = false;
+      const loginButton = document.getElementById("login_btn");
+      if (loginButton) loginButton.hidden = true;
+    }
+
+    async handlePasswordChange() {
+      const current = document.getElementById("current_password");
+      const next = document.getElementById("new_password");
+      const confirm = document.getElementById("confirm_password");
+      const error = document.getElementById("password_change_error");
+      if (error) error.textContent = "";
+      if (!next || next.value.length < 8 || next.value !== (confirm && confirm.value)) {
+        if (error) error.textContent = "New passwords must match and contain at least 8 characters.";
+        return;
+      }
+      const response = await fetch("/api/auth/password/change", {
+        method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
+        body: JSON.stringify({ current_password: current ? current.value : "", new_password: next.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (error) error.textContent = data.error || "Password change failed.";
+        return;
+      }
+      this.saveSession(data.patient_id, data.token);
+      const form = document.getElementById("password_change_form");
+      if (form) form.hidden = true;
+      const loginButton = document.getElementById("login_btn");
+      if (loginButton) loginButton.hidden = false;
+      [current, next, confirm].forEach(input => { if (input) input.value = ""; });
+      this.updateUIVisibility();
+      const dashTab = document.querySelector('[data="dash"]');
+      if (dashTab) dashTab.click();
+      await this.refresh();
     }
 
     async refresh() {
@@ -171,7 +222,7 @@
         const prefRes = await fetch("/api/dashboard/preferences", {
           headers: { "Authorization": `Bearer ${this.token}` },
         });
-        if (prefRes.status === 401) {
+        if (prefRes.status === 401 || prefRes.status === 403) {
           this.handleLogout();
           return;
         }

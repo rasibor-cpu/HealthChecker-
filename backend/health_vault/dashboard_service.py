@@ -23,7 +23,7 @@ class DashboardService:
 
     def get_preferences(self, patient_id: str) -> UserDashboardPreferences:
         """Load user personalization choices from the encrypted vault profile."""
-        profile = self.store.get_profile()
+        profile = self.store.get_profile(patient_id=patient_id)
         prefs_data = profile.get("dashboard_preferences") or {}
         return UserDashboardPreferences.from_dict(prefs_data)
 
@@ -31,9 +31,9 @@ class DashboardService:
         self, patient_id: str, preferences: UserDashboardPreferences
     ) -> UserDashboardPreferences:
         """Persist user personalization choices directly inside the patient's vault profile."""
-        profile = self.store.get_profile()
+        profile = self.store.get_profile(patient_id=patient_id)
         profile["dashboard_preferences"] = preferences.to_dict()
-        self.store.update_profile({"dashboard_preferences": preferences.to_dict()})
+        self.store.update_profile({"dashboard_preferences": preferences.to_dict()}, patient_id=patient_id)
         return preferences
 
     def get_summary(self, patient_id: str) -> DashboardSummary:

@@ -99,6 +99,18 @@ textarea{
   <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" />
   <button id="login_btn">Sign In</button>
   <div id="login_error" class="bad small" style="margin-top: 10px; font-weight: bold;"></div>
+  <form id="password_change_form" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
+    <h4 class="section-title">Change your temporary password</h4>
+    <p class="small muted">A new password is required before health information can be accessed.</p>
+    <label class="small muted" for="current_password">Temporary/current password</label>
+    <input id="current_password" type="password" autocomplete="current-password" />
+    <label class="small muted" for="new_password">New password (8+ characters)</label>
+    <input id="new_password" type="password" autocomplete="new-password" minlength="8" />
+    <label class="small muted" for="confirm_password">Confirm new password</label>
+    <input id="confirm_password" type="password" autocomplete="new-password" minlength="8" />
+    <button id="password_change_btn" type="submit">Change password and continue</button>
+    <div id="password_change_error" class="bad small" role="alert"></div>
+  </form>
 </div>
 
 <nav id="tabs_navbar">

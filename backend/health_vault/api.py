@@ -127,7 +127,7 @@ def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> 
     )
 
 
-def create_health_vault_app(store: VaultStore | None = None):
+def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict[str, str] | None = None):
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
         from fastapi import FastAPI, File, Form, UploadFile
@@ -144,7 +144,16 @@ def create_health_vault_app(store: VaultStore | None = None):
     dashboard_service = DashboardService(vault)
     from backend.health_vault.records_service import RecordsService
     records_service = RecordsService(vault)
-    authenticated_sessions: dict[str, str] = {}
+    from backend.health_vault.auth import AuthenticationError, AuthenticationService
+    auth_service = AuthenticationService(vault)
+    app.state.auth_service = auth_service
+    for test_user_id, test_password in (test_users or {}).items():
+        if auth_service.get_account(test_user_id) is None:
+            auth_service.create_user(
+                user_id=test_user_id, name=f"Test {test_user_id}",
+                email_identifier=test_user_id, password=test_password,
+                must_change_password=False,
+            )
 
     try:
         import multipart  # noqa: F401
@@ -580,30 +589,59 @@ def create_health_vault_app(store: VaultStore | None = None):
 
     @app.post("/api/auth/login")
     async def dashboard_login(body: dict[str, Any]) -> JSONResponse:
-        pid = body.get("patient_id")
-        pwd = body.get("password")
-        if not pid or pwd != "correct":
-            return JSONResponse({"ok": False, "error": "Invalid credentials"}, status_code=401)
-        token = secrets.token_urlsafe(32)
-        authenticated_sessions[token] = str(pid)
-        return JSONResponse({"ok": True, "token": token, "patient_id": pid})
+        user_id = body.get("user_id") or body.get("patient_id")
+        try:
+            result = auth_service.login(str(user_id or ""), str(body.get("password") or ""))
+        except AuthenticationError:
+            return JSONResponse({"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"}, status_code=401)
+        return JSONResponse({"ok": True, **result})
+
+    def _bearer_token(request: Request) -> str:
+        auth = request.headers.get("Authorization")
+        if not auth or not auth.startswith("Bearer ") or not auth[7:].strip():
+            raise AuthenticationError()
+        return auth[7:].strip()
+
+    @app.get("/api/auth/session")
+    async def auth_session(request: Request) -> JSONResponse:
+        try:
+            return JSONResponse(auth_service.safe_session(_bearer_token(request)))
+        except AuthenticationError as exc:
+            return JSONResponse({"ok": False, "error": exc.code}, status_code=exc.status_code)
+
+    @app.post("/api/auth/password/change")
+    async def auth_password_change(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.change_password(
+                _bearer_token(request), str(body.get("current_password") or ""),
+                str(body.get("new_password") or ""),
+            )
+            return JSONResponse({"ok": True, **result})
+        except AuthenticationError as exc:
+            return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
+
+    @app.post("/api/auth/logout")
+    async def auth_logout(request: Request) -> JSONResponse:
+        try:
+            auth_service.logout(_bearer_token(request))
+        except AuthenticationError:
+            pass
+        return JSONResponse({"ok": True})
 
     def _get_authenticated_patient(request: Request) -> str:
-        auth = request.headers.get("Authorization")
-        if not auth or not auth.startswith("Bearer "):
-            raise ValueError("Unauthorized")
-        token = auth[7:]
-        patient_id = authenticated_sessions.get(token)
-        if not patient_id:
-            raise ValueError("Unauthorized")
-        return patient_id
+        account, _ = auth_service.resolve(_bearer_token(request), require_full=True)
+        return account.user_id
+
+    def _auth_error(exc: AuthenticationError) -> JSONResponse:
+        message = "Unauthorized" if exc.code == "unauthorized" else exc.code
+        return JSONResponse({"ok": False, "error": message, "code": exc.code}, status_code=exc.status_code)
 
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         summary = dashboard_service.get_summary(pid)
         return JSONResponse(_sanitize_value(summary.to_dict()))
 
@@ -611,8 +649,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     async def get_dashboard_preferences(request: Request) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         prefs = dashboard_service.get_preferences(pid)
         return JSONResponse(prefs.to_dict())
 
@@ -620,8 +658,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     async def save_dashboard_preferences(request: Request, body: dict[str, Any]) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         from backend.health_vault.models import UserDashboardPreferences
         prefs = UserDashboardPreferences.from_dict(body)
         dashboard_service.save_preferences(pid, prefs)
@@ -635,8 +673,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     ) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         records = records_service.list_records(pid, category=category, status=status)
         return JSONResponse({"records": [record.to_summary_dict() for record in records]})
 
@@ -650,8 +688,8 @@ def create_health_vault_app(store: VaultStore | None = None):
         ) -> JSONResponse:
             try:
                 pid = _get_authenticated_patient(request)
-            except ValueError:
-                return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+            except AuthenticationError as exc:
+                return _auth_error(exc)
             content = await file.read()
             filename = sanitize_filename(file.filename or "upload.bin")
             mime_type = file.content_type or "application/octet-stream"
@@ -663,8 +701,8 @@ def create_health_vault_app(store: VaultStore | None = None):
         async def upload_health_record_fallback(request: Request) -> JSONResponse:
             try:
                 pid = _get_authenticated_patient(request)
-            except ValueError:
-                return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+            except AuthenticationError as exc:
+                return _auth_error(exc)
             try:
                 filename, mime_type, content = _parse_single_multipart(
                     request.headers.get("Content-Type") or "", await request.body()
@@ -679,8 +717,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     async def get_health_record_details(document_id: str, request: Request) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         record = records_service.get_record_details(pid, document_id)
         if not record:
             return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
@@ -690,8 +728,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     async def download_health_record(document_id: str, request: Request):
         try:
             pid = _get_authenticated_patient(request)
-        except ValueError:
-            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
 
         docs = vault.list_documents()
         doc = None

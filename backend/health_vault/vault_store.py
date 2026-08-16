@@ -86,6 +86,7 @@ class VaultStore:
             "encounters": [],
             "medications": [],
             "profile": {"diagnoses": [], "medications": []},
+            "profiles_by_user_id": {},
             "batch_audits": [],
             "ai_import_previews": {},
             "ai_import_audits": [],
@@ -535,17 +536,40 @@ class VaultStore:
             return dict(all_trends) if patient_id == "default-patient" else {}
         return dict(all_trends.get(patient_id) or {})
 
-    def update_profile(self, partial: dict[str, Any]) -> dict[str, Any]:
+    def update_profile(self, partial: dict[str, Any], patient_id: str | None = None) -> dict[str, Any]:
         data = self._read_index()
-        profile = dict(data.get("profile") or {})
+        if patient_id is not None:
+            profiles = data.setdefault("profiles_by_user_id", {})
+            profile = dict(profiles.get(str(patient_id)) or {"diagnoses": [], "medications": []})
+        else:
+            profile = dict(data.get("profile") or {})
         profile.update(partial or {})
-        data["profile"] = profile
-        self._audit(data, "profile_updated", {"keys": list((partial or {}).keys())})
+        if patient_id is not None:
+            profiles[str(patient_id)] = profile
+        else:
+            data["profile"] = profile
+        self._audit(data, "profile_updated", {"patient_id": patient_id, "keys": list((partial or {}).keys())})
         self._write_index(data)
         return profile
 
-    def get_profile(self) -> dict[str, Any]:
-        return dict(self._read_index().get("profile") or {})
+    def get_profile(self, patient_id: str | None = None) -> dict[str, Any]:
+        data = self._read_index()
+        if patient_id is not None:
+            return dict((data.get("profiles_by_user_id") or {}).get(str(patient_id)) or {})
+        legacy = dict(data.get("profile") or {})
+        profiles = data.get("profiles_by_user_id") or {}
+        if len(profiles) == 1 and not any(legacy.get(key) for key in ("name", "display_name", "diagnoses", "medications")):
+            return dict(next(iter(profiles.values())) or {})
+        return legacy
+
+    def ensure_user_profile(self, patient_id: str) -> dict[str, Any]:
+        data = self._read_index()
+        profiles = data.setdefault("profiles_by_user_id", {})
+        if str(patient_id) not in profiles:
+            profiles[str(patient_id)] = {"diagnoses": [], "medications": []}
+            self._audit(data, "user_profile_initialized", {"patient_id": str(patient_id)})
+            self._write_index(data)
+        return dict(profiles[str(patient_id)])
 
     def audit(self) -> list[dict[str, Any]]:
         return list(self._read_index().get("audit") or [])

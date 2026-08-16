@@ -22,7 +22,9 @@ class DoctorVisitMode:
         return f"{label} (latest {latest})" if latest is not None else label
 
     def generate(self, patient_id: str = "default-patient") -> dict[str, Any]:
-        profile = self.store.get_profile()
+        profile = self.store.get_profile(patient_id=patient_id)
+        if not profile and patient_id == "default-patient":
+            profile = self.store.get_profile()
         docs = [
             document
             for document in self.store.list_documents()
