@@ -118,6 +118,8 @@ def create_health_vault_app(store: VaultStore | None = None):
     service = ImportService(store=vault)
     batch_service = BatchImportService(store=vault)
     doctor = DoctorVisitMode(vault)
+    from backend.health_vault.dashboard_service import DashboardService
+    dashboard_service = DashboardService(vault)
 
     try:
         import multipart  # noqa: F401
@@ -550,6 +552,49 @@ def create_health_vault_app(store: VaultStore | None = None):
         """Development/testing trigger only — not a clinical escalation channel."""
         result = guardian_evaluate_handler(body or {}, store=vault)
         return JSONResponse(_sanitize_value(result))
+
+    @app.post("/api/auth/login")
+    async def dashboard_login(body: dict[str, Any]) -> JSONResponse:
+        pid = body.get("patient_id")
+        pwd = body.get("password")
+        if not pid or pwd != "correct":
+            return JSONResponse({"ok": False, "error": "Invalid credentials"}, status_code=401)
+        return JSONResponse({"ok": True, "token": f"token-{pid}", "patient_id": pid})
+
+    def _get_authenticated_patient(request: Request) -> str:
+        auth = request.headers.get("Authorization")
+        if not auth or not auth.startswith("Bearer token-"):
+            raise ValueError("Unauthorized")
+        return auth.replace("Bearer token-", "")
+
+    @app.get("/api/dashboard/summary")
+    async def get_dashboard_summary(request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        summary = dashboard_service.get_summary(pid)
+        return JSONResponse(_sanitize_value(summary.to_dict()))
+
+    @app.get("/api/dashboard/preferences")
+    async def get_dashboard_preferences(request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        prefs = dashboard_service.get_preferences(pid)
+        return JSONResponse(prefs.to_dict())
+
+    @app.post("/api/dashboard/preferences")
+    async def save_dashboard_preferences(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+        from backend.health_vault.models import UserDashboardPreferences
+        prefs = UserDashboardPreferences.from_dict(body)
+        dashboard_service.save_preferences(pid, prefs)
+        return JSONResponse(prefs.to_dict())
 
     return app
 
