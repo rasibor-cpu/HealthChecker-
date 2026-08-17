@@ -31,7 +31,7 @@
 
   async function request(path, options) {
     const response = await fetch(path, { ...(options || {}), headers: { ...authHeaders(), ...((options || {}).headers || {}) } });
-    if (response.status === 401 || response.status === 403) {
+    if (session && (response.status === 401 || response.status === 403)) {
       await logout(false);
       throw new Error(response.status === 403 ? "Password change required" : "Session expired");
     }
@@ -88,8 +88,13 @@
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
     showAuthenticated(false);
     if (notifyServer && token) {
-      await fetch("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ revoke_companion_devices: true })
+      }).catch(() => {});
     }
+    window.location.replace("/mobile/native-logout-complete");
   }
 
   function renderList(target, rows, emptyMessage, formatter) {

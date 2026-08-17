@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HealthChecker+ Companion</string>
-    <string name="status_title">Companion status</string>
+    <string name="app_name">HealthChecker</string>
+    <string name="status_title">Health Connect &amp; Sync</string>
     <string name="nav_back">Back</string>
     <string name="btn_request_permissions">Request Health Connect permissions</string>
     <string name="btn_manage_permissions">Manage Health Connect permissions</string>
@@ -13,4 +13,12 @@
     <string name="pair_success">Paired</string>
     <string name="pair_failed_reason">Pair failed: %1$s</string>
     <string name="pairing_repair_required">Pairing state is inconsistent. Re-pair with your Health Vault host. Existing credentials were not erased.</string>
+    <string name="consumer_settings">Settings</string>
+    <string name="consumer_open_settings">Open Health Connect &amp; Sync settings</string>
+    <string name="consumer_retry">Retry</string>
+    <string name="consumer_connection_required">Connect this HealthChecker installation to your trusted HealthChecker host in Settings, then retry.</string>
+    <string name="consumer_host_unreachable">The trusted HealthChecker host could not be reached. Check the secure connection and retry.</string>
+    <string name="consumer_tls_error">The HealthChecker host certificate could not be verified. The connection was blocked.</string>
+    <string name="consumer_navigation_blocked">HealthChecker blocked navigation outside the trusted consumer service.</string>
+    <string name="consumer_download_blocked">Downloads are blocked in the mobile consumer. View records securely in HealthChecker.</string>
 </resources>

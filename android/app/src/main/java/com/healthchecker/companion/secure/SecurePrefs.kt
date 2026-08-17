@@ -45,6 +45,8 @@ class SecurePrefs(context: Context) {
     /** Active paired delivery host only. Never returns the draft. */
     fun getHostUrl(): String? = hostStore.getActiveHostUrl()
 
+    fun getConsumerOrigin(): String? = hostStore.getConsumerOrigin()
+
     fun getDraftHostUrl(): String? = hostStore.getDraftHostUrl()
 
     fun displayHostForEditing(): String = hostStore.displayHostForEditing()

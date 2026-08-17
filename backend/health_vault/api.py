@@ -687,9 +687,19 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     @app.post("/api/auth/logout")
     async def auth_logout(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
         device_revoked = False
+        devices_revoked = 0
         try:
             token = _bearer_token(request)
             account, _ = auth_service.resolve(token, require_full=False)
+            if bool((body or {}).get("revoke_companion_devices")):
+                for device in vault.list_companion_devices():
+                    if str(device.get("patient_id") or "") != account.user_id or device.get("revoked"):
+                        continue
+                    result = _companion_pairing(vault).revoke_device(
+                        str(device.get("device_id") or ""), patient_id=account.user_id
+                    )
+                    if result.get("ok"):
+                        devices_revoked += 1
             device_id = str((body or {}).get("device_id") or "").strip()
             if device_id:
                 result = _companion_pairing(vault).revoke_device(
@@ -704,7 +714,11 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
             auth_service.logout(token)
         except AuthenticationError:
             pass
-        return JSONResponse({"ok": True, "device_revoked": device_revoked})
+        return JSONResponse({
+            "ok": True,
+            "device_revoked": device_revoked,
+            "devices_revoked": devices_revoked,
+        })
 
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:

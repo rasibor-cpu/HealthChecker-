@@ -17,6 +17,10 @@ class CompanionHostStore(private val prefs: SharedPreferences) {
 
     fun getActiveHostUrl(): String? = prefs.getString(KEY_HOST, null)?.trim()?.takeIf { it.isNotEmpty() }
 
+    /** Trusted consumer origin retained across logout so the next account can sign in. */
+    fun getConsumerOrigin(): String? =
+        prefs.getString(KEY_CONSUMER_ORIGIN, null)?.trim()?.takeIf { it.isNotEmpty() }
+
     fun getDraftHostUrl(): String? = prefs.getString(KEY_DRAFT_HOST, null)?.trim()?.takeIf { it.isNotEmpty() }
 
     /** UI editing value: draft if present, otherwise active (display only — not trusted for delivery). */
@@ -48,6 +52,7 @@ class CompanionHostStore(private val prefs: SharedPreferences) {
         }
         val ok = prefs.edit()
             .putString(KEY_HOST, host)
+            .putString(KEY_CONSUMER_ORIGIN, host)
             .putString(KEY_DEVICE_ID, id)
             .putString(KEY_TOKEN, tok)
             .remove(KEY_DRAFT_HOST)
@@ -93,6 +98,7 @@ class CompanionHostStore(private val prefs: SharedPreferences) {
 
     companion object {
         const val KEY_HOST = "host_url"
+        const val KEY_CONSUMER_ORIGIN = "consumer_origin"
         const val KEY_DRAFT_HOST = "draft_host_url"
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_TOKEN = "device_token"
