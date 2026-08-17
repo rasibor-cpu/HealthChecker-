@@ -11,12 +11,28 @@ android {
         applicationId = "com.healthchecker.companion"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "hc303b.1.0.0"
+        versionCode = 320
+        versionName = "0.320.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_CLEARTEXT_LOCAL_DEV", "false")
     }
 
+    val signingFile = System.getenv("HC_ANDROID_KEYSTORE_FILE")
+    val signingStorePassword = System.getenv("HC_ANDROID_KEYSTORE_PASSWORD")
+    val signingKeyAlias = System.getenv("HC_ANDROID_KEY_ALIAS")
+    val signingKeyPassword = System.getenv("HC_ANDROID_KEY_PASSWORD")
+    val externalSigningReady = listOf(signingFile, signingStorePassword, signingKeyAlias, signingKeyPassword)
+        .all { !it.isNullOrBlank() }
+    signingConfigs {
+        if (externalSigningReady) {
+            create("production") {
+                storeFile = file(signingFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
     buildTypes {
         debug {
             // Local-dev cleartext is opt-in via manifest network-security-config debug only.
@@ -24,6 +40,7 @@ android {
         }
         release {
             isMinifyEnabled = true
+            if (externalSigningReady) signingConfig = signingConfigs.getByName("production")
             buildConfigField("boolean", "ALLOW_CLEARTEXT_LOCAL_DEV", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

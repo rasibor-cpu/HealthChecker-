@@ -28,4 +28,5 @@ android/captures/
 keystore.properties
 *.jks
 *.keystore
+*.hcb
 vault_storage/.companion_pepper

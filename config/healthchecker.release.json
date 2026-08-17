@@ -1,0 +1,11 @@
+{
+  "release_format": "hc.release.v1",
+  "product": "HealthChecker",
+  "version": "0.320.0",
+  "vault_schema": "hc.health_vault.v1",
+  "minimum_compatible_version": "0.318.0",
+  "downgrade_policy": "blocked_unless_schema_and_release_are_explicitly_compatible",
+  "user_data_root": "C:\\ProgramData\\HealthChecker\\data",
+  "configuration_root": "C:\\ProgramData\\HealthChecker\\config",
+  "secret_root": "C:\\ProgramData\\HealthChecker\\secrets"
+}
