@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -131,11 +132,41 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
         from fastapi import FastAPI, File, Form, UploadFile
-        from fastapi.responses import JSONResponse
+        from fastapi.responses import FileResponse, JSONResponse
+        from fastapi.staticfiles import StaticFiles
     except Exception:
         return None
 
     app = FastAPI(title="HealthChecker+ Health Vault", version="hc201g")
+    frontend_root = Path(__file__).resolve().parents[2]
+
+    def serve_frontend_file(filename: str) -> FileResponse:
+        return FileResponse(frontend_root / filename)
+
+    # The consumer UI is deliberately exposed through a narrow allowlist. Never
+    # mount frontend_root: it also contains the encrypted vault and runtime data.
+    app.add_api_route(
+        "/", partial(serve_frontend_file, "index.html"), methods=["GET"],
+        include_in_schema=False,
+    )
+    for public_asset in (
+        "index.html",
+        "style.css",
+        "app.js",
+        "manifest.webmanifest",
+        "service-worker.js",
+        "icon-192.png",
+        "icon-512.png",
+        "maskable-192.png",
+        "maskable-512.png",
+        "apple-touch-icon.png",
+    ):
+        app.add_api_route(
+            f"/{public_asset}", partial(serve_frontend_file, public_asset),
+            methods=["GET"], include_in_schema=False,
+        )
+    app.mount("/js", StaticFiles(directory=frontend_root / "js"), name="frontend-js")
+    app.mount("/css", StaticFiles(directory=frontend_root / "css"), name="frontend-css")
     vault = store or VaultStore()
     service = ImportService(store=vault)
     batch_service = BatchImportService(store=vault)
