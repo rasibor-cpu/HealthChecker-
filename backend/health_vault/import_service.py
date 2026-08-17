@@ -19,13 +19,17 @@ class ImportService:
     Store → Timeline → Trends → Doctor Visit → Audit → UI notify.
     """
 
-    def __init__(self, store: VaultStore | None = None, registry=None) -> None:
+    def __init__(self, store: VaultStore | None = None, registry=None, *, patient_id: str | None = None) -> None:
         self.store = store or VaultStore()
+        self.patient_id = str(patient_id) if patient_id else None
         self.registry = registry or get_default_registry()
         self.pipeline = ImportPipeline(store=self.store, registry=self.registry)
 
     def import_health_record(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self.pipeline.run(request)
+        payload = dict(request)
+        if self.patient_id:
+            payload["patient_id"] = self.patient_id
+        return self.pipeline.run(payload)
 
     def import_file(self, path: str | Path, **kwargs: Any) -> dict[str, Any]:
         p = Path(path)

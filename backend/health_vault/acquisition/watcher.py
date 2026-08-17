@@ -59,11 +59,13 @@ class AcquisitionWatcher:
         *,
         interval_seconds: int = DEFAULT_INTERVAL_SECONDS,
         force: bool = False,
+        patient_id: str | None = None,
     ) -> None:
         self.config = config or get_default_config()
         # Default store path from config if not provided
         self.store = store or AcquisitionStateStore(self.config.acquisition_state_path)
         self.vault_store = vault_store or VaultStore()
+        self.patient_id = str(patient_id) if patient_id else None
         self.interval_seconds = max(MIN_INTERVAL_SECONDS, min(MAX_INTERVAL_SECONDS, interval_seconds))
         self.force = force
 
@@ -95,7 +97,7 @@ class AcquisitionWatcher:
         """
         def _sync_fn() -> dict[str, Any]:
             connector = GmailApiConnector(token_path=self.config.gmail_token_path)
-            verifier = PatientIdentityVerifier.from_store(self.vault_store)
+            verifier = PatientIdentityVerifier.from_store(self.vault_store, patient_id=self.patient_id)
             acquirer = GmailAcquirer(connector=connector, config=self.config, verifier=verifier)
             
             # The acquirer might raise transient HTTP/Auth errors.

@@ -192,7 +192,7 @@ def test_bp_pair_and_kidney_provenance():
     with tempfile.TemporaryDirectory() as td:
         store = _store(Path(td))
         _seed_full(store)
-        brief = ExecutiveHealthBriefingEngine(store).generate()
+        brief = ExecutiveHealthBriefingEngine(store).generate(as_of="2026-08-16T00:00:00Z")
         bp = brief["domain_summaries"]["blood_pressure"]
         assert bp.get("bp_display") and "/" in bp["bp_display"]
         kidney = brief["domain_summaries"]["kidney"]

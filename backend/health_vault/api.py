@@ -128,7 +128,13 @@ def _run_json_batch(batch_service: BatchImportService, body: dict[str, Any]) -> 
     )
 
 
-def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict[str, str] | None = None):
+def create_health_vault_app(
+    store: VaultStore | None = None,
+    *,
+    test_users: dict[str, str] | None = None,
+    production: bool | None = None,
+    bootstrap_password: str | None = None,
+):
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
         from fastapi import FastAPI, File, Form, UploadFile
@@ -184,7 +190,18 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
         )
     app.mount("/js", StaticFiles(directory=frontend_root / "js"), name="frontend-js")
     app.mount("/css", StaticFiles(directory=frontend_root / "css"), name="frontend-css")
-    vault = store or VaultStore()
+    production_mode = (store is None) if production is None else bool(production)
+    if store is None:
+        if production_mode:
+            from backend.health_vault.production_runtime import create_production_vault
+
+            vault = create_production_vault()
+        else:
+            vault = VaultStore()
+    else:
+        vault = store
+    if production_mode and not vault.encrypted:
+        raise RuntimeError("production_vault_encryption_required")
     service = ImportService(store=vault)
     batch_service = BatchImportService(store=vault)
     doctor = DoctorVisitMode(vault)
@@ -193,8 +210,16 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     from backend.health_vault.records_service import RecordsService
     records_service = RecordsService(vault)
     from backend.health_vault.auth import AuthenticationError, AuthenticationService
-    auth_service = AuthenticationService(vault)
+    enrollment_password = bootstrap_password
+    if production_mode and not (Path(vault.root) / "auth_registry.json").exists():
+        enrollment_password = enrollment_password or __import__("os").environ.get("HC_BOOTSTRAP_PASSWORD")
+    auth_service = AuthenticationService(
+        vault,
+        bootstrap_password=enrollment_password,
+        allow_development_bootstrap=not production_mode,
+    )
     app.state.auth_service = auth_service
+    app.state.production_mode = production_mode
 
     def _bearer_token(request: Request) -> str:
         auth = request.headers.get("Authorization")
@@ -209,6 +234,35 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     def _auth_error(exc: AuthenticationError) -> JSONResponse:
         message = "Unauthorized" if exc.code == "unauthorized" else exc.code
         return JSONResponse({"ok": False, "error": message, "code": exc.code}, status_code=exc.status_code)
+
+    def _request_patient(request: Request) -> str:
+        patient_id = getattr(request.state, "patient_id", None)
+        return str(patient_id) if patient_id else _get_authenticated_patient(request)
+
+    # HC-320B production boundary. Device-token ingestion and one-time pairing
+    # confirmation have their own authentication. Everything else under the
+    # clinical API surface is account-authenticated before route dispatch.
+    production_public_api = {
+        "/api/auth/login",
+        "/api/auth/session",
+        "/api/auth/password/change",
+        "/api/auth/logout",
+        "/api/companion/pair/confirm",
+        "/api/companion/observations",
+        "/api/companion/status",
+        "/api/health-vault/batch-limits",
+    }
+
+    @app.middleware("http")
+    async def production_clinical_authentication(request: Request, call_next):
+        path = request.url.path
+        if production_mode and path.startswith("/api/") and path not in production_public_api:
+            try:
+                account, _ = auth_service.resolve(_bearer_token(request), require_full=True)
+            except AuthenticationError as exc:
+                return _auth_error(exc)
+            request.state.patient_id = account.user_id
+        return await call_next(request)
     for test_user_id, test_password in (test_users or {}).items():
         if auth_service.get_account(test_user_id) is None:
             auth_service.create_user(
@@ -228,6 +282,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
         @app.post("/api/import-health-record")
         async def import_health_record(
+            request: Request,
             file: UploadFile | None = File(default=None),
             payload_json: str | None = Form(default=None),
         ) -> JSONResponse:
@@ -247,6 +302,8 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
                         status_code=400,
                     )
             body = _strip_banned_path_keys(body)
+            if production_mode:
+                body["patient_id"] = _request_patient(request)
             if file is not None:
                 content = await file.read()
                 body["content"] = content
@@ -260,6 +317,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
         @app.post("/api/import-health-records/batch")
         async def import_health_records_batch(
+            request: Request,
             files: list[UploadFile] | None = File(default=None),
             payload_json: str | None = Form(default=None),
         ) -> JSONResponse:
@@ -280,6 +338,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
                     )
 
             items: list[dict[str, Any]] = []
+            patient_id = _request_patient(request) if production_mode else None
             for raw in meta.get("items") or meta.get("files") or []:
                 if not isinstance(raw, dict):
                     continue
@@ -287,6 +346,8 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
                 entry.pop("content_path", None)
                 if "filename" in entry:
                     entry["filename"] = sanitize_filename(entry.get("filename"))
+                if patient_id:
+                    entry["patient_id"] = patient_id
                 items.append(entry)
 
             for upload in files or []:
@@ -297,6 +358,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
                         "filename": sanitize_filename(upload.filename or "upload.bin"),
                         "mime_type": upload.content_type or "application/octet-stream",
                         "size_bytes": len(content),
+                        **({"patient_id": patient_id} if patient_id else {}),
                     }
                 )
 
@@ -311,22 +373,31 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
             return JSONResponse(_sanitize_value(report), status_code=status)
 
     @app.post("/api/import-health-records/batch/json")
-    async def import_health_records_batch_json(body: dict[str, Any]) -> JSONResponse:
+    async def import_health_records_batch_json(body: dict[str, Any], request: Request) -> JSONResponse:
         """Structured JSON batch (works without python-multipart)."""
         if not isinstance(body, dict):
             return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
-        report = _run_json_batch(batch_service, body)
+        scoped = dict(body)
+        if production_mode:
+            pid = _request_patient(request)
+            scoped["items"] = [
+                {**item, "patient_id": pid} for item in (body.get("items") or body.get("files") or [])
+                if isinstance(item, dict)
+            ]
+        report = _run_json_batch(batch_service, scoped)
         status = 200 if report.get("ok") or report.get("partial_success") else 400
         if report.get("status") == "rejected":
             status = 400
         return JSONResponse(_sanitize_value(report), status_code=status)
 
     @app.post("/api/import-health-record/json")
-    async def import_health_record_json(body: dict[str, Any]) -> JSONResponse:
+    async def import_health_record_json(body: dict[str, Any], request: Request) -> JSONResponse:
         if not isinstance(body, dict):
             return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
         cleaned = _strip_banned_path_keys(body)
         cleaned.pop("content_path", None)
+        if production_mode:
+            cleaned["patient_id"] = _request_patient(request)
         result = service.import_health_record(cleaned)
         return JSONResponse(_sanitize_value(result))
 
@@ -335,34 +406,42 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
         return get_batch_config().to_dict()
 
     @app.get("/api/health-vault/timeline")
-    def timeline(unified: bool = False) -> dict[str, Any]:
+    def timeline(request: Request, unified: bool = False) -> dict[str, Any]:
+        patient_id = _request_patient(request) if production_mode else "default-patient"
         if unified:
             from backend.health_vault.timeline import build_unified_timeline
 
-            return _sanitize_value({"entries": build_unified_timeline(vault), "unified": True})
-        return _sanitize_value({"entries": build_timeline(vault), "unified": False})
+            return _sanitize_value({"entries": build_unified_timeline(vault, patient_id=patient_id), "unified": True})
+        return _sanitize_value({"entries": build_timeline(vault, patient_id=patient_id), "unified": False})
 
     @app.get("/api/health-vault/doctor-visit")
-    def doctor_visit() -> dict[str, Any]:
-        return _sanitize_value(doctor.generate())
+    def doctor_visit(request: Request) -> dict[str, Any]:
+        return _sanitize_value(doctor.generate(patient_id=_request_patient(request) if production_mode else "default-patient"))
 
     @app.get("/api/health-vault/integrity")
-    def integrity() -> dict[str, Any]:
-        return vault.verify_integrity()
+    def integrity(request: Request) -> dict[str, Any]:
+        result = vault.verify_integrity()
+        return {"ok": bool(result.get("ok")), "scope": "authenticated_patient"} if production_mode else result
 
     @app.get("/api/health-vault/intelligence")
-    def intelligence() -> dict[str, Any]:
+    def intelligence(request: Request) -> dict[str, Any]:
         from backend.health_vault.health_intelligence import HealthIntelligenceEngine
 
-        obs = HealthIntelligenceEngine(vault).generate_observations()
+        pid = _request_patient(request) if production_mode else "default-patient"
+        obs = HealthIntelligenceEngine(vault).generate_observations(patient_id=pid)
         return {"observations": obs, "disclaimer": "Observational only — not a diagnosis."}
 
     @app.get("/api/health-vault/import-log")
-    def import_log() -> dict[str, Any]:
-        return _sanitize_value({"entries": vault.import_log()})
+    def import_log(request: Request) -> dict[str, Any]:
+        entries = vault.import_log()
+        if production_mode:
+            pid = _request_patient(request)
+            entries = [row for row in entries if str(row.get("patient_id") or "default-patient") == pid]
+        return _sanitize_value({"entries": entries})
 
     @app.get("/api/health-vault/executive-briefing")
     def executive_briefing(
+        request: Request,
         patient_id: str = "default-patient",
         as_of: str | None = None,
         trend_window: str = "30d",
@@ -373,7 +452,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
         engine = ExecutiveHealthBriefingEngine(vault)
         payload = engine.generate(
-            patient_id=patient_id,
+            patient_id=_request_patient(request) if production_mode else patient_id,
             as_of=as_of,
             trend_window=trend_window,
             category=category,
@@ -382,6 +461,7 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
     @app.get("/api/health-vault/executive-briefing/print")
     def executive_briefing_print(
+        request: Request,
         patient_id: str = "default-patient",
         trend_window: str = "30d",
     ) -> dict[str, Any]:
@@ -389,18 +469,21 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
         engine = ExecutiveHealthBriefingEngine(vault)
         return _sanitize_value(
-            engine.printable_summary(patient_id=patient_id, trend_window=trend_window)
+            engine.printable_summary(patient_id=_request_patient(request) if production_mode else patient_id, trend_window=trend_window)
         )
 
     @app.post("/api/ai-health/import-preview")
-    async def ai_health_import_preview(body: dict[str, Any]) -> JSONResponse:
+    async def ai_health_import_preview(body: dict[str, Any], request: Request) -> JSONResponse:
         """HC-202 — preview AI-extracted records (no vault writes)."""
         from backend.ai_health.bridge import AIHealthBridge
 
         if not isinstance(body, dict):
             return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
         try:
-            result = AIHealthBridge(store=vault).preview(_strip_banned_path_keys(body))
+            scoped = _strip_banned_path_keys(body)
+            if production_mode:
+                scoped["patient_id"] = _request_patient(request)
+            result = AIHealthBridge(store=vault).preview(scoped)
         except ValueError as exc:
             return JSONResponse(
                 {"ok": False, "errors": [str(exc)]},
@@ -409,51 +492,69 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
         return JSONResponse(_sanitize_value(result))
 
     @app.post("/api/ai-health/import-confirm")
-    async def ai_health_import_confirm(body: dict[str, Any]) -> JSONResponse:
+    async def ai_health_import_confirm(body: dict[str, Any], request: Request) -> JSONResponse:
         """HC-202 — confirmed AI import via canonical ImportPipeline only."""
         from backend.ai_health.bridge import AIHealthBridge
 
         if not isinstance(body, dict):
             return JSONResponse({"ok": False, "errors": ["body must be an object"]}, status_code=400)
-        result = AIHealthBridge(store=vault).confirm(_strip_banned_path_keys(body))
+        scoped = _strip_banned_path_keys(body)
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = AIHealthBridge(store=vault).confirm(scoped)
         status = 200 if result.get("ok") or result.get("partial_success") else 400
         if result.get("status") == "rejected":
             status = 400
         return JSONResponse(_sanitize_value(result), status_code=status)
 
     @app.get("/api/ai-health/import-history")
-    def ai_health_import_history(limit: int = 50) -> dict[str, Any]:
+    def ai_health_import_history(request: Request, limit: int = 50) -> dict[str, Any]:
         from backend.ai_health.bridge import AIHealthBridge
 
-        return _sanitize_value(AIHealthBridge(store=vault).import_history(limit=limit))
+        result = AIHealthBridge(store=vault).import_history(limit=limit)
+        if production_mode:
+            pid = _request_patient(request)
+            if isinstance(result, dict) and isinstance(result.get("entries"), list):
+                result = {**result, "entries": [r for r in result["entries"] if str(r.get("patient_id") or "default-patient") == pid]}
+        return _sanitize_value(result)
 
     # --- HC-302 Continuous Monitoring ---
 
     @app.get("/api/monitoring/status")
-    def monitoring_status(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(monitoring_status_handler(patient_id=patient_id, store=vault))
+    def monitoring_status(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        pid = _request_patient(request) if production_mode else patient_id
+        return _sanitize_value(monitoring_status_handler(patient_id=pid, store=vault))
 
     @app.get("/api/monitoring/connectors")
-    def monitoring_connectors(include_simulated: bool = False) -> dict[str, Any]:
+    def monitoring_connectors(request: Request, include_simulated: bool = False) -> dict[str, Any]:
         return _sanitize_value(
             monitoring_connectors_handler(include_simulated=include_simulated, store=vault)
         )
 
     @app.post("/api/monitoring/sync")
-    async def monitoring_sync(body: dict[str, Any] | None = None) -> JSONResponse:
-        result = monitoring_sync_handler(body or {}, store=vault)
+    async def monitoring_sync(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = monitoring_sync_handler(scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") or result.get("status") in {
             "UNAVAILABLE", "IMPORT_REQUIRED", "permission_required", "permission_denied"
         } else (200 if result.get("ok") else 400))
 
     @app.post("/api/monitoring/evaluate")
-    async def monitoring_evaluate(body: dict[str, Any] | None = None) -> JSONResponse:
-        result = monitoring_evaluate_handler(body or {}, store=vault)
+    async def monitoring_evaluate(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = monitoring_evaluate_handler(scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.post("/api/monitoring/scheduler/tick")
-    async def monitoring_scheduler_tick(body: dict[str, Any] | None = None) -> JSONResponse:
-        result = monitoring_scheduler_tick_handler(body or {}, store=vault)
+    async def monitoring_scheduler_tick(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = monitoring_scheduler_tick_handler(scoped, store=vault)
         return JSONResponse(_sanitize_value(result))
 
     # --- HC-303A Android companion ---
@@ -582,79 +683,118 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     # --- HC-301 Health Guardian ---
 
     @app.get("/api/guardian/status")
-    def guardian_status(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(guardian_status_handler(patient_id=patient_id, store=vault))
+    def guardian_status(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(guardian_status_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.get("/api/guardian/alerts")
-    def guardian_alerts(patient_id: str = "default-patient", active_only: bool = True) -> dict[str, Any]:
+    def guardian_alerts(request: Request, patient_id: str = "default-patient", active_only: bool = True) -> dict[str, Any]:
         return _sanitize_value(
-            guardian_alerts_handler(patient_id=patient_id, active_only=active_only, store=vault)
+            guardian_alerts_handler(patient_id=_request_patient(request) if production_mode else patient_id, active_only=active_only, store=vault)
         )
 
     @app.get("/api/guardian/alerts/history")
-    def guardian_alerts_history(patient_id: str = "default-patient") -> dict[str, Any]:
+    def guardian_alerts_history(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
         return _sanitize_value(
-            guardian_alerts_handler(patient_id=patient_id, active_only=False, store=vault)
+            guardian_alerts_handler(patient_id=_request_patient(request) if production_mode else patient_id, active_only=False, store=vault)
         )
 
     @app.post("/api/guardian/alerts/{alert_id}/acknowledge")
-    async def guardian_ack(alert_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
-        result = guardian_acknowledge_handler(alert_id, body or {}, store=vault)
+    async def guardian_ack(alert_id: str, request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            pid = _request_patient(request)
+            if not any(str(a.get("alert_id")) == alert_id and str(a.get("patient_id") or "default-patient") == pid for a in vault.list_alerts()):
+                return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+            scoped["patient_id"] = pid
+        result = guardian_acknowledge_handler(alert_id, scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.post("/api/guardian/alerts/{alert_id}/resolve")
-    async def guardian_resolve(alert_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
-        result = guardian_resolve_handler(alert_id, body or {}, store=vault)
+    async def guardian_resolve(alert_id: str, request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            pid = _request_patient(request)
+            if not any(str(a.get("alert_id")) == alert_id and str(a.get("patient_id") or "default-patient") == pid for a in vault.list_alerts()):
+                return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+            scoped["patient_id"] = pid
+        result = guardian_resolve_handler(alert_id, scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.get("/api/guardian/baselines")
-    def guardian_baselines(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(guardian_baselines_handler(patient_id=patient_id, store=vault))
+    def guardian_baselines(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(guardian_baselines_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.get("/api/guardian/cgm/sensors")
-    def guardian_cgm_sensors(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(cgm_sensors_handler(patient_id=patient_id, store=vault))
+    def guardian_cgm_sensors(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_sensors_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.post("/api/guardian/cgm/sensors/register")
-    async def guardian_cgm_register(body: dict[str, Any]) -> JSONResponse:
-        result = cgm_register_handler(body, store=vault)
+    async def guardian_cgm_register(body: dict[str, Any], request: Request) -> JSONResponse:
+        scoped = dict(body)
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = cgm_register_handler(scoped, store=vault)
         return JSONResponse(_sanitize_value(result))
 
     @app.post("/api/guardian/cgm/sensors/{sensor_id}/activate")
-    async def guardian_cgm_activate(sensor_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
-        result = cgm_activate_handler(sensor_id, body or {}, store=vault)
+    async def guardian_cgm_activate(sensor_id: str, request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            pid = _request_patient(request)
+            if not any(str(s.get("sensor_id")) == sensor_id and str(s.get("patient_id") or "default-patient") == pid for s in vault.list_cgm_sensors()):
+                return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+            scoped["patient_id"] = pid
+        result = cgm_activate_handler(sensor_id, scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.post("/api/guardian/cgm/sensors/{sensor_id}/fail")
-    async def guardian_cgm_fail(sensor_id: str, body: dict[str, Any] | None = None) -> JSONResponse:
-        result = cgm_fail_handler(sensor_id, body or {}, store=vault)
+    async def guardian_cgm_fail(sensor_id: str, request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            pid = _request_patient(request)
+            if not any(str(s.get("sensor_id")) == sensor_id and str(s.get("patient_id") or "default-patient") == pid for s in vault.list_cgm_sensors()):
+                return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+            scoped["patient_id"] = pid
+        result = cgm_fail_handler(sensor_id, scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.post("/api/guardian/cgm/sensors/{sensor_id}/replace")
-    async def guardian_cgm_replace(sensor_id: str, body: dict[str, Any]) -> JSONResponse:
-        result = cgm_replace_handler(sensor_id, body or {}, store=vault)
+    async def guardian_cgm_replace(sensor_id: str, body: dict[str, Any], request: Request) -> JSONResponse:
+        scoped = dict(body or {})
+        if production_mode:
+            pid = _request_patient(request)
+            if not any(str(s.get("sensor_id")) == sensor_id and str(s.get("patient_id") or "default-patient") == pid for s in vault.list_cgm_sensors()):
+                return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+            scoped["patient_id"] = pid
+        result = cgm_replace_handler(sensor_id, scoped, store=vault)
         return JSONResponse(_sanitize_value(result), status_code=200 if result.get("ok") else 400)
 
     @app.get("/api/guardian/cgm/inventory")
-    def guardian_cgm_inventory(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(cgm_inventory_handler(patient_id=patient_id, store=vault))
+    def guardian_cgm_inventory(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_inventory_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.post("/api/guardian/cgm/inventory")
-    async def guardian_cgm_inventory_update(body: dict[str, Any]) -> JSONResponse:
-        return JSONResponse(_sanitize_value(cgm_inventory_update_handler(body, store=vault)))
+    async def guardian_cgm_inventory_update(body: dict[str, Any], request: Request) -> JSONResponse:
+        scoped = dict(body)
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        return JSONResponse(_sanitize_value(cgm_inventory_update_handler(scoped, store=vault)))
 
     @app.get("/api/guardian/cgm/continuity")
-    def guardian_cgm_continuity(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(cgm_continuity_handler(patient_id=patient_id, store=vault))
+    def guardian_cgm_continuity(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_continuity_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.get("/api/guardian/cgm/data-gaps")
-    def guardian_data_gaps(patient_id: str = "default-patient") -> dict[str, Any]:
-        return _sanitize_value(cgm_data_gaps_handler(patient_id=patient_id, store=vault))
+    def guardian_data_gaps(request: Request, patient_id: str = "default-patient") -> dict[str, Any]:
+        return _sanitize_value(cgm_data_gaps_handler(patient_id=_request_patient(request) if production_mode else patient_id, store=vault))
 
     @app.post("/api/guardian/evaluate")
-    async def guardian_evaluate(body: dict[str, Any] | None = None) -> JSONResponse:
+    async def guardian_evaluate(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
         """Development/testing trigger only — not a clinical escalation channel."""
-        result = guardian_evaluate_handler(body or {}, store=vault)
+        scoped = dict(body or {})
+        if production_mode:
+            scoped["patient_id"] = _request_patient(request)
+        result = guardian_evaluate_handler(scoped, store=vault)
         return JSONResponse(_sanitize_value(result))
 
     @app.post("/api/auth/login")

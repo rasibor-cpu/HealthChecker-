@@ -41,7 +41,15 @@ def main() -> int:
     """One-shot runner entry point for scheduled execution."""
     _configure_logging()
     try:
-        watcher = AcquisitionWatcher()
+        import os
+        from backend.health_vault.production_runtime import create_production_vault
+
+        patient_id = str(os.environ.get("HC_RUNTIME_PATIENT_ID") or "").strip()
+        if not patient_id:
+            raise RuntimeError("runtime_patient_identity_required")
+        watcher = AcquisitionWatcher(
+            vault_store=create_production_vault(), patient_id=patient_id
+        )
         result = watcher.run_if_due()
         
         if result.get("ran"):

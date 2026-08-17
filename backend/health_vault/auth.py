@@ -31,6 +31,10 @@ class AuthenticationError(ValueError):
         self.code, self.status_code = code, status_code
 
 
+class AuthenticationStateError(RuntimeError):
+    """Fail-closed missing or corrupt production authentication state."""
+
+
 def _synchronized(method):
     @wraps(method)
     def wrapped(self, *args, **kwargs):
@@ -75,13 +79,46 @@ def verify_password(password: str, encoded: str) -> bool:
 class AuthenticationService:
     """Encrypted account registry with hash-only opaque sessions."""
 
-    def __init__(self, vault, *, bootstrap_password: str | None = None) -> None:
+    def __init__(
+        self,
+        vault,
+        *,
+        bootstrap_password: str | None = None,
+        allow_development_bootstrap: bool = False,
+    ) -> None:
         self.vault, self.path = vault, Path(vault.root) / "auth_registry.json"
+        self.enrollment_marker = Path(vault.root) / ".auth_enrolled"
         self._lock, self._key = threading.RLock(), getattr(vault, "_encryption_key", None)
         self._dummy_password_hash = hash_password(secrets.token_urlsafe(24))
         if not self.path.exists():
+            if self.enrollment_marker.exists():
+                raise AuthenticationStateError("auth_registry_missing_after_enrollment")
+            enrollment_password = bootstrap_password
+            if enrollment_password is None and allow_development_bootstrap:
+                enrollment_password = "123456"
+            if not enrollment_password:
+                raise AuthenticationStateError("auth_bootstrap_credential_required")
             self._write({"schema_version": "hc.auth.registry.v1", "accounts": {}, "sessions": {}, "audit": []})
-        self.bootstrap_owner(bootstrap_password or os.environ.get("HC_BOOTSTRAP_PASSWORD") or "123456")
+            self.bootstrap_owner(enrollment_password)
+            self._write_enrollment_marker()
+        else:
+            try:
+                data = self._read()
+                if not isinstance(data.get("accounts"), dict) or "00000" not in data["accounts"]:
+                    raise AuthenticationStateError("auth_registry_owner_missing")
+                self._write_enrollment_marker()
+            except AuthenticationStateError:
+                raise
+            except Exception as exc:
+                raise AuthenticationStateError("auth_registry_invalid") from exc
+
+    def _write_enrollment_marker(self) -> None:
+        if self.enrollment_marker.exists():
+            return
+        try:
+            self.enrollment_marker.write_text("hc.auth.enrolled.v1\n", encoding="ascii")
+        except OSError as exc:
+            raise AuthenticationStateError("auth_enrollment_marker_failed") from exc
 
     def _read(self) -> dict[str, Any]:
         with self._lock:

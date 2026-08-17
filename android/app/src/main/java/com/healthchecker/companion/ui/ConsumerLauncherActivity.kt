@@ -234,6 +234,6 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val DEBUG_CONSUMER_ORIGIN = "http://127.0.0.1:8766"
+        private const val DEBUG_CONSUMER_ORIGIN = "http://localhost:8766"
     }
 }

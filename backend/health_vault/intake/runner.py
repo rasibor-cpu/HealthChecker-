@@ -292,7 +292,16 @@ def main() -> int:
     """One-shot runner entry point.  Returns exit code: 0 success, 1 error."""
     _configure_logging()
     try:
-        runner = IntakeRunner()
+        import os
+        from backend.health_vault.import_service import ImportService
+        from backend.health_vault.production_runtime import create_production_vault
+
+        patient_id = str(os.environ.get("HC_RUNTIME_PATIENT_ID") or "").strip()
+        if not patient_id:
+            raise RuntimeError("runtime_patient_identity_required")
+        runner = IntakeRunner(import_service=ImportService(
+            store=create_production_vault(), patient_id=patient_id
+        ))
         summary = runner.run()
         # Print privacy-safe summary counts only.
         print(

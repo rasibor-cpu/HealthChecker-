@@ -7,6 +7,7 @@ Exposes the minimum Companion surface. Does not mount clinical/import/Guardian/A
 from __future__ import annotations
 
 import hmac
+import secrets
 from typing import Any
 
 try:
@@ -82,7 +83,10 @@ def create_companion_only_app(
     )
     app.state.hc_config = config
     app.state.hc_store = store
-    auth_service = AuthenticationService(store)
+    # This isolated companion host must never activate the known development
+    # bootstrap. Its local owner credential is random, memory-only, and unusable
+    # as an operational login; account pairing remains governed by host controls.
+    auth_service = AuthenticationService(store, bootstrap_password=secrets.token_urlsafe(48))
     app.state.hc_auth_service = auth_service
 
     def _base_headers() -> dict[str, str]:

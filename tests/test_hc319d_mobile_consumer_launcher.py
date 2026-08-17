@@ -40,7 +40,7 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source
     assert "prefs.getConsumerOrigin() ?: debugConsumerOrigin()" in source
-    assert 'DEBUG_CONSUMER_ORIGIN = "http://127.0.0.1:8766"' in source
+    assert 'DEBUG_CONSUMER_ORIGIN = "http://localhost:8766"' in source
     assert "prefs.getConsumerOrigin() ?: prefs.getHostUrl()" not in source
 
 
