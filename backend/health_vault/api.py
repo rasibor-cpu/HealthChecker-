@@ -141,7 +141,19 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     frontend_root = Path(__file__).resolve().parents[2]
 
     def serve_frontend_file(filename: str) -> FileResponse:
-        return FileResponse(frontend_root / filename)
+        headers = None
+        if filename == "mobile.html":
+            headers = {
+                "Cache-Control": "no-store",
+                "Content-Security-Policy": (
+                    "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+                    "script-src 'self'; style-src 'self'; object-src 'none'; "
+                    "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+                ),
+                "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff",
+            }
+        return FileResponse(frontend_root / filename, headers=headers)
 
     # The consumer UI is deliberately exposed through a narrow allowlist. Never
     # mount frontend_root: it also contains the encrypted vault and runtime data.
@@ -149,8 +161,13 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
         "/", partial(serve_frontend_file, "index.html"), methods=["GET"],
         include_in_schema=False,
     )
+    app.add_api_route(
+        "/mobile", partial(serve_frontend_file, "mobile.html"), methods=["GET"],
+        include_in_schema=False,
+    )
     for public_asset in (
         "index.html",
+        "mobile.html",
         "style.css",
         "app.js",
         "manifest.webmanifest",
@@ -178,6 +195,20 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
     from backend.health_vault.auth import AuthenticationError, AuthenticationService
     auth_service = AuthenticationService(vault)
     app.state.auth_service = auth_service
+
+    def _bearer_token(request: Request) -> str:
+        auth = request.headers.get("Authorization")
+        if not auth or not auth.startswith("Bearer ") or not auth[7:].strip():
+            raise AuthenticationError()
+        return auth[7:].strip()
+
+    def _get_authenticated_patient(request: Request) -> str:
+        account, _ = auth_service.resolve(_bearer_token(request), require_full=True)
+        return account.user_id
+
+    def _auth_error(exc: AuthenticationError) -> JSONResponse:
+        message = "Unauthorized" if exc.code == "unauthorized" else exc.code
+        return JSONResponse({"ok": False, "error": message, "code": exc.code}, status_code=exc.status_code)
     for test_user_id, test_password in (test_users or {}).items():
         if auth_service.get_account(test_user_id) is None:
             auth_service.create_user(
@@ -429,15 +460,18 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
     @app.post("/api/companion/pair/start")
     async def companion_pair_start(request: Request) -> JSONResponse:
-        admin = request.headers.get("X-HC-Companion-Admin")
+        try:
+            patient_id = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
         try:
             body = await request.json()
         except Exception:
             body = {}
         if not isinstance(body, dict):
             body = {}
-        result = companion_pair_start_handler(body, store=vault, admin_header=admin)
-        code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
+        result = companion_pair_start_handler(body, store=vault, patient_id=patient_id)
+        code = 200 if result.get("ok") else 400
         return JSONResponse(_sanitize_value(result), status_code=code)
 
     @app.post("/api/companion/pair/confirm")
@@ -453,18 +487,23 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
 
     @app.get("/api/companion/devices")
     def companion_devices(request: Request, include_revoked: bool = False) -> JSONResponse:
-        admin = request.headers.get("X-HC-Companion-Admin")
-        result = companion_devices_handler(
-            include_revoked=include_revoked, store=vault, admin_header=admin
+        try:
+            patient_id = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        devices = _companion_pairing(vault).list_devices(
+            include_revoked=include_revoked, patient_id=patient_id
         )
-        code = 200 if result.get("ok", True) and result.get("status") != "admin_required" else 403
-        return JSONResponse(_sanitize_value(result), status_code=code)
+        return JSONResponse(_sanitize_value({"ok": True, "devices": devices}))
 
     @app.delete("/api/companion/devices/{device_id}")
     async def companion_revoke(device_id: str, request: Request) -> JSONResponse:
-        admin = request.headers.get("X-HC-Companion-Admin")
-        result = companion_revoke_handler(device_id, store=vault, admin_header=admin)
-        code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
+        try:
+            patient_id = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        result = _companion_pairing(vault).revoke_device(device_id, patient_id=patient_id)
+        code = 200 if result.get("ok") else (403 if result.get("status") == "forbidden" else 400)
         return JSONResponse(_sanitize_value(result), status_code=code)
 
     @app.post("/api/companion/observations")
@@ -627,12 +666,6 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
             return JSONResponse({"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"}, status_code=401)
         return JSONResponse({"ok": True, **result})
 
-    def _bearer_token(request: Request) -> str:
-        auth = request.headers.get("Authorization")
-        if not auth or not auth.startswith("Bearer ") or not auth[7:].strip():
-            raise AuthenticationError()
-        return auth[7:].strip()
-
     @app.get("/api/auth/session")
     async def auth_session(request: Request) -> JSONResponse:
         try:
@@ -652,20 +685,26 @@ def create_health_vault_app(store: VaultStore | None = None, *, test_users: dict
             return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
 
     @app.post("/api/auth/logout")
-    async def auth_logout(request: Request) -> JSONResponse:
+    async def auth_logout(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
+        device_revoked = False
         try:
-            auth_service.logout(_bearer_token(request))
+            token = _bearer_token(request)
+            account, _ = auth_service.resolve(token, require_full=False)
+            device_id = str((body or {}).get("device_id") or "").strip()
+            if device_id:
+                result = _companion_pairing(vault).revoke_device(
+                    device_id, patient_id=account.user_id
+                )
+                if not result.get("ok"):
+                    return JSONResponse(
+                        {"ok": False, "error": "Device does not belong to this user", "code": "device_owner_mismatch"},
+                        status_code=403,
+                    )
+                device_revoked = True
+            auth_service.logout(token)
         except AuthenticationError:
             pass
-        return JSONResponse({"ok": True})
-
-    def _get_authenticated_patient(request: Request) -> str:
-        account, _ = auth_service.resolve(_bearer_token(request), require_full=True)
-        return account.user_id
-
-    def _auth_error(exc: AuthenticationError) -> JSONResponse:
-        message = "Unauthorized" if exc.code == "unauthorized" else exc.code
-        return JSONResponse({"ok": False, "error": message, "code": exc.code}, status_code=exc.status_code)
+        return JSONResponse({"ok": True, "device_revoked": device_revoked})
 
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:
@@ -1059,14 +1098,13 @@ def companion_pair_start_handler(
     body: dict[str, Any] | None = None,
     store: VaultStore | None = None,
     admin_header: str | None = None,
+    patient_id: str | None = None,
 ) -> dict[str, Any]:
-    from backend.health_vault.companion.security import companion_admin_authorized
-
-    if not companion_admin_authorized(admin_header):
-        return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]}
     body = body or {}
-    # patient_id from client is ignored — host binds default-patient only
-    return _companion_pairing(store).start_pairing(display_name=body.get("display_name"))
+    # A patient_id in the body is ignored; only the authenticated argument is trusted.
+    return _companion_pairing(store).start_pairing(
+        patient_id=str(patient_id or ""), display_name=body.get("display_name")
+    )
 
 
 def companion_pair_confirm_handler(

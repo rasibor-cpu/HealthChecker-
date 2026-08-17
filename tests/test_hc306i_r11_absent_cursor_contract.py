@@ -25,7 +25,9 @@ def store(tmp_path: Path) -> VaultStore:
 
 
 def _pair(store: VaultStore) -> tuple[str, str]:
-    start = CompanionPairingService(store=store).start_pairing(display_name="R11 Phone")
+    start = CompanionPairingService(store=store).start_pairing(
+        patient_id="hc306-test-user", display_name="R11 Phone"
+    )
     conf = CompanionPairingService(store=store).confirm_pairing(
         pair_code=start["pair_code"], device_label="R11"
     )
@@ -76,7 +78,7 @@ def test_missing_next_cursor_does_not_alter_host_cursor(store: VaultStore):
 
     coord = IngestionCoordinator(store=store)
     coord.save_cursor(
-        "health_connect", {"changes_token": "prior-tok"}, patient_id="default-patient"
+        "health_connect", {"changes_token": "prior-tok"}, patient_id="hc306-test-user"
     )
     out = companion_observations_handler(
         _body(batch_id="nofinal", nonce="n-nofinal", observations=[_obs(1)]),
@@ -87,7 +89,7 @@ def test_missing_next_cursor_does_not_alter_host_cursor(store: VaultStore):
     assert out["ok"] is True
     assert out["cursor_advanced"] is False
     assert out["cursor"] == {"changes_token": "prior-tok"}
-    assert coord.get_cursor("health_connect", patient_id="default-patient") == {
+    assert coord.get_cursor("health_connect", patient_id="hc306-test-user") == {
         "changes_token": "prior-tok"
     }
 
@@ -123,7 +125,7 @@ def test_explicit_valid_final_cursor_advances_once(store: VaultStore):
     assert first["ok"] is True
     assert first["cursor_advanced"] is True
     assert first["cursor"] == {"changes_token": "final-tok"}
-    assert coord.get_cursor("health_connect", patient_id="default-patient") == {
+    assert coord.get_cursor("health_connect", patient_id="hc306-test-user") == {
         "changes_token": "final-tok"
     }
     # Second delivery with different batch must not rewrite unless requested
@@ -134,7 +136,7 @@ def test_explicit_valid_final_cursor_advances_once(store: VaultStore):
         local_dev=True,
     )
     assert second["cursor_advanced"] is False
-    assert coord.get_cursor("health_connect", patient_id="default-patient") == {
+    assert coord.get_cursor("health_connect", patient_id="hc306-test-user") == {
         "changes_token": "final-tok"
     }
 

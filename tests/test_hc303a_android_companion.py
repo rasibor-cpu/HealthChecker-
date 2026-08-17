@@ -46,6 +46,7 @@ from backend.health_vault.models import utc_now
 from backend.health_vault.vault_store import VaultStore
 
 ANDROID_ROOT = ROOT / "android"
+TEST_PATIENT = "hc303-test-user"
 
 
 @pytest.fixture()
@@ -58,7 +59,9 @@ def _now() -> str:
 
 
 def _pair(store: VaultStore) -> tuple[str, str]:
-    start = CompanionPairingService(store=store).start_pairing(display_name="Test Phone")
+    start = CompanionPairingService(store=store).start_pairing(
+        patient_id=TEST_PATIENT, display_name="Test Phone"
+    )
     code = start["pair_code"]
     # Plaintext must not remain in stored session
     sessions = store._read_index().get("companion_pair_sessions") or {}
@@ -377,7 +380,9 @@ def test_privacy_redaction_and_status(store: VaultStore):
 
 def test_cross_device_status_isolation(store: VaultStore):
     d1, t1 = _pair(store)
-    start = CompanionPairingService(store=store).start_pairing(display_name="Phone2")
+    start = CompanionPairingService(store=store).start_pairing(
+        patient_id=TEST_PATIENT, display_name="Phone2"
+    )
     conf = CompanionPairingService(store=store).confirm_pairing(
         pair_code=start["pair_code"], device_label="Phone2"
     )
@@ -396,6 +401,7 @@ def test_cross_device_status_isolation(store: VaultStore):
 
 def test_expired_pair_code(store: VaultStore):
     start2 = CompanionPairingService(store=store).start_pairing(
+        patient_id=TEST_PATIENT,
         display_name="Y",
         now=(datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
     )
@@ -407,7 +413,9 @@ def test_expired_pair_code(store: VaultStore):
 
 
 def test_reused_pair_code(store: VaultStore):
-    start = companion_pair_start_handler({"display_name": "X"}, store=store)
+    start = companion_pair_start_handler(
+        {"display_name": "X"}, store=store, patient_id=TEST_PATIENT
+    )
     conf = companion_pair_confirm_handler(
         {"pair_code": start["pair_code"], "device_label": "X"},
         store=store,
@@ -422,7 +430,9 @@ def test_reused_pair_code(store: VaultStore):
 
 
 def test_incorrect_code_attempt_limit(store: VaultStore):
-    start = companion_pair_start_handler({"display_name": "X"}, store=store)
+    start = companion_pair_start_handler(
+        {"display_name": "X"}, store=store, patient_id=TEST_PATIENT
+    )
     # Wrong codes
     for i in range(PAIR_CODE_MAX_ATTEMPTS):
         bad = companion_pair_confirm_handler(
@@ -441,7 +451,9 @@ def test_incorrect_code_attempt_limit(store: VaultStore):
 
     # Exhaust attempts against the real code hash after consume shouldn't matter;
     # start fresh and exhaust against real code with wrong casing attempts after expire simulation
-    start2 = companion_pair_start_handler({"display_name": "Z"}, store=store)
+    start2 = companion_pair_start_handler(
+        {"display_name": "Z"}, store=store, patient_id=TEST_PATIENT
+    )
     code = start2["pair_code"]
     # Use a near-miss code sharing? Better: repeatedly fail the same wrong guess for hash of WRONGCODE
     for _ in range(PAIR_CODE_MAX_ATTEMPTS):
@@ -455,7 +467,9 @@ def test_incorrect_code_attempt_limit(store: VaultStore):
 
 
 def test_concurrent_pair_confirmation(store: VaultStore):
-    start = companion_pair_start_handler({"display_name": "Race"}, store=store)
+    start = companion_pair_start_handler(
+        {"display_name": "Race"}, store=store, patient_id=TEST_PATIENT
+    )
     code = start["pair_code"]
     results: list[dict] = []
 
@@ -504,15 +518,13 @@ def test_revoked_token_request(store: VaultStore):
     assert out["status"] == "unauthorized"
 
 
-def test_admin_token_gates_pair_start(store: VaultStore, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("HC_COMPANION_ADMIN_TOKEN", "secret-admin")
-    denied = companion_pair_start_handler({"display_name": "X"}, store=store, admin_header=None)
-    assert denied["status"] == "admin_required"
+def test_authenticated_identity_gates_pair_start(store: VaultStore):
+    denied = companion_pair_start_handler({"display_name": "X"}, store=store)
+    assert denied["status"] == "identity_required"
     allowed = companion_pair_start_handler(
-        {"display_name": "X"}, store=store, admin_header="secret-admin"
+        {"display_name": "X"}, store=store, patient_id=TEST_PATIENT
     )
     assert allowed["ok"] is True
-    monkeypatch.delenv("HC_COMPANION_ADMIN_TOKEN", raising=False)
 
 
 def test_token_never_stored_plaintext(store: VaultStore):

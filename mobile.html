@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="referrer" content="no-referrer" />
+  <title>HealthChecker+</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body class="mobile-consumer">
+  <header>HealthChecker+</header>
+  <main id="mobile_app">
+    <section id="mobile_login" class="card">
+      <h1>Sign in</h1>
+      <label for="mobile_user_id">User ID</label>
+      <input id="mobile_user_id" autocomplete="username" />
+      <label for="mobile_password">Password</label>
+      <input id="mobile_password" type="password" autocomplete="current-password" />
+      <button id="mobile_login_button" type="button">Sign in</button>
+      <p id="mobile_login_error" class="bad" role="alert"></p>
+      <form id="mobile_password_change" hidden>
+        <h2>Change password</h2>
+        <input id="mobile_current_password" type="password" autocomplete="current-password" placeholder="Current password" />
+        <input id="mobile_new_password" type="password" autocomplete="new-password" placeholder="New password" minlength="8" />
+        <button type="submit">Change password</button>
+        <p id="mobile_password_error" class="bad" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="mobile_consumer" hidden>
+      <nav id="mobile_nav" aria-label="HealthChecker sections">
+        <button type="button" data-mobile-view="dashboard">Dashboard</button>
+        <button type="button" data-mobile-view="records">Records</button>
+        <button type="button" data-mobile-view="trends">Trends</button>
+        <button type="button" data-mobile-view="observations">Observations</button>
+        <button type="button" data-mobile-view="import">Import</button>
+        <button type="button" data-mobile-view="settings">Settings</button>
+      </nav>
+      <p id="mobile_status" role="status" aria-live="polite"></p>
+      <section id="mobile_dashboard" class="card" data-mobile-panel><h1>Dashboard</h1><div data-mobile-content></div></section>
+      <section id="mobile_records" class="card" data-mobile-panel hidden><h1>Records</h1><div data-mobile-content></div></section>
+      <section id="mobile_trends" class="card" data-mobile-panel hidden><h1>Trends</h1><div data-mobile-content></div></section>
+      <section id="mobile_observations" class="card" data-mobile-panel hidden><h1>Observations</h1><div data-mobile-content></div></section>
+      <section id="mobile_import" class="card" data-mobile-panel hidden>
+        <h1>Import</h1>
+        <input id="mobile_record_file" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
+        <button id="mobile_upload_button" type="button">Upload securely</button>
+        <div data-mobile-content></div>
+      </section>
+      <section id="mobile_settings" class="card" data-mobile-panel hidden>
+        <h1>Settings</h1>
+        <p id="mobile_identity"></p>
+        <button id="mobile_logout_button" type="button">Logout</button>
+        <div data-mobile-content></div>
+      </section>
+    </section>
+  </main>
+  <script src="/js/health_vault/mobile_consumer.js"></script>
+</body>
+</html>

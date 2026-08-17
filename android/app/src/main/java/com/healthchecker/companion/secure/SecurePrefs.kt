@@ -66,6 +66,26 @@ class SecurePrefs(context: Context) {
 
     fun clearPairing() = hostStore.clearPairingCredentials()
 
+    /**
+     * Clear every user-bound companion artifact after server-confirmed logout or
+     * revocation. A subsequent account must pair as a new identity and cannot
+     * inherit a prior user's cursor or queued Health Connect delivery.
+     */
+    fun clearUserScopedState() {
+        hostStore.clearPairingCredentials()
+        prefs.edit()
+            .remove(KEY_CHANGES)
+            .remove(KEY_CHANGES_SCOPE)
+            .remove(KEY_PENDING_BATCH)
+            .remove(KEY_LAST_ATTEMPT)
+            .remove(KEY_LAST_SUCCESS)
+            .remove(KEY_LAST_ERROR)
+            .remove(KEY_PARTIAL_WARNING)
+            .remove(KEY_LAST_QUERY_PERFORMED)
+            .remove(KEY_QUEUED)
+            .commit()
+    }
+
     fun getChangesToken(): String? = prefs.getString(KEY_CHANGES, null)
 
     fun getChangesTokenScope(): String? = prefs.getString(KEY_CHANGES_SCOPE, null)

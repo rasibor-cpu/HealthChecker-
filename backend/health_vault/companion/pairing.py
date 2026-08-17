@@ -48,13 +48,17 @@ class CompanionPairingService:
     def start_pairing(
         self,
         *,
+        patient_id: str,
         display_name: str | None = None,
         now: str | None = None,
     ) -> dict[str, Any]:
         """
-        Begin pairing. Patient identity is host-bound (default-patient) —
-        callers cannot inject an arbitrary patient_id.
+        Begin pairing for a patient identity resolved by HC-318 authentication.
+        Callers cannot inject an arbitrary patient_id.
         """
+        owner_id = str(patient_id or "").strip()
+        if not owner_id or owner_id == "default-patient":
+            return {"ok": False, "status": "identity_required", "errors": ["authenticated_user_required"]}
         now_ts = now or utc_now()
         expires = (
             _parse_ts(now_ts) + timedelta(seconds=PAIR_CODE_TTL_SECONDS)
@@ -64,7 +68,7 @@ class CompanionPairingService:
             "session_id": str(uuid4()),
             "pair_code_hash": hash_pair_code(code, store_root=self._root),
             "display_name_hint": (display_name or "Android Companion").strip()[:80],
-            "patient_id": "default-patient",
+            "patient_id": owner_id,
             "created_at": now_ts,
             "expires_at": expires,
             "consumed": False,
@@ -151,6 +155,10 @@ class CompanionPairingService:
             # Lost race to concurrent confirmation
             return {"ok": False, "errors": [PAIR_CODE_REJECT]}
 
+        owner_id = str(consumed.get("patient_id") or "").strip()
+        if not owner_id or owner_id == "default-patient":
+            return {"ok": False, "status": "identity_required", "errors": ["authenticated_user_required"]}
+
         device = {
             "device_id": device_id,
             "display_name": (device_label or session.get("display_name_hint") or "Android Companion")[
@@ -158,7 +166,7 @@ class CompanionPairingService:
             ],
             "platform": (platform or "android")[:40],
             "app_version": (str(app_version)[:40] if app_version else None),
-            "patient_id": "default-patient",
+            "patient_id": owner_id,
             "paired_at": now_ts,
             "last_seen_at": now_ts,
             "token_hash": hash_token(token, store_root=self._root),
@@ -187,11 +195,15 @@ class CompanionPairingService:
             ),
         }
 
-    def revoke_device(self, device_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def revoke_device(
+        self, device_id: str, *, patient_id: str | None = None, now: str | None = None
+    ) -> dict[str, Any]:
         now_ts = now or utc_now()
         device = self.store.get_companion_device(device_id)
         if not device:
             return {"ok": False, "errors": ["revoke_failed"]}
+        if patient_id is not None and str(device.get("patient_id") or "") != str(patient_id):
+            return {"ok": False, "status": "forbidden", "errors": ["device_owner_mismatch"]}
         device = dict(device)
         device["revoked"] = True
         device["revoked_at"] = now_ts
@@ -200,10 +212,14 @@ class CompanionPairingService:
         self.bus.publish(COMPANION_REVOKED, redact_companion_log({"device_id": device_id}))
         return {"ok": True, "device_id": device_id, "revoked": True, "revoked_at": now_ts}
 
-    def list_devices(self, *, include_revoked: bool = False) -> list[dict[str, Any]]:
+    def list_devices(
+        self, *, include_revoked: bool = False, patient_id: str | None = None
+    ) -> list[dict[str, Any]]:
         rows = []
         for d in self.store.list_companion_devices():
             if d.get("revoked") and not include_revoked:
+                continue
+            if patient_id is not None and str(d.get("patient_id") or "") != str(patient_id):
                 continue
             rows.append(
                 {

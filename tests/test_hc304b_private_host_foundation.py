@@ -305,6 +305,11 @@ def test_http_surface_cors_proxy_admin(monitoring_vault: Path):
 
     env = _base_env(monitoring_vault)
     app, config, store = build_activated_app(environ=env, repo_root=ROOT)
+    app.state.hc_auth_service.create_user(
+        user_id="mobile-test", name="Mobile Test", email_identifier="mobile@test.invalid",
+        password="Mobile-Test-Password", must_change_password=False,
+    )
+    user_token = app.state.hc_auth_service.login("mobile-test", "Mobile-Test-Password")["token"]
     os.environ["HC_HOST_ALLOW_TESTCLIENT_PEER"] = "1"
     client = TestClient(app)
 
@@ -355,7 +360,11 @@ def test_http_surface_cors_proxy_admin(monitoring_vault: Path):
     r = client.post(
         "/api/companion/pair/start",
         json={"display_name": "pilot"},
-        headers={**_proxy_headers(config), "X-HC-Companion-Admin": config.admin_token},
+        headers={
+            **_proxy_headers(config),
+            "X-HC-Companion-Admin": config.admin_token,
+            "Authorization": f"Bearer {user_token}",
+        },
     )
     assert r.status_code == 200
     assert r.json().get("ok") is True

@@ -31,6 +31,7 @@ from backend.health_vault.companion_host.rate_limit import (
     PAIR_START_LIMITER,
 )
 from backend.health_vault.companion.security import MAX_PAYLOAD_BYTES
+from backend.health_vault.auth import AuthenticationError, AuthenticationService
 from backend.health_vault.vault_store import VaultStore
 
 # Exact inventory of routes this host may expose (method, path template).
@@ -81,6 +82,8 @@ def create_companion_only_app(
     )
     app.state.hc_config = config
     app.state.hc_store = store
+    auth_service = AuthenticationService(store)
+    app.state.hc_auth_service = auth_service
 
     def _base_headers() -> dict[str, str]:
         return cors_deny_headers()
@@ -229,6 +232,19 @@ def create_companion_only_app(
                 {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]},
                 403,
             )
+        authorization, duplicate_auth = _single_header(request, "authorization")
+        if duplicate_auth or not authorization or not authorization.startswith("Bearer "):
+            return _json(
+                {"ok": False, "status": "unauthorized", "errors": ["authenticated_user_required"]},
+                401,
+            )
+        try:
+            account, _ = auth_service.resolve(authorization[7:].strip(), require_full=True)
+        except AuthenticationError as exc:
+            return _json(
+                {"ok": False, "status": "unauthorized", "errors": [exc.code]},
+                exc.status_code,
+            )
         rl = PAIR_START_LIMITER.check("pair_start")
         if not rl.allowed:
             return _json({"ok": False, "status": "rate_limited", "errors": ["rate_limited"]}, 429)
@@ -236,7 +252,10 @@ def create_companion_only_app(
         if err:
             return err
         result = companion_pair_start_handler(
-            body, store=store, admin_header=request.headers.get("X-HC-Companion-Admin")
+            body,
+            store=store,
+            admin_header=request.headers.get("X-HC-Companion-Admin"),
+            patient_id=account.user_id,
         )
         code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
         log_event("pair_start", ok=bool(result.get("ok")), status=result.get("status"))

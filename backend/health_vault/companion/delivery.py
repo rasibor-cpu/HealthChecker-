@@ -111,6 +111,16 @@ class CompanionDeliveryService:
         if device.get("revoked"):
             return {"ok": False, "status": "revoked", "errors": ["device_revoked"]}
 
+        # Resolve ownership before parsing or reserving any batch. Legacy or
+        # malformed device rows must not mutate even operational intake state.
+        patient_id = str(device.get("patient_id") or "").strip()
+        if not patient_id or patient_id == "default-patient":
+            return {
+                "ok": False,
+                "status": "identity_required",
+                "errors": ["authenticated_user_binding_missing"],
+            }
+
         if require_tls_hint and not local_dev and tls_enabled is False:
             return {
                 "ok": False,
@@ -234,8 +244,7 @@ class CompanionDeliveryService:
                 "errors": ["batch_in_progress_retry_later"],
             }
 
-        # Patient identity from authenticated device only
-        patient_id = str(device.get("patient_id") or "default-patient")
+        # Patient identity was resolved from the authenticated device above.
         validated: list[dict[str, Any]] = []
         rejected: list[dict[str, Any]] = []
 
