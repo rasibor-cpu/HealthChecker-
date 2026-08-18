@@ -67,9 +67,11 @@ class CompanionHostStore(private val prefs: SharedPreferences) {
 
     fun clearPairingCredentials() {
         prefs.edit()
+            .remove(KEY_HOST)
+            .remove(KEY_DRAFT_HOST)
             .remove(KEY_DEVICE_ID)
             .remove(KEY_TOKEN)
-            .apply()
+            .commit()
         SafeLog.i("pairing_cleared")
     }
 

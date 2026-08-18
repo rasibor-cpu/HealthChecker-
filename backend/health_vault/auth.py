@@ -197,6 +197,9 @@ class AuthenticationService:
         credential_hash = str(row.get("password_hash")) if row else self._dummy_password_hash
         valid_password = verify_password(password, credential_hash)
         if not row or not valid_password:
+            if row:
+                row["failed_login_count"] = int(row.get("failed_login_count", 0)) + 1
+                row["last_failed_login_at"] = utc_now()
             self._audit(data, "login_failed", uid, "denied")
             self._write(data)
             raise AuthenticationError("invalid_credentials")
@@ -207,6 +210,8 @@ class AuthenticationService:
         restricted = account.must_change_password or expired
         if expired:
             row["account_status"] = "password_expired"
+        row["failed_login_count"] = 0
+        row["last_failed_login_at"] = None
         scope = "password_change" if restricted else "full"
         token = self._issue_session(data, account, scope)
         self._audit(data, "login_succeeded", uid)

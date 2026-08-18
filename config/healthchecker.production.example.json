@@ -1,0 +1,14 @@
+{
+  "service_id": "healthchecker.consumer.api",
+  "bind_address": "127.0.0.1",
+  "port": 8766,
+  "public_origin": "https://health.capitalstratasystems.com",
+  "transport": "cloudflare_tunnel",
+  "tunnel_service_id": "healthchecker.cloudflare.tunnel",
+  "cloudflared_executable": "C:\\ProgramData\\HealthChecker\\tools\\cloudflared\\cloudflared.exe",
+  "tunnel_config_path": "C:\\ProgramData\\HealthChecker\\config\\cloudflared-healthchecker.yml",
+  "runtime_state_dir": "C:\\ProgramData\\HealthChecker\\runtime\\healthchecker",
+  "log_dir": "C:\\ProgramData\\HealthChecker\\logs\\healthchecker",
+  "restart_limit": 5,
+  "restart_backoff_seconds": 5
+}

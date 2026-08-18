@@ -187,4 +187,25 @@ class CompanionHostStoreTest {
         assertNull(store.getDraftHostUrl())
         assertEquals("https://legacy.example", store.displayHostForEditing())
     }
+
+    @Test
+    fun logoutClearsDeliveryPairingButPreservesConsumerOrigin() {
+        assertTrue(
+            store.commitPairedSession(
+                "https://health.example",
+                "device-owner",
+                "token-owner",
+            )
+        )
+        store.setDraftHostUrl("https://draft.example")
+
+        store.clearPairingCredentials()
+
+        assertTrue(store.assessPairingIntegrity() is CompanionHostStore.PairingIntegrity.Unpaired)
+        assertNull(store.getActiveHostUrl())
+        assertNull(store.getDraftHostUrl())
+        assertNull(store.getDeviceId())
+        assertNull(store.getDeviceToken())
+        assertEquals("https://health.example", store.getConsumerOrigin())
+    }
 }
