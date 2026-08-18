@@ -6,6 +6,7 @@
   let session = null;
   let summary = null;
   let records = [];
+  let preferences = null;
 
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
@@ -27,6 +28,19 @@
     const target = byId(panelId).querySelector("[data-mobile-content]");
     target.replaceChildren();
     return target;
+  }
+
+  function widget(id) {
+    return ((summary && summary.widgets) || []).find(item => item.widget_id === id) || { payload: {} };
+  }
+
+  function label(value) {
+    return String(value || "Not available").replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  function setTheme(theme) {
+    document.body.classList.toggle("dark-theme", theme === "dark");
+    document.body.classList.toggle("light-theme", theme !== "dark");
   }
 
   async function request(path, options) {
@@ -67,13 +81,19 @@
   async function changePassword(event) {
     event.preventDefault();
     const error = byId("mobile_password_error");
+    const next = byId("mobile_new_password").value;
     error.textContent = "";
+    if (next.length < 8 || next !== byId("mobile_confirm_password").value) {
+      error.textContent = "New passwords must match and contain at least 8 characters.";
+      return;
+    }
     try {
       const body = await request("/api/auth/password/change", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_password: byId("mobile_current_password").value, new_password: byId("mobile_new_password").value })
+        body: JSON.stringify({ current_password: byId("mobile_current_password").value, new_password: next })
       });
       saveSession({ token: body.token, userId: body.user_id, name: body.name });
+      ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => { byId(id).value = ""; });
       byId("mobile_password_change").hidden = true;
       showAuthenticated(true);
       await loadDashboard();
@@ -85,6 +105,7 @@
     saveSession(null);
     summary = null;
     records = [];
+    preferences = null;
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
     showAuthenticated(false);
     if (notifyServer && token) {
@@ -110,43 +131,106 @@
 
   async function loadDashboard() {
     summary = await request("/api/dashboard/summary");
+    preferences = await request("/api/dashboard/preferences");
+    setTheme(preferences.theme);
     const target = clearContent("mobile_dashboard");
-    text(target, `Welcome ${summary.patient_name || session.name || session.userId}`);
-    text(target, `${summary.records_count || 0} records`);
-    text(target, `${summary.measurements_count || 0} measurements`);
+    const status = widget("status_summary").payload;
+    const imported = widget("import_wizard").payload;
+    text(target, `Welcome ${session.name || session.userId}`);
+    text(target, `Overall status: ${label(summary.overall_status)}`);
+    text(target, `${Number(imported.records_count || 0)} records`);
+    text(target, `${Number(status.measurements_count || 0)} measurements`);
+    text(target, `${Number(summary.active_warnings_count || 0)} attention items`);
     byId("mobile_identity").textContent = `Signed in as ${session.name || session.userId} (${session.userId})`;
+    byId("mobile_theme").value = preferences.theme === "dark" ? "dark" : "light";
+    byId("mobile_priority_metric").value = preferences.priority_metric || "";
   }
 
   async function loadRecords() {
     const body = await request("/api/records");
     records = Array.isArray(body.records) ? body.records : [];
-    renderList(clearContent("mobile_records"), records, "No records available.", (card, row) => {
+    renderList(clearContent("mobile_records"), records, "No records available. Use Import to add your first report.", (card, row) => {
       text(card, row.original_filename || row.title || "Health record");
-      text(card, `${row.category || "other"} · ${row.status || "unknown"}`, "muted");
+      text(card, `${label(row.primary_category)} · ${label(row.status)}`, "muted");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "View details";
+      button.addEventListener("click", () => loadRecordDetail(row.document_id, card));
+      card.appendChild(button);
     });
+  }
+
+  async function loadRecordDetail(documentId, card) {
+    card.querySelectorAll("[data-record-detail]").forEach(node => node.remove());
+    const detail = document.createElement("section");
+    detail.dataset.recordDetail = "true";
+    detail.setAttribute("aria-live", "polite");
+    text(detail, "Loading record details…", "muted");
+    card.appendChild(detail);
+    try {
+      const record = await request(`/api/records/${encodeURIComponent(documentId)}`);
+      detail.replaceChildren();
+      text(detail, `Source: ${(record.source_provenance || {}).source_system || "Not available"}`);
+      text(detail, `${(record.extracted_measurements || []).length} extracted measurements`);
+      text(detail, `${(record.trend_references || []).length} related trends`);
+      text(detail, `${(record.ai_observations || []).length} AI observations`);
+      text(detail, `${(record.timeline_events || []).length} timeline events`);
+      text(detail, `${(record.evidence_references || []).length} evidence references`);
+      (record.extracted_measurements || []).forEach(item => text(detail, `${label(item.metric)}: ${item.value == null ? "Not available" : item.value} ${item.units || ""}`));
+    } catch (error) {
+      detail.replaceChildren();
+      text(detail, error.message, "bad");
+    }
   }
 
   async function showView(name) {
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
+    document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
     byId("mobile_status").textContent = "Loading…";
     try {
       if (!summary) await loadDashboard();
+      if (name === "dashboard") await loadDashboard();
       if (name === "records") await loadRecords();
       if (name === "trends") {
-        const trends = summary.trends || {};
+        const trends = widget("trends_widget").payload.trends || {};
         renderList(clearContent("mobile_trends"), Object.entries(trends), "No trends available.", (card, row) => {
-          text(card, row[0]); text(card, JSON.stringify(row[1]), "muted");
+          const trend = row[1] || {};
+          text(card, label(row[0]));
+          text(card, `${trend.label || trend.direction || "Not enough data"} · Latest ${trend.latest == null ? "not available" : trend.latest} · ${trend.sample_count || 0} samples`, "muted");
         });
       }
       if (name === "observations") {
-        const observations = summary.observations || [];
+        const observations = widget("key_observations").payload.observations || [];
         renderList(clearContent("mobile_observations"), observations, "No observations available.", (card, row) => {
           text(card, row.fact || row.interpretation || "Observation");
           text(card, row.interpretation || row.explanation || "", "muted");
+          text(card, row.safety_boundary_disclaimer || "Observational information only — not a diagnosis.", "muted");
+        });
+      }
+      if (name === "timeline") {
+        const body = await request("/api/health-vault/timeline?unified=true");
+        renderList(clearContent("mobile_timeline"), body.entries || [], "Your timeline is empty.", (card, row) => {
+          text(card, row.date ? String(row.date).slice(0, 10) : "Timeline event");
+          text(card, row.summary || row.trend_impact || row.event_type || "Health event", "muted");
+          text(card, `Source: ${row.provenance || row.source || "Not available"}`, "muted");
+        });
+      }
+      if (name === "reports") {
+        const report = await request("/api/health-vault/doctor-visit");
+        const target = clearContent("mobile_reports");
+        const keys = Object.keys(report || {});
+        if (!keys.length) text(target, "No report information is available yet.", "muted");
+        keys.forEach(key => {
+          const card = document.createElement("article");
+          card.className = "card";
+          const value = report[key];
+          text(card, label(key));
+          text(card, typeof value === "object" ? `${Array.isArray(value) ? value.length : Object.keys(value || {}).length} linked items` : value, "muted");
+          target.appendChild(card);
         });
       }
       byId("mobile_status").textContent = "";
-    } catch (err) { byId("mobile_status").textContent = err.message; }
+    } catch (error) { byId("mobile_status").textContent = error.message; }
   }
 
   async function upload() {
@@ -157,9 +241,24 @@
     form.append("file", file, file.name);
     try {
       const result = await request("/api/records/upload", { method: "POST", body: form });
-      text(target, `Upload ${result.status || "accepted"}. Document ${result.document_id || "is processing"}.`);
+      text(target, `Upload ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`);
       summary = null; records = [];
-    } catch (err) { text(target, err.message, "bad"); }
+    } catch (error) { text(target, error.message, "bad"); }
+  }
+
+  async function savePreferences() {
+    const status = byId("mobile_status");
+    try {
+      if (!preferences) preferences = await request("/api/dashboard/preferences");
+      preferences.theme = byId("mobile_theme").value;
+      preferences.priority_metric = byId("mobile_priority_metric").value || null;
+      preferences = await request("/api/dashboard/preferences", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preferences)
+      });
+      setTheme(preferences.theme);
+      summary = null;
+      status.textContent = "Preferences saved.";
+    } catch (error) { status.textContent = error.message; }
   }
 
   async function restore() {
@@ -170,7 +269,7 @@
       const current = await request("/api/auth/session");
       session.userId = current.user_id; session.name = current.name;
       showAuthenticated(true);
-      await loadDashboard();
+      await showView("dashboard");
     } catch (_) { await logout(false); }
   }
 
@@ -178,7 +277,9 @@
   byId("mobile_password_change").addEventListener("submit", changePassword);
   byId("mobile_logout_button").addEventListener("click", () => logout(true));
   byId("mobile_upload_button").addEventListener("click", upload);
+  byId("mobile_save_preferences").addEventListener("click", savePreferences);
   document.querySelectorAll("[data-mobile-view]").forEach(button => {
+    button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", () => showView(button.dataset.mobileView));
   });
   restore();

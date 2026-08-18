@@ -115,12 +115,12 @@ textarea{
 
 <nav id="tabs_navbar">
   <div class="tab active" data="dash">Dashboard</div>
-  <div class="tab" data="add">Add</div>
-  <div class="tab" data="sym">Symptoms</div>
   <div class="tab" data="health_records_screen">Health Records</div>
-  <div class="tab" data="vault">Health Vault</div>
-  <div class="tab" data="guardian">Guardian</div>
-  <div class="tab" data="rep">Reports</div>
+  <div class="tab" data="consumer_trends_screen">Trends</div>
+  <div class="tab" data="consumer_observations_screen">Observations</div>
+  <div class="tab" data="consumer_timeline_screen">Timeline</div>
+  <div class="tab" data="consumer_reports_screen">Reports</div>
+  <div class="tab" data="consumer_settings_screen">Settings</div>
 </nav>
 
 <div id="dash" class="screen active">
@@ -148,9 +148,20 @@ textarea{
         <label><strong class="small">Priority Metric Highlight:</strong></label>
         <select id="config_priority_metric" style="margin-top: 4px; margin-bottom: 0;">
           <option value="">None</option>
-          <option value="glucose">Glucose</option>
+          <option value="average_hr">Average Heart Rate</option>
+          <option value="creatinine">Creatinine</option>
+          <option value="diastolic_bp">Diastolic Blood Pressure</option>
           <option value="egfr">eGFR</option>
-          <option value="systolic">Blood Pressure</option>
+          <option value="glucose">Glucose</option>
+          <option value="hba1c">HbA1c</option>
+          <option value="heart_rate">Heart Rate</option>
+          <option value="hrv_rmssd">HRV (RMSSD)</option>
+          <option value="respiratory_rate">Respiratory Rate</option>
+          <option value="resting_hr">Resting Heart Rate</option>
+          <option value="sleep_duration">Sleep Duration</option>
+          <option value="sleep_score">Sleep Score</option>
+          <option value="systolic_bp">Systolic Blood Pressure</option>
+          <option value="weight">Weight</option>
         </select>
       </div>
       <button id="save_config_btn" style="width: auto; padding: 8px 16px; margin: 0;">Save Preferences</button>
@@ -160,11 +171,11 @@ textarea{
     <div id="dashboard_widgets_target"></div>
   </div>
 
-  <div id="exec_health_dashboard" aria-label="Executive Health Dashboard"></div>
+  <div id="exec_health_dashboard" hidden aria-hidden="true"></div>
 
-  <div id="guardian_dash_snapshot" class="card muted small">Guardian status appears after first evaluation.</div>
+  <div id="guardian_dash_snapshot" hidden aria-hidden="true"></div>
 
-  <details class="card">
+  <details class="card" hidden aria-hidden="true">
     <summary class="section-title">Classic Quick Summary &amp; Trends</summary>
     <div id="summary"></div>
     <div id="trendBox"></div>
@@ -172,6 +183,46 @@ textarea{
     <div id="footDash">No foot pain analysis yet.</div>
     <div id="vault_dash_snapshot" class="muted">Open the Health Vault tab to import medical records.</div>
   </details>
+</div>
+
+<div id="consumer_trends_screen" class="screen consumer-api-screen" aria-labelledby="consumer_trends_title">
+  <h3 id="consumer_trends_title" class="section-title">Trends</h3>
+  <p class="muted small">Longitudinal trends are calculated from your authenticated Health Vault evidence.</p>
+  <div data-consumer-state role="status" aria-live="polite"></div>
+  <div data-consumer-content></div>
+</div>
+
+<div id="consumer_observations_screen" class="screen consumer-api-screen" aria-labelledby="consumer_observations_title">
+  <h3 id="consumer_observations_title" class="section-title">Observations</h3>
+  <p class="muted small">Observational information only — not a diagnosis or treatment recommendation.</p>
+  <div data-consumer-state role="status" aria-live="polite"></div>
+  <div data-consumer-content></div>
+</div>
+
+<div id="consumer_timeline_screen" class="screen consumer-api-screen" aria-labelledby="consumer_timeline_title">
+  <h3 id="consumer_timeline_title" class="section-title">Timeline</h3>
+  <p class="muted small">Events are scoped to the signed-in user and retain their source provenance.</p>
+  <div data-consumer-state role="status" aria-live="polite"></div>
+  <div data-consumer-content></div>
+</div>
+
+<div id="consumer_reports_screen" class="screen consumer-api-screen" aria-labelledby="consumer_reports_title">
+  <h3 id="consumer_reports_title" class="section-title">Reports</h3>
+  <p class="muted small">Prepare an authenticated summary for a clinician visit. Review it with a qualified professional.</p>
+  <button id="consumer_report_refresh" type="button">Refresh report</button>
+  <button id="consumer_report_print" type="button" class="secondary">Print report</button>
+  <div data-consumer-state role="status" aria-live="polite"></div>
+  <div data-consumer-content></div>
+</div>
+
+<div id="consumer_settings_screen" class="screen consumer-api-screen" aria-labelledby="consumer_settings_title">
+  <h3 id="consumer_settings_title" class="section-title">Settings</h3>
+  <div class="card">
+    <p id="consumer_settings_identity" class="small"></p>
+    <button id="consumer_settings_theme" type="button">Switch light/dark theme</button>
+    <button id="consumer_settings_customize" type="button" class="secondary">Customize dashboard</button>
+    <p class="muted small">Dashboard choices and theme are stored in your user-scoped encrypted profile.</p>
+  </div>
 </div>
 
 <div id="health_records_screen" class="screen" aria-labelledby="records_screen_title">
@@ -921,5 +972,6 @@ if (window.HCContinuousMonitoring) {
   });
 })();
 </script>
+<script src="js/health_vault/consumer_surfaces.js"></script>
 </body>
 </html>

@@ -22,6 +22,7 @@
         <h2>Change password</h2>
         <input id="mobile_current_password" type="password" autocomplete="current-password" placeholder="Current password" />
         <input id="mobile_new_password" type="password" autocomplete="new-password" placeholder="New password" minlength="8" />
+        <input id="mobile_confirm_password" type="password" autocomplete="new-password" placeholder="Confirm new password" minlength="8" />
         <button type="submit">Change password</button>
         <p id="mobile_password_error" class="bad" role="alert"></p>
       </form>
@@ -33,6 +34,8 @@
         <button type="button" data-mobile-view="records">Records</button>
         <button type="button" data-mobile-view="trends">Trends</button>
         <button type="button" data-mobile-view="observations">Observations</button>
+        <button type="button" data-mobile-view="timeline">Timeline</button>
+        <button type="button" data-mobile-view="reports">Reports</button>
         <button type="button" data-mobile-view="import">Import</button>
         <button type="button" data-mobile-view="settings">Settings</button>
       </nav>
@@ -41,6 +44,8 @@
       <section id="mobile_records" class="card" data-mobile-panel hidden><h1>Records</h1><div data-mobile-content></div></section>
       <section id="mobile_trends" class="card" data-mobile-panel hidden><h1>Trends</h1><div data-mobile-content></div></section>
       <section id="mobile_observations" class="card" data-mobile-panel hidden><h1>Observations</h1><div data-mobile-content></div></section>
+      <section id="mobile_timeline" class="card" data-mobile-panel hidden><h1>Timeline</h1><div data-mobile-content></div></section>
+      <section id="mobile_reports" class="card" data-mobile-panel hidden><h1>Reports</h1><div data-mobile-content></div></section>
       <section id="mobile_import" class="card" data-mobile-panel hidden>
         <h1>Import</h1>
         <input id="mobile_record_file" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
@@ -50,6 +55,30 @@
       <section id="mobile_settings" class="card" data-mobile-panel hidden>
         <h1>Settings</h1>
         <p id="mobile_identity"></p>
+        <label for="mobile_theme">Theme</label>
+        <select id="mobile_theme">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <label for="mobile_priority_metric">Priority metric</label>
+        <select id="mobile_priority_metric">
+          <option value="">None</option>
+          <option value="average_hr">Average Heart Rate</option>
+          <option value="creatinine">Creatinine</option>
+          <option value="diastolic_bp">Diastolic Blood Pressure</option>
+          <option value="egfr">eGFR</option>
+          <option value="glucose">Glucose</option>
+          <option value="hba1c">HbA1c</option>
+          <option value="heart_rate">Heart Rate</option>
+          <option value="hrv_rmssd">HRV (RMSSD)</option>
+          <option value="respiratory_rate">Respiratory Rate</option>
+          <option value="resting_hr">Resting Heart Rate</option>
+          <option value="sleep_duration">Sleep Duration</option>
+          <option value="sleep_score">Sleep Score</option>
+          <option value="systolic_bp">Systolic Blood Pressure</option>
+          <option value="weight">Weight</option>
+        </select>
+        <button id="mobile_save_preferences" type="button">Save preferences</button>
         <button id="mobile_logout_button" type="button">Logout</button>
         <div data-mobile-content></div>
       </section>
