@@ -124,6 +124,74 @@
       "critical_above": 40.0,
       "impossible_below": 8.0,
       "impossible_above": 90.0
+    },
+    "heart_rate": {
+      "units": ["bpm"],
+      "notes": "Unlabelled heart rate is not assumed to be resting. HC-302 mon_hr_high=130 / mon_hr_low=40. Activity context is applied in the snapshot domain.",
+      "normal": [50, 100],
+      "borderline": [101, 130],
+      "abnormal": [131, 180],
+      "critical_above": 181,
+      "critical_below": 40,
+      "impossible_below": 20,
+      "impossible_above": 250
+    },
+    "oxygen_saturation": {
+      "units": ["%"],
+      "notes": "Aligned with HC-301/302 low_oxygen_saturation urgent threshold of 92%. Wearable SpO2 is observational and does not replace clinical pulse oximetry.",
+      "normal": [95, 100],
+      "borderline": [93, 94],
+      "abnormal": [88, 92],
+      "critical_below": 87,
+      "impossible_below": 50,
+      "impossible_above": 100
+    },
+    "spo2": {
+      "units": ["%"],
+      "normal": [95, 100],
+      "borderline": [93, 94],
+      "abnormal": [88, 92],
+      "critical_below": 87,
+      "impossible_below": 50,
+      "impossible_above": 100
+    },
+    "ldl": {
+      "units": ["mg/dL"],
+      "notes": "ATP III observational LDL bands. Not a cardiovascular risk calculation; no treatment target is implied without clinician context.",
+      "normal": [0, 99],
+      "borderline": [100, 129],
+      "abnormal": [130, 189],
+      "critical_above": 190,
+      "impossible_below": 10,
+      "impossible_above": 500
+    },
+    "ldl_c": {
+      "units": ["mg/dL"],
+      "normal": [0, 99],
+      "borderline": [100, 129],
+      "abnormal": [130, 189],
+      "critical_above": 190,
+      "impossible_below": 10,
+      "impossible_above": 500
+    },
+    "hdl": {
+      "units": ["mg/dL"],
+      "notes": "Sex-unspecified HDL: <40 attention, 40–49 caution, ≥50 normal (more conservative than male-only 40 mg/dL cutoff).",
+      "normal": [50, 150],
+      "borderline": [40, 49],
+      "abnormal": [1, 39],
+      "impossible_below": 5,
+      "impossible_above": 200
+    },
+    "triglycerides": {
+      "units": ["mg/dL"],
+      "notes": "NCEP/ATP III observational triglyceride bands.",
+      "normal": [0, 149],
+      "borderline": [150, 199],
+      "abnormal": [200, 499],
+      "critical_above": 500,
+      "impossible_below": 10,
+      "impossible_above": 3000
     }
   }
 }

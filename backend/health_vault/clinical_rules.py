@@ -53,6 +53,13 @@ class ClinicalRulesEngine:
 
         spec = (self.rules.get("metrics") or {}).get(metric)
         if not spec:
+            try:
+                from backend.health_vault.metric_normalization import canonicalize_metric
+
+                spec = (self.rules.get("metrics") or {}).get(canonicalize_metric(metric))
+            except Exception:
+                spec = None
+        if not spec:
             return FLAG_UNKNOWN
         try:
             num = float(value)

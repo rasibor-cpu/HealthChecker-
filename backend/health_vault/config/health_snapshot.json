@@ -1,0 +1,202 @@
+{
+  "schema_version": "hc.health_snapshot.v1",
+  "disclaimer": "Observational decision-support only. Not a diagnosis or prescription. Status colours summarise the latest valid HealthChecker data and do not replace professional medical assessment.",
+  "notes": [
+    "Consumer statuses (NORMAL, CAUTION, ATTENTION, UNKNOWN) are derived in the domain layer.",
+    "Numeric thresholds remain in clinical_rules.json (ClinicalRulesEngine) except where a metric is bimodal or context-dependent.",
+    "Context-aware evaluators (glucose fasting vs post-meal, unpaired heart rate, adult sleep duration, weight-without-BMI) live in health_snapshot.py — not in UI components.",
+    "Snapshot freshness windows describe a current health picture and may be longer than HC-302 CGM/live monitoring windows.",
+    "Informational metrics (weight, steps, activity) display latest values without inventing a clinical target."
+  ],
+  "default_card_order": [
+    "blood_pressure",
+    "glucose",
+    "resting_hr",
+    "heart_rate",
+    "oxygen_saturation",
+    "weight",
+    "bmi",
+    "egfr",
+    "ldl",
+    "hba1c",
+    "sleep_duration",
+    "sleep_score",
+    "steps",
+    "activity_minutes"
+  ],
+  "freshness_windows_minutes": {
+    "heart_rate": 180,
+    "resting_hr": 1440,
+    "average_hr": 1440,
+    "oxygen_saturation": 360,
+    "glucose": 1440,
+    "hba1c": 129600,
+    "systolic_bp": 10080,
+    "diastolic_bp": 10080,
+    "blood_pressure": 10080,
+    "steps": 1440,
+    "activity_minutes": 1440,
+    "exercise_minutes": 1440,
+    "sleep_duration": 2160,
+    "sleep_score": 2160,
+    "weight": 10080,
+    "bmi": 43200,
+    "egfr": 129600,
+    "creatinine": 129600,
+    "ldl": 129600,
+    "hdl": 129600,
+    "triglycerides": 129600,
+    "default": 10080
+  },
+  "stale_escalation_multiplier": 3,
+  "metrics": {
+    "blood_pressure": {
+      "title": "Blood Pressure",
+      "unit": "mmHg",
+      "kind": "composite_bp",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "blood_pressure",
+      "detail_metric": "systolic_bp"
+    },
+    "glucose": {
+      "title": "Glucose",
+      "unit": "mg/dL",
+      "kind": "scalar",
+      "clinical": true,
+      "aliases": ["glucose", "cgm_glucose"],
+      "detail_tab": "vault",
+      "detail_category": "glucose_diabetes",
+      "detail_metric": "glucose",
+      "context_note": "Fasting vs post-meal interpretation is applied when context is present; otherwise CAUTION is preferred over unjustified NORMAL for mid-range values via ClinicalRulesEngine borderline bands."
+    },
+    "heart_rate": {
+      "title": "Heart Rate",
+      "unit": "bpm",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "ecg_cardiology",
+      "detail_metric": "heart_rate",
+      "context_note": "Unlabelled heart rate is not assumed to be resting. Activity/exercise context suppresses non-extreme colouring."
+    },
+    "resting_hr": {
+      "title": "Resting Heart Rate",
+      "unit": "bpm",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "ecg_cardiology",
+      "detail_metric": "resting_hr"
+    },
+    "oxygen_saturation": {
+      "title": "Oxygen Saturation",
+      "unit": "%",
+      "kind": "scalar",
+      "clinical": true,
+      "aliases": ["spo2", "oxygen_saturation"],
+      "detail_tab": "vault",
+      "detail_category": "respiratory_oxygen",
+      "detail_metric": "oxygen_saturation"
+    },
+    "weight": {
+      "title": "Weight",
+      "unit": "kg",
+      "kind": "scalar",
+      "clinical": false,
+      "informational": true,
+      "detail_tab": "vault",
+      "detail_category": "weight_body_metrics",
+      "detail_metric": "weight"
+    },
+    "bmi": {
+      "title": "BMI",
+      "unit": "kg/m2",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "weight_body_metrics",
+      "detail_metric": "bmi"
+    },
+    "egfr": {
+      "title": "Kidney function (eGFR)",
+      "unit": "mL/min/1.73m2",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "kidney_renal",
+      "detail_metric": "egfr"
+    },
+    "ldl": {
+      "title": "LDL cholesterol",
+      "unit": "mg/dL",
+      "kind": "scalar",
+      "clinical": true,
+      "aliases": ["ldl", "ldl_c", "ldl_cholesterol"],
+      "detail_tab": "vault",
+      "detail_category": "laboratory_report",
+      "detail_metric": "ldl"
+    },
+    "hba1c": {
+      "title": "HbA1c",
+      "unit": "%",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "glucose_diabetes",
+      "detail_metric": "hba1c"
+    },
+    "sleep_duration": {
+      "title": "Sleep",
+      "unit": "h",
+      "kind": "sleep_duration",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "sleep",
+      "detail_metric": "sleep_duration",
+      "context_note": "Adult single-night duration bands (National Sleep Foundation 7–9 h). A short night must not be treated as chronic deterioration."
+    },
+    "sleep_score": {
+      "title": "Sleep score",
+      "unit": "score",
+      "kind": "scalar",
+      "clinical": true,
+      "detail_tab": "vault",
+      "detail_category": "sleep",
+      "detail_metric": "sleep_score"
+    },
+    "steps": {
+      "title": "Steps",
+      "unit": "steps",
+      "kind": "scalar",
+      "clinical": false,
+      "informational": true,
+      "detail_tab": "vault",
+      "detail_category": "other",
+      "detail_metric": "steps"
+    },
+    "activity_minutes": {
+      "title": "Activity",
+      "unit": "min",
+      "kind": "scalar",
+      "clinical": false,
+      "informational": true,
+      "aliases": ["activity_minutes", "exercise_minutes"],
+      "detail_tab": "vault",
+      "detail_category": "other",
+      "detail_metric": "activity_minutes"
+    }
+  },
+  "status_text": {
+    "NORMAL": "Normal",
+    "CAUTION": "Caution",
+    "ATTENTION": "Attention",
+    "UNKNOWN": "Unknown"
+  },
+  "status_color": {
+    "NORMAL": "GREEN",
+    "CAUTION": "AMBER",
+    "ATTENTION": "RED",
+    "UNKNOWN": "GREY"
+  }
+}

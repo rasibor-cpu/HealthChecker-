@@ -316,6 +316,9 @@
       /* ignore */
     }
     render(buildLocalBriefing());
+    if (global.HCHealthSnapshot && HCHealthSnapshot.refresh) {
+      try { HCHealthSnapshot.refresh(); } catch (e) { /* ignore */ }
+    }
   }
 
   global.HCExecutiveDashboard = {

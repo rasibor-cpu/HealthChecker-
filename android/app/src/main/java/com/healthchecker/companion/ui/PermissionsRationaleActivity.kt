@@ -8,6 +8,7 @@ import com.healthchecker.companion.R
 class PermissionsRationaleActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
         val tv = TextView(this)
         tv.text = getString(R.string.permissions_rationale)
         tv.setPadding(48, 48, 48, 48)
