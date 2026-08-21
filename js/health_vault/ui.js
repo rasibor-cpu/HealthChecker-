@@ -460,6 +460,7 @@
       ["kidney_renal", "Kidney"],
       ["laboratory_report", "Labs"],
       ["weight_body_metrics", "Weight"],
+      ["respiratory_oxygen", "Oxygen"],
       ["medication", "Medications"],
       ["other", "Other"],
     ];
@@ -482,6 +483,33 @@
   function setTimelineSort(newestFirst) {
     timelineNewestFirst = !!newestFirst;
     refreshVaultViews();
+  }
+
+  function setCategoryFilter(category) {
+    activeCategoryFilter = category || "all";
+    refreshVaultViews();
+  }
+
+  function openMetricDetail(category, metric) {
+    const recordsTab = document.querySelector('.tab[data="health_records_screen"]');
+    const vaultTab = document.querySelector('.tab[data="vault"]');
+    if (recordsTab) recordsTab.click();
+    else if (vaultTab) vaultTab.click();
+    if (category) setCategoryFilter(category);
+    const trends = document.getElementById("vault_trends") || document.getElementById("consumer_trends_screen");
+    const timeline = document.getElementById("vault_timeline") || document.getElementById("consumer_timeline_screen");
+    if (metric && trends) {
+      const nodes = trends.querySelectorAll(".kpi");
+      nodes.forEach((el) => {
+        const text = (el.textContent || "").toLowerCase();
+        if (text.indexOf(String(metric).toLowerCase()) >= 0) {
+          el.setAttribute("data-snapshot-focus", "true");
+          if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    } else if (timeline && timeline.scrollIntoView) {
+      timeline.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   function openDoctorVisit() {
@@ -509,6 +537,8 @@
     retryFailedOnly,
     enqueueFiles,
     setTimelineSort,
+    setCategoryFilter,
+    openMetricDetail,
     showRecentlyImported,
     getBatchQueue: () => batchQueue.slice(),
     getLastBatchReport: () => lastBatchReport,

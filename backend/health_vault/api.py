@@ -8,6 +8,7 @@ Endpoints:
   POST /api/import-health-record/json
   GET  /api/health-vault/executive-briefing
   GET  /api/health-vault/executive-briefing/print
+  GET  /api/health-vault/health-snapshot
   POST /api/ai-health/import-preview
   POST /api/ai-health/import-confirm
   GET  /api/ai-health/import-history
@@ -470,6 +471,23 @@ def create_health_vault_app(
         engine = ExecutiveHealthBriefingEngine(vault)
         return _sanitize_value(
             engine.printable_summary(patient_id=_request_patient(request) if production_mode else patient_id, trend_window=trend_window)
+        )
+
+    @app.get("/api/health-vault/health-snapshot")
+    def health_snapshot(
+        request: Request,
+        patient_id: str = "default-patient",
+        as_of: str | None = None,
+    ) -> dict[str, Any]:
+        """HC-321 read-only consumer Health Snapshot (observational only)."""
+        from backend.health_vault.health_snapshot import HealthSnapshotEngine
+
+        engine = HealthSnapshotEngine(vault)
+        return _sanitize_value(
+            engine.generate(
+                patient_id=_request_patient(request) if production_mode else patient_id,
+                as_of=as_of,
+            )
         )
 
     @app.post("/api/ai-health/import-preview")

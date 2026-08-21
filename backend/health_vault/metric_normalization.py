@@ -42,6 +42,11 @@ METRIC_ALIASES = {
     "steps": "steps",
     "activity_minutes": "activity_minutes",
     "exercise_minutes": "exercise_minutes",
+    "ldl": "ldl",
+    "ldl_c": "ldl",
+    "ldl_cholesterol": "ldl",
+    "hdl": "hdl",
+    "triglycerides": "triglycerides",
     "systolic_bp": "systolic_bp",
     "diastolic_bp": "diastolic_bp",
 }
@@ -70,6 +75,9 @@ CANONICAL_UNITS = {
     "steps": "count",
     "activity_minutes": "min",
     "exercise_minutes": "min",
+    "ldl": "mg/dL",
+    "hdl": "mg/dL",
+    "triglycerides": "mg/dL",
 }
 
 # Metrics allowed into classical / clinical trend engine
@@ -88,6 +96,7 @@ TREND_METRICS = {
     "sleep_duration",
     "sleep_score",
     "respiratory_rate",
+    "ldl",
 }
 
 # HC-321-C1: monitoring / Health Connect observational trend eligibility.

@@ -347,6 +347,13 @@
           /* executive refresh is best-effort */
         }
       }
+      if (global.HCHealthSnapshot && global.HCHealthSnapshot.refresh) {
+        try {
+          await global.HCHealthSnapshot.refresh();
+        } catch (_) {
+          /* snapshot refresh is best-effort */
+        }
+      }
       return this.summary;
     }
 

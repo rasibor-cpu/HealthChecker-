@@ -1,129 +1,424 @@
 {
   "schema_version": "hc.clinical_rules.v1",
-  "notes": "Observational thresholds only — not diagnoses. Configurable per deployment.",
-  "flags": ["Normal", "Borderline", "Abnormal", "Critical", "Unknown"],
+  "notes": "Observational thresholds only \u2014 not diagnoses. Configurable per deployment.",
+  "flags": [
+    "Normal",
+    "Borderline",
+    "Abnormal",
+    "Critical",
+    "Unknown"
+  ],
   "metrics": {
     "systolic": {
-      "units": ["mmHg"],
-      "normal": [90, 120],
-      "borderline": [121, 139],
-      "abnormal": [140, 179],
+      "units": [
+        "mmHg"
+      ],
+      "normal": [
+        90,
+        120
+      ],
+      "borderline": [
+        121,
+        139
+      ],
+      "abnormal": [
+        140,
+        179
+      ],
       "critical_above": 180,
       "critical_below": 70,
       "impossible_below": 40,
       "impossible_above": 300
     },
     "systolic_bp": {
-      "units": ["mmHg"],
-      "normal": [90, 120],
-      "borderline": [121, 139],
-      "abnormal": [140, 179],
+      "units": [
+        "mmHg"
+      ],
+      "normal": [
+        90,
+        120
+      ],
+      "borderline": [
+        121,
+        139
+      ],
+      "abnormal": [
+        140,
+        179
+      ],
       "critical_above": 180,
       "critical_below": 70,
       "impossible_below": 40,
       "impossible_above": 300
     },
     "diastolic": {
-      "units": ["mmHg"],
-      "normal": [60, 80],
-      "borderline": [81, 89],
-      "abnormal": [90, 119],
+      "units": [
+        "mmHg"
+      ],
+      "normal": [
+        60,
+        80
+      ],
+      "borderline": [
+        81,
+        89
+      ],
+      "abnormal": [
+        90,
+        119
+      ],
       "critical_above": 120,
       "critical_below": 40,
       "impossible_below": 20,
       "impossible_above": 200
     },
     "diastolic_bp": {
-      "units": ["mmHg"],
-      "normal": [60, 80],
-      "borderline": [81, 89],
-      "abnormal": [90, 119],
+      "units": [
+        "mmHg"
+      ],
+      "normal": [
+        60,
+        80
+      ],
+      "borderline": [
+        81,
+        89
+      ],
+      "abnormal": [
+        90,
+        119
+      ],
       "critical_above": 120,
       "critical_below": 40,
       "impossible_below": 20,
       "impossible_above": 200
     },
     "glucose": {
-      "units": ["mg/dL"],
-      "normal": [70, 99],
-      "borderline": [100, 125],
-      "abnormal": [126, 250],
+      "units": [
+        "mg/dL"
+      ],
+      "normal": [
+        70,
+        99
+      ],
+      "borderline": [
+        100,
+        125
+      ],
+      "abnormal": [
+        126,
+        250
+      ],
       "critical_above": 400,
       "critical_below": 54,
       "impossible_below": 10,
       "impossible_above": 1000
     },
     "hba1c": {
-      "units": ["%"],
-      "normal": [4.0, 5.6],
-      "borderline": [5.7, 6.4],
-      "abnormal": [6.5, 10.0],
+      "units": [
+        "%"
+      ],
+      "normal": [
+        4.0,
+        5.6
+      ],
+      "borderline": [
+        5.7,
+        6.4
+      ],
+      "abnormal": [
+        6.5,
+        10.0
+      ],
       "critical_above": 12.0,
       "impossible_below": 2.0,
       "impossible_above": 20.0
     },
     "egfr": {
-      "units": ["mL/min/1.73m2"],
-      "normal": [90, 200],
-      "borderline": [60, 89],
-      "abnormal": [30, 59],
+      "units": [
+        "mL/min/1.73m2"
+      ],
+      "normal": [
+        90,
+        200
+      ],
+      "borderline": [
+        60,
+        89
+      ],
+      "abnormal": [
+        30,
+        59
+      ],
       "critical_below": 15,
       "impossible_below": 1,
       "impossible_above": 250
     },
     "creatinine": {
-      "units": ["umol/L", "mg/dL"],
-      "normal": [45, 110],
-      "borderline": [111, 130],
-      "abnormal": [131, 300],
+      "units": [
+        "umol/L",
+        "mg/dL"
+      ],
+      "normal": [
+        45,
+        110
+      ],
+      "borderline": [
+        111,
+        130
+      ],
+      "abnormal": [
+        131,
+        300
+      ],
       "critical_above": 500,
       "impossible_below": 5,
       "impossible_above": 2000
     },
     "resting_hr": {
-      "units": ["bpm"],
-      "normal": [50, 90],
-      "borderline": [91, 100],
-      "abnormal": [101, 140],
+      "units": [
+        "bpm"
+      ],
+      "normal": [
+        50,
+        90
+      ],
+      "borderline": [
+        91,
+        100
+      ],
+      "abnormal": [
+        101,
+        140
+      ],
       "critical_above": 160,
       "critical_below": 35,
       "impossible_below": 20,
       "impossible_above": 250
     },
     "hrv": {
-      "units": ["ms"],
-      "normal": [40, 200],
-      "borderline": [20, 39],
-      "abnormal": [1, 19],
+      "units": [
+        "ms"
+      ],
+      "normal": [
+        40,
+        200
+      ],
+      "borderline": [
+        20,
+        39
+      ],
+      "abnormal": [
+        1,
+        19
+      ],
       "impossible_below": 0,
       "impossible_above": 500
     },
     "sleep_score": {
-      "units": ["score"],
-      "normal": [75, 100],
-      "borderline": [60, 74],
-      "abnormal": [0, 59],
+      "units": [
+        "score"
+      ],
+      "normal": [
+        75,
+        100
+      ],
+      "borderline": [
+        60,
+        74
+      ],
+      "abnormal": [
+        0,
+        59
+      ],
       "impossible_below": 0,
       "impossible_above": 100
     },
     "skin_temperature": {
-      "units": ["C"],
-      "normal": [36.0, 37.5],
-      "borderline": [37.6, 38.0],
-      "abnormal": [38.1, 39.5],
+      "units": [
+        "C"
+      ],
+      "normal": [
+        36.0,
+        37.5
+      ],
+      "borderline": [
+        37.6,
+        38.0
+      ],
+      "abnormal": [
+        38.1,
+        39.5
+      ],
       "critical_above": 40.0,
       "critical_below": 34.0,
       "impossible_below": 25.0,
       "impossible_above": 45.0
     },
     "bmi": {
-      "units": ["kg/m2"],
-      "normal": [18.5, 24.9],
-      "borderline": [25.0, 29.9],
-      "abnormal": [30.0, 39.9],
+      "units": [
+        "kg/m2"
+      ],
+      "normal": [
+        18.5,
+        24.9
+      ],
+      "borderline": [
+        25.0,
+        29.9
+      ],
+      "abnormal": [
+        30.0,
+        39.9
+      ],
       "critical_above": 40.0,
       "impossible_below": 8.0,
       "impossible_above": 90.0
+    },
+    "heart_rate": {
+      "units": [
+        "bpm"
+      ],
+      "notes": "Unlabelled heart rate is not assumed to be resting. HC-302 mon_hr_high=130 / mon_hr_low=40. Activity context is applied in the snapshot domain.",
+      "normal": [
+        50,
+        100
+      ],
+      "borderline": [
+        101,
+        130
+      ],
+      "abnormal": [
+        131,
+        180
+      ],
+      "critical_above": 181,
+      "critical_below": 40,
+      "impossible_below": 20,
+      "impossible_above": 250
+    },
+    "oxygen_saturation": {
+      "units": [
+        "%"
+      ],
+      "notes": "Aligned with HC-301/302 low_oxygen_saturation urgent threshold of 92%. Wearable SpO2 is observational and does not replace clinical pulse oximetry.",
+      "normal": [
+        95,
+        100
+      ],
+      "borderline": [
+        93,
+        94
+      ],
+      "abnormal": [
+        88,
+        92
+      ],
+      "critical_below": 87,
+      "impossible_below": 50,
+      "impossible_above": 100
+    },
+    "spo2": {
+      "units": [
+        "%"
+      ],
+      "normal": [
+        95,
+        100
+      ],
+      "borderline": [
+        93,
+        94
+      ],
+      "abnormal": [
+        88,
+        92
+      ],
+      "critical_below": 87,
+      "impossible_below": 50,
+      "impossible_above": 100
+    },
+    "ldl": {
+      "units": [
+        "mg/dL"
+      ],
+      "notes": "ATP III observational LDL bands. Not a cardiovascular risk calculation; no treatment target is implied without clinician context.",
+      "normal": [
+        0,
+        99
+      ],
+      "borderline": [
+        100,
+        129
+      ],
+      "abnormal": [
+        130,
+        189
+      ],
+      "critical_above": 190,
+      "impossible_below": 10,
+      "impossible_above": 500
+    },
+    "ldl_c": {
+      "units": [
+        "mg/dL"
+      ],
+      "normal": [
+        0,
+        99
+      ],
+      "borderline": [
+        100,
+        129
+      ],
+      "abnormal": [
+        130,
+        189
+      ],
+      "critical_above": 190,
+      "impossible_below": 10,
+      "impossible_above": 500
+    },
+    "hdl": {
+      "units": [
+        "mg/dL"
+      ],
+      "notes": "Sex-unspecified HDL: <40 attention, 40-49 caution, >=50 normal (more conservative than male-only 40 mg/dL cutoff).",
+      "normal": [
+        50,
+        150
+      ],
+      "borderline": [
+        40,
+        49
+      ],
+      "abnormal": [
+        1,
+        39
+      ],
+      "impossible_below": 5,
+      "impossible_above": 200
+    },
+    "triglycerides": {
+      "units": [
+        "mg/dL"
+      ],
+      "notes": "NCEP/ATP III observational triglyceride bands.",
+      "normal": [
+        0,
+        149
+      ],
+      "borderline": [
+        150,
+        199
+      ],
+      "abnormal": [
+        200,
+        499
+      ],
+      "critical_above": 500,
+      "impossible_below": 10,
+      "impossible_above": 3000
     }
   }
 }

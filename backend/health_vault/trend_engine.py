@@ -36,6 +36,7 @@ LOWER_BETTER = {
     "uacr",
     "resting_hr",
     "bmi",
+    "ldl",
 }
 
 # Default: exclude measurements needing review below this overall doc confidence proxy

@@ -81,6 +81,9 @@
     diastolic: { category: "Diastolic", units: "mmHg", fhir_code: "Observation" },
     weight: { category: "Weight", units: "kg", fhir_code: "Observation" },
     bmi: { category: "BMI", units: "kg/m2", fhir_code: "Observation" },
+    ldl: { category: "Lipids", units: "mg/dL", fhir_code: "Observation" },
+    oxygen_saturation: { category: "Respiratory", units: "%", fhir_code: "Observation" },
+    steps: { category: "Activity", units: "count", fhir_code: "Observation" },
   });
 
   function uuid() {
