@@ -4,6 +4,7 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = (ROOT / "scripts" / "start_healthchecker_production.ps1").read_text(encoding="utf-8")
+INSTALL_ROOT_RESOLVER = (ROOT / "scripts" / "Resolve-HealthCheckerInstallRoot.ps1").read_text(encoding="utf-8")
 CONFIG = json.loads((ROOT / "config" / "healthchecker.production.example.json").read_text(encoding="utf-8"))
 ORIGIN = (ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "healthchecker" / "companion" / "consumer" / "ConsumerOriginPolicy.kt").read_text(encoding="utf-8")
 ACTIVITY = (ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "healthchecker" / "companion" / "ui" / "ConsumerLauncherActivity.kt").read_text(encoding="utf-8")
@@ -12,6 +13,8 @@ WORKER = (ROOT / "android" / "app" / "src" / "main" / "java" / "com" / "healthch
 TUNNEL_CONFIGURATOR = (ROOT / "scripts/configure_healthchecker_cloudflare_tunnel.ps1").read_text(encoding="utf-8")
 TUNNEL_LAUNCHER = (ROOT / "scripts/start_healthchecker_cloudflare_tunnel.ps1").read_text(encoding="utf-8")
 RUNTIME_TASK_INSTALLER = (ROOT / "scripts/install_healthchecker_runtime_task.ps1").read_text(encoding="utf-8")
+TUNNEL_OPS_RUNBOOK = (ROOT / "docs" / "ops" / "HC321_B1_CLOUDFLARE_TUNNEL_LIFECYCLE_RUNBOOK.md").read_text(encoding="utf-8")
+CERT_LIFECYCLE_DOC = (ROOT / "docs" / "ops" / "HC321_B1_CERTIFICATE_LIFECYCLE.md").read_text(encoding="utf-8")
 
 
 def test_production_launcher_requires_tls_and_explicit_identity():
@@ -90,3 +93,20 @@ def test_persistent_runtime_task_uses_interactive_dpapi_identity():
     assert 'interactive_dpapi_owner_required' in RUNTIME_TASK_INSTALLER
     assert 'start_healthchecker_production.ps1' in RUNTIME_TASK_INSTALLER
     assert 'Register-ScheduledTask' in RUNTIME_TASK_INSTALLER
+
+
+def test_production_launcher_is_install_root_aware_without_git():
+    assert 'Resolve-HealthCheckerInstallRoot.ps1' in LAUNCHER
+    assert '$installRoot' in LAUNCHER
+    assert 'install_root_markers_missing' in INSTALL_ROOT_RESOLVER
+    assert 'rev-parse' not in INSTALL_ROOT_RESOLVER
+    assert 'WorkingDirectory $installRoot' in RUNTIME_TASK_INSTALLER
+
+
+def test_hc321_b1_ops_and_certificate_docs_are_present():
+    assert 'https://health.capitalstratasystems.com' in TUNNEL_OPS_RUNBOOK
+    assert 'Recover from 524' in TUNNEL_OPS_RUNBOOK
+    assert 'API healthy / tunnel unhealthy' in TUNNEL_OPS_RUNBOOK
+    assert 'no local public TLS private key' in CERT_LIFECYCLE_DOC
+    assert 'RELEASE/INFRASTRUCTURE OWNER — ASSIGN BEFORE EXTERNAL PRODUCTION HANDOFF' in CERT_LIFECYCLE_DOC
+    assert 'RELEASE/INFRASTRUCTURE OWNER — ASSIGN BEFORE EXTERNAL PRODUCTION HANDOFF' in TUNNEL_OPS_RUNBOOK

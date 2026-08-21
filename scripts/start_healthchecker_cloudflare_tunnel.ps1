@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param([string]$ConfigPath = "C:\ProgramData\HealthChecker\config\production.json")
 $ErrorActionPreference = "Stop"
+# Tunnel lifecycle is independent of source/git checkout. Config and credentials
+# live under ProgramData only; this script never resolves a repository root.
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw "production_config_missing" }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 if ($config.tunnel_service_id -ne "healthchecker.cloudflare.tunnel") { throw "tunnel_service_identity_invalid" }

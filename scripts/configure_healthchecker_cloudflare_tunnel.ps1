@@ -5,6 +5,9 @@ param(
     [string]$OutputPath = "C:\ProgramData\HealthChecker\config\cloudflared-healthchecker.yml"
 )
 $ErrorActionPreference = "Stop"
+# Fail-closed configurator: credentials must already exist under ProgramData.
+# Never invent tunnel UUIDs, never write credentials into the source tree, and
+# never require git. Tunnel failure recovery must not stop the loopback API.
 $credentials = [IO.Path]::GetFullPath($CredentialsFile)
 if (-not (Test-Path -LiteralPath $credentials -PathType Leaf)) { throw "tunnel_credentials_missing" }
 if ([IO.Path]::GetExtension($credentials) -ne ".json") { throw "tunnel_credentials_invalid" }

@@ -5,7 +5,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $python = "C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe"
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$resolver = Join-Path $PSScriptRoot "Resolve-HealthCheckerInstallRoot.ps1"
+if (-not (Test-Path -LiteralPath $resolver -PathType Leaf)) { throw "HealthChecker production startup failed: install_root_resolver_missing" }
+$installRoot = & $resolver -ScriptsDirectory $PSScriptRoot
+if (-not $installRoot) { throw "HealthChecker production startup failed: install_root_unresolved" }
 
 function Stop-WithCode([string]$Code) {
     throw "HealthChecker production startup failed: $Code"
@@ -60,7 +63,7 @@ try {
         @{ service = "healthchecker.consumer.api"; state = "starting"; attempt = $attempt; at_utc = [DateTime]::UtcNow.ToString("o") } |
             ConvertTo-Json -Compress | Set-Content -LiteralPath $heartbeatPath -Encoding utf8
         Add-Content -LiteralPath $logPath -Value "event=runtime_start attempt=$attempt"
-        Set-Location -LiteralPath $repositoryRoot
+        Set-Location -LiteralPath $installRoot
         & $python -m uvicorn backend.health_vault.api:create_health_vault_app `
             --factory --host $bindAddress --port $port `
             --no-access-log
