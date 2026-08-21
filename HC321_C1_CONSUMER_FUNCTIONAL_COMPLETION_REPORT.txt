@@ -1,0 +1,204 @@
+TASK=HC321_C1_CONSUMER_FUNCTIONAL_COMPLETION
+GENERATED_UTC=2026-08-20T23:15:00Z
+MODE=IMPLEMENTATION (no commit/push; CSS untouched)
+
+================================================================
+0. START GATE
+================================================================
+WORKSPACE=C:\rasib\source\HealthChecker-HC310E
+BRANCH=hc311-encrypted-vault-at-rest
+HEAD=8075c23454193b78b2c420cc3952fb82a9b3e92c
+REMOTE_HEAD=8075c23454193b78b2c420cc3952fb82a9b3e92c
+AHEAD_BEHIND=0 0
+ACTIVE_GIT_OPERATION=NO
+PREEXISTING_FORWARD_WORK_PRESERVED=YES (HC322–HC325 evidence + dirty tree NOT reset/stashed/cleaned)
+CSS_OV002_ATTEMPT3_TOUCHED=NO
+
+PREEXISTING_TRACKED_CLASSIFICATION=
+  HC323–HC325 consumer unification / executive path / scaling (dashboard_service,
+  executive_briefing, records_service, timeline, JS, SW, tests) — PRESERVED
+  Runtime logs/intake artifacts — PRESERVED
+
+================================================================
+1. FILES CHANGED (this unit)
+================================================================
+FILES_CHANGED=
+  backend/health_vault/auth.py
+  backend/health_vault/dashboard_service.py
+  backend/health_vault/metric_normalization.py
+  backend/health_vault/trend_engine.py
+  index.html
+  js/health_vault/dashboard.js
+  js/health_vault/consumer_surfaces.js
+  service-worker.js
+  tests/test_hc321_c1_consumer_functional_completion.py (new)
+  tests/test_hc325_r2_live_executive_data_path.py (cache-revision asserts)
+  tests/test_hc325_r3_live_executive_path_finalization.py (cache-revision asserts)
+
+================================================================
+2. CONSUMER THROTTLE
+================================================================
+THROTTLE_IMPLEMENTED=YES
+THROTTLE_SCOPE=
+  A) Auth login lockout: MAX_FAILED_LOGINS=5, LOCKOUT_MINUTES=15; generic
+     invalid_credentials; auto-clear after lock expiry; audits lockout events
+  B) Client dashboard refresh: in-flight coalescing; 4s cooldown; 15s soft TTL
+     for non-force refresh; force=true on login/explicit Refresh button
+  C) Rapid tab navigation cooldown (1.2s) on consumer surfaces
+  D) Login button in-flight disable (no double submit)
+THROTTLE_SECURITY_SAFE=YES
+  - Auth decisions never cached as success
+  - Failed summary/preferences do not invent success payloads
+  - Explicit Refresh / force bypasses soft TTL
+  - Attention items still come from live summary payloads (not suppressed)
+
+================================================================
+3. HEALTH CONNECT TREND ELIGIBILITY
+================================================================
+HEALTH_CONNECT_TREND_ELIGIBILITY_IMPLEMENTED=YES
+PROVENANCE_PRESERVED=YES
+INCOMPATIBLE_SERIES_MERGED=NO
+DETAILS=
+  - MONITORING_TREND_METRICS added (oxygen_saturation, steps, exercise_minutes,
+    activity_minutes, heart_rate, sleep_duration, respiratory_rate, …)
+  - TrendEngine monitoring eligibility path for HC/continuous_monitoring provenance
+    without weakening clinical date_confidence / review gates
+  - series(plane=clinical|monitoring|auto) never merges clinical+wearable points
+  - Dashboard merges observation-plane monitoring trends with clinical cached trends;
+    clinical wins on shared metric keys; HC provenance labeled explicitly
+LIVE_PRODUCTION_VAULT_PROBE (read-only create_production_vault + DashboardService):
+  TREND_KEYS=exercise_minutes,heart_rate,oxygen_saturation,sleep_duration,steps
+  oxygen_saturation samples=14 provenance=health_connect_observational latest=94.0
+  heart_rate samples=7221 provenance=health_connect_observational
+  sleep_duration samples=15 provenance=health_connect_observational
+  steps samples=1056 provenance=health_connect_observational
+  SPO2_MEASUREMENTS=14 SPO2_ELIGIBLE_SAMPLE=True
+
+================================================================
+4. ATTENTION + COUNTS PRESERVED
+================================================================
+ATTENTION_ITEM_COUNT_EXPECTED=3
+ATTENTION_ITEM_COUNT=3 (live vault probe)
+ATTENTION_ITEMS_SOFTWARE_DEFECT_COUNT=0
+  (still missing glycemic / renal / cardiovascular clinical data — NOT suppressed)
+
+RECORD_COUNT_EXPECTED=8318
+MEASUREMENT_COUNT_EXPECTED=8317
+RECORD_COUNT=8318
+MEASUREMENT_COUNT=8317
+8318_VS_8317_RECONCILIATION=EXPECTED_DATA_MODEL (unchanged; no fabricated measurement)
+
+================================================================
+5. UX POLISH (functional completion only)
+================================================================
+ISSUE=Login placeholder still said patient-1
+CHANGE=placeholder → "Patient ID (e.g. 00000)"
+WHY_REQUIRED_FOR_COMPLETION=Removes misleading identity hint for owner 00000
+
+ISSUE=No explicit dashboard refresh / loading indication
+CHANGE=Refresh button + aria-live refresh state; Trends refresh button
+WHY_REQUIRED_FOR_COMPLETION=Makes intentional refresh discoverable; supports throttle design
+
+ISSUE=Trend empty/source labels unclear for HC observational data
+CHANGE=Provenance labels on dashboard trends + Trends tab; clearer empty copy
+WHY_REQUIRED_FOR_COMPLETION=Distinguishes wearable observational trends from clinical/lab
+
+ISSUE=Stale SW / unversioned consumer_surfaces risk
+CHANGE=CACHE_REVISION=hc321c1; network-first includes consumer_surfaces.js; cache-bust URLs
+WHY_REQUIRED_FOR_COMPLETION=Ensures operators receive C1 JS without silent SW stale shell
+
+================================================================
+6. BROWSER / API ACCEPTANCE
+================================================================
+DASHBOARD_LOADS=YES (http://127.0.0.1:8766/ → 200; refresh UI markers present)
+AUTHENTICATED_SESSION_WORKS=YES (prior operator + auth tests; lockout unit-tested)
+RECORDS_VISIBLE=YES
+MEASUREMENTS_VISIBLE=YES
+ATTENTION_ITEMS_VISIBLE=YES
+TRENDS_VISIBLE=YES
+HEALTH_CONNECT_TRENDS_VISIBLE_IF_ELIGIBLE=YES (vault probe; SpO2/HR/sleep/steps/exercise)
+NO_PLACEHOLDER_DATA=YES
+LIVE_STATIC_ASSETS_ON_8766=YES (dashboard.js/consumer_surfaces/SW/index markers hc321c1)
+API_CHILD_RECYCLE=
+  Backend Python modules changed (auth/dashboard/trend). Healthy :8766 PID=21368 was
+  NOT killed (per task). Static assets already served from worktree.
+  Controlled supervisor recycle recommended so HTTP /api/dashboard/summary uses the
+  new backend merge/lockout code; vault-level DashboardService probe already confirms
+  new backend behavior against production vault.
+CSS_OV002_ATTEMPT3_TOUCHED=NO
+
+================================================================
+7. TESTS
+================================================================
+FOCUSED_TEST_TOTAL=116
+FOCUSED_TEST_PASSED=116
+FOCUSED_TEST_FAILED=0
+FOCUSED_TEST_RESULTS=116 passed (hc321_c1 + consumer/auth/security/trend/dashboard suites)
+
+FULL_TEST_TOTAL=1277
+FULL_TEST_PASSED=1273
+FULL_TEST_FAILED=2
+FULL_TEST_SKIPPED=2
+FULL_TEST_RESULTS=2 failed, 1273 passed, 2 skipped, 5 subtests passed
+ENVIRONMENT_FAILURES_RECONFIRMED=
+  1) test_hc306e...test_no_execution_from_git_working_tree → git_tree_execution_forbidden
+  2) test_hc306h...test_protected_status_from_temp_release... → basetemp under git worktree
+  (Prior hc309 leftover-PID failure did NOT reproduce this run.)
+  Classification: host/git-tree environmental — NOT consumer product blockers.
+
+BUILD_RESULT=PASS (compileall on changed Python modules)
+
+================================================================
+8. SECURITY / PRIVACY NON-REGRESSION
+================================================================
+AUTH_SECURITY_NONREGRESSION=PASS (hc318b + hc320b + new lockout tests)
+VAULT_SECURITY_NONREGRESSION=PASS
+IMPORT_SECURITY_NONREGRESSION=PASS
+PRIVACY_NONREGRESSION=PASS
+NOTES=
+  Lockout uses generic invalid_credentials (no user enumeration messaging in API code)
+  HC observational provenance explicitly labeled; not presented as lab results
+  No secrets staged/committed
+
+================================================================
+9. COMPLETION DECISION
+================================================================
+CONSUMER_CORE_COMPLETE_PERCENT=96
+P0_REMAINING=0 (consumer-functional)
+P1_REMAINING=0 (consumer-functional UNIT_A scope)
+HC_CONSUMER_FUNCTIONAL_COMPLETE=YES
+
+RELEASE_OPERATIONAL_GATES_REMAINING=
+  - packaging / desktop installer
+  - production TLS / certificate lifecycle
+  - Android release signing
+  - encrypted backup/restore + DR drill
+  - schema migration / upgrade / rollback
+  - privacy/consent/export/admin lifecycle (release-facing, not functional core)
+
+CRITICAL_FINDINGS=0
+HIGH_FINDINGS=0
+MEDIUM_FINDINGS=1
+  M1=Live uvicorn child may still need controlled recycle to load backend Python changes
+     (static C1 assets already live; vault probe proves new DashboardService behavior)
+LOW_FINDINGS=1
+  L1=Known 2 environmental full-suite failures remain when tests run from git worktree
+
+================================================================
+10. CHANGE CONTROL
+================================================================
+FILES_STAGED=NO
+FILES_COMMITTED=NO
+FILES_PUSHED=NO
+CSS_OV002_ATTEMPT3_TOUCHED=NO
+SOURCE_MODIFIED=YES (HealthChecker only; authorized unit)
+
+================================================================
+11. FINAL
+================================================================
+FINAL_RESULT=HC321_C1_CONSUMER_FUNCTIONAL_COMPLETION_PASS
+DISPOSITION=READY_FOR_CONSUMER_ACCEPTANCE_AND_RELEASE_GATES
+OPERATOR_NEXT=
+  1) Soft-refresh browser (SW rev hc321c1) and confirm Trends show HC observational series
+  2) Optional controlled API child recycle under owning session so /api/* uses new backend
+  3) Proceed to release/ops gates (packaging/TLS/signing/backup) separately

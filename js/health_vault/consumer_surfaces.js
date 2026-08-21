@@ -10,12 +10,16 @@
     consumer_settings_screen: loadSettings,
   };
 
+  const NAV_COOLDOWN_MS = 1200;
+  let lastNavAt = 0;
+  let lastNavScreen = "";
+
   function dashboard() { return global.HCConsumerDashboard; }
   function headers() { return dashboard() ? dashboard().getAuthorizationHeaders() : {}; }
   function authenticated() { return !!(dashboard() && dashboard().token); }
 
   async function request(path) {
-    const response = await fetch(path, { headers: headers() });
+    const response = await fetch(path, { headers: headers(), cache: "no-store" });
     if (response.status === 401 || response.status === 403) {
       if (dashboard()) dashboard().handleLogout();
       throw new Error("Your session expired. Please sign in again.");
@@ -74,30 +78,54 @@
     return ((summary && summary.widgets) || []).find(item => item.widget_id === id) || { payload: {} };
   }
 
-  async function summary() {
-    if (dashboard() && dashboard().summary) return dashboard().summary;
+  async function summary(force) {
+    const dash = dashboard();
+    if (dash) {
+      if (force || !dash.summary) {
+        await dash.refresh({ force: !!force });
+      }
+      if (dash.summary) return dash.summary;
+    }
     return request("/api/dashboard/summary");
   }
 
-  async function loadTrends() {
+  function provenanceLabel(trend) {
+    const provenance = (trend && trend.provenance) || (trend && trend.data_plane === "monitoring" ? "health_connect_observational" : "clinical");
+    if (provenance === "health_connect_observational") return "Health Connect (observational — not a lab result)";
+    if (provenance === "clinical") return "Clinical / lab evidence";
+    return String(provenance);
+  }
+
+  async function loadTrends(options) {
+    const force = !!(options && options.force);
     const view = begin("consumer_trends_screen");
     try {
-      const trends = widget(await summary(), "trends_widget").payload.trends || {};
+      const trendsPayload = widget(await summary(force), "trends_widget").payload || {};
+      const trends = trendsPayload.trends || {};
+      const exclusions = trendsPayload.exclusions || [];
       const entries = Object.entries(trends);
-      if (!entries.length) empty(view.content, "No trends are available yet. Add records containing repeated measurements to build longitudinal trends.");
+      if (!entries.length && !exclusions.length) {
+        empty(view.content, "No trends are available yet. Add records with repeated measurements or sync Health Connect observations to build longitudinal trends.");
+      }
       entries.forEach(([metric, trend]) => card(view.content, metric.replace(/_/g, " "), [
         `Direction: ${trend.label || trend.direction || "Not enough data"}`,
         `Latest: ${trend.latest == null ? "Not available" : trend.latest}`,
         `Samples: ${trend.sample_count == null ? "Not available" : trend.sample_count}`,
+        `Source: ${provenanceLabel(trend)}`,
+      ]));
+      exclusions.forEach(item => card(view.content, `${String(item.metric || "metric").replace(/_/g, " ")} (excluded)`, [
+        item.message || "Intentionally excluded from classical Trends.",
+        `Reason: ${item.reason || "excluded"}`,
       ]));
       finish(view);
     } catch (error) { finish(view, error.message); }
   }
 
-  async function loadObservations() {
+  async function loadObservations(options) {
+    const force = !!(options && options.force);
     const view = begin("consumer_observations_screen");
     try {
-      const observations = widget(await summary(), "key_observations").payload.observations || [];
+      const observations = widget(await summary(force), "key_observations").payload.observations || [];
       if (!observations.length) empty(view.content, "No AI observations are available for your records yet.");
       observations.forEach(item => card(view.content, item.category || "Observation", [
         item.fact, item.interpretation, item.explanation,
@@ -162,9 +190,18 @@
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); tab.click(); }
       });
       if (SCREEN_LOADERS[screenId]) tab.addEventListener("click", () => {
-        if (authenticated()) SCREEN_LOADERS[screenId]();
+        if (!authenticated()) return;
+        const now = Date.now();
+        if (screenId === lastNavScreen && (now - lastNavAt) < NAV_COOLDOWN_MS) {
+          return;
+        }
+        lastNavAt = now;
+        lastNavScreen = screenId;
+        SCREEN_LOADERS[screenId]();
       });
     });
+    const trendsRefresh = document.getElementById("consumer_trends_refresh");
+    if (trendsRefresh) trendsRefresh.addEventListener("click", () => loadTrends({ force: true }));
     const refresh = document.getElementById("consumer_report_refresh");
     if (refresh) refresh.addEventListener("click", loadReport);
     const print = document.getElementById("consumer_report_print");

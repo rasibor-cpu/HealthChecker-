@@ -137,7 +137,7 @@ def test_dashboard_ui_html_markers():
     assert 'id="login_screen"' in html
     assert 'id="consumer_dashboard_container"' in html
     assert 'id="dashboard_widgets_target"' in html
-    assert 'src="js/health_vault/dashboard.js"' in html
+    assert "js/health_vault/dashboard.js" in html
 
     # Verify js/health_vault/dashboard.js contains primary elements
     js = Path("js/health_vault/dashboard.js").read_text(encoding="utf-8")

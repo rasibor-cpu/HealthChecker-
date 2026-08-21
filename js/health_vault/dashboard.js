@@ -12,6 +12,13 @@
       this.token = null;
       this.preferences = null;
       this.summary = null;
+      this._refreshInFlight = null;
+      this._lastRefreshAt = 0;
+      this._summaryFetchedAt = 0;
+      this._loginInFlight = false;
+      // Soft throttle for repeated auto-refresh / rapid navigation (ms).
+      this.REFRESH_COOLDOWN_MS = 4000;
+      this.SUMMARY_TTL_MS = 15000;
     }
 
     init() {
@@ -35,6 +42,9 @@
       } catch (e) {
         console.error("Failed to load dashboard session", e);
       }
+      document.dispatchEvent(new CustomEvent("hc:session-changed", {
+        detail: { authenticated: !!this.token },
+      }));
     }
 
     saveSession(patientId, token) {
@@ -84,6 +94,11 @@
         customizeBtn.onclick = () => this.toggleCustomizationPanel();
       }
 
+      const refreshBtn = document.getElementById("dashboard_refresh_btn");
+      if (refreshBtn) {
+        refreshBtn.onclick = () => this.refresh({ force: true });
+      }
+
       const saveConfigBtn = document.getElementById("save_config_btn");
       if (saveConfigBtn) {
         saveConfigBtn.onclick = () => this.savePreferencesFromUI();
@@ -117,9 +132,11 @@
     }
 
     async handleLogin() {
+      if (this._loginInFlight) return;
       const pidEl = document.getElementById("login_patient_id");
       const pwdEl = document.getElementById("login_password");
       const errEl = document.getElementById("login_error");
+      const loginBtn = document.getElementById("login_btn");
 
       if (errEl) errEl.textContent = "";
 
@@ -131,6 +148,8 @@
         return;
       }
 
+      this._loginInFlight = true;
+      if (loginBtn) loginBtn.disabled = true;
       try {
         const res = await fetch("/api/auth/login", {
           method: "POST",
@@ -139,8 +158,12 @@
         });
 
         if (!res.ok) {
-          const errData = await res.json();
-          if (errEl) errEl.textContent = errData.error || "Login failed.";
+          const errData = await res.json().catch(() => ({}));
+          if (errEl) {
+            errEl.textContent = errData.error === "invalid_credentials"
+              ? "Sign-in failed. Check your Patient ID and password, or wait if the account is temporarily locked."
+              : (errData.error || "Login failed.");
+          }
           return;
         }
 
@@ -162,9 +185,12 @@
           dashTab.click();
         }
 
-        await this.refresh();
+        await this.refresh({ force: true });
       } catch (e) {
         if (errEl) errEl.textContent = "Network error during login.";
+      } finally {
+        this._loginInFlight = false;
+        if (loginBtn) loginBtn.disabled = false;
       }
     }
 
@@ -214,31 +240,96 @@
       await this.refresh();
     }
 
-    async refresh() {
+    setRefreshState(message) {
+      const el = document.getElementById("dashboard_refresh_state");
+      if (!el) return;
+      el.textContent = message || "";
+    }
+
+    async refresh(options) {
+      const opts = options || {};
+      const force = !!opts.force;
       if (!this.token) return;
 
-      try {
-        // Fetch Preferences
-        const prefRes = await fetch("/api/dashboard/preferences", {
-          headers: { "Authorization": `Bearer ${this.token}` },
-        });
-        if (prefRes.status === 401 || prefRes.status === 403) {
-          this.handleLogout();
-          return;
-        }
-        this.preferences = await prefRes.json();
-        this.applyTheme(this.preferences.theme);
-
-        // Fetch Summary
-        const sumRes = await fetch("/api/dashboard/summary", {
-          headers: { "Authorization": `Bearer ${this.token}` },
-        });
-        this.summary = await sumRes.json();
-
-        this.renderDashboard();
-      } catch (e) {
-        console.error("Dashboard refresh error", e);
+      const now = Date.now();
+      if (this._refreshInFlight) {
+        return this._refreshInFlight;
       }
+      if (
+        !force &&
+        this.summary &&
+        this._summaryFetchedAt &&
+        (now - this._summaryFetchedAt) < this.SUMMARY_TTL_MS
+      ) {
+        this.renderDashboard();
+        return this.summary;
+      }
+      if (!force && this._lastRefreshAt && (now - this._lastRefreshAt) < this.REFRESH_COOLDOWN_MS) {
+        return this.summary;
+      }
+
+      this._lastRefreshAt = now;
+      this.setRefreshState("Refreshing health data…");
+      this._refreshInFlight = this._refreshBody(force)
+        .then(result => {
+          return result;
+        })
+        .catch(e => {
+          console.error("Dashboard refresh error", e);
+          this.setRefreshState("Could not refresh dashboard. Try again.");
+          // Fail closed: never invent a successful summary from a failed response.
+          // Keep any prior in-memory summary for display only; callers must not treat this as a fresh fetch.
+          return this.summary;
+        })
+        .finally(() => {
+          this._refreshInFlight = null;
+        });
+      return this._refreshInFlight;
+    }
+
+    async _refreshBody(force) {
+      // Fetch Preferences — never cache auth/security decisions
+      const prefRes = await fetch("/api/dashboard/preferences", {
+        headers: { "Authorization": `Bearer ${this.token}` },
+        cache: "no-store",
+      });
+      if (prefRes.status === 401 || prefRes.status === 403) {
+        this.handleLogout();
+        return;
+      }
+      if (!prefRes.ok) {
+        this.setRefreshState("Preferences unavailable.");
+        throw new Error("preferences_failed");
+      }
+      this.preferences = await prefRes.json();
+      this.applyTheme(this.preferences.theme);
+
+      // Fetch Summary
+      const sumRes = await fetch("/api/dashboard/summary", {
+        headers: { "Authorization": `Bearer ${this.token}` },
+        cache: "no-store",
+      });
+      if (sumRes.status === 401 || sumRes.status === 403) {
+        this.handleLogout();
+        return;
+      }
+      if (!sumRes.ok) {
+        this.setRefreshState("Dashboard summary unavailable.");
+        throw new Error("summary_failed");
+      }
+      this.summary = await sumRes.json();
+      this._summaryFetchedAt = Date.now();
+
+      this.renderDashboard();
+      this.setRefreshState(force ? "Updated just now." : "");
+      if (global.HCExecutiveDashboard && global.HCExecutiveDashboard.refresh) {
+        try {
+          await global.HCExecutiveDashboard.refresh();
+        } catch (_) {
+          /* executive refresh is best-effort */
+        }
+      }
+      return this.summary;
     }
 
     applyTheme(theme) {
@@ -403,6 +494,23 @@
 
       if (type === "status") {
         const colorClass = payload.status === "warning" ? "warn" : "ok";
+        const latest = payload.monitoring_latest || {};
+        const latestLines = Object.entries(latest).slice(0, 4).map(([metric, row]) => {
+          const value = row && row.value != null ? row.value : "—";
+          const unit = row && row.unit ? ` ${row.unit}` : "";
+          return `<div class="small"><strong>${this.escape(metric.replace(/_/g, " "))}:</strong> ${this.escape(String(value))}${this.escape(unit)}</div>`;
+        }).join("");
+        const hcCount = payload.health_connect_observation_count || 0;
+        const sync = payload.health_connect_sync || {};
+        const syncState = sync.sync_state || "not_configured";
+        const syncClass = syncState === "synced" || syncState === "observations_present" ? "ok" : "muted";
+        const syncDetails = [
+          sync.label || "Health Connect sync status unavailable",
+          sync.paired_device_count != null ? `Paired devices: ${sync.paired_device_count}` : null,
+          sync.observation_count != null ? `HC observations: ${sync.observation_count}` : null,
+          sync.last_observation_at ? `Last observation: ${String(sync.last_observation_at).slice(0, 19)}` : null,
+          sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null,
+        ].filter(Boolean).map(line => `<div class="small muted">${this.escape(String(line))}</div>`).join("");
         return `
           <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
             <div class="kpi" style="flex: 1; min-width: 120px;">
@@ -412,11 +520,19 @@
             <div class="kpi" style="flex: 1; min-width: 120px;">
               <strong>Attention Items:</strong> 
               <span class="${payload.active_warnings > 0 ? "bad" : "muted"}" style="font-weight: bold;">${payload.active_warnings}</span>
+              <div class="small muted">Missing-data / trend warnings in Key Observations (not Guardian alerts).</div>
             </div>
             <div class="kpi" style="flex: 1; min-width: 120px;">
               <strong>Total Measurements:</strong> ${payload.measurements_count}
             </div>
+            <div class="kpi" style="flex: 1; min-width: 160px;">
+              <strong>Health Connect / Android Sync:</strong>
+              <span class="${syncClass}" style="font-weight: bold;">${this.escape(String(syncState).replace(/_/g, " ").toUpperCase())}</span>
+              ${syncDetails}
+            </div>
+            ${hcCount ? `<div class="kpi" style="flex: 1; min-width: 120px;"><strong>Health Connect Observations:</strong> ${hcCount}</div>` : ""}
           </div>
+          ${latestLines ? `<div style="margin-top: 10px;">${latestLines}</div>` : ""}
         `;
       }
 
@@ -463,24 +579,39 @@
       if (type === "trends_chart") {
         const trends = payload.trends || {};
         const keys = Object.keys(trends);
-        if (!keys.length) {
-          return '<div class="muted small">No metrics available for trend mapping.</div>';
+        const exclusions = payload.exclusions || [];
+        if (!keys.length && !exclusions.length) {
+          return '<div class="muted small">No metrics available for trend mapping yet. Import records or sync Health Connect observations to build longitudinal trends.</div>';
         }
-        return `
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            ${keys.map(k => {
+        const trendRows = keys.map(k => {
               const tr = trends[k];
               const isPriority = k === payload.priority_metric;
+              const provenance = tr.provenance || (tr.data_plane === "monitoring" ? "health_connect_observational" : "clinical");
+              const planeLabel = provenance === "health_connect_observational"
+                ? "Health Connect (observational)"
+                : (provenance === "clinical" ? "Clinical / lab" : provenance);
               return `
                 <div class="kpi small" style="display: flex; justify-content: space-between; align-items: center; border-left: 2px solid ${isPriority ? "var(--accent)" : "var(--line)"}; padding-left: 8px;">
                   <div>
                     <strong>${this.escape(k.toUpperCase())}</strong> ${isPriority ? '<span class="badge" style="font-size:9px; background:var(--accent); color:var(--bg)">Priority</span>' : ''}
-                    <div class="muted">Sample count: ${tr.sample_count} · Latest value: ${tr.latest || "—"}</div>
+                    <div class="muted">Sample count: ${tr.sample_count} · Latest value: ${tr.latest == null ? "—" : tr.latest}</div>
+                    <div class="muted" style="font-size: 11px;">Source: ${this.escape(planeLabel)}</div>
                   </div>
                   <span class="badge ${tr.direction === "worsening" ? "bad" : "ok"}">${this.escape(tr.label)}</span>
                 </div>
               `;
-            }).join("")}
+            }).join("");
+        const exclusionRows = exclusions.map(item => `
+              <div class="kpi small muted" style="border-left: 2px dashed var(--line); padding-left: 8px;">
+                <strong>${this.escape(String(item.metric || "").replace(/_/g, " ").toUpperCase())}</strong>
+                <div>${this.escape(item.message || "Intentionally excluded from Trends.")}</div>
+                <div style="font-size: 11px;">Reason: ${this.escape(item.reason || "excluded")}</div>
+              </div>
+            `).join("");
+        return `
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${trendRows}
+            ${exclusionRows ? `<div class="small muted" style="margin-top:4px;"><strong>Explicit exclusions</strong></div>${exclusionRows}` : ""}
           </div>
         `;
       }

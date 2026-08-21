@@ -106,3 +106,38 @@ def test_dashboard_multi_user_isolation(test_vault):
         if obs.get("metric") is not None:
             assert len(obs["evidence"]) > 0
             assert obs["evidence"][0]["document_id"] == "doc-b"
+
+
+def test_dashboard_includes_health_connect_monitoring(test_vault):
+    data = test_vault._read_index()
+    data["observations"] = [
+        {
+            "patient_id": "patient-1",
+            "metric_type": "heart_rate",
+            "value": 72,
+            "unit": "bpm",
+            "measured_at": "2026-08-19T12:00:00Z",
+            "ingested_at": "2026-08-19T12:01:00Z",
+            "source": "health_connect_companion",
+            "acquisition_mode": "LIVE",
+        },
+        {
+            "patient_id": "patient-1",
+            "metric_type": "steps",
+            "value": 4200,
+            "unit": "count",
+            "measured_at": "2026-08-19T12:00:00Z",
+            "ingested_at": "2026-08-19T12:01:00Z",
+            "source": "health_connect_companion",
+            "acquisition_mode": "LIVE",
+        },
+    ]
+    test_vault._write_index(data)
+
+    summary = DashboardService(test_vault).get_summary("patient-1")
+    widgets = {w["widget_id"]: w for w in summary.to_dict()["widgets"]}
+    obs_payload = widgets["key_observations"]["payload"]["observations"]
+    assert any(o.get("metric") == "heart_rate" for o in obs_payload)
+    trends = widgets["trends_widget"]["payload"]["trends"]
+    assert trends["heart_rate"]["sample_count"] == 1
+    assert widgets["status_summary"]["payload"]["health_connect_observation_count"] == 2

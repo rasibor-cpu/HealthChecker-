@@ -21,6 +21,37 @@ from backend.health_vault.vault_crypto import decrypt_bytes, encrypt_bytes
 PASSWORD_DAYS = 30
 SESSION_HOURS = 12
 CHANGE_SESSION_MINUTES = 10
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# Configurable brute-force controls (fail-closed defaults). Evaluated at call time
+# so tests and operators can tune without process restart of module constants alone.
+def max_failed_logins() -> int:
+    return _env_positive_int("HC_AUTH_MAX_FAILED_LOGINS", 5)
+
+
+def lockout_minutes() -> int:
+    return _env_positive_int("HC_AUTH_LOCKOUT_MINUTES", 15)
+
+
+def min_seconds_between_attempts() -> int:
+    return _env_positive_int("HC_AUTH_MIN_SECONDS_BETWEEN_ATTEMPTS", 1)
+
+
+# Back-compat aliases for importers/tests.
+MAX_FAILED_LOGINS = 5
+LOCKOUT_MINUTES = 15
+MIN_SECONDS_BETWEEN_ATTEMPTS = 1
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
 _AUTH_CONTEXT = b"auth/registry.v1"
 
@@ -190,17 +221,62 @@ class AuthenticationService:
         }
         return token
 
+    def _clear_lockout_state(self, row: dict[str, Any]) -> None:
+        row["failed_login_count"] = 0
+        row["last_failed_login_at"] = None
+        row["locked_until"] = None
+        if row.get("account_status") == "locked":
+            row["account_status"] = "active"
+
+    def _apply_expired_lockout_recovery(self, row: dict[str, Any]) -> bool:
+        """Safe recovery path: expired lockouts auto-clear before credential check."""
+        locked_until = _parse(row.get("locked_until"))
+        if locked_until and locked_until <= _now():
+            self._clear_lockout_state(row)
+            return True
+        return False
+
     @_synchronized
     def login(self, user_id: str, password: str) -> dict[str, Any]:
         uid, data = str(user_id), self._read()
         row = data.get("accounts", {}).get(uid)
+
+        # HC-321-C1: account lockout + inter-attempt rate limit (generic error; no user enum).
+        if row:
+            locked_until = _parse(row.get("locked_until"))
+            if locked_until and locked_until > _now():
+                self._audit(data, "login_locked", uid, "denied")
+                self._write(data)
+                raise AuthenticationError("invalid_credentials")
+            recovered = self._apply_expired_lockout_recovery(row)
+            if recovered:
+                self._audit(data, "login_lockout_auto_recovered", uid, "success")
+
         credential_hash = str(row.get("password_hash")) if row else self._dummy_password_hash
         valid_password = verify_password(password, credential_hash)
         if not row or not valid_password:
             if row:
-                row["failed_login_count"] = int(row.get("failed_login_count", 0)) + 1
+                # Inter-attempt rate signal: rapid wrong passwords still advance lockout.
+                last_failed = _parse(row.get("last_failed_login_at"))
+                rapid = bool(
+                    last_failed
+                    and (_now() - last_failed).total_seconds() < min_seconds_between_attempts()
+                )
+                fails = int(row.get("failed_login_count", 0)) + 1
+                row["failed_login_count"] = fails
                 row["last_failed_login_at"] = utc_now()
-            self._audit(data, "login_failed", uid, "denied")
+                if fails >= max_failed_logins():
+                    row["account_status"] = "locked"
+                    row["locked_until"] = _iso(_now() + timedelta(minutes=lockout_minutes()))
+                    self._audit(data, "login_lockout_engaged", uid, "denied")
+                self._audit(
+                    data,
+                    "login_rate_limited" if rapid else "login_failed",
+                    uid,
+                    "denied",
+                )
+            else:
+                self._audit(data, "login_failed", uid, "denied")
             self._write(data)
             raise AuthenticationError("invalid_credentials")
         account = UserAccount.from_dict(row)
@@ -210,14 +286,22 @@ class AuthenticationService:
         restricted = account.must_change_password or expired
         if expired:
             row["account_status"] = "password_expired"
-        row["failed_login_count"] = 0
-        row["last_failed_login_at"] = None
+        self._clear_lockout_state(row)
         scope = "password_change" if restricted else "full"
         token = self._issue_session(data, account, scope)
         self._audit(data, "login_succeeded", uid)
         self._write(data)
         return {"token": token, "user_id": uid, "patient_id": uid, "name": account.name,
                 "must_change_password": restricted, "password_expiry_date": account.password_expiry_date, "scope": scope}
+
+    @_synchronized
+    def unlock_after_cooldown(self, user_id: str, password: str) -> dict[str, Any]:
+        """Explicit recovery entrypoint: same fail-closed rules as login after lockout expiry.
+
+        While locked_until is in the future this fails closed with invalid_credentials.
+        After cooldown, a correct password restores access (via login).
+        """
+        return self.login(user_id, password)
 
     def resolve(self, token: str, *, require_full: bool = True) -> tuple[UserAccount, dict[str, Any]]:
         data = self._read()
@@ -250,6 +334,7 @@ class AuthenticationService:
                     "password_expiry_date": _iso(changed + timedelta(days=PASSWORD_DAYS)),
                     "must_change_password": False, "account_status": "active",
                     "password_version": int(row.get("password_version", 1)) + 1})
+        self._clear_lockout_state(row)
         data["accounts"][account.user_id] = row
         for session in data["sessions"].values():
             if session.get("user_id") == account.user_id and not session.get("revoked_at"):

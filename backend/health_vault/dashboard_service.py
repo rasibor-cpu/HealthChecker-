@@ -2,16 +2,297 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+from backend.health_vault.monitoring.monitoring_engine import MonitoringEngine
 from backend.health_vault.models import (
     DashboardSummary,
     DashboardWidget,
     UserDashboardPreferences,
 )
-from backend.health_vault.timeline import build_timeline
+from backend.health_vault.timeline import _measurements_by_document, build_timeline
 from backend.health_vault.vault_store import VaultStore
+
+
+def _patient_has_health_connect_observations(
+    store: VaultStore,
+    patient_id: str,
+    *,
+    observations: list[dict[str, Any]] | None = None,
+) -> bool:
+    rows = store.list_observations() if observations is None else observations
+    for row in rows:
+        if str(row.get("patient_id") or "default-patient") != patient_id:
+            continue
+        source = str(row.get("source") or "")
+        if "health_connect" in source or row.get("connector_id") == "health_connect":
+            return True
+    return False
+
+
+def _health_connect_sync_summary(
+    store: VaultStore,
+    patient_id: str,
+    *,
+    observations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """First-class Health Connect / Android companion sync status for the consumer dashboard."""
+    paired_count = 0
+    last_seen_at = None
+    try:
+        from backend.health_vault.companion.pairing import CompanionPairingService
+
+        devices = CompanionPairingService(store).list_devices(
+            include_revoked=False, patient_id=patient_id
+        )
+        paired_count = len(devices)
+        for device in devices:
+            seen = device.get("last_seen_at")
+            if seen and (last_seen_at is None or str(seen) > str(last_seen_at)):
+                last_seen_at = seen
+    except Exception:
+        paired_count = 0
+
+    rows = store.list_observations() if observations is None else observations
+    last_observation_at = None
+    observation_count = 0
+    for row in rows:
+        if str(row.get("patient_id") or "default-patient") != patient_id:
+            continue
+        source = str(row.get("source") or "")
+        if "health_connect" not in source and row.get("connector_id") != "health_connect":
+            continue
+        observation_count += 1
+        measured = row.get("measured_at") or row.get("ingested_at")
+        if measured and (last_observation_at is None or str(measured) > str(last_observation_at)):
+            last_observation_at = measured
+
+    companion = store.get_companion_status() or {}
+    companion_device = str(companion.get("device_id") or "")
+    # Only surface companion_status when it belongs to a device paired to this patient
+    companion_for_patient = {}
+    if companion and paired_count:
+        try:
+            from backend.health_vault.companion.pairing import CompanionPairingService
+
+            owned_ids = {
+                str(d.get("device_id"))
+                for d in CompanionPairingService(store).list_devices(
+                    include_revoked=True, patient_id=patient_id
+                )
+            }
+            if companion_device and companion_device in owned_ids:
+                companion_for_patient = {
+                    "device_id": companion_device,
+                    "updated_at": companion.get("updated_at") or companion.get("last_sync_at"),
+                    "health_connect_status": companion.get("health_connect")
+                    or companion.get("health_connect_status")
+                    or {},
+                }
+                sync_ts = companion_for_patient.get("updated_at")
+                if sync_ts and (last_seen_at is None or str(sync_ts) > str(last_seen_at)):
+                    last_seen_at = sync_ts
+        except Exception:
+            companion_for_patient = {}
+
+    if observation_count > 0 and paired_count > 0:
+        sync_state = "synced"
+        label = "Health Connect sync active"
+    elif observation_count > 0:
+        sync_state = "observations_present"
+        label = "Health Connect observations present"
+    elif paired_count > 0:
+        sync_state = "paired_awaiting_data"
+        label = "Android companion paired — awaiting Health Connect data"
+    else:
+        sync_state = "not_configured"
+        label = "Health Connect / Android sync not configured"
+
+    return {
+        "sync_state": sync_state,
+        "label": label,
+        "paired_device_count": paired_count,
+        "observation_count": observation_count,
+        "last_observation_at": last_observation_at,
+        "last_device_seen_at": last_seen_at,
+        "companion": companion_for_patient,
+        "host_note": (
+            "Host cannot read Health Connect directly. "
+            "Android companion delivers observational data after permission grant."
+        ),
+    }
+
+
+def _trend_exclusion_notes(
+    *,
+    observations: list[dict[str, Any]],
+    patient_id: str,
+    trends: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Explicit exclusions for HC metrics that intentionally do not enter Trends."""
+    from backend.health_vault.metric_normalization import (
+        MONITORING_TREND_METRICS,
+        canonicalize_metric,
+    )
+
+    present: set[str] = set()
+    for row in observations:
+        if str(row.get("patient_id") or "default-patient") != patient_id:
+            continue
+        source = str(row.get("source") or "")
+        if "health_connect" not in source and row.get("connector_id") != "health_connect":
+            continue
+        metric = canonicalize_metric(str(row.get("metric_type") or row.get("metric") or ""))
+        if metric and metric != "unknown":
+            present.add(metric)
+
+    notes: list[dict[str, str]] = []
+    for metric in sorted(present):
+        if metric in trends:
+            continue
+        if metric in MONITORING_TREND_METRICS:
+            notes.append(
+                {
+                    "metric": metric,
+                    "reason": "insufficient_or_ineligible_samples",
+                    "message": (
+                        f"{metric.replace('_', ' ')} has Health Connect observations but "
+                        "does not yet meet trend sample/eligibility requirements."
+                    ),
+                }
+            )
+        else:
+            notes.append(
+                {
+                    "metric": metric,
+                    "reason": "intentionally_excluded_from_trends",
+                    "message": (
+                        f"{metric.replace('_', ' ')} is retained as observational Health Connect "
+                        "data and is intentionally excluded from classical consumer Trends."
+                    ),
+                }
+            )
+    return notes
+
+
+def _monitoring_observation_cards(
+    store: VaultStore, patient_id: str
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Surface HC-302 Health Connect latest readings for the consumer dashboard."""
+    status = MonitoringEngine(store).build_status(patient_id=patient_id)
+    latest = dict(status.get("latest_reading_by_metric") or {})
+    cards: list[dict[str, Any]] = []
+    for metric, row in sorted(latest.items()):
+        value = row.get("value")
+        if value is None:
+            continue
+        unit = row.get("unit") or row.get("units") or ""
+        measured_at = row.get("measured_at") or ""
+        freshness = row.get("freshness_status") or "unknown"
+        cards.append(
+            {
+                "patient_id": patient_id,
+                "category": "continuous_monitoring",
+                "metric": metric,
+                "fact": f"Latest {metric.replace('_', ' ')}: {value}{(' ' + unit) if unit else ''}",
+                "interpretation": f"Health Connect ({freshness})",
+                "explanation": (
+                    "Observational Health Connect data from the encrypted vault. "
+                    "Not a diagnosis or treatment recommendation."
+                ),
+                "measured_at": measured_at,
+                "source": row.get("source") or "health_connect_companion",
+            }
+        )
+    return cards, latest
+
+
+def _monitoring_trend_snapshot(
+    store: VaultStore,
+    patient_id: str,
+    *,
+    observations: list[dict[str, Any]] | None = None,
+) -> tuple[dict[str, Any], int]:
+    """Lightweight trend view from persisted monitoring observations.
+
+    Health Connect observational rows participate in consumer trends with an
+    explicit observational provenance — they are never labeled as clinical/lab.
+    """
+    from backend.health_vault.metric_normalization import (
+        MONITORING_TREND_METRICS,
+        canonicalize_metric,
+    )
+
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    rows = store.list_observations() if observations is None else observations
+    for row in rows:
+        if str(row.get("patient_id") or "default-patient") != patient_id:
+            continue
+        source = str(row.get("source") or "")
+        if "health_connect" not in source and row.get("connector_id") != "health_connect":
+            continue
+        metric = canonicalize_metric(
+            str(row.get("metric_type") or row.get("metric") or "").strip()
+        )
+        if not metric or metric == "unknown" or row.get("value") is None:
+            continue
+        if metric not in MONITORING_TREND_METRICS:
+            continue
+        try:
+            float(row.get("value"))
+        except (TypeError, ValueError):
+            continue
+        if not (row.get("measured_at") or row.get("ingested_at")):
+            continue
+        buckets[metric].append(row)
+    trends: dict[str, Any] = {}
+    for metric, metric_rows in buckets.items():
+        metric_rows.sort(key=lambda item: str(item.get("measured_at") or item.get("ingested_at") or ""))
+        latest = metric_rows[-1]
+        try:
+            values = [float(r["value"]) for r in metric_rows]
+        except (TypeError, ValueError, KeyError):
+            continue
+        direction = "stable"
+        label = "Available"
+        reason = "monitoring_snapshot"
+        if len(values) >= 3:
+            from backend.health_vault.trend_engine import TrendEngine
+
+            classified = TrendEngine.classify(metric, values)
+            direction = classified["direction"]
+            label = classified["label"]
+            reason = "monitoring_auto"
+        trends[metric] = {
+            "metric": metric,
+            "direction": direction,
+            "label": label,
+            "reason": reason,
+            "sample_count": len(metric_rows),
+            "latest": latest.get("value"),
+            "updated_at": latest.get("measured_at") or latest.get("ingested_at"),
+            "category": "continuous_monitoring",
+            "provenance": "health_connect_observational",
+            "data_plane": "monitoring",
+        }
+    return trends, sum(len(rows) for rows in buckets.values())
+
+
+def _merge_trend_planes(
+    clinical_trends: dict[str, Any],
+    monitoring_trends: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge clinical cached trends with HC observational trends without overwriting clinical."""
+    merged = dict(monitoring_trends or {})
+    for metric, row in (clinical_trends or {}).items():
+        entry = dict(row)
+        entry.setdefault("provenance", entry.get("provenance") or "clinical")
+        entry.setdefault("data_plane", entry.get("data_plane") or "clinical")
+        # Clinical/lab series always wins for the shared metric key.
+        merged[metric] = entry
+    return merged
 
 
 class DashboardService:
@@ -40,30 +321,66 @@ class DashboardService:
         """Synthesize clinical data and construct ordered widgets for landing page view."""
         prefs = self.get_preferences(patient_id)
         from backend.health_vault.records_service import RecordsService
-        record_summaries = [
-            record.to_summary_dict()
-            for record in RecordsService(self.store).list_records(patient_id)[:5]
-        ]
+
+        records_service = RecordsService(self.store)
+        all_measurements = self.store.list_measurements()
+        measurement_counts = RecordsService._measurement_counts_by_document(all_measurements)
+        measurements_by_document = _measurements_by_document(all_measurements)
+        patient_observations = self.store.list_observations()
+        patient_records = records_service.list_records(
+            patient_id,
+            measurement_counts=measurement_counts,
+        )
+        record_summaries = [record.to_summary_dict() for record in patient_records[:5]]
+        records_count = len(patient_records)
+        measurements_count = sum(record.metrics_count for record in patient_records)
         
-        # 1. Fetch patient intelligence outputs
-        observations = self.intel_engine.get_patient_observations(patient_id)
-        trends = self.store.get_trends(patient_id=patient_id)
+        # 1. Fetch patient intelligence outputs and Health Connect monitoring evidence
+        observations = list(self.intel_engine.get_patient_observations(patient_id))
+        monitoring_cards: list[dict[str, Any]] = []
+        monitoring_latest: dict[str, Any] = {}
+        if _patient_has_health_connect_observations(
+            self.store, patient_id, observations=patient_observations
+        ):
+            monitoring_cards, monitoring_latest = _monitoring_observation_cards(
+                self.store, patient_id
+            )
+        if monitoring_cards:
+            observations = monitoring_cards + observations
+        trends = self.store.get_trends(patient_id=patient_id) or {}
+        monitoring_trends: dict[str, Any] = {}
+        health_connect_observation_count = 0
+        if _patient_has_health_connect_observations(
+            self.store, patient_id, observations=patient_observations
+        ):
+            monitoring_trends, _eligible_samples = _monitoring_trend_snapshot(
+                self.store, patient_id, observations=patient_observations
+            )
+            health_connect_observation_count = sum(
+                1
+                for row in patient_observations
+                if str(row.get("patient_id") or "default-patient") == patient_id
+                and (
+                    "health_connect" in str(row.get("source") or "")
+                    or row.get("connector_id") == "health_connect"
+                )
+            )
+        trends = _merge_trend_planes(trends, monitoring_trends)
+        health_connect_sync = _health_connect_sync_summary(
+            self.store, patient_id, observations=patient_observations
+        )
+        trend_exclusions = _trend_exclusion_notes(
+            observations=patient_observations,
+            patient_id=patient_id,
+            trends=trends,
+        )
         timeline = build_timeline(
             self.store,
             patient_id=patient_id,
             include_guardian_events=True,
-            newest_first=True
+            newest_first=True,
+            measurements_by_document=measurements_by_document,
         )
-        patient_document_ids = {
-            str(document.get("id"))
-            for document in self.store.list_documents()
-            if document.get("id") and document.get("patient_id", "default-patient") == patient_id
-        }
-        patient_measurements = [
-            measurement
-            for measurement in self.store.list_measurements()
-            if str(measurement.get("document_id") or "") in patient_document_ids
-        ]
 
         # 2. Derive overall status & count active warnings
         active_warnings = 0
@@ -86,7 +403,10 @@ class DashboardService:
                 payload={
                     "status": status,
                     "active_warnings": active_warnings,
-                    "measurements_count": len(patient_measurements),
+                    "measurements_count": measurements_count,
+                    "monitoring_latest": monitoring_latest,
+                    "health_connect_observation_count": health_connect_observation_count,
+                    "health_connect_sync": health_connect_sync,
                 }
             ),
             "key_observations": DashboardWidget(
@@ -103,7 +423,8 @@ class DashboardService:
                 priority=3,
                 payload={
                     "trends": trends,
-                    "priority_metric": prefs.priority_metric
+                    "priority_metric": prefs.priority_metric,
+                    "exclusions": trend_exclusions,
                 }
             ),
             "timeline_widget": DashboardWidget(
@@ -120,7 +441,7 @@ class DashboardService:
                 priority=5,
                 payload={
                     "allowed_formats": ["PDF", "JSON", "PNG"],
-                    "records_count": len(RecordsService(self.store).list_records(patient_id)),
+                    "records_count": records_count,
                     "recent_records": record_summaries,
                 }
             )

@@ -12,8 +12,11 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
-const CACHE_REVISION = "hc318b";
+const CACHE_REVISION = "hc321c1";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
+
+/** HC-325 R3 / HC-321-C1: network-first for dashboard scripts (Ctrl+F5 does not bypass an active SW). */
+const NETWORK_FIRST_JS = /\/js\/health_vault\/(executive_dashboard|dashboard|health_guardian|consumer_surfaces)\.js(?:\?|$)/;
 
 /** App-shell URLs safe to precache (relative to SW scope). */
 const APP_SHELL = [
@@ -87,14 +90,55 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(keys.filter((k) => k !== ACTIVE_CACHE_NAME).map((k) => caches.delete(k)))
       )
+      .then(() => self.skipWaiting())
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: "window" }))
+      .then((clientList) =>
+        Promise.all(
+          clientList.map((client) =>
+            typeof client.navigate === "function" ? client.navigate(client.url).catch(() => {}) : Promise.resolve()
+          )
+        )
+      )
   );
 });
+
+function networkFirstShell(req) {
+  return fetch(req)
+    .then((response) => {
+      // Never re-cache HTML navigations — they must track deploy revisions.
+      const isHtmlNav = req.mode === "navigate";
+      if (
+        response &&
+        response.ok &&
+        !isHtmlNav &&
+        req.url.indexOf(self.location.origin) === 0
+      ) {
+        const clone = response.clone();
+        caches.open(ACTIVE_CACHE_NAME).then((cache) => cache.put(req, clone));
+      }
+      return response;
+    })
+    .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")));
+}
+
+function isNavigationRequest(req) {
+  if (req.mode === "navigate") return true;
+  const accept = req.headers.get("accept") || "";
+  return accept.indexOf("text/html") >= 0;
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   if (isForbiddenCacheUrl(req.url)) return;
+
+  // HC-325 R3: navigations + executive/dashboard/guardian JS are network-first so a
+  // controlling SW cannot keep serving the pre-HC324 localStorage executive plane.
+  if (isNavigationRequest(req) || NETWORK_FIRST_JS.test(req.url)) {
+    event.respondWith(networkFirstShell(req));
+    return;
+  }
 
   event.respondWith(
     caches.match(req).then((cached) => {
@@ -129,6 +173,10 @@ self.addEventListener("fetch", (event) => {
  */
 self.addEventListener("message", (event) => {
   const data = event.data || {};
+  if (data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
   if (data.type === "SKIP") {
     return;
   }

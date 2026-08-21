@@ -72,7 +72,7 @@ CANONICAL_UNITS = {
     "exercise_minutes": "min",
 }
 
-# Metrics allowed into trend engine
+# Metrics allowed into classical / clinical trend engine
 TREND_METRICS = {
     "systolic_bp",
     "diastolic_bp",
@@ -88,6 +88,23 @@ TREND_METRICS = {
     "sleep_duration",
     "sleep_score",
     "respiratory_rate",
+}
+
+# HC-321-C1: monitoring / Health Connect observational trend eligibility.
+# Kept separate from TREND_METRICS so wearable SpO2/steps/etc. do not dilute
+# stricter clinical/lab eligibility rules, while still participating in trends.
+MONITORING_TREND_METRICS = {
+    "heart_rate",
+    "resting_hr",
+    "average_hr",
+    "hrv_rmssd",
+    "sleep_duration",
+    "sleep_score",
+    "respiratory_rate",
+    "oxygen_saturation",
+    "steps",
+    "activity_minutes",
+    "exercise_minutes",
 }
 
 # Unit families that may convert

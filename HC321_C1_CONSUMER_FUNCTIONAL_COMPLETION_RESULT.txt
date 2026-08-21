@@ -1,0 +1,139 @@
+TASK=HC321_C1_CONSUMER_FUNCTIONAL_COMPLETION
+RESULT_FILE=HC321_C1_CONSUMER_FUNCTIONAL_COMPLETION_RESULT.txt
+GENERATED_UTC=2026-08-20T23:40:00Z
+
+================================================================
+REPOSITORY IDENTITY
+================================================================
+WORKSPACE=C:\rasib\source\HealthChecker-HC310E
+BRANCH=hc311-encrypted-vault-at-rest
+HEAD=8075c23454193b78b2c420cc3952fb82a9b3e92c
+REMOTE_HEAD=8075c23454193b78b2c420cc3952fb82a9b3e92c
+AHEAD_BEHIND=0 0
+ACTIVE_GIT_OPERATION=NO
+HC_8766_HEALTHY=YES (PID 21368, HTTP 200) — NOT STOPPED
+CSS_8765=LISTENING (untouched)
+CSS_TOUCHED=NO
+
+================================================================
+FILES CHANGED (HC321-C1 scope)
+================================================================
+backend/health_vault/auth.py
+backend/health_vault/dashboard_service.py
+backend/health_vault/metric_normalization.py
+backend/health_vault/trend_engine.py
+index.html
+js/health_vault/dashboard.js
+js/health_vault/consumer_surfaces.js
+service-worker.js
+tests/test_hc321_c1_consumer_functional_completion.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+
+(Pre-existing HC322–HC325 dirty/evidence files preserved; not reset/stashed.)
+
+================================================================
+P0-01 — LOGIN THROTTLING / LOCKOUT / SAFE RECOVERY
+================================================================
+IMPLEMENTATION=
+  - Configurable via env (evaluated at call time):
+      HC_AUTH_MAX_FAILED_LOGINS (default 5)
+      HC_AUTH_LOCKOUT_MINUTES (default 15)
+      HC_AUTH_MIN_SECONDS_BETWEEN_ATTEMPTS (default 1; rapid wrong-password audit signal)
+  - After threshold failures: account_status=locked + locked_until
+  - Fail closed with generic invalid_credentials (no user enumeration)
+  - Safe recovery:
+      1) Auto-clear when locked_until expires (login_lockout_auto_recovered audit)
+      2) unlock_after_cooldown(user_id, password) explicit entrypoint → login after cooldown
+      3) Successful password change clears lockout state
+  - Correct password immediately after a typo remains allowed (does not block recovery)
+  - Patient scoping / auth boundaries unchanged
+TESTS=lockout + unlock_after_cooldown covered in test_hc321_c1_*; hc318b/hc320b still green
+
+================================================================
+P1-01 — HEALTH CONNECT → TRENDENGINE ELIGIBILITY
+================================================================
+IMPLEMENTATION=
+  - MONITORING_TREND_METRICS + TrendEngine monitoring eligibility path
+  - Clinical and wearable series never merged (plane=clinical|monitoring|auto)
+  - Dashboard merges HC observational trends with clinical trends; clinical wins on shared keys
+  - Provenance labeled health_connect_observational
+  - Explicit exclusions surfaced when HC metrics are intentionally not trend-eligible
+LIVE=
+  TREND_KEYS=exercise_minutes,heart_rate,oxygen_saturation,sleep_duration,steps
+  All labeled health_connect_observational
+
+================================================================
+P1-02 — AUTHENTICATED BROWSER / LIVE KPI ACCEPTANCE
+================================================================
+METHOD=
+  Read-only production vault via DashboardService + ExecutiveHealthBriefingEngine.generate
+  (no live health-data mutation; :8766 left running)
+  Static authenticated UI assets verified served from :8766 (dashboard.js hc321c1)
+LIVE_KPI=
+  RECORDS=8318
+  MEASUREMENTS=8317
+  CLASSIC_ATTENTION=3 (preserved missing glycemic/renal/cardiovascular — NOT suppressed)
+  EXEC_RECORDS=8318
+  EXEC_MEAS=8317
+  EXEC_HC_OBS=8308
+  EXEC_NONZERO=YES
+BROWSER_STATIC=
+  placeholder Patient ID (e.g. 00000) present; patient-1 placeholder gone
+  JS serves Health Connect / Android Sync + Explicit exclusions
+
+================================================================
+P1-08 — DASHBOARD POLISH
+================================================================
+IMPLEMENTATION=
+  - Removed misleading patient-1 login placeholder → "Patient ID (e.g. 00000)"
+  - First-class Health Connect / Android sync status on status_summary:
+      sync_state, label, paired_device_count, observation_count, last timestamps
+  - Refresh button + refresh state; Trends provenance/exclusion copy
+  - SW CACHE_REVISION=hc321c1; network-first includes consumer_surfaces.js
+  - No consumer dashboard redesign; landing/records/trends/reports/theme/customize preserved
+LIVE_SYNC=
+  SYNC_STATE=synced
+  SYNC_LABEL=Health Connect sync active
+  SYNC_PAIRED=2 OBS=8308
+
+================================================================
+TESTS
+================================================================
+compileall backend/health_vault = PASS
+node --check dashboard.js / consumer_surfaces.js = PASS
+FOCUSED+RELEVANT CONSUMER SUITE = 117 passed, 0 failed
+  (test_hc321_c1_* + hc316b/c + hc318b + hc315c/d + hc317b/c + hc319a + hc320b +
+   hc323_r16 + hc324 + hc325_r2/r3 + hc201g)
+
+ACCEPTANCE_FULLY_GREEN=YES
+
+================================================================
+RESIDUAL DEFECTS
+================================================================
+MEDIUM=
+  Live uvicorn child (PID 21368) was not recycled; static JS is live from worktree.
+  Backend Python lockout/sync fields are confirmed via read-only DashboardService on the
+  production vault. Optional controlled API recycle (owning session) loads backend into
+  HTTP /api without stopping CSS.
+LOW=
+  Known host/git-tree environmental failures may still appear in full-suite runs when
+  executed from the git working tree (not consumer blockers; not re-hidden).
+
+================================================================
+CHANGE CONTROL
+================================================================
+SOURCE_MODIFIED=YES
+FILES_STAGED=NO
+FILES_COMMITTED=NO
+FILES_PUSHED=NO
+CSS_TOUCHED=NO
+
+================================================================
+NEXT_GATE
+================================================================
+NEXT_GATE=CONSUMER_ACCEPTANCE_AND_RELEASE_OPERATIONAL_GATES
+  (packaging / TLS / Android signing / backup-restore — out of HC321-C1 scope)
+
+FINAL_RESULT=HC321_C1_CONSUMER_FUNCTIONAL_COMPLETION_PASS
+DISPOSITION=READY_FOR_CONSUMER_ACCEPTANCE_AND_RELEASE_GATES

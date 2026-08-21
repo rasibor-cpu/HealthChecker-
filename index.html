@@ -94,7 +94,7 @@ textarea{
 <div id="login_screen" class="screen" style="max-width: 400px; margin: 40px auto; padding: 20px; background: var(--card); border-radius: 12px; display: none;">
   <h3 class="section-title">Login to HealthChecker</h3>
   <label class="small muted">Patient ID</label>
-  <input id="login_patient_id" placeholder="e.g. patient-1" style="margin-top: 4px;" />
+  <input id="login_patient_id" placeholder="Patient ID (e.g. 00000)" style="margin-top: 4px;" autocomplete="username" />
   <label class="small muted">Password</label>
   <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" />
   <button id="login_btn">Sign In</button>
@@ -130,7 +130,9 @@ textarea{
   <div id="consumer_dashboard_container" style="display: none; margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
       <h3 id="dashboard_greeting" class="section-title" style="margin: 0; color: var(--accent);">Welcome</h3>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <span id="dashboard_refresh_state" class="small muted" role="status" aria-live="polite"></span>
+        <button id="dashboard_refresh_btn" type="button" style="width: auto; padding: 6px 12px; margin: 0; min-height: 38px;">Refresh</button>
         <button id="theme_toggle_btn" style="width: auto; padding: 6px 12px; margin: 0; min-height: 38px;">Switch Theme</button>
         <button id="customize_dashboard_btn" style="width: auto; padding: 6px 12px; margin: 0; min-height: 38px;">Customize</button>
         <button id="logout_btn" style="width: auto; padding: 6px 12px; margin: 0; background: var(--bad); min-height: 38px;">Logout</button>
@@ -156,6 +158,10 @@ textarea{
           <option value="hba1c">HbA1c</option>
           <option value="heart_rate">Heart Rate</option>
           <option value="hrv_rmssd">HRV (RMSSD)</option>
+          <option value="oxygen_saturation">Oxygen Saturation (SpO2)</option>
+          <option value="steps">Steps</option>
+          <option value="exercise_minutes">Exercise Minutes</option>
+          <option value="activity_minutes">Activity Minutes</option>
           <option value="respiratory_rate">Respiratory Rate</option>
           <option value="resting_hr">Resting Heart Rate</option>
           <option value="sleep_duration">Sleep Duration</option>
@@ -187,7 +193,8 @@ textarea{
 
 <div id="consumer_trends_screen" class="screen consumer-api-screen" aria-labelledby="consumer_trends_title">
   <h3 id="consumer_trends_title" class="section-title">Trends</h3>
-  <p class="muted small">Longitudinal trends are calculated from your authenticated Health Vault evidence.</p>
+  <p class="muted small">Longitudinal trends use authenticated Health Vault evidence. Clinical/lab series stay separate from Health Connect observational wearable data.</p>
+  <button id="consumer_trends_refresh" type="button" class="secondary">Refresh trends</button>
   <div data-consumer-state role="status" aria-live="polite"></div>
   <div data-consumer-content></div>
 </div>
@@ -566,14 +573,14 @@ textarea{
 <script src="js/health_vault/import_confirm.js"></script>
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
-<script src="js/health_vault/executive_dashboard.js"></script>
+<script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
 <script src="js/health_vault/health_guardian.js"></script>
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
-<script src="js/health_vault/dashboard.js"></script>
+<script src="js/health_vault/dashboard.js?v=hc321c1"></script>
 <script src="js/health_vault/records.js"></script>
 <script>
 const KEY = 'HC_V6';
@@ -941,8 +948,14 @@ tabs.forEach(t => t.onclick = () => {
 });
 
 render();
-if (window.HCConsumerDashboard) HCConsumerDashboard.init();
-if (window.HCExecutiveDashboard) HCExecutiveDashboard.refresh();
+if (window.HCConsumerDashboard) {
+  HCConsumerDashboard.init();
+  if (HCConsumerDashboard.token && window.HCExecutiveDashboard) {
+    HCExecutiveDashboard.refresh();
+  }
+} else if (window.HCExecutiveDashboard) {
+  HCExecutiveDashboard.refresh();
+}
 if (window.HCHealthGuardian) {
   try { HCHealthGuardian.refresh({ trigger: 'startup' }); } catch (_) {}
 }
@@ -953,7 +966,21 @@ if (window.HCContinuousMonitoring) {
 // HC-301/302 service worker (local notifications only; never off-device)
 (function registerGuardianSW() {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('./service-worker.js').then(function (reg) {
+  var reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (reloading) return;
+    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321c1') return;
+    reloading = true;
+    sessionStorage.setItem('hc_sw_reload_rev', 'hc321c1');
+    window.location.reload();
+  });
+  navigator.serviceWorker.register('./service-worker.js?v=hc321c1').then(function (reg) {
+    if (reg && reg.waiting) {
+      try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
+    }
+    if (reg && typeof reg.update === 'function') {
+      try { reg.update(); } catch (_) {}
+    }
     if (reg && 'periodicSync' in reg) {
       try {
         reg.periodicSync.register('hc-guardian-eval', { minInterval: 60 * 60 * 1000 });
