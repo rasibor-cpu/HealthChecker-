@@ -1007,6 +1007,66 @@ def create_health_vault_app(
         except PrivacyRightsError as exc:
             return _privacy_error(exc)
 
+    from backend.health_vault.ops_supportability import (
+        SupportabilityError,
+        build_readiness_status,
+        create_support_bundle,
+        support_bundle_bytes,
+    )
+    from fastapi.responses import Response
+
+    @app.get("/api/ops/readiness")
+    async def ops_readiness(request: Request) -> JSONResponse:
+        try:
+            auth_service.resolve(_bearer_token(request), require_full=True)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        companion = {}
+        monitoring = {}
+        try:
+            companion = _companion_delivery(vault).status(authorization=None)
+        except Exception:
+            companion = {}
+        try:
+            from backend.health_vault.monitoring.monitoring_engine import MonitoringEngine
+
+            monitoring = MonitoringEngine(vault).build_status(patient_id=_request_patient(request))
+        except Exception:
+            monitoring = {}
+        status = build_readiness_status(
+            vault,
+            companion_status=companion if isinstance(companion, dict) else {},
+            monitoring_status=monitoring if isinstance(monitoring, dict) else {},
+            public_origin_reachable=None,
+            loopback_ok=True,
+        )
+        return JSONResponse({"ok": True, "readiness": status})
+
+    @app.post("/api/ops/support-bundle")
+    async def ops_support_bundle(request: Request, body: dict[str, Any] | None = None) -> Response:
+        try:
+            auth_service.require_roles(_bearer_token(request), auth_service.PRIVILEGED_ROLES)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        if not bool((body or {}).get("confirm_export")):
+            return JSONResponse(
+                {"ok": False, "error": "confirm_export_required", "code": "confirm_export_required"},
+                status_code=400,
+            )
+        try:
+            readiness = build_readiness_status(vault, loopback_ok=True)
+            payload = support_bundle_bytes(vault, readiness=readiness)
+        except SupportabilityError as exc:
+            return JSONResponse({"ok": False, "error": str(exc), "code": str(exc)}, status_code=400)
+        return Response(
+            content=payload,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="healthchecker-support-bundle.zip"',
+                "X-HC-Auto-Transmit": "never",
+            },
+        )
+
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:
         try:

@@ -179,6 +179,23 @@
   async function loadSettings() {
     const identity = document.getElementById("consumer_settings_identity");
     if (identity && dashboard()) identity.textContent = `Signed in as ${dashboard().patientId}.`;
+    const ops = document.getElementById("consumer_settings_ops");
+    if (!ops || !authenticated()) return;
+    try {
+      const readiness = await request("/api/ops/readiness");
+      const r = (readiness && readiness.readiness) || {};
+      const failures = r.failure_states || [];
+      const hints = r.onboarding_hints || {};
+      const guidance = r.recovery_guidance || {};
+      const lines = [
+        `Runtime: ${r.loopback_api || "unknown"}; vault schema ${r.vault_schema_ok ? "ok" : "attention"}; companion paired: ${r.companion_paired ? "yes" : "no"}.`,
+        hints.first_run || "",
+        failures.length ? (guidance[failures[0]] || hints.pairing || "") : (hints.offline_degraded || ""),
+      ].filter(Boolean);
+      ops.textContent = lines.join(" ");
+    } catch (error) {
+      ops.textContent = "Runtime readiness unavailable. Confirm the HealthChecker API is running on 127.0.0.1:8766 (not CSS :8765), then retry.";
+    }
   }
 
   function bind() {
@@ -215,6 +232,34 @@
       dashboard().toggleCustomizationPanel();
       const panel = document.getElementById("dashboard_config_panel");
       if (panel) panel.focus();
+    });
+    const supportBtn = document.getElementById("consumer_settings_support_bundle");
+    if (supportBtn) supportBtn.addEventListener("click", async () => {
+      if (!authenticated() || !dashboard()) return;
+      const confirmed = global.confirm(
+        "Export a redacted support bundle? It is not sent automatically; you choose whether to share it."
+      );
+      if (!confirmed) return;
+      try {
+        const response = await fetch("/api/ops/support-bundle", {
+          method: "POST",
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            dashboard().getAuthorizationHeaders()
+          ),
+          body: JSON.stringify({ confirm_export: true }),
+        });
+        if (!response.ok) throw new Error("support_bundle_failed");
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "healthchecker-support-bundle.zip";
+        anchor.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        global.alert("Support bundle export failed. Owner/admin session required; try again after sign-in.");
+      }
     });
     document.addEventListener("hc:session-changed", event => {
       if (!event.detail || !event.detail.authenticated) {
