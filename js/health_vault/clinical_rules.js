@@ -7,11 +7,21 @@
 
   const RULES = {
     systolic: { normal: [90, 120], borderline: [121, 139], abnormal: [140, 179], critical_above: 180, critical_below: 70 },
+    systolic_bp: { normal: [90, 120], borderline: [121, 139], abnormal: [140, 179], critical_above: 180, critical_below: 70 },
     diastolic: { normal: [60, 80], borderline: [81, 89], abnormal: [90, 119], critical_above: 120, critical_below: 40 },
+    diastolic_bp: { normal: [60, 80], borderline: [81, 89], abnormal: [90, 119], critical_above: 120, critical_below: 40 },
     glucose: { normal: [70, 99], borderline: [100, 125], abnormal: [126, 250], critical_above: 400, critical_below: 54 },
     hba1c: { normal: [4.0, 5.6], borderline: [5.7, 6.4], abnormal: [6.5, 10], critical_above: 12 },
     egfr: { normal: [90, 200], borderline: [60, 89], abnormal: [30, 59], critical_below: 15 },
     resting_hr: { normal: [50, 90], borderline: [91, 100], abnormal: [101, 140], critical_above: 160, critical_below: 35 },
+    heart_rate: { normal: [50, 100], borderline: [101, 130], abnormal: [131, 180], critical_above: 181, critical_below: 40 },
+    oxygen_saturation: { normal: [95, 100], borderline: [93, 94], abnormal: [88, 92], critical_below: 87 },
+    spo2: { normal: [95, 100], borderline: [93, 94], abnormal: [88, 92], critical_below: 87 },
+    ldl: { normal: [0, 99], borderline: [100, 129], abnormal: [130, 189], critical_above: 190 },
+    ldl_c: { normal: [0, 99], borderline: [100, 129], abnormal: [130, 189], critical_above: 190 },
+    hdl: { normal: [50, 150], borderline: [40, 49], abnormal: [1, 39] },
+    triglycerides: { normal: [0, 149], borderline: [150, 199], abnormal: [200, 499], critical_above: 500 },
+    bmi: { normal: [18.5, 24.9], borderline: [25.0, 29.9], abnormal: [30.0, 39.9], critical_above: 40.0 },
     sleep_score: { normal: [75, 100], borderline: [60, 74], abnormal: [0, 59] },
   };
 

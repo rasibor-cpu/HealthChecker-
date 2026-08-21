@@ -36,6 +36,7 @@ const APP_SHELL = [
   "./js/health_vault/ai_health_bridge.js",
   "./js/health_vault/doctor_visit.js",
   "./js/health_vault/executive_dashboard.js",
+  "./js/health_vault/health_snapshot.js",
   "./js/health_vault/alert_engine.js",
   "./js/health_vault/baseline_engine.js",
   "./js/health_vault/cgm_continuity.js",

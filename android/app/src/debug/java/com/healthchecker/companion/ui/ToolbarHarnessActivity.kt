@@ -20,6 +20,7 @@ class ToolbarHarnessActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
         setContentView(R.layout.activity_companion_status)
         navigator = StatusScreenNavigator(
             finishScreen = { finish() },

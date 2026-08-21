@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>HealthChecker+ v6 (Trend Intelligence + Foot Pain Analysis + Health Vault)</title>
 <style>
-:root{
+:root, html[data-theme="dark"]{
   --bg:#0b1220;
   --card:#0f1a30;
   --text:#eaf0ff;
@@ -15,10 +15,43 @@
   --bad:#fb7185;
   --accent:#4da3ff;
   --line:#233458;
+  --status-green:#2dd4bf;
+  --status-amber:#fbbf24;
+  --status-red:#fb7185;
+  --status-grey:#9fb1d1;
+  --status-green-bg:rgba(45,212,191,0.12);
+  --status-amber-bg:rgba(251,191,36,0.12);
+  --status-red-bg:rgba(251,113,133,0.12);
+  --status-grey-bg:rgba(159,177,209,0.10);
+  --header:#101a32;
+  --input-bg:#0c162b;
+}
+html[data-theme="light"]{
+  --bg:#f4f6fb;
+  --card:#ffffff;
+  --text:#10203a;
+  --muted:#5c6b80;
+  --ok:#0f7a5c;
+  --warn:#9a6700;
+  --bad:#b42318;
+  --accent:#1d6fd8;
+  --line:#d5dce8;
+  --status-green:#0f7a5c;
+  --status-amber:#9a6700;
+  --status-red:#b42318;
+  --status-grey:#5c6b80;
+  --status-green-bg:#e6f7f1;
+  --status-amber-bg:#fff8e6;
+  --status-red-bg:#fde8e6;
+  --status-grey-bg:#f1f3f6;
+  --header:#eaf0ff;
+  --input-bg:#ffffff;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
-header{padding:12px;background:#101a32;font-weight:700}
+header{padding:12px;background:var(--header);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:12px}
+header .hc-header-title{font-weight:700}
+#hc_theme_toggle{width:auto;margin:0;padding:8px 12px;min-height:44px}
 nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
 .tab{padding:8px 10px;border-radius:10px;background:#233458;cursor:pointer;user-select:none}
 .tab.active{background:#4da3ff}
@@ -43,7 +76,7 @@ input,select,button{
   padding:10px;
   border-radius:10px;
   border:1px solid var(--line);
-  background:#0c162b;
+  background:var(--input-bg);
   color:var(--text);
   margin-bottom:10px;
 }
@@ -51,6 +84,12 @@ button{
   background:var(--accent);
   border:none;
   font-weight:700;
+}
+button.secondary{
+  background:transparent;
+  border:1px solid var(--line);
+  color:var(--text);
+  font-weight:600;
 }
 .kpi{
   padding:10px;
@@ -75,12 +114,64 @@ textarea{
   padding:10px;
   border-radius:10px;
   border:1px solid var(--line);
-  background:#0c162b;
+  background:var(--input-bg);
   color:var(--text);
   margin-bottom:10px;
   font-family:ui-monospace,Consolas,monospace;
   font-size:12px;
 }
+.hc-health-snapshot{margin-bottom:12px}
+.hc-metric-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+@media (min-width:720px){
+  .hc-metric-grid{grid-template-columns:1fr 1fr}
+}
+.hc-metric-card{
+  display:block;
+  width:100%;
+  text-align:left;
+  min-height:44px;
+  padding:14px;
+  border-radius:14px;
+  border:2px solid var(--line);
+  background:var(--card);
+  color:var(--text);
+  cursor:pointer;
+  margin-bottom:0;
+  font-weight:400;
+}
+.hc-metric-card:focus{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+}
+.hc-metric-name{font-size:14px;font-weight:700;margin-bottom:4px;overflow-wrap:anywhere}
+.hc-metric-value{font-size:22px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+.hc-metric-unit{font-size:14px;font-weight:600;color:var(--muted)}
+.hc-metric-status{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:800;letter-spacing:.02em}
+.hc-status-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.hc-metric-freshness,.hc-metric-trend,.hc-metric-source{font-size:12px;margin-top:4px;color:var(--muted)}
+.hc-status-green{border-color:var(--status-green);background:var(--status-green-bg)}
+.hc-status-green .hc-metric-status{color:var(--status-green)}
+.hc-status-green .hc-status-dot{background:var(--status-green)}
+.hc-status-amber{border-color:var(--status-amber);background:var(--status-amber-bg)}
+.hc-status-amber .hc-metric-status{color:var(--status-amber)}
+.hc-status-amber .hc-status-dot{background:var(--status-amber)}
+.hc-status-red{border-color:var(--status-red);background:var(--status-red-bg)}
+.hc-status-red .hc-metric-status{color:var(--status-red)}
+.hc-status-red .hc-status-dot{background:var(--status-red)}
+.hc-status-grey{border-color:var(--status-grey);background:var(--status-grey-bg)}
+.hc-status-grey .hc-metric-status{color:var(--status-grey)}
+.hc-status-grey .hc-status-dot{background:var(--status-grey)}
+.hc-snapshot-customize{margin-top:10px}
+.hc-layout-list{list-style:none;padding:0;margin:8px 0}
+.hc-layout-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.hc-layout-list label{display:flex;align-items:center;gap:8px;min-height:44px}
+.hc-layout-list input{width:auto;margin:0}
+.hc-layout-move{display:flex;gap:6px}
+.hc-layout-move button{width:auto;margin:0;min-height:44px;min-width:44px;padding:8px 10px}
 @media print{
   nav,header,#vault_import_panel{display:none !important}
   .screen{display:block !important}
@@ -88,7 +179,10 @@ textarea{
 </style>
 </head>
 <body>
-<header>HealthChecker+ v6</header>
+<header>
+  <span class="hc-header-title">HealthChecker+ v6</span>
+  <button type="button" id="hc_theme_toggle" class="secondary" aria-pressed="false">Light mode</button>
+</header>
 
 <nav>
   <div class="tab active" data="dash">Dashboard</div>
@@ -102,6 +196,7 @@ textarea{
 <div id="dash" class="screen active">
   <div id="alerts"></div>
 
+  <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
   <div id="exec_health_dashboard" aria-label="Executive Health Dashboard"></div>
 
   <div id="guardian_dash_snapshot" class="card muted small">Guardian status appears after first evaluation.</div>
@@ -370,6 +465,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js"></script>
+<script src="js/health_vault/health_snapshot.js"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
@@ -731,6 +827,9 @@ tabs.forEach(t => t.onclick = () => {
   if (t.getAttribute('data') === 'dash' && window.HCExecutiveDashboard) {
     HCExecutiveDashboard.refresh();
   }
+  if (t.getAttribute('data') === 'dash' && window.HCHealthSnapshot) {
+    HCHealthSnapshot.refresh();
+  }
   if (t.getAttribute('data') === 'guardian' && window.HCHealthGuardian) {
     HCHealthGuardian.refresh({ trigger: 'tab' });
     HCHealthGuardian.renderTimelineFiltered();
@@ -739,6 +838,10 @@ tabs.forEach(t => t.onclick = () => {
 });
 
 render();
+if (window.HCHealthSnapshot) {
+  try { HCHealthSnapshot.initTheme(); } catch (_) {}
+  try { HCHealthSnapshot.refresh(); } catch (_) {}
+}
 if (window.HCExecutiveDashboard) HCExecutiveDashboard.refresh();
 if (window.HCHealthGuardian) {
   try { HCHealthGuardian.refresh({ trigger: 'startup' }); } catch (_) {}

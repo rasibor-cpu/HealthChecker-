@@ -65,6 +65,7 @@ class CompanionStatusActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_companion_status)
         prefs = SecurePrefs(this)

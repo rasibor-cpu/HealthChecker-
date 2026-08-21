@@ -5,17 +5,20 @@
   "use strict";
 
   /** For these metrics, higher is better. */
-  const HIGHER_BETTER = new Set(["egfr", "sleep_score", "energy_score", "cgm_time_in_range"]);
+  const HIGHER_BETTER = new Set(["egfr", "sleep_score", "energy_score", "cgm_time_in_range", "oxygen_saturation"]);
   /** For these metrics, lower is better. */
   const LOWER_BETTER = new Set([
     "glucose",
     "hba1c",
     "systolic",
     "diastolic",
+    "systolic_bp",
+    "diastolic_bp",
     "creatinine",
     "uacr",
     "resting_hr",
     "bmi",
+    "ldl",
   ]);
 
   function seriesForMetric(metric) {

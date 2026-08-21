@@ -125,6 +125,10 @@ METRIC_CATALOG: dict[str, dict[str, Any]] = {
     "activity_minutes": {"category": "Activity", "units": "min"},
     "exercise_minutes": {"category": "Activity", "units": "min"},
     "spo2": {"category": "Respiratory", "units": "%"},
+    "ldl": {"category": "Lipids", "units": "mg/dL"},
+    "ldl_c": {"category": "Lipids", "units": "mg/dL"},
+    "hdl": {"category": "Lipids", "units": "mg/dL"},
+    "triglycerides": {"category": "Lipids", "units": "mg/dL"},
 }
 
 PROVENANCE_VALUES = (

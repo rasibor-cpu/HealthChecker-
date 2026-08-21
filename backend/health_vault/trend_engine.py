@@ -16,6 +16,7 @@ HIGHER_BETTER = {
     "cgm_time_in_range",
     "hrv_rmssd",
     "sleep_duration",
+    "oxygen_saturation",
 }
 LOWER_BETTER = {
     "glucose",
@@ -28,6 +29,7 @@ LOWER_BETTER = {
     "uacr",
     "resting_hr",
     "bmi",
+    "ldl",
 }
 
 # Default: exclude measurements needing review below this overall doc confidence proxy
