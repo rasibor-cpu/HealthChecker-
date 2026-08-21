@@ -443,3 +443,171 @@ def test_no_unintended_global_flag_secure():
 def test_sw_precaches_snapshot_module():
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     assert "health_snapshot.js" in sw
+
+
+def test_light_and_dark_status_tokens_are_distinct():
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    dark = html.split('html[data-theme="light"]', 1)[0]
+    light = html.split('html[data-theme="light"]', 1)[1].split("*{", 1)[0]
+    for token in ("--status-green", "--status-amber", "--status-red", "--status-grey"):
+        assert token in dark
+        assert token in light
+    assert "#2dd4bf" in dark and "#0f7a5c" in light
+    assert "#fbbf24" in dark and "#9a6700" in light
+    assert "#fb7185" in dark and "#b42318" in light
+    for cls in ("hc-status-green", "hc-status-amber", "hc-status-red", "hc-status-grey"):
+        assert cls in html
+    assert "hc-metric-status" in html
+    assert 'id="hc_theme_toggle"' in html
+
+
+def test_card_navigation_reuses_vault_detail():
+    snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
+    ui = (ROOT / "js" / "health_vault" / "ui.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert "HCVaultUI.openMetricDetail" in snap
+    assert "data-category=" in snap
+    assert "data-detail-metric=" in snap
+    assert "function openMetricDetail" in ui
+    assert '.tab[data="vault"]' in ui
+    assert "setCategoryFilter" in ui
+    assert 'id="vault_trends"' in html
+    assert 'id="vault_timeline"' in html
+    assert 'data="dash"' in html and 'data="rep"' in html
+
+
+def test_no_flag_secure_set_anywhere_in_android_sources():
+    """Companion must not *set* FLAG_SECURE. Tests may mention the flag."""
+    android = ROOT / "android"
+    setters = []
+    for path in android.rglob("*"):
+        if path.suffix.lower() not in {".kt", ".java", ".xml"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "addFlags" in text and "FLAG_SECURE" in text and "Test" not in path.name:
+            setters.append(str(path.relative_to(ROOT)))
+        if "setFlags" in text and "FLAG_SECURE" in text:
+            setters.append(str(path.relative_to(ROOT)))
+    assert setters == []
+    manifest = (ROOT / "android/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+    assert "FLAG_SECURE" not in manifest
+    assert 'secure="true"' not in manifest.lower()
+
+
+def _node_snapshot_eval(script: str) -> str:
+    import subprocess
+
+    prelude = f"""
+const fs = require('fs');
+const vm = require('vm');
+const ctx = {{ console, globalThis: {{}} }};
+ctx.globalThis = ctx;
+ctx.window = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/clinical_rules.js")!r}, 'utf8'), ctx);
+vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/trend_engine.js")!r}, 'utf8'), ctx);
+vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/health_snapshot.js")!r}, 'utf8'), ctx);
+const HS = ctx.HCHealthSnapshot;
+{script}
+"""
+    proc = subprocess.run(["node", "-e", prelude], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return proc.stdout.strip()
+
+
+def test_js_latest_valid_and_status_colours():
+    out = _node_snapshot_eval(
+        """
+const rows = [
+  {metric:'glucose', value:90, units:'mg/dL', measured_at:'2026-08-21T16:00:00Z'},
+  {metric:'glucose', value:null, units:'mg/dL', measured_at:'2026-08-21T17:50:00Z'},
+  {metric:'glucose', value:101, units:'mg/dL', measured_at:'2026-08-21T17:00:00Z'},
+];
+const latest = HS.selectLatestValid(rows, 'glucose');
+const stN = HS.evaluateConsumerStatus({metric:'systolic_bp', value:118, units:'mmHg'});
+const stC = HS.evaluateConsumerStatus({metric:'systolic_bp', value:132, units:'mmHg'});
+const stA = HS.evaluateConsumerStatus({metric:'systolic_bp', value:150, units:'mmHg'});
+const stU = HS.evaluateConsumerStatus({metric:'glucose', value:90, currentness:'stale'});
+console.log(JSON.stringify({
+  latest: latest && latest.value,
+  n: [stN.status, stN.status_color],
+  c: [stC.status, stC.status_color],
+  a: [stA.status, stA.status_color],
+  u: [stU.status, stU.status_color],
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["latest"] == 101
+    assert payload["n"] == ["NORMAL", "GREEN"]
+    assert payload["c"] == ["CAUTION", "AMBER"]
+    assert payload["a"] == ["ATTENTION", "RED"]
+    assert payload["u"] == ["UNKNOWN", "GREY"]
+
+
+def test_js_card_render_includes_value_unit_status_and_is_tappable():
+    out = _node_snapshot_eval(
+        """
+const html = HS.renderHealthMetricCard({
+  metric_id: 'blood_pressure',
+  title: 'Blood Pressure',
+  display_value: '118/76',
+  unit: 'mmHg',
+  status: 'NORMAL',
+  status_text: 'Normal',
+  status_color: 'GREEN',
+  freshness_label: 'Updated 18 minutes ago',
+  trend_label: 'Improving',
+  trend_indicator: '\\u2193',
+  provenance: 'wearable_screenshot',
+  source: 'home_monitor',
+  detail_category: 'blood_pressure',
+  detail_metric: 'systolic_bp',
+  accessibility_label: 'Blood pressure, 118 over 76 millimetres of mercury, status Normal, Updated 18 minutes ago.',
+});
+const missingTrend = HS.renderHealthMetricCard({
+  metric_id: 'steps',
+  title: 'Steps',
+  display_value: '1000',
+  unit: 'steps',
+  status: 'UNKNOWN',
+  status_text: 'Unknown',
+  status_color: 'GREY',
+  detail_category: 'other',
+  detail_metric: 'steps',
+});
+console.log(JSON.stringify({html, missingTrend}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    html = payload["html"]
+    assert html.startswith('<button type="button"')
+    assert "hc-metric-card" in html
+    assert "hc-status-green" in html
+    assert "118/76" in html
+    assert "mmHg" in html
+    assert "Normal" in html
+    assert 'data-status="NORMAL"' in html
+    assert "Updated 18 minutes ago" in html
+    assert "Improving" in html
+    assert "home_monitor" in html
+    assert 'data-metric="blood_pressure"' in html
+    assert 'data-category="blood_pressure"' in html
+    assert "aria-label=" in html
+    assert "118 over 76" in html
+    assert "Trend unavailable" in payload["missingTrend"]
+    assert "hc-status-grey" in payload["missingTrend"]
+
+
+def test_js_layout_and_theme_helpers():
+    out = _node_snapshot_eval(
+        """
+const cards = [{metric_id:'glucose'},{metric_id:'blood_pressure'},{metric_id:'steps'}];
+const vis = HS.applyLayout(cards, {order:['blood_pressure','glucose','steps'], hidden:['steps']}, HS.DEFAULT_ORDER);
+console.log(JSON.stringify({ids: vis.map(c => c.metric_id), hasTheme: typeof HS.applyTheme === 'function'}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["ids"] == ["blood_pressure", "glucose"]
+    assert payload["hasTheme"] is True
+
