@@ -121,7 +121,16 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     uninstall_script = (root / "scripts/uninstall_healthchecker_desktop.ps1").read_text(encoding="utf-8")
     assert "HC_ANDROID_KEYSTORE_FILE" in gradle
     assert "HC_ANDROID_KEYSTORE_PASSWORD" in gradle
+    assert "HC_ANDROID_KEY_ALIAS" in gradle
+    assert "HC_ANDROID_KEY_PASSWORD" in gradle
+    assert "HC_ANDROID_REQUIRE_PRODUCTION_SIGNING" in gradle
+    assert "hc_android_signing_env_incomplete" in gradle
+    assert "debug.keystore" in gradle
     assert "storePassword = System.getenv" not in gradle
+    assert 'storePassword = "' not in gradle
+    assert 'keyPassword = "' not in gradle
+    assert "versionCode = 321" in gradle
+    assert 'versionName = "0.321.0"' in gradle
     assert '$trees = @("backend", "js", "css", "assets", "icons")' in package_script
     assert "vault_storage|hc_intake" in package_script
     assert "PreserveUserData" in install_script
