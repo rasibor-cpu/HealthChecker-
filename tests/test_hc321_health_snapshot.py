@@ -634,3 +634,174 @@ console.log(JSON.stringify({ids: vis.map(c => c.metric_id), hasTheme: typeof HS.
     payload = __import__("json").loads(out)
     assert payload["ids"] == ["blood_pressure", "glucose"]
     assert payload["hasTheme"] is True
+
+
+def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
+    """HC321-UAT10: Health Snapshot mounts inside the authenticated Welcome container near the top."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="consumer_dashboard_container"' in html
+    assert 'id="hc_health_snapshot"' in html
+    consumer = html.split('id="consumer_dashboard_container"', 1)[1]
+    # Mount must live inside the authenticated container, before widget target and executive.
+    assert 'id="hc_health_snapshot"' in consumer.split('id="dashboard_widgets_target"', 1)[0]
+    assert html.index('id="hc_health_snapshot"') < html.index('id="dashboard_widgets_target"')
+    assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
+    assert "health_snapshot.js?v=hc321uat10" in html
+    sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat10"' in sw
+
+
+def test_uat10_authenticated_dashboard_snapshot_render_path():
+    """Authenticated Dashboard load → snapshot API → non-empty cards → HealthMetricCard markup."""
+    pytest.importorskip("fastapi")
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi.testclient import TestClient
+
+    from backend.health_vault.api import create_health_vault_app
+
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        app = create_health_vault_app(
+            store=store,
+            production=True,
+            bootstrap_password="Boot-Pass-UAT10xx",
+        )
+        client = TestClient(app)
+        login = client.post(
+            "/api/auth/login",
+            json={"patient_id": "00000", "password": "Boot-Pass-UAT10xx"},
+        )
+        assert login.status_code == 200
+        token = login.json()["token"]
+        if login.json().get("must_change_password"):
+            changed = client.post(
+                "/api/auth/password/change",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "current_password": "Boot-Pass-UAT10xx",
+                    "new_password": "Owner-UAT10-Password1",
+                },
+            )
+            assert changed.status_code == 200
+            token = changed.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        now = datetime.now(timezone.utc)
+        for i, (metric, value, unit) in enumerate(
+            [
+                ("heart_rate", 72, "bpm"),
+                ("oxygen_saturation", 97, "%"),
+                ("steps", 5400, "count"),
+                ("sleep_duration", 420, "min"),
+                ("activity_minutes", 35, "min"),
+            ]
+        ):
+            store.upsert_observation(
+                {
+                    "patient_id": "00000",
+                    "metric_type": metric,
+                    "value": value,
+                    "unit": unit,
+                    "measured_at": (now - timedelta(minutes=i))
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "acquisition_mode": "HEALTH_CONNECT",
+                    "fingerprint": f"uat10-live-{metric}",
+                }
+            )
+
+        summary = client.get("/api/dashboard/summary", headers=headers)
+        assert summary.status_code == 200
+        snap = client.get("/api/health-vault/health-snapshot", headers=headers)
+        assert snap.status_code == 200
+        body = snap.json()
+        assert body["card_count"] > 0
+        metric_ids = [c["metric_id"] for c in body["cards"]]
+        # Capture metric names only — no PHI values asserted beyond presence.
+        assert "heart_rate" in metric_ids
+        assert "oxygen_saturation" in metric_ids
+        assert "steps" in metric_ids
+
+        slim = []
+        for c in body["cards"]:
+            slim.append(
+                {
+                    k: c.get(k)
+                    for k in (
+                        "metric_id",
+                        "title",
+                        "display_value",
+                        "unit",
+                        "status",
+                        "status_text",
+                        "status_color",
+                        "freshness_label",
+                        "detail_category",
+                        "detail_metric",
+                        "accessibility_label",
+                    )
+                }
+            )
+        cards_json = __import__("json").dumps(slim)
+        out = _node_snapshot_eval(
+            f"""
+const cards = {cards_json};
+const root = {{ innerHTML: '', querySelectorAll() {{ return []; }}, addEventListener() {{}} }};
+HS.renderInto(root, cards);
+console.log(JSON.stringify({{
+  has_section: root.innerHTML.includes('Health Snapshot'),
+  rendered_cards: (root.innerHTML.match(/hc-metric-card/g) || []).length,
+  api_cards: cards.length,
+}}));
+"""
+        )
+        payload = __import__("json").loads(out)
+        assert payload["has_section"] is True
+        assert payload["api_cards"] > 0
+        assert payload["rendered_cards"] == payload["api_cards"]
+
+
+def test_uat10_js_refresh_renders_health_metric_cards():
+    cards = [
+        {
+            "metric_id": "heart_rate",
+            "title": "Heart Rate",
+            "display_value": "72",
+            "unit": "bpm",
+            "status": "NORMAL",
+            "status_text": "Normal",
+            "status_color": "GREEN",
+            "freshness_label": "Updated 5 minutes ago",
+            "detail_category": "ecg_cardiology",
+            "detail_metric": "heart_rate",
+            "accessibility_label": "Heart Rate, 72 bpm, status Normal.",
+        },
+        {
+            "metric_id": "steps",
+            "title": "Steps",
+            "display_value": "5400",
+            "unit": "steps",
+            "status": "UNKNOWN",
+            "status_text": "Unknown",
+            "status_color": "GREY",
+            "freshness_label": "Updated today",
+            "detail_category": "other",
+            "detail_metric": "steps",
+            "accessibility_label": "Steps, 5400, status Unknown.",
+        },
+    ]
+    out = _node_snapshot_eval(
+        f"""
+const cards = {__import__("json").dumps(cards)};
+const root = {{ innerHTML: '', querySelectorAll() {{ return []; }}, addEventListener() {{}} }};
+HS.renderInto(root, cards);
+console.log(JSON.stringify({{
+  has_section: root.innerHTML.includes('Health Snapshot'),
+  rendered_cards: (root.innerHTML.match(/hc-metric-card/g) || []).length,
+}}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["has_section"] is True
+    assert payload["rendered_cards"] == 2

@@ -1081,6 +1081,13 @@
   function refresh() {
     const root = document.getElementById("hc_health_snapshot");
     if (!root) return Promise.resolve();
+    // Always paint the section shell first so authenticated Dashboard never leaves an empty mount
+    // between Welcome controls and widgets / executive (HC321-UAT10).
+    if (!root.querySelector(".hc-health-snapshot")) {
+      try {
+        renderInto(root, []);
+      } catch (_) {}
+    }
     const headers = authHeaders();
     if (!headers) {
       renderLocal();
@@ -1094,6 +1101,7 @@
       .then(function (body) {
         const cards = applyLayout(body && body.cards ? body.cards : [], loadLayout());
         renderInto(root, cards);
+        return cards;
       })
       .catch(function () {
         // Authenticated sessions prefer server cards; fall back locally only when API unavailable.

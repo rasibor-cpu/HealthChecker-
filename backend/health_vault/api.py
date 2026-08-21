@@ -483,9 +483,19 @@ def create_health_vault_app(
         from backend.health_vault.health_snapshot import HealthSnapshotEngine
 
         engine = HealthSnapshotEngine(vault)
+        # Prefer authenticated patient whenever a session is present (production or tests).
+        scoped_patient = patient_id
+        try:
+            if getattr(request.state, "patient_id", None):
+                scoped_patient = str(request.state.patient_id)
+            elif production_mode:
+                scoped_patient = _request_patient(request)
+        except Exception:
+            if production_mode:
+                scoped_patient = _request_patient(request)
         return _sanitize_value(
             engine.generate(
-                patient_id=_request_patient(request) if production_mode else patient_id,
+                patient_id=scoped_patient,
                 as_of=as_of,
             )
         )

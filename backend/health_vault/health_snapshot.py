@@ -724,7 +724,11 @@ class HealthSnapshotEngine:
             for o in self.store.list_observations() or []:
                 if str(o.get("patient_id") or "default-patient") != patient_id:
                     continue
-                rows.append(dict(o))
+                row = dict(o)
+                # Companion / Health Connect rows often store `unit` (singular).
+                if row.get("units") is None and row.get("unit") is not None:
+                    row["units"] = row.get("unit")
+                rows.append(row)
         except Exception:
             pass
         return rows

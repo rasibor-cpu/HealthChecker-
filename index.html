@@ -246,11 +246,13 @@ textarea{
       <button id="save_config_btn" style="width: auto; padding: 8px 16px; margin: 0;">Save Preferences</button>
     </div>
 
+    <!-- HC-321 Health Snapshot: near top of authenticated Welcome/Dashboard -->
+    <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
+
     <!-- Active Widgets Target container -->
     <div id="dashboard_widgets_target"></div>
   </div>
 
-  <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
   <div id="exec_health_dashboard" hidden aria-hidden="true"></div>
 
   <div id="guardian_dash_snapshot" hidden aria-hidden="true"></div>
@@ -650,7 +652,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat7"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat10"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
@@ -1028,19 +1030,22 @@ tabs.forEach(t => t.onclick = () => {
 });
 
 render();
+if (window.HCHealthSnapshot && HCHealthSnapshot.initTheme) {
+  try { HCHealthSnapshot.initTheme(); } catch (_) {}
+}
 if (window.HCConsumerDashboard) {
   HCConsumerDashboard.init();
   if (HCConsumerDashboard.token && window.HCExecutiveDashboard) {
     HCExecutiveDashboard.refresh();
   }
-  if (HCConsumerDashboard.token && window.HCHealthSnapshot) {
+  if (window.HCHealthSnapshot) {
     try { HCHealthSnapshot.refresh(); } catch (_) {}
   }
 } else if (window.HCExecutiveDashboard) {
   HCExecutiveDashboard.refresh();
-}
-if (window.HCHealthSnapshot && !(window.HCConsumerDashboard && HCConsumerDashboard.token)) {
-  try { HCHealthSnapshot.refresh(); } catch (_) {}
+  if (window.HCHealthSnapshot) {
+    try { HCHealthSnapshot.refresh(); } catch (_) {}
+  }
 }
 if (window.HCHealthGuardian) {
   try { HCHealthGuardian.refresh({ trigger: 'startup' }); } catch (_) {}
@@ -1055,12 +1060,12 @@ if (window.HCContinuousMonitoring) {
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (reloading) return;
-    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321c1') return;
+    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321uat10') return;
     reloading = true;
-    sessionStorage.setItem('hc_sw_reload_rev', 'hc321c1');
+    sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat10');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc321c1').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc321uat10').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }
