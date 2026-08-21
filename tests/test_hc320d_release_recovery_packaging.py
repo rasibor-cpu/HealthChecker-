@@ -126,5 +126,9 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     assert "vault_storage|hc_intake" in package_script
     assert "PreserveUserData" in install_script
     assert "HealthChecker.lnk" in install_script
-    assert 'Remove-Item -LiteralPath $installRoot' in uninstall_script
-    assert 'Remove-Item -LiteralPath $dataRoot' not in uninstall_script
+    assert "release_integrity_failed" in install_script
+    assert ".previous" in install_script
+    assert "User data preserved" in uninstall_script
+    assert "Remove-Item -LiteralPath $dataRoot" not in uninstall_script
+    assert "Remove-Item -LiteralPath $DataRoot" not in uninstall_script
+    assert "0.321.0" in (root / "config/healthchecker.release.json").read_text(encoding="utf-8")

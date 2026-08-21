@@ -1,7 +1,7 @@
 {
   "release_format": "hc.release.v1",
   "product": "HealthChecker",
-  "version": "0.320.0",
+  "version": "0.321.0",
   "vault_schema": "hc.health_vault.v1",
   "minimum_compatible_version": "0.318.0",
   "downgrade_policy": "blocked_unless_schema_and_release_are_explicitly_compatible",

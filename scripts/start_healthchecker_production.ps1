@@ -4,17 +4,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$python = "C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe"
-$resolver = Join-Path $PSScriptRoot "Resolve-HealthCheckerInstallRoot.ps1"
-if (-not (Test-Path -LiteralPath $resolver -PathType Leaf)) { throw "HealthChecker production startup failed: install_root_resolver_missing" }
-$installRoot = & $resolver -ScriptsDirectory $PSScriptRoot
-if (-not $installRoot) { throw "HealthChecker production startup failed: install_root_unresolved" }
 
 function Stop-WithCode([string]$Code) {
     throw "HealthChecker production startup failed: $Code"
 }
 
-if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { Stop-WithCode "runtime_missing" }
+$assertRuntime = Join-Path $PSScriptRoot "Assert-HealthCheckerManagedRuntime.ps1"
+if (-not (Test-Path -LiteralPath $assertRuntime -PathType Leaf)) { Stop-WithCode "managed_runtime_assert_missing" }
+try {
+    $python = & $assertRuntime
+} catch {
+    Stop-WithCode "runtime_missing"
+}
+if (-not $python) { Stop-WithCode "runtime_missing" }
+
+$resolver = Join-Path $PSScriptRoot "Resolve-HealthCheckerInstallRoot.ps1"
+if (-not (Test-Path -LiteralPath $resolver -PathType Leaf)) { Stop-WithCode "install_root_resolver_missing" }
+$installRoot = & $resolver -ScriptsDirectory $PSScriptRoot
+if (-not $installRoot) { Stop-WithCode "install_root_unresolved" }
+
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { Stop-WithCode "config_missing" }
 
 try { $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json }
