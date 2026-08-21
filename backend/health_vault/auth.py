@@ -362,3 +362,167 @@ class AuthenticationService:
                 "name": account.name, "role": account.role, "scope": session["scope"],
                 "must_change_password": account.must_change_password or session["scope"] != "full",
                 "password_expiry_date": account.password_expiry_date}
+
+    # --- HC321-C-C admin lifecycle (least privilege; auditable; no silent escalation) ---
+
+    ALLOWED_ROLES = frozenset({"owner", "admin", "user"})
+    PRIVILEGED_ROLES = frozenset({"owner", "admin"})
+
+    def require_roles(self, token: str, allowed: set[str] | frozenset[str]) -> UserAccount:
+        account, _ = self.resolve(token, require_full=True)
+        if account.role not in allowed:
+            raise AuthenticationError("forbidden", 403)
+        return account
+
+    def _safe_account_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "user_id": row.get("user_id"),
+            "name": row.get("name"),
+            "email_identifier": row.get("email_identifier"),
+            "role": row.get("role") or "user",
+            "account_status": row.get("account_status"),
+            "must_change_password": bool(row.get("must_change_password")),
+            "password_expiry_date": row.get("password_expiry_date"),
+        }
+
+    @_synchronized
+    def list_accounts(self, actor_token: str) -> list[dict[str, Any]]:
+        self.require_roles(actor_token, self.PRIVILEGED_ROLES)
+        data = self._read()
+        return [self._safe_account_row(row) for row in data.get("accounts", {}).values()]
+
+    @_synchronized
+    def admin_create_user(
+        self,
+        actor_token: str,
+        *,
+        user_id: str,
+        name: str,
+        email_identifier: str,
+        password: str,
+        role: str = "user",
+    ) -> dict[str, Any]:
+        actor = self.require_roles(actor_token, self.PRIVILEGED_ROLES)
+        role_norm = str(role or "user").strip().lower()
+        if role_norm not in self.ALLOWED_ROLES:
+            raise AuthenticationError("invalid_role", 400)
+        if role_norm == "owner":
+            raise AuthenticationError("owner_role_not_assignable", 403)
+        if role_norm == "admin" and actor.role != "owner":
+            raise AuthenticationError("forbidden", 403)
+        if len(password) < 8:
+            raise AuthenticationError("password_policy_violation", 400)
+        account = self.create_user(
+            user_id=user_id,
+            name=name,
+            email_identifier=email_identifier,
+            password=password,
+            role=role_norm,
+            must_change_password=True,
+        )
+        data = self._read()
+        self._audit(data, "admin_account_created", actor.user_id)
+        data.setdefault("audit", []).append(
+            {
+                "event_id": str(uuid4()),
+                "at": utc_now(),
+                "action": "privilege_change",
+                "user_id": actor.user_id,
+                "outcome": "success",
+                "target_user_id": account.user_id,
+                "detail": {"role": role_norm},
+            }
+        )
+        self._write(data)
+        return self._safe_account_row(account.to_dict(include_secret=True))
+
+    @_synchronized
+    def set_account_status(self, actor_token: str, user_id: str, status: str) -> dict[str, Any]:
+        actor = self.require_roles(actor_token, self.PRIVILEGED_ROLES)
+        status_norm = str(status or "").strip().lower()
+        if status_norm not in {"active", "disabled"}:
+            raise AuthenticationError("invalid_account_status", 400)
+        uid = str(user_id)
+        if uid == actor.user_id and status_norm == "disabled":
+            raise AuthenticationError("cannot_disable_self", 400)
+        data = self._read()
+        row = data.get("accounts", {}).get(uid)
+        if not row:
+            raise AuthenticationError("account_not_found", 404)
+        target_role = str(row.get("role") or "user")
+        if target_role == "owner" and actor.role != "owner":
+            raise AuthenticationError("forbidden", 403)
+        if target_role == "admin" and actor.role != "owner" and status_norm == "disabled":
+            raise AuthenticationError("forbidden", 403)
+        row["account_status"] = status_norm
+        if status_norm == "disabled":
+            for session in data.get("sessions", {}).values():
+                if session.get("user_id") == uid and not session.get("revoked_at"):
+                    session["revoked_at"] = utc_now()
+        self._audit(data, f"account_{status_norm}", actor.user_id)
+        data.setdefault("audit", []).append(
+            {
+                "event_id": str(uuid4()),
+                "at": utc_now(),
+                "action": "privilege_change",
+                "user_id": actor.user_id,
+                "outcome": "success",
+                "target_user_id": uid,
+                "detail": {"account_status": status_norm},
+            }
+        )
+        self._write(data)
+        return self._safe_account_row(row)
+
+    @_synchronized
+    def set_role(self, actor_token: str, user_id: str, role: str) -> dict[str, Any]:
+        actor = self.require_roles(actor_token, {"owner"})
+        role_norm = str(role or "").strip().lower()
+        if role_norm not in self.ALLOWED_ROLES or role_norm == "owner":
+            raise AuthenticationError("invalid_role", 400)
+        uid = str(user_id)
+        if uid == actor.user_id:
+            raise AuthenticationError("cannot_change_own_role", 400)
+        data = self._read()
+        row = data.get("accounts", {}).get(uid)
+        if not row:
+            raise AuthenticationError("account_not_found", 404)
+        if str(row.get("role") or "") == "owner":
+            raise AuthenticationError("owner_role_immutable", 403)
+        previous = row.get("role")
+        row["role"] = role_norm
+        data.setdefault("audit", []).append(
+            {
+                "event_id": str(uuid4()),
+                "at": utc_now(),
+                "action": "privilege_change",
+                "user_id": actor.user_id,
+                "outcome": "success",
+                "target_user_id": uid,
+                "detail": {"from_role": previous, "to_role": role_norm},
+            }
+        )
+        self._write(data)
+        return self._safe_account_row(row)
+
+    @_synchronized
+    def revoke_all_sessions(self, actor_token: str, user_id: str | None = None) -> dict[str, Any]:
+        account, _ = self.resolve(actor_token, require_full=True)
+        target = str(user_id or account.user_id)
+        if target != account.user_id and account.role not in self.PRIVILEGED_ROLES:
+            raise AuthenticationError("forbidden", 403)
+        data = self._read()
+        if target != account.user_id:
+            row = data.get("accounts", {}).get(target)
+            if not row:
+                raise AuthenticationError("account_not_found", 404)
+            if str(row.get("role") or "") == "owner" and account.role != "owner":
+                raise AuthenticationError("forbidden", 403)
+        revoked = 0
+        for session in data.get("sessions", {}).values():
+            if session.get("user_id") == target and not session.get("revoked_at"):
+                session["revoked_at"] = utc_now()
+                revoked += 1
+        self._audit(data, "sessions_revoked", account.user_id)
+        self._write(data)
+        return {"ok": True, "user_id": target, "sessions_revoked": revoked}

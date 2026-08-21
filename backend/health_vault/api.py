@@ -860,6 +860,153 @@ def create_health_vault_app(
             "devices_revoked": devices_revoked,
         })
 
+    from backend.health_vault.privacy_rights import PrivacyDataRightsService, PrivacyRightsError
+
+    privacy_service = PrivacyDataRightsService(vault)
+
+    def _privacy_error(exc: PrivacyRightsError) -> JSONResponse:
+        return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
+
+    @app.get("/api/admin/users")
+    async def admin_list_users(request: Request) -> JSONResponse:
+        try:
+            users = auth_service.list_accounts(_bearer_token(request))
+            return JSONResponse({"ok": True, "users": users})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.post("/api/admin/users")
+    async def admin_create_user(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            created = auth_service.admin_create_user(
+                _bearer_token(request),
+                user_id=str(body.get("user_id") or ""),
+                name=str(body.get("name") or ""),
+                email_identifier=str(body.get("email_identifier") or body.get("user_id") or ""),
+                password=str(body.get("password") or ""),
+                role=str(body.get("role") or "user"),
+            )
+            return JSONResponse({"ok": True, "user": created})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc), "code": str(exc)}, status_code=400)
+
+    @app.post("/api/admin/users/{user_id}/status")
+    async def admin_set_status(user_id: str, request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            row = auth_service.set_account_status(
+                _bearer_token(request), user_id, str(body.get("status") or "")
+            )
+            return JSONResponse({"ok": True, "user": row})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.post("/api/admin/users/{user_id}/role")
+    async def admin_set_role(user_id: str, request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            row = auth_service.set_role(_bearer_token(request), user_id, str(body.get("role") or ""))
+            return JSONResponse({"ok": True, "user": row})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.post("/api/admin/users/{user_id}/sessions/revoke")
+    async def admin_revoke_sessions(user_id: str, request: Request) -> JSONResponse:
+        try:
+            result = auth_service.revoke_all_sessions(_bearer_token(request), user_id)
+            return JSONResponse(result)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.get("/api/privacy/notice")
+    async def privacy_notice(request: Request) -> JSONResponse:
+        try:
+            auth_service.resolve(_bearer_token(request), require_full=True)
+            return JSONResponse({"ok": True, **privacy_service.privacy_notice()})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.get("/api/privacy/consent")
+    async def privacy_consent_get(request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            return JSONResponse({"ok": True, **privacy_service.get_consent(pid)})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.post("/api/privacy/consent")
+    async def privacy_consent_grant(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            record = privacy_service.record_consent(
+                pid,
+                purpose=str(body.get("purpose") or ""),
+                notice_version=body.get("privacy_notice_version"),
+                provenance=str(body.get("provenance") or "authenticated_user"),
+            )
+            return JSONResponse({"ok": True, "consent": record})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except PrivacyRightsError as exc:
+            return _privacy_error(exc)
+
+    @app.post("/api/privacy/consent/withdraw")
+    async def privacy_consent_withdraw(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            record = privacy_service.withdraw_consent(pid, purpose=str(body.get("purpose") or ""))
+            return JSONResponse({"ok": True, "consent": record})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except PrivacyRightsError as exc:
+            return _privacy_error(exc)
+
+    @app.get("/api/privacy/export")
+    async def privacy_export(request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            package = privacy_service.export_patient_package(pid)
+            return JSONResponse({"ok": True, "export": _sanitize_value(package)})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+    @app.post("/api/privacy/amend")
+    async def privacy_amend(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            profile = privacy_service.amend_profile(pid, dict(body.get("amendments") or {}))
+            return JSONResponse({"ok": True, "profile": profile})
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except PrivacyRightsError as exc:
+            return _privacy_error(exc)
+
+    @app.post("/api/privacy/deletion/request")
+    async def privacy_deletion_request(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            result = privacy_service.request_deletion(pid, confirmation=str(body.get("confirmation") or ""))
+            return JSONResponse(result)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except PrivacyRightsError as exc:
+            return _privacy_error(exc)
+
+    @app.post("/api/privacy/deletion/confirm")
+    async def privacy_deletion_confirm(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+            result = privacy_service.confirm_deletion(
+                pid,
+                confirmation_token=str(body.get("confirmation_token") or ""),
+                confirmation=str(body.get("confirmation") or ""),
+            )
+            return JSONResponse(result)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        except PrivacyRightsError as exc:
+            return _privacy_error(exc)
+
     @app.get("/api/dashboard/summary")
     async def get_dashboard_summary(request: Request) -> JSONResponse:
         try:
