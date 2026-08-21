@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Callable, Mapping
 
+from backend.health_vault.recovery import CURRENT_SCHEMA, RecoveryError, VaultMigrationManager
 from backend.health_vault.vault_key_protector import read_protected_key
 from backend.health_vault.vault_store import VaultStore
 
@@ -34,11 +35,20 @@ def create_production_vault(
         # Force authentication of an existing index during startup. A wrong or
         # corrupt key must not be deferred until the first user request.
         store._read_index()
+        # Schema compatibility gate: unsupported/future schemas never become active.
+        VaultMigrationManager().validate_current(store)
+    except ProductionRuntimeError:
+        raise
+    except RecoveryError as exc:
+        raise ProductionRuntimeError(f"production_vault_schema_incompatible:{exc}") from exc
     except Exception as exc:
         raise ProductionRuntimeError("production_vault_activation_failed") from exc
     if not store.encrypted:
         raise ProductionRuntimeError("production_vault_encryption_required")
+    schema = store._read_index().get("schema_version")
+    if schema != CURRENT_SCHEMA:
+        raise ProductionRuntimeError("production_vault_schema_incompatible")
     return store
 
 
-__all__ = ["ProductionRuntimeError", "create_production_vault"]
+__all__ = ["ProductionRuntimeError", "create_production_vault", "CURRENT_SCHEMA"]
