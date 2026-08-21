@@ -10,6 +10,7 @@
     constructor() {
       this.patientId = null;
       this.token = null;
+      this.displayName = null;
       this.preferences = null;
       this.summary = null;
       this._refreshInFlight = null;
@@ -38,6 +39,7 @@
           const parsed = JSON.parse(raw);
           this.patientId = parsed.patientId;
           this.token = parsed.token;
+          this.displayName = parsed.displayName || null;
         }
       } catch (e) {
         console.error("Failed to load dashboard session", e);
@@ -47,21 +49,36 @@
       }));
     }
 
-    saveSession(patientId, token) {
+    saveSession(patientId, token, displayName) {
       this.patientId = patientId;
       this.token = token;
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ patientId, token }));
+      this.displayName = displayName || null;
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        patientId,
+        token,
+        displayName: this.displayName || undefined,
+      }));
       document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: true } }));
     }
 
     clearSession() {
       this.patientId = null;
       this.token = null;
+      this.displayName = null;
       this.preferences = null;
       this.summary = null;
       sessionStorage.removeItem(STORAGE_KEY);
       document.body.classList.remove("light-theme", "dark-theme");
       document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: false } }));
+    }
+
+    consumerGreeting() {
+      const fromSummary = this.summary && this.summary.display_name;
+      const name = String(fromSummary || this.displayName || "").trim();
+      if (name && name !== String(this.patientId || "")) {
+        return `Welcome, ${name}`;
+      }
+      return "My Health Dashboard";
     }
 
     getAuthorizationHeaders() {
@@ -168,7 +185,8 @@
         }
 
         const data = await res.json();
-        this.saveSession(data.patient_id, data.token);
+        const loginName = (data.name && data.name !== data.patient_id) ? data.name : null;
+        this.saveSession(data.patient_id, data.token, loginName);
         
         if (pidEl) pidEl.value = "";
         if (pwdEl) pwdEl.value = "";
@@ -228,7 +246,7 @@
         if (error) error.textContent = data.error || "Password change failed.";
         return;
       }
-      this.saveSession(data.patient_id, data.token);
+      this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
       const form = document.getElementById("password_change_form");
       if (form) form.hidden = true;
       const loginButton = document.getElementById("login_btn");
@@ -466,7 +484,7 @@
     renderDashboard() {
       const greetingEl = document.getElementById("dashboard_greeting");
       if (greetingEl) {
-        greetingEl.textContent = `Welcome, ${this.patientId || "Patient"}`;
+        greetingEl.textContent = this.consumerGreeting();
       }
 
       const target = document.getElementById("dashboard_widgets_target");
@@ -502,12 +520,23 @@
         }).join("");
         const hcCount = payload.health_connect_observation_count || 0;
         const sync = payload.health_connect_sync || {};
-        const syncState = sync.sync_state || "not_configured";
+        let syncState = sync.sync_state || "";
+        // If backend omitted sync payload (stale process) but HC observations are present,
+        // reflect observation presence — never hard-code "synced".
+        if ((!syncState || syncState === "not_configured") && (hcCount > 0 || (sync.observation_count || 0) > 0)) {
+          syncState = "observations_present";
+        }
+        if (!syncState) syncState = "not_configured";
         const syncClass = syncState === "synced" || syncState === "observations_present" ? "ok" : "muted";
+        const inferredLabel = syncState === "observations_present"
+          ? "Health Connect observations present"
+          : (syncState === "synced" ? "Health Connect sync active" : "Health Connect / Android sync not configured");
         const syncDetails = [
-          sync.label || "Health Connect sync status unavailable",
+          sync.label || sync.reason || inferredLabel,
           sync.paired_device_count != null ? `Paired devices: ${sync.paired_device_count}` : null,
-          sync.observation_count != null ? `HC observations: ${sync.observation_count}` : null,
+          (sync.observation_count != null ? sync.observation_count : hcCount) != null
+            ? `HC observations: ${sync.observation_count != null ? sync.observation_count : hcCount}`
+            : null,
           sync.last_observation_at ? `Last observation: ${String(sync.last_observation_at).slice(0, 19)}` : null,
           sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null,
         ].filter(Boolean).map(line => `<div class="small muted">${this.escape(String(line))}</div>`).join("");
@@ -588,8 +617,10 @@
               const isPriority = k === payload.priority_metric;
               const provenance = tr.provenance || (tr.data_plane === "monitoring" ? "health_connect_observational" : "clinical");
               const planeLabel = provenance === "health_connect_observational"
-                ? "Health Connect (observational)"
-                : (provenance === "clinical" ? "Clinical / lab" : provenance);
+                ? "Health Connect observational"
+                : (provenance === "combined_clinical_and_health_connect" || tr.data_plane === "combined"
+                  ? "Combined clinical + Health Connect observational"
+                  : (provenance === "clinical" ? "Clinical / lab" : provenance));
               return `
                 <div class="kpi small" style="display: flex; justify-content: space-between; align-items: center; border-left: 2px solid ${isPriority ? "var(--accent)" : "var(--line)"}; padding-left: 8px;">
                   <div>

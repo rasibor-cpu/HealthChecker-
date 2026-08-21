@@ -101,14 +101,33 @@ def _health_connect_sync_summary(
         sync_state = "synced"
         label = "Health Connect sync active"
     elif observation_count > 0:
+        # Observations in the vault mean Android/HC delivery already occurred even if
+        # the current pairing roster is empty (revoked/re-paired/stale device registry).
         sync_state = "observations_present"
         label = "Health Connect observations present"
+        if paired_count == 0:
+            label = (
+                "Health Connect observations present "
+                "(no active paired Android device in registry)"
+            )
     elif paired_count > 0:
         sync_state = "paired_awaiting_data"
         label = "Android companion paired — awaiting Health Connect data"
     else:
         sync_state = "not_configured"
         label = "Health Connect / Android sync not configured"
+
+    # Prefer companion heartbeat when it confirms a healthier state than raw counts alone.
+    companion_hc = (companion_for_patient.get("health_connect_status") or {})
+    companion_state = str(
+        companion_hc.get("status")
+        or companion_hc.get("state")
+        or companion_for_patient.get("status")
+        or ""
+    ).lower()
+    if companion_state in {"synced", "ok", "healthy", "active"} and observation_count > 0:
+        sync_state = "synced"
+        label = "Health Connect sync active"
 
     return {
         "sync_state": sync_state,
@@ -122,6 +141,7 @@ def _health_connect_sync_summary(
             "Host cannot read Health Connect directly. "
             "Android companion delivers observational data after permission grant."
         ),
+        "reason": label,
     }
 
 
@@ -284,14 +304,56 @@ def _merge_trend_planes(
     clinical_trends: dict[str, Any],
     monitoring_trends: dict[str, Any],
 ) -> dict[str, Any]:
-    """Merge clinical cached trends with HC observational trends without overwriting clinical."""
-    merged = dict(monitoring_trends or {})
-    for metric, row in (clinical_trends or {}).items():
-        entry = dict(row)
-        entry.setdefault("provenance", entry.get("provenance") or "clinical")
-        entry.setdefault("data_plane", entry.get("data_plane") or "clinical")
-        # Clinical/lab series always wins for the shared metric key.
-        merged[metric] = entry
+    """Merge clinical cached trends with HC observational trends without silently collapsing planes.
+
+    - Monitoring-only metrics keep Health Connect observational provenance.
+    - Clinical-only metrics keep clinical/lab provenance.
+    - When both planes contribute the same metric key, label the row as combined explicitly
+      (do not pretend the series is purely clinical/lab).
+    """
+    from backend.health_vault.metric_normalization import MONITORING_TREND_METRICS
+
+    merged: dict[str, Any] = {}
+    clinical = clinical_trends or {}
+    monitoring = monitoring_trends or {}
+    for metric in sorted(set(clinical) | set(monitoring)):
+        clin = dict(clinical[metric]) if metric in clinical else None
+        mon = dict(monitoring[metric]) if metric in monitoring else None
+        if clin is not None:
+            clin_prov = str(clin.get("provenance") or clin.get("data_plane") or "").strip().lower()
+            if not clin_prov or clin_prov in {"monitoring", "health_connect_observational"}:
+                # Legacy/unprovenanced cache rows for wearable metrics must not override HC.
+                if mon is not None and (
+                    metric in MONITORING_TREND_METRICS
+                    or clin_prov in {"monitoring", "health_connect_observational"}
+                ):
+                    clin = None
+                else:
+                    clin["provenance"] = clin.get("provenance") or "clinical"
+                    clin["data_plane"] = clin.get("data_plane") or "clinical"
+            else:
+                clin.setdefault("provenance", "clinical")
+                clin.setdefault("data_plane", clin.get("data_plane") or "clinical")
+        if clin is not None and mon is not None:
+            entry = dict(clin)
+            entry["provenance"] = "combined_clinical_and_health_connect"
+            entry["data_plane"] = "combined"
+            entry["plane_components"] = {
+                "clinical": {
+                    "latest": clin.get("latest"),
+                    "sample_count": clin.get("sample_count"),
+                },
+                "health_connect_observational": {
+                    "latest": mon.get("latest"),
+                    "sample_count": mon.get("sample_count"),
+                },
+            }
+            entry["label"] = clin.get("label") or mon.get("label") or entry.get("label")
+            merged[metric] = entry
+        elif clin is not None:
+            merged[metric] = clin
+        elif mon is not None:
+            merged[metric] = mon
     return merged
 
 
@@ -469,9 +531,14 @@ class DashboardService:
         # Sort based on priority value (smaller priority numbers go first)
         ordered_widgets.sort(key=lambda w: w.priority)
 
+        profile = self.store.get_profile(patient_id=patient_id) or {}
+        raw_display = str(profile.get("display_name") or "").strip()
+        display_name = raw_display if raw_display and raw_display != patient_id else None
+
         return DashboardSummary(
             patient_id=patient_id,
             overall_status=status,
             active_warnings_count=active_warnings,
-            widgets=ordered_widgets
+            widgets=ordered_widgets,
+            display_name=display_name,
         )

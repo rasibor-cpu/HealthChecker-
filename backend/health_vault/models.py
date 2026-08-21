@@ -422,14 +422,19 @@ class DashboardSummary:
     overall_status: str
     active_warnings_count: int
     widgets: list[DashboardWidget] = field(default_factory=list)
+    display_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "patient_id": self.patient_id,
             "overall_status": self.overall_status,
             "active_warnings_count": self.active_warnings_count,
             "widgets": [w.to_dict() for w in self.widgets],
         }
+        # Consumer presentation only — never invent a name; omit when unset.
+        if self.display_name:
+            payload["display_name"] = self.display_name
+        return payload
 
 
 from enum import Enum

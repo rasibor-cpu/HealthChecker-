@@ -136,12 +136,16 @@
     const target = clearContent("mobile_dashboard");
     const status = widget("status_summary").payload;
     const imported = widget("import_wizard").payload;
-    text(target, `Welcome ${session.name || session.userId}`);
+    text(target, session.name && session.name !== session.userId
+      ? `Welcome, ${session.name}`
+      : "My Health Dashboard");
     text(target, `Overall status: ${label(summary.overall_status)}`);
     text(target, `${Number(imported.records_count || 0)} records`);
     text(target, `${Number(status.measurements_count || 0)} measurements`);
     text(target, `${Number(summary.active_warnings_count || 0)} attention items`);
-    byId("mobile_identity").textContent = `Signed in as ${session.name || session.userId} (${session.userId})`;
+    byId("mobile_identity").textContent = session.name && session.name !== session.userId
+      ? `Signed in as ${session.name} (Patient ID: ${session.userId})`
+      : `Signed in as Patient ID ${session.userId}`;
     byId("mobile_theme").value = preferences.theme === "dark" ? "dark" : "light";
     byId("mobile_priority_metric").value = preferences.priority_metric || "";
   }

@@ -91,7 +91,10 @@
 
   function provenanceLabel(trend) {
     const provenance = (trend && trend.provenance) || (trend && trend.data_plane === "monitoring" ? "health_connect_observational" : "clinical");
-    if (provenance === "health_connect_observational") return "Health Connect (observational — not a lab result)";
+    if (provenance === "health_connect_observational") return "Health Connect observational";
+    if (provenance === "combined_clinical_and_health_connect" || (trend && trend.data_plane === "combined")) {
+      return "Combined clinical + Health Connect observational";
+    }
     if (provenance === "clinical") return "Clinical / lab evidence";
     return String(provenance);
   }
@@ -178,7 +181,14 @@
 
   async function loadSettings() {
     const identity = document.getElementById("consumer_settings_identity");
-    if (identity && dashboard()) identity.textContent = `Signed in as ${dashboard().patientId}.`;
+    if (identity && dashboard()) {
+      const dash = dashboard();
+      const name = (dash.summary && dash.summary.display_name) || dash.displayName;
+      // Patient ID remains visible in Settings for support/ops scoping.
+      identity.textContent = name && name !== dash.patientId
+        ? `Signed in as ${name} (Patient ID: ${dash.patientId}).`
+        : `Signed in as Patient ID ${dash.patientId}.`;
+    }
     const ops = document.getElementById("consumer_settings_ops");
     if (!ops || !authenticated()) return;
     try {

@@ -57,7 +57,9 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // HC321-UAT1: do not blanket FLAG_SECURE on ordinary consumer screens.
+        // Secure flag is applied only while login/password-change surfaces are visible.
+        applySecureWindow(false)
         setContentView(R.layout.activity_consumer_launcher)
         prefs = SecurePrefs(this)
         webView = findViewById(R.id.consumerWebView)
@@ -83,6 +85,8 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         super.onResume()
         if (::webView.isInitialized && connectionPanel.visibility == View.VISIBLE) {
             loadConsumer()
+        } else if (::webView.isInitialized) {
+            refreshSecureWindowFromDom()
         }
     }
 
@@ -150,6 +154,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (originPolicy?.isAllowed(url) == true) showWebView()
+                refreshSecureWindowFromDom()
             }
 
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
@@ -217,6 +222,23 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         connectionMessage.text = message
         webView.visibility = View.GONE
         connectionPanel.visibility = View.VISIBLE
+        applySecureWindow(false)
+    }
+
+    private fun refreshSecureWindowFromDom() {
+        if (!::webView.isInitialized) return
+        webView.evaluateJavascript(SecureWindowPolicy.SENSITIVE_SURFACE_JS) { raw ->
+            val secure = raw == "true"
+            runOnUiThread { applySecureWindow(secure) }
+        }
+    }
+
+    private fun applySecureWindow(secure: Boolean) {
+        if (secure) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     private fun openNativeSettings() {

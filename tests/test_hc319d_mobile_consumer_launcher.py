@@ -29,13 +29,19 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
     source = (ANDROID / "java/com/healthchecker/companion/ui/ConsumerLauncherActivity.kt").read_text(
         encoding="utf-8"
     )
+    policy = (ANDROID / "java/com/healthchecker/companion/ui/SecureWindowPolicy.kt").read_text(
+        encoding="utf-8"
+    )
     required = (
         "allowFileAccess = false", "allowContentAccess = false",
         "allowFileAccessFromFileURLs = false", "allowUniversalAccessFromFileURLs = false",
         "MIXED_CONTENT_NEVER_ALLOW", "LOAD_NO_CACHE", "setAcceptThirdPartyCookies(webView, false)",
         "handler?.cancel()", "FLAG_SECURE", "ConsumerOriginPolicy", "clearUserScopedState",
+        "SecureWindowPolicy", "applySecureWindow", "refreshSecureWindowFromDom",
     )
     assert all(term in source for term in required)
+    assert "window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in source.split("fun onCreate", 1)[1].split("setContentView", 1)[0]
+    assert "shouldSecureWindow" in policy
     assert "addJavascriptInterface" not in source
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source

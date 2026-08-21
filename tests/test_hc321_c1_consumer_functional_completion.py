@@ -171,9 +171,9 @@ def test_monitoring_observation_snapshot_preserves_provenance(store: VaultStore)
     assert sample_count == 3
 
 
-def test_merge_prefers_clinical_over_monitoring():
+def test_merge_prefers_explicit_clinical_and_labels_combined():
     merged = _merge_trend_planes(
-        {"heart_rate": {"metric": "heart_rate", "latest": 70, "sample_count": 3}},
+        {"heart_rate": {"metric": "heart_rate", "latest": 70, "sample_count": 3, "provenance": "clinical"}},
         {
             "heart_rate": {
                 "metric": "heart_rate",
@@ -188,9 +188,33 @@ def test_merge_prefers_clinical_over_monitoring():
             },
         },
     )
-    assert merged["heart_rate"]["latest"] == 70
-    assert merged["heart_rate"]["provenance"] == "clinical"
+    assert merged["heart_rate"]["provenance"] == "combined_clinical_and_health_connect"
+    assert merged["heart_rate"]["data_plane"] == "combined"
     assert merged["oxygen_saturation"]["provenance"] == "health_connect_observational"
+
+
+def test_merge_does_not_let_unprovenanced_cache_override_hc():
+    merged = _merge_trend_planes(
+        {"heart_rate": {"metric": "heart_rate", "latest": 70, "sample_count": 3}},
+        {
+            "heart_rate": {
+                "metric": "heart_rate",
+                "latest": 110,
+                "sample_count": 9,
+                "provenance": "health_connect_observational",
+                "data_plane": "monitoring",
+            },
+            "steps": {
+                "metric": "steps",
+                "latest": 4000,
+                "provenance": "health_connect_observational",
+                "data_plane": "monitoring",
+            },
+        },
+    )
+    assert merged["heart_rate"]["provenance"] == "health_connect_observational"
+    assert merged["heart_rate"]["latest"] == 110
+    assert merged["steps"]["provenance"] == "health_connect_observational"
 
 
 def test_dashboard_includes_monitoring_trends_alongside_attention(store: VaultStore):
