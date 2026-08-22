@@ -154,6 +154,97 @@ def snapshot_metric_id(metric: str | None) -> str:
     return SNAPSHOT_METRIC_DEDUPE.get(canonical, canonical)
 
 
+def metric_filter_aliases(
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+) -> set[str]:
+    """Expand a Snapshot/consumer metric filter into canonical + alias tokens."""
+    raw: list[str] = []
+    if metric:
+        raw.append(str(metric))
+    if isinstance(metrics, str):
+        raw.append(metrics)
+    elif metrics:
+        raw.extend(str(item) for item in metrics)
+    want: set[str] = set()
+    for item in raw:
+        for part in str(item or "").split(","):
+            token = part.strip().lower()
+            if not token:
+                continue
+            canon = canonicalize_metric(token)
+            snap = snapshot_metric_id(token)
+            want.update({token, canon, snap, token.replace(" ", "_"), token.replace("_", " ")})
+            if snap == "activity_minutes" or canon in {"activity_minutes", "exercise_minutes"}:
+                want.update({"activity_minutes", "exercise_minutes"})
+            if snap == "blood_pressure" or canon in {"systolic_bp", "diastolic_bp"}:
+                want.update({"blood_pressure", "systolic_bp", "diastolic_bp", "systolic", "diastolic"})
+            if canon == "heart_rate":
+                want.update({"heart_rate", "pulse", "hr"})
+    return {item for item in want if item}
+
+
+def _normalize_identity_timestamp(value: Any) -> str:
+    measured = parse_iso(value)
+    if measured is None:
+        text = str(value or "").strip()
+        return text[:19] if text else ""
+    return measured.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def fallback_observation_identity(row: dict[str, Any] | None) -> str:
+    """Conservative display identity when fingerprint / observation_id are absent."""
+    row = row or {}
+    metric = observation_metric(row)
+    num = as_number(row.get("value"))
+    value_key = str(num if num is not None else (row.get("value") if row.get("value") is not None else ""))
+    units = str(row.get("units") or row.get("unit") or "").strip().lower()
+    ts = _normalize_identity_timestamp(row.get("measured_at"))
+    return f"fallback:{metric}|{value_key}|{ts}|{units}"
+
+
+def observation_display_identity(row: dict[str, Any] | None) -> str:
+    """Canonical observation identity for Snapshot history display dedupe.
+
+    Prefers stored fingerprint, then observation_id. Falls back to a conservative
+    metric|value|timestamp|units fingerprint only when stronger identifiers are
+    missing. Never mutates stored clinical observations.
+    """
+    row = row or {}
+    fingerprint = str(row.get("fingerprint") or "").strip()
+    if fingerprint:
+        return f"fp:{fingerprint}"
+    observation_id = str(row.get("observation_id") or row.get("id") or "").strip()
+    if observation_id:
+        return f"id:{observation_id}"
+    return fallback_observation_identity(row)
+
+
+def dedupe_observation_history(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Collapse duplicate display rows without deleting stored observations."""
+    seen_fp: set[str] = set()
+    seen_id: set[str] = set()
+    seen_fallback: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for row in rows or []:
+        fingerprint = str(row.get("fingerprint") or "").strip()
+        observation_id = str(row.get("observation_id") or row.get("id") or "").strip()
+        fallback = fallback_observation_identity(row)
+        if fingerprint and fingerprint in seen_fp:
+            continue
+        if observation_id and observation_id in seen_id:
+            continue
+        if fallback in seen_fallback:
+            continue
+        if fingerprint:
+            seen_fp.add(fingerprint)
+        if observation_id:
+            seen_id.add(observation_id)
+        seen_fallback.add(fallback)
+        unique.append(row)
+    return unique
+
+
 def observation_context(row: dict[str, Any]) -> str:
     parts = [
         str(row.get("context") or ""),
@@ -629,6 +720,9 @@ def _row_from_measurement(m: dict[str, Any], docs_by_id: dict[str, dict[str, Any
         "document_id": m.get("document_id"),
         "confidence": m.get("confidence"),
         "invalid": m.get("invalid"),
+        "fingerprint": m.get("fingerprint"),
+        "observation_id": m.get("observation_id") or m.get("id"),
+        "source_record_id": m.get("source_record_id"),
     }
 
 
@@ -816,6 +910,9 @@ class HealthSnapshotEngine:
                     "provenance": r.get("provenance"),
                     "source": r.get("source"),
                     "source_metric": mid,
+                    "fingerprint": r.get("fingerprint"),
+                    "observation_id": r.get("observation_id") or r.get("id"),
+                    "source_record_id": r.get("source_record_id"),
                     "historical_status": hist_status["status"],
                     "historical_status_text": hist_status["status_text"],
                     "historical_status_color": hist_status["status_color"],
@@ -824,6 +921,7 @@ class HealthSnapshotEngine:
                 }
             )
         history_rows.sort(key=lambda item: item["_ts"], reverse=True)
+        history_rows = dedupe_observation_history(history_rows)
         trimmed = history_rows[: max(1, int(history_limit or 40))]
         nums = [item["_num"] for item in trimmed if item.get("_num") is not None]
         stats = None

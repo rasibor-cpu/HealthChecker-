@@ -28,9 +28,12 @@ from backend.health_vault.health_snapshot import (
     apply_layout,
     compute_freshness,
     consumer_status_from_flag,
+    dedupe_observation_history,
     evaluate_consumer_status,
+    fallback_observation_identity,
     is_valid_observation,
     load_health_snapshot_config,
+    observation_display_identity,
     select_latest_valid,
     status_color,
     trend_from_values,
@@ -656,7 +659,7 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
     assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12c"' in sw
+    assert 'CACHE_REVISION = "hc321uat12e"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -958,4 +961,247 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12c"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12e"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+
+
+def _assert_json_not_html(response):
+    ctype = str(response.headers.get("content-type") or "").lower()
+    assert "json" in ctype
+    assert "html" not in ctype
+    text = response.text.lstrip()
+    assert text
+    assert not text.startswith("<")
+    assert "<html" not in text[:240].lower()
+    return response.json()
+
+
+def _uat12e_login(client, password="Boot-Pass-UAT12Exx"):
+    login = client.post("/api/auth/login", json={"user_id": "00000", "password": password})
+    assert login.status_code == 200, login.text
+    token = login.json()["token"]
+    if login.json().get("must_change_password"):
+        changed = client.post(
+            "/api/auth/password/change",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"current_password": password, "new_password": "Owner-UAT12E-Password1"},
+        )
+        assert changed.status_code == 200, changed.text
+        token = changed.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_uat12e_history_dedupes_duplicate_hr_samples_without_deleting_store():
+    t_76 = "2026-08-21T14:50:45Z"
+    t_65 = "2026-08-21T14:40:45Z"
+    t_72 = "2026-08-21T14:30:45Z"
+    observations = [
+        _obs("heart_rate", 76, t_76, units="bpm", source="health_connect"),
+        _obs("heart_rate", 76, "2026-08-21T14:50:45.000Z", units="bpm", source="health_connect_companion"),
+        _obs("heart_rate", 65, t_65, units="bpm", fingerprint="same-fp-65"),
+        _obs("heart_rate", 65, t_65, units="bpm", fingerprint="same-fp-65"),
+        _obs("heart_rate", 72, t_72, units="bpm", observation_id="distinct-72"),
+        _obs("heart_rate", 74, "2026-08-21T14:20:45Z", units="bpm", observation_id="distinct-74"),
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        for i, row in enumerate(observations):
+            store.upsert_observation(
+                {
+                    "patient_id": "default-patient",
+                    "metric_type": row["metric"],
+                    "value": row["value"],
+                    "unit": row.get("units"),
+                    "measured_at": row["measured_at"],
+                    "source": row.get("source") or "fixture",
+                    "fingerprint": f"stored-{i}",
+                    "observation_id": f"stored-obs-{i}",
+                }
+            )
+        before = len(store.list_observations() or [])
+        assert before == 6
+        assert observation_display_identity(observations[2]).startswith("fp:")
+        assert fallback_observation_identity(observations[0]).startswith("fallback:")
+        assert len(dedupe_observation_history(observations)) == 4
+        detail = HealthSnapshotEngine(store).metric_detail(
+            "heart_rate", observations=observations, as_of=AS_OF
+        )
+        values = [row["value"] for row in detail["history"]]
+        assert values.count(76) == 1
+        assert values.count(65) == 1
+        assert 72 in values
+        assert 74 in values
+        assert detail["stats"]["sample_count"] == 4
+        assert detail["stats"]["maximum"] == 76
+        assert detail["stats"]["minimum"] == 65
+        assert len(store.list_observations() or []) == before
+
+
+def test_uat12e_js_history_dedupes_duplicate_hr_samples():
+    out = _node_snapshot_eval(
+        """
+const rows = [
+  {metric:'heart_rate', value:76, units:'bpm', measured_at:'2026-08-21T14:50:45Z'},
+  {metric:'heart_rate', value:76, units:'bpm', measured_at:'2026-08-21T14:50:45.000Z'},
+  {metric:'heart_rate', value:65, units:'bpm', measured_at:'2026-08-21T14:40:45Z', fingerprint:'same-fp-65'},
+  {metric:'heart_rate', value:65, units:'bpm', measured_at:'2026-08-21T14:40:45Z', fingerprint:'same-fp-65'},
+  {metric:'heart_rate', value:72, units:'bpm', measured_at:'2026-08-21T14:30:45Z', observation_id:'distinct-72'},
+  {metric:'heart_rate', value:74, units:'bpm', measured_at:'2026-08-21T14:20:45Z', observation_id:'distinct-74'},
+];
+const summary = HS.summarizeHistory(rows, 'heart_rate');
+console.log(JSON.stringify({
+  values: summary.history.map(r => r.value),
+  samples: summary.stats.sample_count,
+  min: summary.stats.minimum,
+  max: summary.stats.maximum,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["values"].count(76) == 1
+    assert payload["values"].count(65) == 1
+    assert 72 in payload["values"]
+    assert 74 in payload["values"]
+    assert payload["samples"] == 4
+    assert payload["min"] == 65
+    assert payload["max"] == 76
+
+
+def test_uat12e_filtered_surfaces_authenticated_json_never_html():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from backend.health_vault.api import create_health_vault_app
+
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        app = create_health_vault_app(
+            store=store,
+            production=True,
+            bootstrap_password="Boot-Pass-UAT12Exx",
+        )
+        client = TestClient(app)
+        html_root = client.get("/")
+        assert html_root.status_code == 200
+        assert "html" in str(html_root.headers.get("content-type") or "").lower()
+
+        for path in (
+            "/api/health-vault/timeline?unified=true&metric=heart_rate",
+            "/api/records?metric=heart_rate",
+            "/api/health-vault/trends?metric=heart_rate",
+        ):
+            unauth = client.get(path)
+            assert unauth.status_code in (401, 403)
+            _assert_json_not_html(unauth)
+
+        headers = _uat12e_login(client)
+        hr_doc = MedicalDocument(
+            id="doc-hr",
+            patient_id="00000",
+            document_type="continuous_monitoring_observation",
+            source_system="health_connect_companion",
+            original_filename="heart-rate.json",
+            measured_at="2026-08-21T14:50:45Z",
+            primary_category="other",
+            sha256="a" * 64,
+        )
+        steps_doc = MedicalDocument(
+            id="doc-steps",
+            patient_id="00000",
+            document_type="continuous_monitoring_observation",
+            source_system="health_connect_companion",
+            original_filename="steps.json",
+            measured_at="2026-08-21T14:40:45Z",
+            primary_category="other",
+            sha256="b" * 64,
+        )
+        store.store(
+            document=hr_doc,
+            measurements=[
+                Measurement(
+                    metric="heart_rate",
+                    value=76,
+                    units="bpm",
+                    measured_at="2026-08-21T14:50:45Z",
+                )
+            ],
+            content=b"hr",
+        )
+        store.store(
+            document=steps_doc,
+            measurements=[
+                Measurement(
+                    metric="steps",
+                    value=5400,
+                    units="count",
+                    measured_at="2026-08-21T14:40:45Z",
+                )
+            ],
+            content=b"steps",
+        )
+        for i, (metric, value) in enumerate(
+            (("heart_rate", 70), ("heart_rate", 72), ("heart_rate", 76), ("steps", 1000), ("steps", 2000), ("steps", 5400))
+        ):
+            store.upsert_observation(
+                {
+                    "patient_id": "00000",
+                    "metric_type": metric,
+                    "value": value,
+                    "unit": "bpm" if metric == "heart_rate" else "count",
+                    "measured_at": f"2026-08-21T14:{30 + i:02d}:45Z",
+                    "source": "health_connect_companion",
+                    "connector_id": "health_connect",
+                    "fingerprint": f"uat12e-{metric}-{i}",
+                    "observation_id": f"uat12e-obs-{metric}-{i}",
+                }
+            )
+
+        timeline = client.get(
+            "/api/health-vault/timeline?unified=true&metric=heart_rate",
+            headers=headers,
+        )
+        timeline_body = _assert_json_not_html(timeline)
+        assert timeline.status_code == 200
+        assert isinstance(timeline_body.get("entries"), list)
+        assert timeline_body.get("filter_metric") == "heart_rate"
+        blob = __import__("json").dumps(timeline_body).lower()
+        assert "heart_rate" in blob
+        assert all(
+            "steps" not in __import__("json").dumps(entry).lower()
+            or "heart_rate" in __import__("json").dumps(entry).lower()
+            for entry in timeline_body["entries"]
+        )
+
+        records = client.get("/api/records?metric=heart_rate", headers=headers)
+        records_body = _assert_json_not_html(records)
+        assert records.status_code == 200
+        names = [row.get("original_filename") for row in records_body["records"]]
+        assert "heart-rate.json" in names
+        assert "steps.json" not in names
+
+        trends = client.get("/api/health-vault/trends?metric=heart_rate", headers=headers)
+        trends_body = _assert_json_not_html(trends)
+        assert trends.status_code == 200
+        assert set(trends_body.get("trends") or {}) == {"heart_rate"}
+        assert "steps" not in (trends_body.get("trends") or {})
+
+        asset = client.get("/js/health_vault/trends.js")
+        assert asset.status_code == 200
+        asset_ct = str(asset.headers.get("content-type") or "").lower()
+        assert "javascript" in asset_ct or "ecmascript" in asset_ct or asset_ct.startswith("text/plain")
+        assert "html" not in asset_ct
+        assert not asset.text.lstrip().startswith("<")
+        assert "HCConsumerTrends" in asset.text
+        assert "/api/health-vault/trends" in asset.text
+
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+        records_js = (ROOT / "js" / "health_vault" / "records.js").read_text(encoding="utf-8")
+        sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
+        assert "js/health_vault/trends.js" in html
+        assert "Accept: \"application/json\"" in surfaces or "Accept: 'application/json'" in surfaces or 'Accept: "application/json"' in surfaces
+        assert "parseJsonResponse" in surfaces
+        assert "setMetricFilter" in records_js
+        assert "HCRecordsUI.setMetricFilter" in surfaces
+        assert "./js/health_vault/trends.js" in sw
+        assert "isNavigationRequest(req)" in sw
+        assert "network_failed" in sw
