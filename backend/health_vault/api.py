@@ -478,8 +478,13 @@ def create_health_vault_app(
         request: Request,
         patient_id: str = "default-patient",
         as_of: str | None = None,
+        metric: str | None = None,
     ) -> dict[str, Any]:
-        """HC-321 read-only consumer Health Snapshot (observational only)."""
+        """HC-321 read-only consumer Health Snapshot (observational only).
+
+        Optional ``metric`` returns a drill-down payload for one Snapshot card
+        (history + stats) without fabricating missing measurements.
+        """
         from backend.health_vault.health_snapshot import HealthSnapshotEngine
 
         engine = HealthSnapshotEngine(vault)
@@ -493,6 +498,14 @@ def create_health_vault_app(
         except Exception:
             if production_mode:
                 scoped_patient = _request_patient(request)
+        if metric:
+            return _sanitize_value(
+                engine.metric_detail(
+                    metric,
+                    patient_id=scoped_patient,
+                    as_of=as_of,
+                )
+            )
         return _sanitize_value(
             engine.generate(
                 patient_id=scoped_patient,

@@ -8,6 +8,8 @@
   let batchQueue = [];
   let lastBatchReport = null;
   let activeCategoryFilter = "all";
+  let activeMetricFilter = null;
+  let activeMetricAliases = [];
   let timelineNewestFirst = true;
 
   /** Legacy single-file path — still supported (uses confirmation). */
@@ -419,6 +421,15 @@
             (d.secondary_categories || []).indexOf(activeCategoryFilter) >= 0
         );
       }
+      if (activeMetricFilter && activeMetricAliases.length) {
+        docs = docs.filter((d) => {
+          const meas = global.HCHealthVault.listMeasurements({ document_id: d.id }) || [];
+          return meas.some((m) => {
+            const key = String(m.metric || "").toLowerCase();
+            return activeMetricAliases.indexOf(key) >= 0;
+          });
+        });
+      }
       docsEl.innerHTML = docs.length
         ? docs
             .map((d) => {
@@ -490,19 +501,33 @@
     refreshVaultViews();
   }
 
+  function setMetricFilter(metric, aliases, category) {
+    activeMetricFilter = metric || null;
+    activeMetricAliases = (aliases || []).map(function (a) {
+      return String(a || "").toLowerCase();
+    });
+    if (metric && activeMetricAliases.indexOf(String(metric).toLowerCase()) < 0) {
+      activeMetricAliases.push(String(metric).toLowerCase());
+    }
+    if (category) activeCategoryFilter = category;
+    refreshVaultViews();
+  }
+
   function openMetricDetail(category, metric) {
     const recordsTab = document.querySelector('.tab[data="health_records_screen"]');
     const vaultTab = document.querySelector('.tab[data="vault"]');
     if (recordsTab) recordsTab.click();
     else if (vaultTab) vaultTab.click();
-    if (category) setCategoryFilter(category);
+    if (metric) setMetricFilter(metric, [metric], category || null);
+    else if (category) setCategoryFilter(category);
     const trends = document.getElementById("vault_trends") || document.getElementById("consumer_trends_screen");
     const timeline = document.getElementById("vault_timeline") || document.getElementById("consumer_timeline_screen");
     if (metric && trends) {
+      const want = String(metric).toLowerCase();
       const nodes = trends.querySelectorAll(".kpi");
       nodes.forEach((el) => {
         const text = (el.textContent || "").toLowerCase();
-        if (text.indexOf(String(metric).toLowerCase()) >= 0) {
+        if (text.indexOf(want.replace(/_/g, " ")) >= 0 || text.indexOf(want) >= 0) {
           el.setAttribute("data-snapshot-focus", "true");
           if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -538,6 +563,7 @@
     enqueueFiles,
     setTimelineSort,
     setCategoryFilter,
+    setMetricFilter,
     openMetricDetail,
     showRecentlyImported,
     getBatchQueue: () => batchQueue.slice(),

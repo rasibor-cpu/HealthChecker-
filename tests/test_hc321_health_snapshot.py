@@ -122,7 +122,9 @@ def test_freshness_current_aging_stale_missing():
         stale_multiplier=3,
     )
     assert aging["freshness_status"] == "aging"
-    assert aging["currentness"] == "current"
+    # Beyond the configured current-data window: not a CURRENT clinical picture.
+    assert aging["currentness"] == "stale"
+    assert "not current" in aging["label"]
 
     stale = compute_freshness(
         metric="glucose",
@@ -478,11 +480,17 @@ def test_light_and_dark_status_tokens_are_distinct():
 def test_card_navigation_reuses_vault_detail():
     snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
     ui = (ROOT / "js" / "health_vault" / "ui.js").read_text(encoding="utf-8")
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert "HCVaultUI.openMetricDetail" in snap
+    assert "function openMetricDetail" in snap
+    assert "closeDrillDown" in snap
+    assert "hc-drill-back" in snap
+    assert "data-open-filtered" in snap
     assert "data-category=" in snap
     assert "data-detail-metric=" in snap
     assert "function openMetricDetail" in ui
+    assert "setMetricFilter" in ui
+    assert "openFiltered" in surfaces
     assert ('.tab[data="vault"]' in ui) or ("health_records_screen" in ui) or ("health_records_screen" in snap)
     assert "setCategoryFilter" in ui
     assert ('id="vault_trends"' in html) or ('id="consumer_trends_screen"' in html)
@@ -646,9 +654,9 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert 'id="hc_health_snapshot"' in consumer.split('id="dashboard_widgets_target"', 1)[0]
     assert html.index('id="hc_health_snapshot"') < html.index('id="dashboard_widgets_target"')
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
-    assert "health_snapshot.js?v=hc321uat10" in html
+    assert "health_snapshot.js?v=hc321uat11" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat10"' in sw
+    assert 'CACHE_REVISION = "hc321uat11"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -805,3 +813,95 @@ console.log(JSON.stringify({{
     payload = __import__("json").loads(out)
     assert payload["has_section"] is True
     assert payload["rendered_cards"] == 2
+
+
+def test_uat11_activity_exercise_minutes_deduped():
+    observations = [
+        _obs("activity_minutes", 34, AS_OF - timedelta(hours=2), units="min"),
+        _obs("exercise_minutes", 34, AS_OF - timedelta(hours=2), units="min"),
+    ]
+    snap = HealthSnapshotEngine().generate(observations=observations, as_of=AS_OF)
+    ids = [c["metric_id"] for c in snap["cards"]]
+    assert ids.count("activity_minutes") == 1
+    assert "exercise_minutes" not in ids
+    card = next(c for c in snap["cards"] if c["metric_id"] == "activity_minutes")
+    assert card["title"] == "Activity"
+
+
+def test_uat11_stale_sleep_unknown_fresh_abnormal_attention():
+    stale = HealthSnapshotEngine().generate(
+        observations=[_obs("sleep_duration", 1.2, AS_OF - timedelta(days=3), units="h")],
+        as_of=AS_OF,
+    )
+    stale_card = stale["cards"][0]
+    assert stale_card["currentness"] == "stale"
+    assert stale_card["status"] == STATUS_UNKNOWN
+    assert stale_card["status_color"] == COLOR_GREY
+    assert "not current" in stale_card["freshness_label"]
+    assert stale_card["historical_status"] == STATUS_ATTENTION
+    assert stale_card["historical_status_color"] == COLOR_RED
+
+    fresh = HealthSnapshotEngine().generate(
+        observations=[_obs("sleep_duration", 1.2, AS_OF - timedelta(hours=8), units="h")],
+        as_of=AS_OF,
+    )
+    fresh_card = fresh["cards"][0]
+    assert fresh_card["currentness"] == "current"
+    assert fresh_card["status"] == STATUS_ATTENTION
+    assert fresh_card["status_color"] == COLOR_RED
+
+
+def test_uat11_metric_detail_history_and_filter_identity():
+    observations = [
+        _obs("heart_rate", 80, AS_OF - timedelta(hours=2), units="bpm"),
+        _obs("heart_rate", 72, AS_OF - timedelta(minutes=20), units="bpm"),
+        _obs("heart_rate", 76, AS_OF - timedelta(minutes=5), units="bpm"),
+        _obs("steps", 1000, AS_OF - timedelta(hours=1)),
+    ]
+    detail = HealthSnapshotEngine().metric_detail(
+        "heart_rate", observations=observations, as_of=AS_OF
+    )
+    assert detail["found"] is True
+    assert detail["card"]["metric_id"] == "heart_rate"
+    assert len(detail["history"]) >= 3
+    assert detail["history"][0]["value"] == 76  # newest first
+    assert detail["stats"]["sample_count"] >= 3
+    assert "heart_rate" in detail["filter_metrics"]
+
+
+def test_uat11_compact_mobile_css_and_status_text():
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert "@media (max-width:719px)" in html
+    assert ".hc-metric-card{padding:8px 10px" in html.replace(" ", "") or "padding:8px 10px" in html
+    assert "hc-metric-status" in html
+    dash = (ROOT / "js" / "health_vault" / "dashboard.js").read_text(encoding="utf-8")
+    assert "Data freshness" in dash
+    assert "Health Connect connection" in dash
+    assert "SYNCED" not in dash or "Data freshness" in dash
+    snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
+    assert "hc-drill-back" in snap
+    assert "metric=" in snap
+    assert "closeDrillDown" in snap
+
+
+def test_uat11_js_aging_is_not_current_and_dedupe_layout():
+    out = _node_snapshot_eval(
+        """
+const aging = HS.computeFreshness('sleep_duration', '2020-01-01T00:00:00Z', Date.parse('2020-01-04T00:00:00Z'));
+const cards = HS.applyLayout([
+  {metric_id:'exercise_minutes', title:'Exercise Minutes', display_value:'34'},
+  {metric_id:'activity_minutes', title:'Activity', display_value:'34'},
+], {order:['activity_minutes','exercise_minutes'], hidden:[]}, HS.DEFAULT_ORDER);
+console.log(JSON.stringify({
+  aging_currentness: aging.currentness,
+  aging_label: aging.label,
+  ids: cards.map(c => c.metric_id),
+  title: cards[0] && cards[0].title,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["aging_currentness"] == "stale"
+    assert "not current" in payload["aging_label"]
+    assert payload["ids"] == ["activity_minutes"]
+    assert payload["title"] == "Activity"

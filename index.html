@@ -134,6 +134,31 @@ textarea{
 .hc-metric-status{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:800;letter-spacing:.02em}
 .hc-status-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
 .hc-metric-freshness,.hc-metric-trend,.hc-metric-source{font-size:12px;margin-top:4px;color:var(--muted)}
+/* HC321-UAT11: compact mobile Snapshot density (~30–40% less vertical space). */
+@media (max-width:719px){
+  .hc-health-snapshot{margin-bottom:8px}
+  .hc-metric-grid{gap:6px}
+  .hc-metric-card{padding:8px 10px;border-radius:12px;min-height:44px}
+  .hc-metric-name{font-size:13px;margin-bottom:2px;line-height:1.25}
+  .hc-metric-value{font-size:20px;line-height:1.15}
+  .hc-metric-unit{font-size:12px}
+  .hc-metric-status{margin-top:4px;gap:6px;font-size:13px}
+  .hc-status-dot{width:8px;height:8px}
+  .hc-metric-freshness,.hc-metric-trend{font-size:11px;margin-top:2px;line-height:1.25}
+  .hc-metric-source{font-size:10px;margin-top:1px;line-height:1.2}
+  .hc-snapshot-header .small{margin-top:2px;margin-bottom:6px}
+  .hc-snapshot-customize{margin-top:6px}
+}
+.hc-snapshot-drilldown .hc-drill-back{width:auto;min-height:44px;margin:0 0 10px 0}
+.hc-drill-hero{cursor:default;pointer-events:none}
+.hc-drill-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.hc-drill-stats div{border:1px solid var(--line);border-radius:10px;padding:8px}
+.hc-drill-stats strong{display:block;font-size:16px}
+.hc-drill-history{list-style:none;padding:0;margin:8px 0}
+.hc-drill-history li{padding:8px 0;border-bottom:1px solid var(--line)}
+.hc-drill-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.hc-drill-actions button{width:auto;min-height:44px;margin:0}
+.hc-metric-chart{margin:8px 0;color:var(--accent)}
 .hc-status-green{border-color:var(--status-green);background:var(--status-green-bg)}
 .hc-status-green .hc-metric-status{color:var(--status-green)}
 .hc-status-green .hc-status-dot{background:var(--status-green)}
@@ -652,7 +677,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat10"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat11"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>

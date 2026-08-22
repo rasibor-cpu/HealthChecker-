@@ -99,16 +99,30 @@
     return String(provenance);
   }
 
+  let metricFilter = null;
+
   async function loadTrends(options) {
     const force = !!(options && options.force);
+    const filterMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || null;
+    const filterMetrics = ((options && options.metrics) || (metricFilter && metricFilter.metrics) || [])
+      .map(value => String(value || "").toLowerCase());
     const view = begin("consumer_trends_screen");
     try {
       const trendsPayload = widget(await summary(force), "trends_widget").payload || {};
       const trends = trendsPayload.trends || {};
       const exclusions = trendsPayload.exclusions || [];
-      const entries = Object.entries(trends);
+      let entries = Object.entries(trends);
+      if (filterMetric || filterMetrics.length) {
+        const want = new Set(filterMetrics.concat(filterMetric ? [String(filterMetric).toLowerCase()] : []));
+        entries = entries.filter(([metric]) => {
+          const key = String(metric || "").toLowerCase();
+          return want.has(key) || want.has(key.replace(/_/g, ""));
+        });
+      }
       if (!entries.length && !exclusions.length) {
-        empty(view.content, "No trends are available yet. Add records with repeated measurements or sync Health Connect observations to build longitudinal trends.");
+        empty(view.content, filterMetric
+          ? `No trends are available yet for ${String(filterMetric).replace(/_/g, " ")}.`
+          : "No trends are available yet. Add records with repeated measurements or sync Health Connect observations to build longitudinal trends.");
       }
       entries.forEach(([metric, trend]) => card(view.content, metric.replace(/_/g, " "), [
         `Direction: ${trend.label || trend.direction || "Not enough data"}`,
@@ -116,10 +130,12 @@
         `Samples: ${trend.sample_count == null ? "Not available" : trend.sample_count}`,
         `Source: ${provenanceLabel(trend)}`,
       ]));
-      exclusions.forEach(item => card(view.content, `${String(item.metric || "metric").replace(/_/g, " ")} (excluded)`, [
-        item.message || "Intentionally excluded from classical Trends.",
-        `Reason: ${item.reason || "excluded"}`,
-      ]));
+      if (!filterMetric) {
+        exclusions.forEach(item => card(view.content, `${String(item.metric || "metric").replace(/_/g, " ")} (excluded)`, [
+          item.message || "Intentionally excluded from classical Trends.",
+          `Reason: ${item.reason || "excluded"}`,
+        ]));
+      }
       finish(view);
     } catch (error) { finish(view, error.message); }
   }
@@ -138,12 +154,30 @@
     } catch (error) { finish(view, error.message); }
   }
 
-  async function loadTimeline() {
+  async function loadTimeline(options) {
+    const filterMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || null;
+    const filterMetrics = ((options && options.metrics) || (metricFilter && metricFilter.metrics) || [])
+      .map(value => String(value || "").toLowerCase());
+    const want = new Set(filterMetrics.concat(filterMetric ? [String(filterMetric).toLowerCase()] : []));
     const view = begin("consumer_timeline_screen");
     try {
       const body = await request("/api/health-vault/timeline?unified=true");
-      const events = Array.isArray(body.entries) ? body.entries : [];
-      if (!events.length) empty(view.content, "Your timeline is empty. Imported records and measurements will appear here.");
+      let events = Array.isArray(body.entries) ? body.entries : [];
+      if (want.size) {
+        events = events.filter(event => {
+          const blob = JSON.stringify(event || {}).toLowerCase();
+          for (const key of want) {
+            if (!key) continue;
+            if (blob.indexOf(key) >= 0 || blob.indexOf(key.replace(/_/g, " ")) >= 0) return true;
+          }
+          return false;
+        });
+      }
+      if (!events.length) {
+        empty(view.content, filterMetric
+          ? `No timeline events matched ${String(filterMetric).replace(/_/g, " ")}.`
+          : "Your timeline is empty. Imported records and measurements will appear here.");
+      }
       events.forEach(event => card(view.content, event.date ? String(event.date).slice(0, 10) : "Timeline event", [
         event.summary || event.trend_impact || event.event_type,
         `Category: ${event.primary_category || event.category || "Not available"}`,
@@ -151,6 +185,29 @@
       ]));
       finish(view);
     } catch (error) { finish(view, error.message); }
+  }
+
+  function openFiltered(surface, options) {
+    metricFilter = {
+      metric: options && options.metric ? String(options.metric) : null,
+      metrics: (options && options.metrics) || [],
+      category: options && options.category ? options.category : null,
+    };
+    const map = {
+      records: "health_records_screen",
+      health_records: "health_records_screen",
+      vault: "health_records_screen",
+      timeline: "consumer_timeline_screen",
+      trends: "consumer_trends_screen",
+    };
+    const screenId = map[surface] || surface;
+    if (screenId === "health_records_screen" && global.HCVaultUI && HCVaultUI.setMetricFilter) {
+      HCVaultUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+    }
+    const tab = document.querySelector('.tab[data="' + screenId + '"]');
+    if (tab) tab.click();
+    if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
+    if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
   }
 
   function reportRows(value, prefix, rows, depth) {
@@ -280,5 +337,5 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
   else bind();
-  global.HCConsumerSurfaces = { loadTrends, loadObservations, loadTimeline, loadReport };
+  global.HCConsumerSurfaces = { loadTrends, loadObservations, loadTimeline, loadReport, openFiltered };
 })(typeof window !== "undefined" ? window : globalThis);

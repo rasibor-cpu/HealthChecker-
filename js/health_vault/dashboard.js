@@ -534,17 +534,46 @@
           syncState = "observations_present";
         }
         if (!syncState) syncState = "not_configured";
-        const syncClass = syncState === "synced" || syncState === "observations_present" ? "ok" : "muted";
-        const inferredLabel = syncState === "observations_present"
-          ? "Health Connect observations present"
-          : (syncState === "synced" ? "Health Connect sync active" : "Health Connect / Android sync not configured");
+        const connectionLabel =
+          syncState === "synced" || syncState === "observations_present"
+            ? "Connected"
+            : syncState === "paired"
+              ? "Paired"
+              : syncState === "not_configured"
+                ? "Not configured"
+                : String(syncState).replace(/_/g, " ");
+        const connectionClass =
+          syncState === "synced" || syncState === "observations_present" || syncState === "paired" ? "ok" : "muted";
+        // Data freshness is separate from technical sync/pairing (HC321-UAT11).
+        let dataFreshness = "Unknown";
+        let dataFreshnessClass = "muted";
+        const lastObs = sync.last_observation_at || null;
+        if (lastObs) {
+          const ageMs = Date.now() - Date.parse(lastObs);
+          if (Number.isFinite(ageMs)) {
+            const ageHours = ageMs / 3600000;
+            if (ageHours <= 36) {
+              dataFreshness = "Current";
+              dataFreshnessClass = "ok";
+            } else if (ageHours <= 72) {
+              dataFreshness = "Aging";
+              dataFreshnessClass = "warn";
+            } else {
+              dataFreshness = "Stale";
+              dataFreshnessClass = "bad";
+            }
+          }
+        } else if (hcCount > 0) {
+          dataFreshness = "Aging";
+          dataFreshnessClass = "warn";
+        }
         const syncDetails = [
-          sync.label || sync.reason || inferredLabel,
+          sync.label || sync.reason || null,
           sync.paired_device_count != null ? `Paired devices: ${sync.paired_device_count}` : null,
           (sync.observation_count != null ? sync.observation_count : hcCount) != null
             ? `HC observations: ${sync.observation_count != null ? sync.observation_count : hcCount}`
             : null,
-          sync.last_observation_at ? `Last observation: ${String(sync.last_observation_at).slice(0, 19)}` : null,
+          lastObs ? `Last observation: ${String(lastObs).slice(0, 19)}` : null,
           sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null,
         ].filter(Boolean).map(line => `<div class="small muted">${this.escape(String(line))}</div>`).join("");
         return `
@@ -562,8 +591,9 @@
               <strong>Total Measurements:</strong> ${payload.measurements_count}
             </div>
             <div class="kpi" style="flex: 1; min-width: 160px;">
-              <strong>Health Connect / Android Sync:</strong>
-              <span class="${syncClass}" style="font-weight: bold;">${this.escape(String(syncState).replace(/_/g, " ").toUpperCase())}</span>
+              <strong>Health Connect connection:</strong>
+              <span class="${connectionClass}" style="font-weight: bold;">${this.escape(connectionLabel)}</span>
+              <div class="small"><strong>Data freshness:</strong> <span class="${dataFreshnessClass}">${this.escape(dataFreshness)}</span></div>
               ${syncDetails}
             </div>
             ${hcCount ? `<div class="kpi" style="flex: 1; min-width: 120px;"><strong>Health Connect Observations:</strong> ${hcCount}</div>` : ""}

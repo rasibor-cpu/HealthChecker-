@@ -87,6 +87,12 @@ DISCLAIMER = (
     "replace professional medical assessment."
 )
 
+# Snapshot consumer cards: map semantic duplicates onto one preferred metric_id.
+# Underlying observations remain stored under their original canonical names.
+SNAPSHOT_METRIC_DEDUPE = {
+    "exercise_minutes": "activity_minutes",
+}
+
 
 def load_health_snapshot_config(path: Path | None = None) -> dict[str, Any]:
     p = path or _CONFIG_PATH
@@ -140,6 +146,12 @@ def as_number(value: Any) -> float | None:
 
 def observation_metric(row: dict[str, Any]) -> str:
     return canonicalize_metric(row.get("metric_type") or row.get("metric") or "")
+
+
+def snapshot_metric_id(metric: str | None) -> str:
+    """Canonical metric identity for Snapshot cards (includes semantic dedupe)."""
+    canonical = canonicalize_metric(metric)
+    return SNAPSHOT_METRIC_DEDUPE.get(canonical, canonical)
 
 
 def observation_context(row: dict[str, Any]) -> str:
@@ -261,12 +273,15 @@ def compute_freshness(
         or windows.get("default")
         or 10080
     )
+    # Beyond the configured current-data freshness window, Snapshot must not present
+    # an observation as the user's CURRENT clinical picture (HC321-UAT11).
+    # freshness_status still distinguishes aging vs deeply stale for operators.
     if age_min <= fresh_window:
         status = FRESHNESS_FRESH
         currentness = CURRENTNESS_CURRENT
     elif age_min <= fresh_window * float(stale_multiplier or 3):
         status = FRESHNESS_AGING
-        currentness = CURRENTNESS_CURRENT
+        currentness = CURRENTNESS_STALE
     else:
         status = FRESHNESS_STALE
         currentness = CURRENTNESS_STALE
@@ -674,18 +689,32 @@ class HealthSnapshotEngine:
             if card:
                 cards.append(card)
                 seen.add(metric_id)
+                # Prefer Activity over Exercise Minutes when both exist as observations.
+                for alias in (spec.get("aliases") or []):
+                    seen.add(snapshot_metric_id(alias))
+                seen.add(snapshot_metric_id(metric_id))
         # Surface other significant existing observations not in the initial set.
         extra_metrics = sorted(
             {
-                observation_metric(r)
+                snapshot_metric_id(observation_metric(r))
                 for r in observations
                 if is_valid_observation(r, rules=self.rules)
             }
             - seen
-            - {"systolic_bp", "diastolic_bp", "systolic", "diastolic", "spo2", "ldl_c"}
+            - {
+                "systolic_bp",
+                "diastolic_bp",
+                "systolic",
+                "diastolic",
+                "spo2",
+                "ldl_c",
+                "exercise_minutes",  # aliased into activity_minutes for Snapshot
+            }
         )
         for metric in extra_metrics:
             if not metric or metric in {"unknown", "rhythm", "ecg_result"}:
+                continue
+            if metric in SNAPSHOT_METRIC_DEDUPE:
                 continue
             spec = {
                 "title": metric.replace("_", " ").title(),
@@ -700,6 +729,134 @@ class HealthSnapshotEngine:
             if card:
                 cards.append(card)
         return cards
+
+    def metric_detail(
+        self,
+        metric_id: str,
+        *,
+        patient_id: str = "default-patient",
+        as_of: str | datetime | None = None,
+        observations: list[dict[str, Any]] | None = None,
+        history_limit: int = 40,
+    ) -> dict[str, Any]:
+        """Drill-down payload for one Snapshot metric (history + stats, no fabricated rows)."""
+        as_of_dt = parse_iso(as_of) or datetime.now(timezone.utc)
+        rows = list(observations) if observations is not None else self._collect_rows(patient_id)
+        want = snapshot_metric_id(metric_id)
+        specs = self.config.get("metrics") or {}
+        # Prefer configured Activity card when requesting exercise_minutes.
+        preferred_id = want
+        if preferred_id == "activity_minutes" and "activity_minutes" in specs:
+            preferred_id = "activity_minutes"
+        elif preferred_id in specs:
+            preferred_id = preferred_id
+        elif metric_id in specs:
+            preferred_id = metric_id
+        else:
+            preferred_id = want
+
+        card = None
+        for c in self.build_cards(rows, as_of=as_of_dt):
+            if c.get("metric_id") == preferred_id or snapshot_metric_id(c.get("metric_id")) == want:
+                card = c
+                break
+        if card is None:
+            return {
+                "schema_version": self.config.get("schema_version") or "hc.health_snapshot.v1",
+                "metric_id": preferred_id,
+                "found": False,
+                "card": None,
+                "history": [],
+                "stats": None,
+                "disclaimer": self.config.get("disclaimer") or DISCLAIMER,
+            }
+
+        aliases = {want, preferred_id, canonicalize_metric(metric_id)}
+        spec = specs.get(preferred_id) or {}
+        for a in spec.get("aliases") or []:
+            aliases.add(canonicalize_metric(a))
+            aliases.add(snapshot_metric_id(a))
+        if preferred_id == "blood_pressure":
+            aliases.update({"systolic_bp", "diastolic_bp", "systolic", "diastolic"})
+        if preferred_id == "activity_minutes":
+            aliases.add("exercise_minutes")
+
+        history_rows: list[dict[str, Any]] = []
+        for r in rows:
+            mid = observation_metric(r)
+            if preferred_id == "blood_pressure":
+                if mid not in {"systolic_bp", "diastolic_bp"}:
+                    continue
+            elif mid not in aliases and snapshot_metric_id(mid) not in aliases:
+                continue
+            if not is_valid_observation(r, rules=self.rules):
+                continue
+            measured = parse_iso(r.get("measured_at"))
+            if measured is None:
+                continue
+            num = as_number(r.get("value"))
+            hist_status = evaluate_consumer_status(
+                metric=mid if preferred_id != "blood_pressure" else mid,
+                value=r.get("value"),
+                units=r.get("units") or r.get("unit"),
+                context=observation_context(r),
+                rules=self.rules,
+                informational=bool(spec.get("informational") or spec.get("clinical") is False),
+                currentness=CURRENTNESS_CURRENT,
+            )
+            history_rows.append(
+                {
+                    "metric": mid,
+                    "value": r.get("value"),
+                    "display_value": format_display_value(
+                        r.get("value"), metric=mid, units=r.get("units") or r.get("unit")
+                    ),
+                    "units": r.get("units") or r.get("unit"),
+                    "measured_at": r.get("measured_at"),
+                    "provenance": r.get("provenance"),
+                    "source": r.get("source"),
+                    "source_metric": mid,
+                    "historical_status": hist_status["status"],
+                    "historical_status_text": hist_status["status_text"],
+                    "historical_status_color": hist_status["status_color"],
+                    "_ts": measured,
+                    "_num": num,
+                }
+            )
+        history_rows.sort(key=lambda item: item["_ts"], reverse=True)
+        trimmed = history_rows[: max(1, int(history_limit or 40))]
+        nums = [item["_num"] for item in trimmed if item.get("_num") is not None]
+        stats = None
+        if nums:
+            stats = {
+                "sample_count": len(nums),
+                "average": round(sum(nums) / len(nums), 2),
+                "minimum": min(nums),
+                "maximum": max(nums),
+            }
+        for item in trimmed:
+            item.pop("_ts", None)
+            item.pop("_num", None)
+
+        source_metric = None
+        if preferred_id == "activity_minutes":
+            for r in rows:
+                if observation_metric(r) == "exercise_minutes" and is_valid_observation(r, rules=self.rules):
+                    source_metric = "exercise_minutes"
+                    break
+
+        return {
+            "schema_version": self.config.get("schema_version") or "hc.health_snapshot.v1",
+            "metric_id": preferred_id,
+            "found": True,
+            "card": card,
+            "history": trimmed,
+            "stats": stats,
+            "canonical_source_metric": source_metric,
+            "filter_metrics": sorted(aliases),
+            "disclaimer": self.config.get("disclaimer") or DISCLAIMER,
+            "observational_only": True,
+        }
 
     def _collect_rows(self, patient_id: str) -> list[dict[str, Any]]:
         if self.store is None:
@@ -746,7 +903,15 @@ class HealthSnapshotEngine:
         aliases = [canonicalize_metric(a) for a in (spec.get("aliases") or [metric_id])]
         if canonicalize_metric(metric_id) not in aliases:
             aliases.insert(0, canonicalize_metric(metric_id))
-        matching = [r for r in observations if observation_metric(r) in set(aliases)]
+        alias_set = set(aliases)
+        alias_set.update(snapshot_metric_id(a) for a in list(alias_set))
+        if "activity_minutes" in alias_set:
+            alias_set.add("exercise_minutes")
+        matching = [
+            r
+            for r in observations
+            if observation_metric(r) in alias_set or snapshot_metric_id(observation_metric(r)) in alias_set
+        ]
         latest = select_latest_valid(matching, rules=self.rules)
         if latest is None:
             return None  # do not manufacture empty metrics
@@ -796,9 +961,21 @@ class HealthSnapshotEngine:
             currentness=fresh["currentness"],
             sample_count=len(values),
         )
+        # Preserve historical clinical reading for drill-down when Snapshot is UNKNOWN due to freshness.
+        historical = evaluate_consumer_status(
+            metric=metric_id,
+            value=latest.get("value"),
+            units=unit,
+            context=observation_context(latest),
+            rules=self.rules,
+            informational=bool(spec.get("informational") or spec.get("clinical") is False),
+            currentness=CURRENTNESS_CURRENT,
+            sample_count=len(values),
+        )
         display_unit = spec.get("unit") or unit
         if metric_id == "sleep_duration":
             display_unit = "h"
+        source_metric = observation_metric(latest)
         card = {
             "metric_id": metric_id,
             "title": spec.get("title") or metric_id.replace("_", " ").title(),
@@ -808,6 +985,9 @@ class HealthSnapshotEngine:
             "status_text": status["status_text"],
             "status_color": status["status_color"],
             "status_reason": status["reason"],
+            "historical_status": historical["status"],
+            "historical_status_text": historical["status_text"],
+            "historical_status_color": historical["status_color"],
             "measured_at": latest.get("measured_at"),
             "freshness_status": fresh["freshness_status"],
             "currentness": fresh["currentness"],
@@ -818,6 +998,7 @@ class HealthSnapshotEngine:
             "trend_indicator": trend["indicator"],
             "provenance": latest.get("provenance"),
             "source": latest.get("source"),
+            "source_metric": source_metric,
             "detail_tab": spec.get("detail_tab") or "vault",
             "detail_category": spec.get("detail_category") or "other",
             "detail_metric": spec.get("detail_metric") or metric_id,

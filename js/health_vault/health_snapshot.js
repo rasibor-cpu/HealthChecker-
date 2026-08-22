@@ -232,6 +232,18 @@
   const LAYOUT_KEY = "hc_dashboard_layout_v1";
   const THEME_KEY = "hc_theme";
   const STALE_MULT = 3;
+  let _snapshotScrollY = 0;
+  let _activeDrillMetric = null;
+  let _lastSnapshotCards = [];
+
+  function metricAliasesFor(metricId) {
+    const id = canonicalize(metricId);
+    const spec = METRIC_SPECS[id] || {};
+    const aliases = [id].concat((spec.aliases || []).map(canonicalize));
+    if (id === "activity_minutes") aliases.push("exercise_minutes");
+    if (id === "blood_pressure") aliases.push("systolic_bp", "diastolic_bp");
+    return aliases;
+  }
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -343,7 +355,8 @@
       currentness = "current";
     } else if (ageMin <= windowMin * STALE_MULT) {
       freshness_status = "aging";
-      currentness = "current";
+      // Beyond the current-data window: still visible, but not a CURRENT clinical picture.
+      currentness = "stale";
     } else {
       freshness_status = "stale";
       currentness = "stale";
@@ -645,6 +658,15 @@
       currentness: fresh.currentness,
       sample_count: values.length,
     });
+    const historical = evaluateConsumerStatus({
+      metric: metricId,
+      value: latest.value,
+      units: unit,
+      context: observationContext(latest),
+      informational: !!spec.informational || spec.clinical === false,
+      currentness: "current",
+      sample_count: values.length,
+    });
     const trend = trendFromValues(metricId, values);
     const card = {
       metric_id: metricId,
@@ -655,6 +677,9 @@
       status_text: status.status_text,
       status_color: status.status_color,
       status_reason: status.reason,
+      historical_status: historical.status,
+      historical_status_text: historical.status_text,
+      historical_status_color: historical.status_color,
       measured_at: latest.measured_at,
       freshness_status: fresh.freshness_status,
       currentness: fresh.currentness,
@@ -665,6 +690,7 @@
       trend_indicator: trend.indicator,
       provenance: latest.provenance,
       source: latest.source,
+      source_metric: observationMetric(latest),
       detail_tab: spec.detail_tab || "vault",
       detail_category: spec.detail_category || "other",
       detail_metric: spec.detail_metric || metricId,
@@ -792,7 +818,18 @@
     const order = layout.order && layout.order.length ? layout.order.slice() : (defaultOrder || []).slice();
     const byId = {};
     cards.forEach(function (c) {
-      byId[c.metric_id] = c;
+      let id = c.metric_id;
+      if (id === "exercise_minutes") {
+        // Prefer the Activity card when both arrive from the API.
+        id = "activity_minutes";
+        c = Object.assign({}, c, {
+          metric_id: "activity_minutes",
+          title: (METRIC_SPECS.activity_minutes && METRIC_SPECS.activity_minutes.title) || "Activity",
+          detail_metric: "activity_minutes",
+          source_metric: c.source_metric || "exercise_minutes",
+        });
+      }
+      if (!byId[id]) byId[id] = c;
     });
     const visible = [];
     const seen = {};
@@ -803,9 +840,9 @@
         seen[id] = true;
       }
     });
-    cards.forEach(function (c) {
-      if (seen[c.metric_id] || hidden[c.metric_id]) return;
-      visible.push(c);
+    Object.keys(byId).forEach(function (id) {
+      if (seen[id] || hidden[id]) return;
+      visible.push(byId[id]);
     });
     return visible;
   }
@@ -830,12 +867,20 @@
     const rows = observations || collectObservations();
     const now = nowMs != null ? nowMs : Date.now();
     const cards = [];
+    const seen = {};
     Object.keys(METRIC_SPECS).forEach(function (id) {
       const spec = METRIC_SPECS[id];
       const card =
         spec.kind === "composite_bp" ? bloodPressureCard(spec, rows, now) : scalarCard(id, spec, rows, now);
-      if (card) cards.push(card);
+      if (card) {
+        cards.push(card);
+        seen[id] = true;
+        (spec.aliases || []).forEach(function (a) {
+          seen[canonicalize(a)] = true;
+        });
+      }
     });
+    // Do not invent a second Activity / Exercise Minutes card.
     return applyLayout(cards, layout || loadLayout(), DEFAULT_ORDER);
   }
 
@@ -897,41 +942,337 @@
     );
   }
 
-  function openMetricDetail(card) {
-    const tabName = card.detail_tab || "vault";
-    const tabMap = {
-      vault: "health_records_screen",
-      health_records: "health_records_screen",
-      trends: "consumer_trends_screen",
-      timeline: "consumer_timeline_screen",
-    };
-    const mapped = tabMap[tabName] || tabName;
-    const tab =
-      document.querySelector('.tab[data="' + mapped + '"]') ||
-      document.querySelector('.tab[data="' + tabName + '"]');
-    if (tab) tab.click();
-    if (global.HCVaultUI && typeof HCVaultUI.openMetricDetail === "function") {
-      HCVaultUI.openMetricDetail(card.detail_category, card.detail_metric || card.metric_id);
+  function summarizeHistory(rows, metricId) {
+    const aliases = metricAliasesFor(metricId);
+    const eligible = (rows || [])
+      .filter(function (r) {
+        return aliases.indexOf(observationMetric(r)) >= 0 && isValidObservation(r);
+      })
+      .sort(function (a, b) {
+        return String(b.measured_at || "").localeCompare(String(a.measured_at || ""));
+      });
+    const nums = eligible
+      .map(function (r) {
+        return asNumber(r.value);
+      })
+      .filter(function (v) {
+        return v != null;
+      });
+    const history = eligible.slice(0, 40).map(function (r) {
+      const hist = evaluateConsumerStatus({
+        metric: observationMetric(r),
+        value: r.value,
+        units: r.units || r.unit,
+        context: observationContext(r),
+        currentness: "current",
+        informational: !!(METRIC_SPECS[canonicalize(metricId)] || {}).informational,
+      });
+      return {
+        metric: observationMetric(r),
+        value: r.value,
+        display_value: formatDisplayValue(r.value, observationMetric(r), r.units || r.unit),
+        units: r.units || r.unit,
+        measured_at: r.measured_at,
+        provenance: r.provenance,
+        source: r.source,
+        historical_status: hist.status,
+        historical_status_text: hist.status_text,
+        historical_status_color: hist.status_color,
+      };
+    });
+    let stats = null;
+    if (nums.length) {
+      stats = {
+        sample_count: nums.length,
+        average: Math.round((nums.reduce(function (a, b) {
+          return a + b;
+        }, 0) / nums.length) * 100) / 100,
+        minimum: Math.min.apply(null, nums),
+        maximum: Math.max.apply(null, nums),
+      };
+    }
+    return { history: history, stats: stats };
+  }
+
+  function sparklineMarkup(history, unit) {
+    const values = (history || [])
+      .map(function (h) {
+        return asNumber(h.value);
+      })
+      .filter(function (v) {
+        return v != null;
+      })
+      .reverse();
+    if (values.length < 2) {
+      return '<p class="small muted">Trend chart needs at least two valid points.</p>';
+    }
+    const min = Math.min.apply(null, values);
+    const max = Math.max.apply(null, values);
+    const span = max - min || 1;
+    const w = 280;
+    const h = 64;
+    const pts = values
+      .map(function (v, i) {
+        const x = (i / (values.length - 1)) * (w - 8) + 4;
+        const y = h - 4 - ((v - min) / span) * (h - 8);
+        return x.toFixed(1) + "," + y.toFixed(1);
+      })
+      .join(" ");
+    return (
+      '<div class="hc-metric-chart" role="img" aria-label="Recent trend chart">' +
+      '<svg viewBox="0 0 ' +
+      w +
+      " " +
+      h +
+      '" width="100%" height="' +
+      h +
+      '" preserveAspectRatio="none">' +
+      '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' +
+      pts +
+      '" /></svg>' +
+      '<div class="small muted">Range ' +
+      esc(String(min)) +
+      "–" +
+      esc(String(max)) +
+      (unit ? " " + esc(unit) : "") +
+      "</div></div>"
+    );
+  }
+
+  function openFilteredSurface(surface, metricId, category) {
+    const aliases = metricAliasesFor(metricId);
+    const primary = canonicalize(metricId);
+    if (global.HCVaultUI && typeof HCVaultUI.setMetricFilter === "function") {
+      HCVaultUI.setMetricFilter(primary, aliases, category || null);
+    }
+    if (global.HCConsumerSurfaces && typeof HCConsumerSurfaces.openFiltered === "function") {
+      HCConsumerSurfaces.openFiltered(surface, {
+        metric: primary,
+        metrics: aliases,
+        category: category || null,
+      });
       return;
     }
-    const tl =
-      document.getElementById("vault_timeline") ||
-      document.getElementById("vault_trends") ||
-      document.getElementById("consumer_timeline_screen") ||
-      document.getElementById("consumer_trends_screen");
-    if (tl && tl.scrollIntoView) tl.scrollIntoView({ behavior: "smooth", block: "start" });
+    const tabMap = {
+      records: "health_records_screen",
+      health_records: "health_records_screen",
+      vault: "health_records_screen",
+      timeline: "consumer_timeline_screen",
+      trends: "consumer_trends_screen",
+    };
+    const tabName = tabMap[surface] || surface;
+    const tab = document.querySelector('.tab[data="' + tabName + '"]');
+    if (tab) tab.click();
+  }
+
+  function renderDrillDown(root, detail) {
+    if (!root) return;
+    const card = (detail && detail.card) || {};
+    const history = (detail && detail.history) || [];
+    const stats = (detail && detail.stats) || null;
+    const color = String(card.status_color || "GREY").toLowerCase();
+    const histColor = String(card.historical_status_color || card.status_color || "GREY").toLowerCase();
+    const sourceMetric =
+      (detail && detail.canonical_source_metric) || card.source_metric || card.detail_metric || card.metric_id;
+    const statsHtml = stats
+      ? '<div class="hc-drill-stats" aria-label="Summary statistics">' +
+        '<div><span class="muted">Samples</span><strong>' +
+        esc(String(stats.sample_count)) +
+        "</strong></div>" +
+        '<div><span class="muted">Average</span><strong>' +
+        esc(String(stats.average)) +
+        "</strong></div>" +
+        '<div><span class="muted">Min</span><strong>' +
+        esc(String(stats.minimum)) +
+        "</strong></div>" +
+        '<div><span class="muted">Max</span><strong>' +
+        esc(String(stats.maximum)) +
+        "</strong></div></div>"
+      : '<p class="small muted">No summary statistics available yet.</p>';
+    const historyHtml = history.length
+      ? '<ul class="hc-drill-history">' +
+        history
+          .map(function (row) {
+            return (
+              "<li><strong>" +
+              esc(row.display_value != null ? row.display_value : row.value) +
+              (row.units ? " " + esc(row.units) : "") +
+              "</strong> · " +
+              esc(row.historical_status_text || "") +
+              '<div class="small muted">' +
+              esc(String(row.measured_at || "").slice(0, 19)) +
+              (row.source || row.provenance ? " · " + esc([row.source, row.provenance].filter(Boolean).join(" · ")) : "") +
+              (row.metric && row.metric !== card.metric_id ? " · source metric " + esc(row.metric) : "") +
+              "</div></li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : '<p class="small muted">No recent valid measurements for this metric.</p>';
+    const histBlock =
+      card.currentness === "stale" && card.historical_status
+        ? '<div class="hc-drill-historical small">Historical classification (at measurement time): <strong class="hc-status-' +
+          esc(histColor) +
+          '">' +
+          esc(card.historical_status_text || card.historical_status) +
+          "</strong></div>"
+        : "";
+    root.innerHTML =
+      '<section class="hc-health-snapshot hc-snapshot-drilldown" aria-label="' +
+      esc(card.title || "Metric detail") +
+      '">' +
+      '<button type="button" class="secondary hc-drill-back" id="hc_snapshot_back">← Back to Health Snapshot</button>' +
+      '<div class="hc-metric-card hc-status-' +
+      esc(color) +
+      ' hc-drill-hero" tabindex="-1">' +
+      '<div class="hc-metric-name">' +
+      esc(card.title || card.metric_id || "Metric") +
+      "</div>" +
+      '<div class="hc-metric-value">' +
+      esc(card.display_value == null ? "—" : String(card.display_value)) +
+      " " +
+      (card.unit ? '<span class="hc-metric-unit">' + esc(card.unit) + "</span>" : "") +
+      "</div>" +
+      '<div class="hc-metric-status" data-status="' +
+      esc(card.status || "UNKNOWN") +
+      '"><span class="hc-status-dot" aria-hidden="true"></span>' +
+      esc(card.status_text || "Unknown") +
+      "</div>" +
+      '<div class="hc-metric-freshness">' +
+      esc(card.freshness_label || "") +
+      "</div>" +
+      trendMarkup(card) +
+      provenanceMarkup(card) +
+      "</div>" +
+      histBlock +
+      (sourceMetric && sourceMetric !== card.metric_id
+        ? '<p class="small muted">Underlying source metric: <code>' + esc(sourceMetric) + "</code></p>"
+        : "") +
+      "<h4 class=\"section-title\">Recent history</h4>" +
+      sparklineMarkup(history, card.unit) +
+      statsHtml +
+      historyHtml +
+      '<div class="hc-drill-actions">' +
+      '<button type="button" class="secondary" data-open-filtered="records">Filtered Health Records</button>' +
+      '<button type="button" class="secondary" data-open-filtered="timeline">Filtered Timeline</button>' +
+      '<button type="button" class="secondary" data-open-filtered="trends">Filtered Trends</button>' +
+      "</div>" +
+      '<p class="small muted">' +
+      esc(DISCLAIMER) +
+      "</p></section>";
+    const back = root.querySelector("#hc_snapshot_back");
+    if (back) {
+      back.addEventListener("click", function () {
+        closeDrillDown();
+      });
+    }
+    root.querySelectorAll("[data-open-filtered]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openFilteredSurface(
+          btn.getAttribute("data-open-filtered"),
+          card.metric_id || card.detail_metric,
+          card.detail_category
+        );
+      });
+    });
+  }
+
+  function closeDrillDown() {
+    _activeDrillMetric = null;
+    const root = document.getElementById("hc_health_snapshot");
+    if (!root) return;
+    renderInto(root, _lastSnapshotCards.length ? _lastSnapshotCards : buildCards());
+    try {
+      if (typeof window !== "undefined" && window.scrollTo) {
+        window.scrollTo(0, _snapshotScrollY || 0);
+      }
+    } catch (_) {}
+  }
+
+  function openMetricDetail(card) {
+    if (!card) return;
+    const metricId = card.metric_id || card.detail_metric;
+    if (!metricId) return;
+    try {
+      _snapshotScrollY =
+        (typeof window !== "undefined" && (window.scrollY || window.pageYOffset)) || 0;
+    } catch (_) {
+      _snapshotScrollY = 0;
+    }
+    _activeDrillMetric = metricId;
+    const root = document.getElementById("hc_health_snapshot");
+    if (!root) return;
+    const headers = authHeaders();
+    const paintLocal = function () {
+      const localCard =
+        (_lastSnapshotCards || []).find(function (c) {
+          return c.metric_id === metricId;
+        }) || card;
+      const local = summarizeHistory(collectObservations(), metricId);
+      // Attach historical status if missing (stale Snapshot cards).
+      if (!localCard.historical_status && localCard.currentness === "stale") {
+        const hist = evaluateConsumerStatus({
+          metric: metricId,
+          value: localCard.display_value,
+          units: localCard.unit,
+          currentness: "current",
+          informational: !!localCard.informational,
+        });
+        localCard.historical_status = hist.status;
+        localCard.historical_status_text = hist.status_text;
+        localCard.historical_status_color = hist.status_color;
+      }
+      renderDrillDown(root, {
+        card: localCard,
+        history: local.history,
+        stats: local.stats,
+        canonical_source_metric:
+          metricId === "activity_minutes" ? "exercise_minutes" : localCard.source_metric || null,
+      });
+    };
+    if (!headers) {
+      paintLocal();
+      return;
+    }
+    root.innerHTML =
+      '<section class="hc-health-snapshot hc-snapshot-drilldown"><p class="muted">Loading metric detail…</p></section>';
+    fetch("/api/health-vault/health-snapshot?metric=" + encodeURIComponent(metricId), {
+      headers: headers,
+      cache: "no-store",
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("metric_detail_" + res.status);
+        return res.json();
+      })
+      .then(function (body) {
+        if (!body || body.found === false || !body.card) {
+          paintLocal();
+          return;
+        }
+        renderDrillDown(root, body);
+      })
+      .catch(function () {
+        paintLocal();
+      });
   }
 
   function bindCardClicks(root) {
     if (!root) return;
     root.querySelectorAll(".hc-metric-card").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        openMetricDetail({
-          detail_tab: "vault",
-          detail_category: btn.getAttribute("data-category"),
-          detail_metric: btn.getAttribute("data-detail-metric"),
-          metric_id: btn.getAttribute("data-metric"),
+        const metricId = btn.getAttribute("data-metric");
+        const fromCache = (_lastSnapshotCards || []).find(function (c) {
+          return c.metric_id === metricId;
         });
+        openMetricDetail(
+          fromCache || {
+            detail_tab: "vault",
+            detail_category: btn.getAttribute("data-category"),
+            detail_metric: btn.getAttribute("data-detail-metric"),
+            metric_id: metricId,
+            title: (btn.querySelector(".hc-metric-name") || {}).textContent,
+          }
+        );
       });
     });
   }
@@ -1024,7 +1365,18 @@
 
   function renderInto(root, cards) {
     if (!root) return;
+    if (_activeDrillMetric) {
+      // Preserve drill-down until Back; refresh will reopen with latest data.
+      const keep = (cards || []).find(function (c) {
+        return c.metric_id === _activeDrillMetric;
+      });
+      if (keep) {
+        openMetricDetail(keep);
+        return;
+      }
+    }
     const list = cards || buildCards();
+    _lastSnapshotCards = list.slice();
     const layout = loadLayout();
     const empty =
       '<p class="muted small">No current HealthChecker observations yet. Import records or add a reading to populate this snapshot.</p>';
@@ -1181,6 +1533,8 @@
     renderInto: renderInto,
     refresh: refresh,
     openMetricDetail: openMetricDetail,
+    closeDrillDown: closeDrillDown,
+    metricAliasesFor: metricAliasesFor,
     loadLayout: loadLayout,
     saveLayout: saveLayout,
     applyTheme: applyTheme,
