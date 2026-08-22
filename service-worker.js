@@ -12,7 +12,7 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
-const CACHE_REVISION = "hc321uat12";
+const CACHE_REVISION = "hc321uat12c";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** HC-325 R3 / HC-321-C1: network-first for dashboard scripts (Ctrl+F5 does not bypass an active SW). */

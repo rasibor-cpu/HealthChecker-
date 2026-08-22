@@ -704,7 +704,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat12"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat12c"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
@@ -1117,7 +1117,7 @@ if (window.HCContinuousMonitoring) {
     sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat10');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc321uat10').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12c').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }

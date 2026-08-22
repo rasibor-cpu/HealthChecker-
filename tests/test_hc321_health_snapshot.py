@@ -656,7 +656,7 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
     assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12"' in sw
+    assert 'CACHE_REVISION = "hc321uat12c"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -958,4 +958,4 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12c"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")

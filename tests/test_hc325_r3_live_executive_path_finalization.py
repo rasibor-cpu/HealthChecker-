@@ -16,7 +16,10 @@ def test_executive_uses_canonical_consumer_dashboard_token_contract():
     assert "HCConsumerDashboard.token" in js
     assert "canonicalAuthHeaders" in js
     assert "getAuthorizationHeaders()" in dash
-    assert 'sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ patientId, token }))' in dash
+    assert "sessionStorage.setItem(STORAGE_KEY, JSON.stringify({" in dash
+    assert "patientId," in dash
+    assert "token," in dash
+    assert "displayName:" in dash
 
 
 def test_authenticated_refresh_cannot_paint_local_vault_fallback():
@@ -93,13 +96,13 @@ def test_no_competing_legacy_initializer_after_consumer_init():
 def test_service_worker_navigation_is_network_first_with_skip_waiting():
     sw = _read("service-worker.js")
     html = _read("index.html")
-    assert 'CACHE_REVISION = "hc321c1"' in sw
+    assert 'CACHE_REVISION = "hc321uat12c"' in sw
     assert "isNavigationRequest" in sw
     assert "SKIP_WAITING" in sw
     assert "clients.claim()" in sw
     assert "client.navigate" in sw
     assert "controllerchange" in html
-    assert "service-worker.js?v=hc321c1" in html
+    assert "service-worker.js?v=hc321uat12c" in html
 
 
 def test_guardian_server_backed_contract_intact():
