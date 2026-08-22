@@ -238,9 +238,55 @@
 
   /** Convenience refresh used by dashboard / Guardian tab. */
   HCHealthGuardian.prototype.refresh = function (opts) {
-    const result = this.evaluate(Object.assign({ trigger: "ui_refresh" }, opts || {}));
+    opts = Object.assign({ trigger: "ui_refresh" }, opts || {});
+    const self = this;
+    const headers = (function () {
+      try {
+        if (global.HCConsumerDashboard && typeof global.HCConsumerDashboard.getAuthorizationHeaders === "function") {
+          const h = global.HCConsumerDashboard.getAuthorizationHeaders();
+          if (h && h.Authorization) return h;
+        }
+      } catch (e) { /* fall through */ }
+      try {
+        const raw = global.sessionStorage.getItem("hc_auth_session");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed.token ? { Authorization: "Bearer " + parsed.token } : null;
+      } catch (e) {
+        return null;
+      }
+    })();
+    if (headers) {
+      return Promise.all([
+        fetch("/api/guardian/status", { headers: headers }).then(function (r) {
+          return r.ok ? r.json() : null;
+        }),
+        fetch("/api/guardian/alerts?active_only=true", { headers: headers }).then(function (r) {
+          return r.ok ? r.json() : null;
+        }),
+      ])
+        .then(function (parts) {
+          const status = parts[0];
+          const alertsPayload = parts[1];
+          if (status) {
+            self._serverStatus = status;
+            self._serverAlerts = (alertsPayload && alertsPayload.alerts) || [];
+            self.renderUI({ status: status, server_alerts: self._serverAlerts, source: "server" });
+            return { ok: true, status: status, alerts: self._serverAlerts, source: "server" };
+          }
+          const result = self.evaluate(opts);
+          self.renderUI(result);
+          return result;
+        })
+        .catch(function () {
+          const result = self.evaluate(opts);
+          self.renderUI(result);
+          return result;
+        });
+    }
+    const result = this.evaluate(opts);
     this.renderUI(result);
-    return result;
+    return Promise.resolve(result);
   };
 
   HCHealthGuardian.prototype.getStatus = function (patientId) {
@@ -771,10 +817,14 @@
     }
     const alertsEl = document.getElementById("guardian_alerts_list");
     if (alertsEl) {
-      const items = this.alerts.listAlerts({ active_only: true });
+      const items =
+        result && result.server_alerts
+          ? result.server_alerts
+          : this.alerts.listAlerts({ active_only: true });
       alertsEl.innerHTML = items.length
         ? items
             .map((a) => {
+              const alertId = a.alert_id || a.id;
               return (
                 `<div class="kpi">` +
                 `<div><strong class="${
@@ -782,14 +832,17 @@
                 }">${esc(a.severity)}</strong> — ${esc(a.title)}</div>` +
                 `<div class="small">${esc(a.message)}</div>` +
                 `<div class="small muted">${esc(a.recommended_next_step || "")}</div>` +
-                `<div class="vault-batch-actions">` +
-                `<button type="button" class="secondary" onclick="HCHealthGuardian.ack('${esc(
-                  a.alert_id
-                )}')">Acknowledge</button>` +
-                `<button type="button" class="secondary" onclick="HCHealthGuardian.resolve('${esc(
-                  a.alert_id
-                )}')">Resolve</button>` +
-                `</div></div>`
+                (result && result.source === "server"
+                  ? `<div class="small muted">Source: encrypted vault Guardian engine</div>`
+                  : `<div class="vault-batch-actions">` +
+                    `<button type="button" class="secondary" onclick="HCHealthGuardian.ack('${esc(
+                      alertId
+                    )}')">Acknowledge</button>` +
+                    `<button type="button" class="secondary" onclick="HCHealthGuardian.resolve('${esc(
+                      alertId
+                    )}')">Resolve</button>` +
+                    `</div>`) +
+                `</div>`
               );
             })
             .join("")

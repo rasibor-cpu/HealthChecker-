@@ -44,7 +44,7 @@
       "id": "blood_pressure",
       "title": "Blood Pressure",
       "categories": ["blood_pressure"],
-      "metrics": ["systolic_bp", "diastolic_bp", "pulse", "heart_rate"]
+      "metrics": ["systolic_bp", "diastolic_bp"]
     },
     {
       "id": "sleep",
@@ -73,7 +73,7 @@
       "id": "respiratory",
       "title": "Respiratory / Oxygen",
       "categories": ["respiratory_oxygen"],
-      "metrics": ["respiratory_rate", "spo2"]
+      "metrics": ["respiratory_rate", "spo2", "oxygen_saturation"]
     },
     {
       "id": "medications",

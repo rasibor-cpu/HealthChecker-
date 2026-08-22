@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from collections import Counter
 from typing import Any
 from backend.health_vault.batch_import import BatchImportService, sanitize_filename
 from backend.health_vault.health_intelligence import HealthIntelligenceEngine
@@ -138,7 +140,21 @@ class RecordsService:
             "tags": tags,
         }
 
-    def _build_record(self, doc: dict[str, Any], include_linkage: bool = False) -> HealthRecord:
+    @staticmethod
+    def _measurement_counts_by_document(measurements: list[dict[str, Any]]) -> dict[str, int]:
+        counts: Counter[str] = Counter()
+        for measurement in measurements:
+            document_id = str(measurement.get("document_id") or "")
+            if document_id:
+                counts[document_id] += 1
+        return dict(counts)
+
+    def _build_record(
+        self,
+        doc: dict[str, Any],
+        include_linkage: bool = False,
+        metrics_count: int | None = None,
+    ) -> HealthRecord:
         doc_id = doc["id"]
         patient_id = doc.get("patient_id", "default-patient")
 
@@ -146,6 +162,7 @@ class RecordsService:
         status = map_status(doc.get("status"), doc.get("requires_review", False))
 
         linkage = None
+        measurements: list[dict[str, Any]] = []
         if include_linkage:
             measurements = self.store.list_measurements(document_id=doc_id)
 
@@ -191,6 +208,13 @@ class RecordsService:
                 evidence_references=evidence_refs,
             )
 
+        if metrics_count is None:
+            metrics_count = (
+                len(measurements)
+                if include_linkage
+                else len(self.store.list_measurements(document_id=doc_id))
+            )
+
         return HealthRecord(
             document_id=doc_id,
             patient_id=patient_id,
@@ -200,7 +224,7 @@ class RecordsService:
             imported_at=doc.get("imported_at") or utc_now(),
             measured_at=doc.get("measured_at"),
             size_bytes=doc.get("size_bytes"),
-            metrics_count=len(self.store.list_measurements(document_id=doc_id)),
+            metrics_count=metrics_count,
             metadata={key: doc.get(key) for key in (
                 "document_type", "mime_type", "interpretation", "parser_version",
                 "parser_confidence", "classification_confidence", "classification_method",
@@ -211,9 +235,27 @@ class RecordsService:
             lifecycle=self._lifecycle(doc) if include_linkage else [],
         )
 
-    def list_records(self, patient_id: str, *, category: str | None = None, status: str | None = None) -> list[HealthRecord]:
-        docs = self.store.list_documents()
-        records = [self._build_record(doc, include_linkage=False) for doc in docs if self._patient_id(doc) == patient_id]
+    def list_records(
+        self,
+        patient_id: str,
+        *,
+        category: str | None = None,
+        status: str | None = None,
+        measurement_counts: dict[str, int] | None = None,
+    ) -> list[HealthRecord]:
+        patient_docs = [
+            doc for doc in self.store.list_documents() if self._patient_id(doc) == patient_id
+        ]
+        if measurement_counts is None:
+            measurement_counts = self._measurement_counts_by_document(self.store.list_measurements())
+        records = [
+            self._build_record(
+                doc,
+                include_linkage=False,
+                metrics_count=measurement_counts.get(str(doc["id"]), 0),
+            )
+            for doc in patient_docs
+        ]
         if category:
             expected_category = map_category(category)
             records = [record for record in records if record.primary_category == expected_category]

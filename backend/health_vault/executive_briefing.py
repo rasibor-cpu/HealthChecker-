@@ -26,14 +26,23 @@ DISCLAIMER = (
     "Does not replace professional medical assessment."
 )
 
-STATUS_LABELS = (
-    "Stable",
-    "Improving",
-    "Worsening",
-    "Needs attention",
-    "Insufficient data",
-    "Awaiting verification",
-)
+HC_DOMAIN_OBSERVATIONAL_METRICS: dict[str, tuple[str, ...]] = {
+    "heart": ("heart_rate", "resting_hr", "hrv_rmssd", "average_hr"),
+    "respiratory": ("oxygen_saturation", "respiratory_rate", "spo2"),
+    "sleep": ("sleep_duration", "sleep_score", "deep_sleep_duration", "rem_sleep_duration"),
+}
+
+
+def _is_health_connect_observation(row: dict[str, Any]) -> bool:
+    source = str(row.get("source") or "")
+    return "health_connect" in source or row.get("connector_id") == "health_connect"
+
+
+def _is_continuous_monitoring_document(doc: dict[str, Any]) -> bool:
+    if str(doc.get("document_type") or "") == "continuous_monitoring_observation":
+        return True
+    tags = [str(t).lower() for t in (doc.get("tags") or [])]
+    return "continuous_monitoring" in tags or "hc302" in tags
 
 
 def _parse_iso(value: Any) -> datetime | None:
@@ -101,18 +110,22 @@ class ExecutiveHealthBriefingEngine:
                 if d.get("primary_category") == category
                 or category in (d.get("secondary_categories") or [])
             ]
-        measurements = self.store.list_measurements()
         docs_by_id = {d["id"]: d for d in docs if d.get("id")}
-        profile = self.store.get_profile() or {}
+        measurements = [
+            m
+            for m in self.store.list_measurements()
+            if str(m.get("document_id") or "") in docs_by_id
+        ]
+        profile = self.store.get_profile(patient_id=patient_id) or {}
+        if not profile and patient_id == "default-patient":
+            profile = self.store.get_profile() or {}
+        raw_display = str(profile.get("display_name") or "").strip()
+        display_name = raw_display if raw_display and raw_display != patient_id else None
+        hc_observations = self._patient_health_connect_observations(patient_id)
         batch_audits = list(reversed(self.store.list_batch_audits() or []))[:10]
         import_log = list(reversed(self.store.import_log() or []))[:20]
 
-        # Ensure trends are current for windowed classification
-        try:
-            self.trends.recompute()
-        except Exception:
-            pass
-        trend_snap = self.store.get_trends() or {}
+        trend_snap = self.store.get_trends(patient_id=patient_id) or {}
 
         domain_summaries = self._domain_summaries(
             docs=docs,
@@ -121,6 +134,7 @@ class ExecutiveHealthBriefingEngine:
             trend_snap=trend_snap,
             as_of=as_of_dt,
             trend_window=trend_window,
+            hc_observations=hc_observations,
         )
         attention = self._attention_items(
             docs=docs,
@@ -129,6 +143,7 @@ class ExecutiveHealthBriefingEngine:
             profile=profile,
             as_of=as_of_dt,
             domain_summaries=domain_summaries,
+            patient_id=patient_id,
         )
         monitoring = self._monitoring_actions(attention=attention, domain_summaries=domain_summaries, docs=docs)
         recent_imports = self._recent_imports(batch_audits)
@@ -175,6 +190,7 @@ class ExecutiveHealthBriefingEngine:
             "generated_at": utc_now(),
             "as_of": as_of_dt.isoformat().replace("+00:00", "Z"),
             "patient_id": patient_id,
+            "display_name": display_name,
             "trend_window": trend_window,
             "data_status": data_status,
             "last_updated": utc_now(),
@@ -182,6 +198,25 @@ class ExecutiveHealthBriefingEngine:
             "new_records_imported_recently": new_recent,
             "records_requiring_review": review_count,
             "records_requiring_sources_count": len(records_requiring_sources),
+            "vault_summary": {
+                "total_records": len(docs),
+                "total_measurements": len(measurements),
+                "health_connect_observation_count": len(hc_observations),
+            },
+            "attention_semantics": {
+                "classic_dashboard_attention_items": (
+                    "Count of Key Observation rows whose interpretation includes "
+                    "'missing data warning' or clinical trend warnings on the classic dashboard."
+                ),
+                "executive_attention_items": (
+                    "Record-quality, overdue monitoring-interval, and missing canonical "
+                    "clinical-data prompts for the executive briefing."
+                ),
+                "guardian_alerts": (
+                    "Independent rule-based Guardian threshold alerts; not equivalent to "
+                    "classic missing-data warnings or executive record-quality prompts."
+                ),
+            },
             "domain_summaries": domain_summaries,
             "attention_items": attention,
             "monitoring_actions": monitoring,
@@ -221,6 +256,126 @@ class ExecutiveHealthBriefingEngine:
         }
 
     # --- internals ---
+
+    def _patient_health_connect_observations(self, patient_id: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for row in self.store.list_observations():
+            if str(row.get("patient_id") or "default-patient") != patient_id:
+                continue
+            if _is_health_connect_observation(row):
+                rows.append(dict(row))
+        return rows
+
+    def _observational_sample_count(
+        self,
+        *,
+        domain_id: str,
+        measurements: list[dict[str, Any]],
+        docs_by_id: dict[str, dict[str, Any]],
+    ) -> int:
+        allowed = {canonicalize_metric(m) for m in HC_DOMAIN_OBSERVATIONAL_METRICS.get(domain_id, ())}
+        if not allowed:
+            return 0
+        count = 0
+        for measurement in measurements:
+            metric = canonicalize_metric(measurement.get("metric"))
+            if metric not in allowed:
+                continue
+            doc = docs_by_id.get(str(measurement.get("document_id") or "")) or {}
+            if _is_continuous_monitoring_document(doc):
+                count += 1
+        return count
+
+    def _observational_windowed_series(
+        self,
+        *,
+        metric: str,
+        measurements: list[dict[str, Any]],
+        docs_by_id: dict[str, dict[str, Any]],
+        as_of: datetime,
+        window_days: int | None,
+    ) -> list[dict[str, Any]]:
+        canonical = canonicalize_metric(metric)
+        items: list[dict[str, Any]] = []
+        for measurement in measurements:
+            if canonicalize_metric(measurement.get("metric")) != canonical:
+                continue
+            doc = docs_by_id.get(str(measurement.get("document_id") or "")) or {}
+            if not _is_continuous_monitoring_document(doc):
+                continue
+            measured = _parse_iso(
+                measurement.get("measured_at") or doc.get("measured_at") or doc.get("report_date")
+            )
+            if measured is None:
+                continue
+            if window_days is not None and window_days > 0:
+                if measured < as_of - timedelta(days=int(window_days)):
+                    continue
+            if measured > as_of:
+                continue
+            try:
+                val = float(measurement["value"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            items.append(
+                {
+                    "value": val,
+                    "units": measurement.get("units"),
+                    "measured_at": measured.isoformat().replace("+00:00", "Z"),
+                    "document_id": measurement.get("document_id"),
+                    "confidence": measurement.get("confidence") or doc.get("parser_confidence"),
+                }
+            )
+        items.sort(key=lambda x: x["measured_at"])
+        return items
+
+    def _missing_canonical_clinical_attention(
+        self,
+        *,
+        measurements: list[dict[str, Any]],
+        patient_id: str,
+    ) -> list[dict[str, Any]]:
+        """Align executive missing-data prompts with classic dashboard HI warnings."""
+        metrics = {canonicalize_metric(m.get("metric")) for m in measurements}
+        items: list[dict[str, Any]] = []
+        if not ({"glucose", "hba1c"} & metrics):
+            items.append(
+                {
+                    "kind": "missing_clinical_data",
+                    "code": "missing_glycemic_data",
+                    "message": "No glucose or HbA1c measurements found for glycemic analysis.",
+                    "priority": 35,
+                    "advisory_only": True,
+                    "diagnostic": False,
+                    "semantic_scope": "classic_missing_data_warning",
+                }
+            )
+        if not ({"egfr", "creatinine"} & metrics):
+            items.append(
+                {
+                    "kind": "missing_clinical_data",
+                    "code": "missing_renal_data",
+                    "message": "No eGFR or creatinine measurements found for renal analysis.",
+                    "priority": 35,
+                    "advisory_only": True,
+                    "diagnostic": False,
+                    "semantic_scope": "classic_missing_data_warning",
+                }
+            )
+        has_bp = "systolic_bp" in metrics and "diastolic_bp" in metrics
+        if not has_bp:
+            items.append(
+                {
+                    "kind": "missing_clinical_data",
+                    "code": "missing_cardiovascular_data",
+                    "message": "No blood-pressure measurements found for cardiovascular analysis.",
+                    "priority": 35,
+                    "advisory_only": True,
+                    "diagnostic": False,
+                    "semantic_scope": "classic_missing_data_warning",
+                }
+            )
+        return items
 
     def _overall_data_status(
         self,
@@ -273,6 +428,7 @@ class ExecutiveHealthBriefingEngine:
         trend_snap: dict[str, Any],
         as_of: datetime,
         trend_window: str,
+        hc_observations: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         out: dict[str, Any] = {}
         for domain in self.config.get("domains") or []:
@@ -298,6 +454,14 @@ class ExecutiveHealthBriefingEngine:
                     as_of=as_of,
                     window_days=window_days,
                 )
+                if not series and did in HC_DOMAIN_OBSERVATIONAL_METRICS:
+                    series = self._observational_windowed_series(
+                        metric=metric,
+                        measurements=measurements,
+                        docs_by_id=docs_by_id,
+                        as_of=as_of,
+                        window_days=window_days,
+                    )
                 if not series:
                     continue
                 latest_values[metric] = {
@@ -363,6 +527,24 @@ class ExecutiveHealthBriefingEngine:
                 trend_label=trend_label,
                 latest_values=latest_values,
             )
+            observational_samples = self._observational_sample_count(
+                domain_id=did,
+                measurements=measurements,
+                docs_by_id=docs_by_id,
+            )
+            if not latest_doc and latest_values:
+                status = "Observational monitoring"
+                latest_obs_date = max(
+                    (str(v.get("measured_at") or "") for v in latest_values.values()),
+                    default="",
+                )
+            else:
+                latest_obs_date = None
+            provenance = (latest_doc or {}).get("provenance")
+            source_system = (latest_doc or {}).get("source_system")
+            if not latest_doc and latest_values:
+                provenance = "health_connect_observational"
+                source_system = "health_connect_companion"
 
             out[did] = {
                 "id": did,
@@ -373,19 +555,28 @@ class ExecutiveHealthBriefingEngine:
                     (latest_doc or {}).get("measured_at")
                     or (latest_doc or {}).get("report_date")
                     or (latest_doc or {}).get("imported_at")
+                    or latest_obs_date
                 ),
                 "latest_values": latest_values,
                 "bp_display": bp_display,
                 "trend_direction": trend_label,
                 "data_confidence": (latest_doc or {}).get("classification_confidence")
                 or (latest_doc or {}).get("parser_confidence"),
-                "provenance": (latest_doc or {}).get("provenance"),
-                "source_system": (latest_doc or {}).get("source_system"),
+                "provenance": provenance,
+                "source_system": source_system,
                 "recent_record_count": len(domain_docs),
+                "clinical_record_count": len(domain_docs),
+                "observational_sample_count": observational_samples,
                 "requires_review": bool((latest_doc or {}).get("requires_review")),
                 "verification_status": self._verification_status(latest_doc),
                 "sleep_context": sleep_context,
                 "heart_detail": heart_extra,
+                "observational_only": bool(not latest_doc and latest_values),
+                "observational_note": (
+                    "Health Connect observational monitoring — not equivalent to a clinical record or diagnosis."
+                    if not latest_doc and latest_values
+                    else None
+                ),
                 "expandable_provenance": {
                     "document_id": (latest_doc or {}).get("id"),
                     "filename": (latest_doc or {}).get("original_filename"),
@@ -540,6 +731,7 @@ class ExecutiveHealthBriefingEngine:
         profile: dict[str, Any],
         as_of: datetime,
         domain_summaries: dict[str, Any],
+        patient_id: str = "default-patient",
     ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
 
@@ -650,6 +842,13 @@ class ExecutiveHealthBriefingEngine:
                     f"Uncertain medication status: {text}.",
                     priority=24,
                 )
+
+        items.extend(
+            self._missing_canonical_clinical_attention(
+                measurements=measurements,
+                patient_id=patient_id,
+            )
+        )
 
         # Dedup by code+message
         seen: set[str] = set()
