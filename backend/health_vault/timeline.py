@@ -6,6 +6,8 @@ from collections import defaultdict
 from typing import Any
 
 from backend.health_vault.date_extraction import timeline_sort_key
+from backend.health_vault.health_snapshot import metric_filter_aliases, snapshot_metric_id
+from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.vault_store import VaultStore
 
 
@@ -244,6 +246,65 @@ def _load_hc_v6_entries() -> list[dict[str, Any]]:
         return out
     except Exception:
         return []
+
+
+def _entry_metric_tokens(entry: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for measurement in entry.get("measurements") or []:
+        mid = canonicalize_metric(measurement.get("metric") or measurement.get("metric_type") or "")
+        if mid:
+            tokens.add(mid)
+            tokens.add(snapshot_metric_id(mid))
+    payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+    for raw in (
+        entry.get("summary"),
+        entry.get("trend_impact"),
+        entry.get("primary_category"),
+        payload.get("metric"),
+        payload.get("metric_type"),
+    ):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        tokens.add(canonicalize_metric(text))
+        tokens.add(snapshot_metric_id(text))
+    return {item for item in tokens if item}
+
+
+def timeline_entry_matches_metric(
+    entry: dict[str, Any],
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+) -> bool:
+    want = metric_filter_aliases(metric, metrics)
+    if not want:
+        return True
+    tokens = _entry_metric_tokens(entry)
+    if tokens & want:
+        return True
+    related = entry.get("trend_impact") or ""
+    blob = " ".join(
+        [
+            str(entry.get("summary") or ""),
+            str(related),
+            str(entry.get("primary_category") or ""),
+        ]
+    ).lower()
+    for token in want:
+        if token and token.replace("_", " ") in blob:
+            return True
+    return False
+
+
+def filter_timeline_entries(
+    entries: list[dict[str, Any]],
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+) -> list[dict[str, Any]]:
+    want = metric_filter_aliases(metric, metrics)
+    if not want:
+        return list(entries or [])
+    return [entry for entry in (entries or []) if timeline_entry_matches_metric(entry, metric, metrics)]
 
 
 def build_unified_timeline(store: VaultStore, **kwargs: Any) -> list[dict[str, Any]]:

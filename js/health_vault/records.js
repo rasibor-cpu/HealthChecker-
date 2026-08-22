@@ -6,6 +6,8 @@
     constructor() {
       this.records = [];
       this.searchTerm = "";
+      this.metricFilter = null;
+      this.metricAliases = [];
       this.selectedFile = null;
       this.listRequest = null;
       this.detailRequest = null;
@@ -40,7 +42,11 @@
 
     async request(url, options) {
       const config = Object.assign({}, options || {});
-      config.headers = Object.assign({}, config.headers || {}, this.authHeaders());
+      config.headers = Object.assign(
+        { Accept: "application/json" },
+        config.headers || {},
+        this.authHeaders()
+      );
       const response = await fetch(url, config);
       if (response.status === 401) {
         const dashboard = this.dashboard();
@@ -48,6 +54,19 @@
         throw new Error("authentication_required");
       }
       return response;
+    }
+
+    async readJson(response) {
+      const ct = String((response.headers && response.headers.get("content-type")) || "").toLowerCase();
+      if (ct.indexOf("text/html") >= 0) {
+        throw new Error("records_html_shell");
+      }
+      const text = await response.text();
+      const trimmed = String(text || "").trim();
+      if (!trimmed || trimmed.charAt(0) === "<") {
+        throw new Error("records_html_shell");
+      }
+      return JSON.parse(trimmed);
     }
 
     bindEvents() {
@@ -129,6 +148,8 @@
       if (this.detailRequest) this.detailRequest.abort();
       this.records = [];
       this.searchTerm = "";
+      this.metricFilter = null;
+      this.metricAliases = [];
       this.intelligenceByDocument.clear();
       this.selectFile(null);
       const search = document.getElementById("records_search");
@@ -151,11 +172,13 @@
         const status = document.getElementById("records_status_filter");
         if (category && category.value) params.set("category", category.value);
         if (status && status.value) params.set("status", status.value);
+        if (this.metricFilter) params.set("metric", this.metricFilter);
+        if (this.metricAliases && this.metricAliases.length) params.set("metrics", this.metricAliases.join(","));
         const response = await this.request(`/api/records${params.toString() ? `?${params}` : ""}`, {
           signal: this.listRequest.signal,
         });
         if (!response.ok) throw new Error("records_load_failed");
-        const body = await response.json();
+        const body = await this.readJson(response);
         this.records = Array.isArray(body.records) ? body.records : [];
         this.renderRecords();
         this.text("records_count", String(this.records.length));
@@ -169,14 +192,30 @@
       }
     }
 
+    setMetricFilter(metric, aliases, category) {
+      this.metricFilter = metric ? String(metric) : null;
+      this.metricAliases = (aliases || []).map(value => String(value || "").toLowerCase()).filter(Boolean);
+      if (this.metricFilter && this.metricAliases.indexOf(String(this.metricFilter).toLowerCase()) < 0) {
+        this.metricAliases.push(String(this.metricFilter).toLowerCase());
+      }
+      if (category) {
+        const select = document.getElementById("records_category_filter");
+        if (select && !select.value) select.value = category;
+      }
+      this.refreshRecords();
+    }
+
     filteredRecords() {
-      if (!this.searchTerm) return this.records;
-      return this.records.filter(record => [
-        record.original_filename,
-        record.primary_category,
-        record.source_system,
-        record.status,
-      ].some(value => String(value || "").toLowerCase().includes(this.searchTerm)));
+      let records = this.records;
+      if (this.searchTerm) {
+        records = records.filter(record => [
+          record.original_filename,
+          record.primary_category,
+          record.source_system,
+          record.status,
+        ].some(value => String(value || "").toLowerCase().includes(this.searchTerm)));
+      }
+      return records;
     }
 
     renderRecords() {
@@ -215,6 +254,8 @@
         if (element) element.value = "";
       });
       this.searchTerm = "";
+      this.metricFilter = null;
+      this.metricAliases = [];
       this.refreshRecords();
     }
 
