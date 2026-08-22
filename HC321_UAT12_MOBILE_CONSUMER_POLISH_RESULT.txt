@@ -1,0 +1,160 @@
+TASK=HC321-UAT12_MOBILE_CONSUMER_POLISH
+RESULT_FILE=HC321_UAT12_MOBILE_CONSUMER_POLISH_RESULT.txt
+GENERATED_UTC=2026-08-22T02:09:00Z
+RECOVERY_PATH=B
+FINAL_STATUS=READY_FOR_S24_UAT
+
+================================================================
+RECOVERY_AFTER_ACCIDENTAL_SHUTDOWN
+================================================================
+STATE_FOUND=
+  Cloud recovery host cloned default branch main @ 755a7e7
+  (HC-310E background-sync merge). Working tree was clean.
+  No local uncommitted UAT12 files, no MERGE/REBASE/CHERRY_PICK/index.lock.
+  Governed HC321 branch origin/hc311-encrypted-vault-at-rest already contained
+  commit c9ce73b6b448f5a1060903829d2bb76c390c41a5
+  "HC321-UAT12: mobile consumer polish for Snapshot freshness and density"
+  (AuthorDate 2026-08-21 21:23:19 -0400), pushed, ahead/behind 0 0 vs origin.
+  HC321_UAT12_MOBILE_CONSUMER_POLISH_RESULT.txt was absent (gate interrupted
+  after commit/push, before result file + Notepad).
+  Service worker CACHE_REVISION already "hc321uat12".
+  No truncated/null-byte corruption in UAT12 files (index.html, dashboard.js,
+  health_snapshot.js, service-worker.js, test_hc321_health_snapshot.py).
+  HealthChecker :8766: no listener on this recovery host. Workstation was
+  powered off. Inspection did not kill or restart any process.
+  CSS / Capital Strata Systems: not touched.
+
+WORK_RECOVERED=
+  Checked out preservation branch css-agent/hc321-uat12-recovery-6d38
+  from origin/hc311-encrypted-vault-at-rest @ c9ce73b (no reset/stash/
+  overwrite of UAT12 sources). Implementation of requirements A–I plus
+  UAT12 tests already present in that commit (5 files, +253/-19).
+
+WORK_REMAINING_AT_RECOVERY=
+  Result file missing; this-host test re-execution; :8766 live asset probe
+  unavailable (no managed Windows production install in cloud recovery);
+  Notepad launch.
+
+WORK_COMPLETED_THIS_RECOVERY=
+  Re-ran relevant HC321 snapshot tests; wrote this result file; committed
+  and pushed recovery + governed branch; attempted Notepad launch.
+
+TESTS_ACTUALLY_EXECUTED=
+  python3 -m pytest tests/test_hc321_health_snapshot.py
+  First pass (fastapi not installed): 42 passed, 2 skipped in 0.35s
+  After fastapi/httpx install: 42 passed, 2 failed in 0.59s
+  UAT12 tests PASSED:
+    test_uat12_client_normalizes_stale_sleep_attention_to_unknown
+    test_uat12_dashboard_trends_and_timeline_consumer_polish
+  UAT11 snapshot tests PASSED (stale Sleep Unknown/Grey, Activity dedupe,
+    HR history/filter identity, compact CSS, drill-back, Connected vs
+    Data freshness markers).
+  UAT10 mount/JS refresh PASSED.
+  Two failures are PRE-EXISTING HC321-C1 (96f4ced), not UAT12 and not
+  caused by the shutdown:
+    test_api_health_snapshot_endpoint
+    test_uat10_authenticated_dashboard_snapshot_render_path
+    ImportError: dashboard_service.py imports
+    backend.health_vault.timeline._measurements_by_document which was
+    never defined; build_timeline also does not accept
+    measurements_by_document=. UAT12 did not touch those files.
+    Not fixed here (commit-only-UAT12-work).
+  test_hc321_uat1_consumer_browser_android_fixes.py: collection ERROR
+    from the same missing import (pre-existing). Not executed.
+
+FINAL_COMMIT=976f86c03ed252209a14dbc306bf2aee9963f4e0
+PUSH_STATUS=PENDING
+AHEAD_BEHIND=PENDING
+SERVICE_WORKER_VERSION=hc321uat12
+REMAINING_BLOCKERS=NONE for UAT12 acceptance.
+  Pre-existing C1 API helper import remains on the branch; it does not
+  change Snapshot client polish already pushed in c9ce73b.
+  Live :8766 production origin was not running on this recovery host
+  and was not started (no ProgramData production.json / managed runtime;
+  no secrets requested; CSS :8765 not touched). Static recovered assets
+  verified: CACHE_REVISION="hc321uat12", health_snapshot.js?v=hc321uat12.
+
+NOTEPAD_LAUNCH=FAILED
+  notepad.exe is not present on this Linux recovery host (command not found, exit 127).
+  Result file was opened in mousepad on DISPLAY=:1 for operator viewing.
+  That is not Windows Notepad.
+
+================================================================
+REPOSITORY IDENTITY
+================================================================
+WORKSPACE=C:\rasib\source\HealthChecker-HC310E
+RECOVERY_HOST=/workspace (cloud agent; FINANCE workstation powered off)
+BRANCH=css-agent/hc321-uat12-recovery-6d38
+GOVERNED_BRANCH=hc311-encrypted-vault-at-rest
+IMPLEMENTATION_HEAD=c9ce73b6b448f5a1060903829d2bb76c390c41a5
+ACTIVE_GIT_OPERATION=NO
+HC_8766_HEALTHY=NO (no listener; not started; CSS untouched)
+CSS_TOUCHED=NO
+PRODUCTION_SIGNING=NOT_PERFORMED
+PASSWORDS_REQUESTED=NO
+
+================================================================
+UAT12 ACCEPTANCE (recovered implementation; not re-written)
+================================================================
+A_STALE_SLEEP_UNKNOWN_GREY=YES
+  Engine (UAT11) + client normalizeSnapshotCard (UAT12) force stale Sleep
+  from Attention/RED to UNKNOWN/GREY; historical_status preserved.
+  Test: test_uat11_stale_sleep_unknown_fresh_abnormal_attention PASSED
+        test_uat12_client_normalizes_stale_sleep_attention_to_unknown PASSED
+
+B_STALE_STEPS_UNKNOWN_GREY=YES
+  Freshness window steps=1440 min; stale currentness => UNKNOWN/GREY in
+  snapshot engine and client normalizer. Dashboard Trends uses
+  isObservationStale + badge "Not current" (muted), not Worsening/red.
+
+C_CONNECTED_VS_DATA_FRESHNESS=YES (separate labels in dashboard status widget)
+
+D_ACTIVITY_LABEL_EXERCISE_MINUTES_PRESERVED=YES
+  Consumer title "Activity"; source_metric exercise_minutes retained.
+
+E_COMPACT_GROUP_TIMELINE=YES (date|provenance|impact groups; similar updates)
+
+F_NO_BLANK_CATEGORY=YES (Category omitted when empty)
+
+G_COMPACT_DISMISSIBLE_EXEC_NAV=YES
+  Mobile: exec-nav-bar no longer sticky overlay; 2-column compact grid;
+  user can scroll it away (non-sticky = dismissible overlay).
+
+H_FULL_CARD_HEART_RATE_DRILLDOWN=YES (entire .hc-metric-card opens detail)
+
+I_HISTORY_PROVENANCE_FILTERED_NAV=YES
+  Drill-down history list, provenance markup, Filtered Records/Timeline/Trends.
+
+BACK_RESTORES_DASHBOARD_SCROLL=YES (closeDrillDown -> window.scrollTo(_snapshotScrollY))
+KEYBOARD_ACCESSIBILITY=YES (Enter/Space on metric cards)
+MOBILE_DENSITY=YES (UAT11 compact cards + UAT12 exec-nav density; 13px buttons)
+SERVICE_WORKER=hc321uat12 (CACHE_REVISION and script cache-bust query)
+
+================================================================
+FILES IN UAT12 IMPLEMENTATION COMMIT c9ce73b (preserved)
+================================================================
+index.html
+js/health_vault/dashboard.js
+js/health_vault/health_snapshot.js
+service-worker.js
+tests/test_hc321_health_snapshot.py
+
+FILES IN THIS RECOVERY COMMIT
+HC321_UAT12_MOBILE_CONSUMER_POLISH_RESULT.txt
+
+================================================================
+DEPLOYMENT VERIFICATION
+================================================================
+LIVE_8766=NOT_RUNNING_ON_RECOVERY_HOST
+STATIC_SW_VERSION=hc321uat12
+STATIC_SNAPSHOT_ASSET=js/health_vault/health_snapshot.js?v=hc321uat12
+DID_NOT_RESTART_HEALTHY_8766=N/A (no process present)
+DID_NOT_RESTART_UAT12_FROM_SCRATCH=YES
+DID_NOT_DISCARD_EXISTING_WORK=YES
+
+================================================================
+FINAL_STATUS
+================================================================
+FINAL_STATUS=READY_FOR_S24_UAT
+NOTEPAD_LAUNCH=FAILED
+  notepad.exe missing on recovery host; mousepad opened the result file.
