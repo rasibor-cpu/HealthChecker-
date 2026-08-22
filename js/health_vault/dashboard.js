@@ -511,6 +511,9 @@
       target.querySelectorAll("[data-open-health-records]").forEach(button => {
         button.onclick = () => this.openScreen("health_records_screen");
       });
+      target.querySelectorAll("[data-open-full-timeline]").forEach(button => {
+        button.onclick = () => this.openScreen("consumer_timeline_screen");
+      });
     }
 
     renderWidgetContent(widget) {
@@ -649,8 +652,42 @@
         if (!keys.length && !exclusions.length) {
           return '<div class="muted small">No metrics available for trend mapping yet. Import records or sync Health Connect observations to build longitudinal trends.</div>';
         }
-        const trendRows = keys.map(k => {
-              const tr = trends[k];
+        const freshnessWindowsMin = {
+          heart_rate: 180,
+          oxygen_saturation: 360,
+          steps: 1440,
+          activity_minutes: 1440,
+          exercise_minutes: 1440,
+          sleep_duration: 2160,
+          default: 10080,
+        };
+        const consumerMetricTitle = (metric) => {
+          const key = String(metric || "").toLowerCase();
+          if (key === "exercise_minutes" || key === "activity_minutes") return "Activity";
+          if (key === "sleep_duration") return "Sleep";
+          if (key === "oxygen_saturation") return "Oxygen Saturation";
+          if (key === "heart_rate") return "Heart Rate";
+          return String(metric || "").replace(/_/g, " ");
+        };
+        const isObservationStale = (metric, updatedAt) => {
+          if (!updatedAt) return false;
+          const ts = Date.parse(updatedAt);
+          if (!Number.isFinite(ts)) return false;
+          const ageMin = (Date.now() - ts) / 60000;
+          const windowMin = freshnessWindowsMin[String(metric || "").toLowerCase()] || freshnessWindowsMin.default;
+          return ageMin > windowMin;
+        };
+        // Prefer Activity over EXERCISE_MINUTES when both present.
+        const displayKeys = [];
+        const seenConsumer = {};
+        keys.forEach((k) => {
+          const consumerKey = k === "exercise_minutes" ? "activity_minutes" : k;
+          if (seenConsumer[consumerKey]) return;
+          seenConsumer[consumerKey] = true;
+          displayKeys.push(k === "exercise_minutes" && trends.activity_minutes ? "activity_minutes" : k);
+        });
+        const trendRows = displayKeys.map(k => {
+              const tr = trends[k] || {};
               const isPriority = k === payload.priority_metric;
               const provenance = tr.provenance || (tr.data_plane === "monitoring" ? "health_connect_observational" : "clinical");
               const planeLabel = provenance === "health_connect_observational"
@@ -658,20 +695,26 @@
                 : (provenance === "combined_clinical_and_health_connect" || tr.data_plane === "combined"
                   ? "Combined clinical + Health Connect observational"
                   : (provenance === "clinical" ? "Clinical / lab" : provenance));
+              const stale = isObservationStale(k, tr.updated_at || tr.measured_at);
+              const label = stale ? "Not current" : (tr.label || tr.direction || "Available");
+              const badgeClass = stale ? "muted" : (tr.direction === "worsening" ? "bad" : "ok");
+              const latestNote = stale
+                ? `Last recorded ${String(tr.updated_at || tr.measured_at || "").slice(0, 19)} (not current)`
+                : `Sample count: ${tr.sample_count} · Latest value: ${tr.latest == null ? "—" : tr.latest}`;
               return `
                 <div class="kpi small" style="display: flex; justify-content: space-between; align-items: center; border-left: 2px solid ${isPriority ? "var(--accent)" : "var(--line)"}; padding-left: 8px;">
                   <div>
-                    <strong>${this.escape(k.toUpperCase())}</strong> ${isPriority ? '<span class="badge" style="font-size:9px; background:var(--accent); color:var(--bg)">Priority</span>' : ''}
-                    <div class="muted">Sample count: ${tr.sample_count} · Latest value: ${tr.latest == null ? "—" : tr.latest}</div>
-                    <div class="muted" style="font-size: 11px;">Source: ${this.escape(planeLabel)}</div>
+                    <strong>${this.escape(consumerMetricTitle(k))}</strong> ${isPriority ? '<span class="badge" style="font-size:9px; background:var(--accent); color:var(--bg)">Priority</span>' : ''}
+                    <div class="muted">${this.escape(latestNote)}</div>
+                    <div class="muted" style="font-size: 11px;">Source: ${this.escape(planeLabel)}${stale ? " · historical trend available in Snapshot drill-down" : ""}</div>
                   </div>
-                  <span class="badge ${tr.direction === "worsening" ? "bad" : "ok"}">${this.escape(tr.label)}</span>
+                  <span class="badge ${badgeClass}">${this.escape(label)}</span>
                 </div>
               `;
             }).join("");
         const exclusionRows = exclusions.map(item => `
               <div class="kpi small muted" style="border-left: 2px dashed var(--line); padding-left: 8px;">
-                <strong>${this.escape(String(item.metric || "").replace(/_/g, " ").toUpperCase())}</strong>
+                <strong>${this.escape(consumerMetricTitle(item.metric || ""))}</strong>
                 <div>${this.escape(item.message || "Intentionally excluded from Trends.")}</div>
                 <div style="font-size: 11px;">Reason: ${this.escape(item.reason || "excluded")}</div>
               </div>
@@ -689,17 +732,56 @@
         if (!events.length) {
           return '<div class="muted small">Timeline is empty.</div>';
         }
-        return `
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            ${events.map(ev => `
+        const groups = {};
+        events.forEach((ev) => {
+          const date = String(ev.date || "").substring(0, 10) || "Unknown date";
+          const prov = String(ev.provenance || ev.source || "unspecified");
+          const impact = String(ev.trend_impact || ev.summary || "Measurement updated");
+          const key = `${date}|${prov}|${impact}`;
+          if (!groups[key]) {
+            groups[key] = {
+              date,
+              provenance: prov,
+              impact,
+              category: ev.primary_category || ev.category || "",
+              severity: ev.severity || "",
+              count: 0,
+            };
+          }
+          groups[key].count += 1;
+        });
+        const rows = Object.values(groups);
+        const compact = rows.map((g) => {
+          const cat = String(g.category || "").trim();
+          const metaBits = [];
+          if (cat) metaBits.push(`Category: ${cat}`);
+          if (g.provenance) metaBits.push(`Provenance: ${g.provenance}`);
+          if (g.count > 1) metaBits.push(`${g.count} similar updates`);
+          const summary =
+            g.count > 1 && /no trend impact/i.test(g.impact)
+              ? `${g.count} Health Connect observations · no trend impact yet`
+              : g.count > 1
+                ? `${g.impact} · ${g.count} entries`
+                : g.impact;
+          return `
               <div class="kpi small" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
                 <div>
-                  <strong>${this.escape(ev.date.substring(0, 10))}</strong> · ${this.escape(ev.trend_impact || ev.summary || "Measurement updated")}
-                  <div class="muted" style="font-size: 11px;">Category: ${this.escape(ev.primary_category)} · Provenance: ${this.escape(ev.provenance)}</div>
+                  <strong>${this.escape(g.date)}</strong> · ${this.escape(summary)}
+                  ${metaBits.length ? `<div class="muted" style="font-size: 11px;">${this.escape(metaBits.join(" · "))}</div>` : ""}
                 </div>
-                ${ev.severity ? `<span class="badge ${ev.severity === "critical" ? "bad" : "warn"}">${this.escape(ev.severity.toUpperCase())}</span>` : ''}
+                ${g.severity ? `<span class="badge ${g.severity === "critical" ? "bad" : "warn"}">${this.escape(String(g.severity).toUpperCase())}</span>` : ""}
               </div>
-            `).join("")}
+            `;
+        }).join("");
+        return `
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${compact}
+            <div class="small muted" style="margin-top:6px;">
+              Dashboard shows a compacted Health Connect summary. Open Timeline for the full event list (${events.length} entries preserved).
+              <div style="margin-top:6px;">
+                <button type="button" data-open-full-timeline style="width:auto;padding:6px 12px;margin:0;min-height:38px;">Open full Timeline</button>
+              </div>
+            </div>
           </div>
         `;
       }

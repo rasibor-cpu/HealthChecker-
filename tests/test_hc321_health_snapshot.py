@@ -654,9 +654,9 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert 'id="hc_health_snapshot"' in consumer.split('id="dashboard_widgets_target"', 1)[0]
     assert html.index('id="hc_health_snapshot"') < html.index('id="dashboard_widgets_target"')
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
-    assert "health_snapshot.js?v=hc321uat11" in html
+    assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat11"' in sw
+    assert 'CACHE_REVISION = "hc321uat12"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -905,3 +905,57 @@ console.log(JSON.stringify({
     assert "not current" in payload["aging_label"]
     assert payload["ids"] == ["activity_minutes"]
     assert payload["title"] == "Activity"
+
+
+def test_uat12_client_normalizes_stale_sleep_attention_to_unknown():
+    """Defense-in-depth: even if API returns Attention for stale Sleep, client paints UNKNOWN/GREY."""
+    out = _node_snapshot_eval(
+        """
+const asOf = Date.parse('2026-08-21T12:00:00Z');
+const card = HS.normalizeSnapshotCard({
+  metric_id: 'sleep_duration',
+  title: 'Sleep',
+  display_value: '1.2',
+  unit: 'h',
+  status: 'ATTENTION',
+  status_text: 'Attention',
+  status_color: 'RED',
+  measured_at: '2026-08-18T12:00:00Z',
+  currentness: 'current',
+  freshness_label: 'Updated 3 days ago',
+}, asOf);
+console.log(JSON.stringify({
+  status: card.status,
+  color: card.status_color,
+  currentness: card.currentness,
+  label: card.freshness_label,
+  historical: card.historical_status,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["status"] == "UNKNOWN"
+    assert payload["color"] == "GREY"
+    assert payload["currentness"] == "stale"
+    assert "not current" in payload["label"]
+    assert payload["label"].startswith("Last recorded")
+    assert payload["historical"] == "ATTENTION"
+
+
+def test_uat12_dashboard_trends_and_timeline_consumer_polish():
+    dash = (ROOT / "js" / "health_vault" / "dashboard.js").read_text(encoding="utf-8")
+    assert "Not current" in dash
+    assert "consumerMetricTitle" in dash or 'return "Activity"' in dash
+    assert "exercise_minutes" in dash and "Activity" in dash
+    assert "similar updates" in dash or "Health Connect observations" in dash
+    assert "Category: ${" not in dash or "if (cat)" in dash
+    assert "data-open-full-timeline" in dash
+    assert "Data freshness" in dash
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert "exec-nav-bar.vault-sticky-actions" in html
+    assert "position:static" in html.replace(" ", "") or "position:static" in html
+    snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
+    assert "normalizeSnapshotCard" in snap
+    assert "keydown" in snap
+    assert "hc-drill-back" in snap
+    assert 'CACHE_REVISION = "hc321uat12"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")

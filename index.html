@@ -49,6 +49,33 @@ nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap}
 .exec-domain-card{margin-top:8px}
 .exec-summary-card .kpi{margin:4px 0}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;font-weight:600}
+@media (max-width:719px){
+  /* HC321-UAT12: Executive shortcuts must not sticky-overlay and obscure mobile content. */
+  .exec-nav-bar.vault-sticky-actions,
+  #exec_health_dashboard .vault-sticky-actions{
+    position:static;
+    bottom:auto;
+    z-index:auto;
+    background:transparent;
+    border:none;
+    padding:0;
+    box-shadow:none;
+  }
+  .exec-nav-bar{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    margin-top:8px;
+  }
+  .exec-nav-bar button{
+    flex:none;
+    width:100%;
+    min-height:40px;
+    margin:0;
+    padding:8px 10px;
+    font-size:13px;
+  }
+}
 @media (max-width:640px){
   .exec-nav-bar button{flex:1 1 100%}
 }
@@ -677,7 +704,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat11"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat12"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>

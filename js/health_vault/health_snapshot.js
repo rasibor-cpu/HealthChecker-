@@ -809,6 +809,69 @@
     return card;
   }
 
+  function normalizeSnapshotCard(card, nowMs) {
+    if (!card) return card;
+    const out = Object.assign({}, card);
+    if (out.metric_id === "exercise_minutes") {
+      out.metric_id = "activity_minutes";
+      out.title = "Activity";
+      out.detail_metric = out.detail_metric || "activity_minutes";
+      out.source_metric = out.source_metric || "exercise_minutes";
+    }
+    if (out.measured_at) {
+      const fresh = computeFreshness(out.metric_id || out.detail_metric, out.measured_at, nowMs);
+      // Always prefer domain freshness over a stale backend process still marking aging as current.
+      if (fresh.currentness === "stale") {
+        if (out.status && out.status !== STATUS_UNKNOWN && !out.historical_status) {
+          out.historical_status = out.status;
+          out.historical_status_text = out.status_text || statusText(out.status);
+          out.historical_status_color = out.status_color || statusColor(out.status);
+        }
+        out.freshness_status = fresh.freshness_status;
+        out.currentness = "stale";
+        out.freshness_label = fresh.label;
+        out.age_seconds = fresh.age_seconds;
+        out.status = STATUS_UNKNOWN;
+        out.status_text = statusText(STATUS_UNKNOWN);
+        out.status_color = COLOR_GREY;
+        out.status_reason = "stale";
+        out.accessibility_label = accessibilityLabel(out);
+      } else if (fresh.currentness === "current") {
+        out.freshness_status = fresh.freshness_status;
+        out.currentness = "current";
+        out.freshness_label = fresh.label;
+        out.age_seconds = fresh.age_seconds;
+      }
+    } else if (out.currentness === "stale" && out.status !== STATUS_UNKNOWN) {
+      if (!out.historical_status) {
+        out.historical_status = out.status;
+        out.historical_status_text = out.status_text || statusText(out.status);
+        out.historical_status_color = out.status_color || statusColor(out.status);
+      }
+      out.status = STATUS_UNKNOWN;
+      out.status_text = statusText(STATUS_UNKNOWN);
+      out.status_color = COLOR_GREY;
+      out.status_reason = "stale";
+      if (out.freshness_label && String(out.freshness_label).indexOf("Updated") === 0) {
+        out.freshness_label =
+          String(out.freshness_label).replace(/^Updated/, "Last recorded") +
+          (String(out.freshness_label).indexOf("not current") >= 0 ? "" : " (not current)");
+      }
+      out.accessibility_label = accessibilityLabel(out);
+    }
+    return out;
+  }
+
+  function normalizeSnapshotCards(cards, nowMs) {
+    return applyLayout(
+      (cards || []).map(function (c) {
+        return normalizeSnapshotCard(c, nowMs);
+      }),
+      loadLayout(),
+      DEFAULT_ORDER
+    );
+  }
+
   function applyLayout(cards, layout, defaultOrder) {
     layout = layout || {};
     const hidden = {};
@@ -1274,6 +1337,12 @@
           }
         );
       });
+      btn.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          btn.click();
+        }
+      });
     });
   }
 
@@ -1451,7 +1520,7 @@
         return res.json();
       })
       .then(function (body) {
-        const cards = applyLayout(body && body.cards ? body.cards : [], loadLayout());
+        const cards = normalizeSnapshotCards(body && body.cards ? body.cards : []);
         renderInto(root, cards);
         return cards;
       })
@@ -1527,6 +1596,8 @@
     formatDisplayValue: formatDisplayValue,
     accessibilityLabel: accessibilityLabel,
     applyLayout: applyLayout,
+    normalizeSnapshotCard: normalizeSnapshotCard,
+    normalizeSnapshotCards: normalizeSnapshotCards,
     buildCards: buildCards,
     collectObservations: collectObservations,
     renderHealthMetricCard: renderHealthMetricCard,
