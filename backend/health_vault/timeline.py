@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from backend.health_vault.date_extraction import timeline_sort_key
 from backend.health_vault.vault_store import VaultStore
+
+
+def _measurements_by_document(measurements: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for measurement in measurements:
+        document_id = str(measurement.get("document_id") or "")
+        if document_id:
+            grouped[document_id].append(measurement)
+    return dict(grouped)
 
 
 def build_timeline(
@@ -19,6 +29,7 @@ def build_timeline(
     include_guardian_events: bool = False,
     include_hc_v6: bool = False,
     patient_id: str = "default-patient",
+    measurements_by_document: dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Document timeline (HC-201 compatible by default).
@@ -37,7 +48,11 @@ def build_timeline(
             secondary = doc.get("secondary_categories") or []
             if primary != category and category not in secondary:
                 continue
-        measurements = store.list_measurements(document_id=doc["id"])
+        measurements = (
+            list(measurements_by_document.get(str(doc["id"]), []))
+            if measurements_by_document is not None
+            else store.list_measurements(document_id=doc["id"])
+        )
         related = {}
         for m in measurements:
             metric = str(m.get("metric") or "").lower()
