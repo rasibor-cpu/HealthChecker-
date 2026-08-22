@@ -62,9 +62,11 @@ TESTS_ACTUALLY_EXECUTED=
   test_hc321_uat1_consumer_browser_android_fixes.py: collection ERROR
     from the same missing import (pre-existing). Not executed.
 
-FINAL_COMMIT=976f86c03ed252209a14dbc306bf2aee9963f4e0
-PUSH_STATUS=PENDING
-AHEAD_BEHIND=PENDING
+FINAL_COMMIT=932d8264b4c6d2cd8dcb8e53ee7589a7c084374a
+PUSH_STATUS=PUSHED
+  origin/css-agent/hc321-uat12-recovery-6d38
+  origin/hc311-encrypted-vault-at-rest
+AHEAD_BEHIND=0 0
 SERVICE_WORKER_VERSION=hc321uat12
 REMAINING_BLOCKERS=NONE for UAT12 acceptance.
   Pre-existing C1 API helper import remains on the branch; it does not
