@@ -144,7 +144,8 @@ UAT12F regression coverage:
 ================================================================
 DEPLOY_HEAD
 ================================================================
-COMMIT=7d6152a
+REPAIR_COMMIT=7d6152a
+RESULT_COMMIT=pending
 SUBJECT=HC321-UAT12F: repair Filtered Timeline Failed to fetch
 GOVERNED_WINDOWS_8766_DEPLOY=NOT_PERFORMED
   This Linux cloud host has no C:\ProgramData\HealthChecker production.json, vault key,
