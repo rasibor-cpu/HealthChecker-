@@ -12,11 +12,11 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
-const CACHE_REVISION = "hc321uat12c";
+const CACHE_REVISION = "hc321uat12g";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** HC-325 R3 / HC-321-C1: network-first for dashboard scripts (Ctrl+F5 does not bypass an active SW). */
-const NETWORK_FIRST_JS = /\/js\/health_vault\/(executive_dashboard|health_snapshot|dashboard|health_guardian|consumer_surfaces)\.js(?:\?|$)/;
+const NETWORK_FIRST_JS = /\/js\/health_vault\/(executive_dashboard|health_snapshot|dashboard|health_guardian|consumer_surfaces|trends)\.js(?:\?|$)/;
 
 /** App-shell URLs safe to precache (relative to SW scope). */
 const APP_SHELL = [
@@ -35,6 +35,7 @@ const APP_SHELL = [
   "./js/health_vault/vault_store.js",
   "./js/health_vault/trend_engine.js",
   "./js/health_vault/timeline.js",
+  "./js/health_vault/trends.js",
   "./js/health_vault/import_engine.js",
   "./js/health_vault/batch_import.js",
   "./js/health_vault/import_confirm.js",
@@ -44,6 +45,7 @@ const APP_SHELL = [
   "./js/health_vault/health_snapshot.js",
   "./js/health_vault/dashboard.js",
   "./js/health_vault/records.js",
+  "./js/health_vault/consumer_surfaces.js",
   "./js/health_vault/alert_engine.js",
   "./js/health_vault/baseline_engine.js",
   "./js/health_vault/cgm_continuity.js",
@@ -120,7 +122,12 @@ function networkFirstShell(req) {
       }
       return response;
     })
-    .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")));
+    .catch(() => {
+      if (isNavigationRequest(req)) {
+        return caches.match(req).then((cached) => cached || caches.match("./index.html"));
+      }
+      return caches.match(req).then((cached) => cached || Promise.reject(new TypeError("network_failed")));
+    });
 }
 
 function isNavigationRequest(req) {
@@ -132,6 +139,10 @@ function isNavigationRequest(req) {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  // HC321-UAT12F: never wrap /api/ in respondWith. A controlling SW that
+  // intercepts the unified timeline GET can surface TypeError: Failed to fetch
+  // on S24 when the encrypted vault response is large or slow, while the
+  // smaller Snapshot GET still succeeds. Let the browser fetch APIs natively.
   if (isForbiddenCacheUrl(req.url)) return;
 
   // HC-325 R3: navigations + executive/dashboard/guardian JS are network-first so a
@@ -161,7 +172,12 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached || caches.match("./index.html"));
+        .catch(() => {
+          if (isNavigationRequest(req)) {
+            return cached || caches.match("./index.html");
+          }
+          return cached || Promise.reject(new TypeError("network_failed"));
+        });
     })
   );
 });

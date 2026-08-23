@@ -241,6 +241,8 @@ class RecordsService:
         *,
         category: str | None = None,
         status: str | None = None,
+        metric: str | None = None,
+        metrics: list[str] | str | None = None,
         measurement_counts: dict[str, int] | None = None,
     ) -> list[HealthRecord]:
         patient_docs = [
@@ -262,6 +264,19 @@ class RecordsService:
         if status:
             expected_status = map_status(status, False)
             records = [record for record in records if record.status == expected_status]
+        if metric or metrics:
+            from backend.health_vault.health_snapshot import metric_filter_aliases, snapshot_metric_id
+            from backend.health_vault.metric_normalization import canonicalize_metric
+
+            want = metric_filter_aliases(metric, metrics)
+            matching_docs: set[str] = set()
+            for measurement in self.store.list_measurements() or []:
+                mid = canonicalize_metric(measurement.get("metric") or measurement.get("metric_type") or "")
+                if mid in want or snapshot_metric_id(mid) in want:
+                    document_id = str(measurement.get("document_id") or "")
+                    if document_id:
+                        matching_docs.add(document_id)
+            records = [record for record in records if record.document_id in matching_docs]
         records.sort(key=lambda record: (record.measured_at or record.imported_at, record.document_id), reverse=True)
         return records
 

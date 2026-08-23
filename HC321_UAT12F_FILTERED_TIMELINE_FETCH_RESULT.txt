@@ -1,0 +1,194 @@
+TASK=HC321-UAT12F_FILTERED_TIMELINE_FAILED_TO_FETCH
+RESULT_FILE=HC321_UAT12F_FILTERED_TIMELINE_FETCH_RESULT.txt
+GENERATED_UTC=2026-08-23T00:55:00Z
+BRANCH=css-agent/hc321-uat12f-timeline-fetch-eab4
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/4
+BASE_BRANCH=hc311-encrypted-vault-at-rest
+
+================================================================
+REPRODUCED_BROWSER_REQUEST
+================================================================
+UI path: Heart Rate Snapshot drill-down → button data-open-filtered="timeline"
+  → openFilteredSurface() in js/health_vault/health_snapshot.js
+  → HCConsumerSurfaces.openFiltered("timeline", {metric:"heart_rate", metrics:["heart_rate"]})
+  → loadTimeline() in js/health_vault/consumer_surfaces.js
+
+timeline.js is the local IndexedDB/HC_V6 builder and does NOT issue this fetch.
+
+Exact authenticated request constructed by loadTimeline:
+  METHOD=GET
+  URL=/api/health-vault/timeline?unified=true&metric=heart_rate&metrics=heart_rate
+  ACCEPT=application/json
+  AUTHORIZATION=Bearer <HC-318 session token from HCConsumerDashboard.getAuthorizationHeaders()>
+  CACHE=no-store
+  CREDENTIALS=same-origin (now explicit; browser default for this same-origin GET)
+
+Working Snapshot request (same session, same origin):
+  METHOD=GET
+  URL=/api/health-vault/health-snapshot?metric=heart_rate
+  AUTHORIZATION=Bearer <same token>
+  CACHE=no-store
+  ACCEPT=(unset)
+
+S24 UI error was fetch() TypeError message "Failed to fetch" (network-level; no HTTP
+status reached the client). This is not the UAT12E HTML-shell parse error and not a
+401 application/json body.
+
+Unauthenticated live public probe (does NOT prove the authenticated S24 flow):
+  GET https://health.capitalstratasystems.com/api/health-vault/timeline?unified=true&metric=heart_rate
+  Accept: application/json
+  HTTP/2 401
+  content-type: application/json
+  body: {"ok":false,"error":"Unauthorized","code":"unauthorized"}
+  CORS: no Access-Control-* (same-origin PWA does not preflight this GET)
+  OPTIONS with Access-Control-Request-Headers: authorization,accept also 401 JSON
+  Snapshot unauthenticated probe: identical 401 JSON
+  Cloudflare in front (cf-ray, server: cloudflare). No browser CORS error on this probe.
+
+================================================================
+ROOT_CAUSE
+================================================================
+Authenticated GET /api/health-vault/timeline?unified=true&metric=heart_rate built the
+full patient vault via build_timeline(), which called list_measurements(document_id=...)
+once per document. VaultStore._read_index() decrypts the entire encrypted index on every
+call. On the live Health Connect vault that N+1 decrypt stalled past the Cloudflare/S24
+fetch deadline, so the browser reported TypeError: Failed to fetch.
+
+Why Snapshot/Records/Trends still worked with the same Bearer token:
+  Snapshot history is capped and reads observations, not one decrypt per document.
+  Records/Trends return small JSON from a single index read + filter.
+
+Contributing (not sufficient alone):
+  openFiltered() clicked the Timeline tab (SCREEN_LOADERS loadTimeline) and then called
+  loadTimeline() again → two concurrent huge unified-timeline GETs on S24.
+  Each timeline entry embedded the full document blob, which _sanitize_value() walked
+  before JSONResponse — large payload after a slow build.
+
+Service worker on UAT12E already skipped /api/ (isForbiddenCacheUrl early return). An
+older controlling SW wrapping /api/ in respondWith can also surface Failed to fetch for
+slow/large API bodies; revision advanced to hc321uat12f and the non-intercept remains.
+
+================================================================
+REPAIR
+================================================================
+- Batch measurements once in build_timeline() (display/transport only; no clinical deletes).
+- Consumer timeline API returns a slim JSON projection + optional display cap (400).
+- Snapshot drill-down sets nav cooldown before tab.click() so Timeline/Trends fetch once.
+- Explicit credentials: "same-origin" on the consumer fetch helper; keep Accept JSON + HTML guard.
+- Service worker CACHE_REVISION=hc321uat12f; /api/ still not intercepted.
+
+Preserved: patient scoping, HC-318 auth, metric filtering, JSON-only API handling,
+existing stored documents/observations, display-only Snapshot deduplication.
+CSS :8765 not touched. FINANCE dirty work not reset/stashed/overwritten.
+
+================================================================
+FILES_CHANGED
+================================================================
+backend/health_vault/timeline.py
+backend/health_vault/api.py
+js/health_vault/consumer_surfaces.js
+service-worker.js
+index.html
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+HC321_UAT12F_FILTERED_TIMELINE_FETCH_RESULT.txt
+
+================================================================
+TEST_RESULTS
+================================================================
+FOCUSED_HC321:
+  python3 -m pytest tests/test_hc321_health_snapshot.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py -q
+  66 passed
+
+GOVERNED_CONSUMER_REGRESSION_GATE:
+  test_hc321_health_snapshot.py
+  test_hc321_uat1_consumer_browser_android_fixes.py
+  test_hc321_c1_consumer_functional_completion.py
+  test_hc201i_executive_dashboard.py
+  test_hc201c_production_readiness.py
+  test_hc201_health_vault.py
+  test_hc201h_confirmed_ingestion.py
+  test_hc316c_consumer_dashboard.py
+  test_hc316b_dashboard_backend.py
+  test_hc318b_authentication_foundation.py
+  test_hc319c_mobile_identity_and_api_only.py
+  test_hc319a_consumer_runtime.py
+  test_hc325_r2_live_executive_data_path.py
+  test_hc325_r3_live_executive_path_finalization.py
+  test_hc301_health_guardian.py
+  test_hc320b_production_security_closure.py
+  test_hc317c_consumer_records_ui.py
+  292 passed, 3 failed
+
+  PRE-EXISTING Linux-only failures (multipart UploadFile TypeAdapter / pydantic 2.13;
+  not caused by this repair; same class as UAT12E):
+    test_hc320b_production_security_closure.py::test_legacy_timeline_and_import_ignore_forged_patient_identity
+      (GET timeline patient-scoping assertions passed; failure is later POST import)
+    test_hc317c_consumer_records_ui.py::test_authenticated_upload_list_detail_and_encrypted_download
+    test_hc317c_consumer_records_ui.py::test_records_ui_authentication_required_and_forged_tokens_rejected
+
+UAT12F regression coverage:
+  test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth
+  test_uat12f_consumer_projection_cannot_be_parsed_as_html_shell
+  test_uat12f_s24_authenticated_filtered_timeline_avoids_n_plus_one_and_failed_to_fetch
+  Proven in-process and on loopback harness:
+    authenticated unfiltered Timeline HTTP 200 application/json
+    authenticated metric=heart_rate Timeline HTTP 200 application/json, HR-only entries
+    no HTML shell
+    Filtered Records still works
+    Filtered Trends still works
+    Snapshot drill-down JSON intact
+    list_measurements called once per timeline GET (not once per document)
+
+================================================================
+DEPLOY_HEAD
+================================================================
+REPAIR_COMMIT=7d6152a
+SUBJECT=HC321-UAT12F: repair Filtered Timeline Failed to fetch
+GOVERNED_WINDOWS_8766_DEPLOY=NOT_PERFORMED
+  This Linux cloud host has no C:\ProgramData\HealthChecker production.json, vault key,
+  or start_healthchecker_production.ps1 runtime. Port 8766 had no listener. CSS :8765
+  was not touched. FINANCE workspace was not reset/cleaned/stashed.
+
+LOOPBACK_REPAIR_HARNESS:
+  Temporary encrypted vault + create_health_vault_app(production=True) on 127.0.0.1:8766
+  (uvicorn installed for this probe only; process stopped; 8766 free afterward).
+  GET /api/health-vault/timeline?unified=true → 200 application/json, not HTML
+  GET /api/health-vault/timeline?unified=true&metric=heart_rate
+    headers: Authorization Bearer + Accept application/json
+    → 200 application/json, filter_metric=heart_rate, 1 HR entry, no steps-only leak
+  GET /api/health-vault/health-snapshot?metric=heart_rate → 200 application/json
+  GET /api/records?metric=heart_rate → 200 application/json, filenames=["heart-rate.json"]
+  GET /api/health-vault/trends?metric=heart_rate → 200 application/json, trends=["heart_rate"]
+
+================================================================
+LIVE_PUBLIC_VERIFICATION
+================================================================
+ORIGIN=https://health.capitalstratasystems.com
+STILL_SERVING=hc321uat12e (repair NOT on the public origin yet)
+GET /api/health-vault/timeline?unified=true&metric=heart_rate unauthenticated:
+  HTTP/2 401 application/json Unauthorized (fast; does not reproduce S24 Failed to fetch)
+service-worker.js CACHE_REVISION=hc321uat12e
+index.html registers service-worker.js?v=hc321uat12e and consumer_surfaces.js?v=hc321uat12e
+Authenticated public Filtered Timeline was NOT proven from this host (no S24 session).
+
+================================================================
+SERVICE_WORKER_VERSION
+================================================================
+hc321uat12f
+(live public origin still hc321uat12e until governed :8766 deploy)
+
+================================================================
+NOTEPAD_LAUNCH
+================================================================
+notepad.exe is not present on this Linux cloud host.
+mousepad used as the local fallback to display this file.
+
+================================================================
+FINAL_STATUS
+================================================================
+FINAL_STATUS=REPAIR_COMPLETE_AWAITING_GOVERNED_8766_DEPLOY
+READY_FOR_S24_RETEST is withheld because live public HTTPS still serves hc321uat12e
+and the authenticated public Filtered Timeline request was not proven after a governed
+:8766 deploy.
