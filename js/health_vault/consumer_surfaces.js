@@ -429,10 +429,11 @@
       event && event.trend_impact,
       event && event.event_type,
       event && event.primary_category,
-    ].join(" ").toLowerCase();
+    ].join(" ").toLowerCase().replace(/_/g, " ");
     for (const key of want) {
-      if (!key) continue;
-      if (blob.indexOf(key) >= 0 || blob.indexOf(String(key).replace(/_/g, " ")) >= 0) return true;
+      const needle = String(key || "").toLowerCase().replace(/_/g, " ").trim();
+      if (needle.length < 4) continue;
+      if (blob.indexOf(needle) >= 0) return true;
     }
     return false;
   }
@@ -475,25 +476,53 @@
     target.appendChild(article);
   }
 
+  let timelineLoadSeq = 0;
+
+  function buildTimelineQuery(options) {
+    const rawMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || "";
+    const filterMetric = canonicalizeMetric(rawMetric);
+    const params = new URLSearchParams({ unified: "true" });
+    if (filterMetric) params.set("metric", filterMetric);
+    return {
+      path: "/api/health-vault/timeline?" + params.toString(),
+      filterMetric: filterMetric || null,
+      want: filterMetric ? new Set([filterMetric]) : new Set(),
+    };
+  }
+
+  function activateConsumerScreen(screenId) {
+    const tabs = document.querySelectorAll("#tabs_navbar .tab");
+    for (let i = 0; i < tabs.length; i++) tabs[i].classList.remove("active");
+    const tab = document.querySelector('#tabs_navbar .tab[data="' + screenId + '"]') ||
+      document.querySelector('.tab[data="' + screenId + '"]');
+    if (tab) tab.classList.add("active");
+    const screens = document.querySelectorAll(".screen");
+    for (let i = 0; i < screens.length; i++) screens[i].classList.remove("active");
+    const screen = document.getElementById(screenId);
+    if (screen) screen.classList.add("active");
+  }
+
   async function loadTimeline(options) {
-    const filterMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || null;
-    const filterMetrics = ((options && options.metrics) || (metricFilter && metricFilter.metrics) || [])
-      .map(value => String(value || "").toLowerCase());
-    const want = new Set(
-      filterMetrics.concat(filterMetric ? [canonicalizeMetric(filterMetric)] : []).map(canonicalizeMetric)
-    );
+    const query = buildTimelineQuery(options);
+    const seq = ++timelineLoadSeq;
     const view = begin("consumer_timeline_screen");
     try {
-      const params = new URLSearchParams({ unified: "true" });
-      if (filterMetric) params.set("metric", String(filterMetric));
-      if (filterMetrics.length) params.set("metrics", filterMetrics.join(","));
-      const body = await request("/api/health-vault/timeline?" + params.toString());
+      const body = await request(query.path);
+      if (seq !== timelineLoadSeq) return;
       let events = Array.isArray(body.entries) ? body.entries : [];
-      if (want.size) events = events.filter(event => matchesMetricFilter(event, want));
-      const groups = compactTimelineEntries(events);
+      if (query.want.size) events = events.filter(event => matchesMetricFilter(event, query.want));
+      let groups = compactTimelineEntries(events);
+      if (query.filterMetric) {
+        groups = groups.filter(group => {
+          if (group.kind === "group") return group.metric === query.filterMetric;
+          const sample = extractSample(group.event);
+          if (sample.metric) return sample.metric === query.filterMetric;
+          return matchesMetricFilter(group.event, query.want);
+        });
+      }
       if (!groups.length) {
-        empty(view.content, filterMetric
-          ? `No timeline events matched ${consumerMetricLabel(filterMetric)}.`
+        empty(view.content, query.filterMetric
+          ? `No timeline events matched ${consumerMetricLabel(query.filterMetric)}.`
           : "Your timeline is empty. Imported records and measurements will appear here.");
       }
       groups.forEach(group => {
@@ -504,13 +533,17 @@
         card(view.content, entryDay(group.event), eventCardLines(group.event));
       });
       finish(view);
-    } catch (error) { finish(view, error.message); }
+    } catch (error) {
+      if (seq !== timelineLoadSeq) return;
+      finish(view, error.message);
+    }
   }
 
   function openFiltered(surface, options) {
+    const primary = canonicalizeMetric(options && options.metric ? String(options.metric) : "");
     metricFilter = {
-      metric: options && options.metric ? String(options.metric) : null,
-      metrics: (options && options.metrics) || [],
+      metric: primary || null,
+      metrics: primary ? [primary] : ((options && options.metrics) || []).map(canonicalizeMetric).filter(Boolean),
       category: options && options.category ? options.category : null,
     };
     const map = {
@@ -529,18 +562,21 @@
         HCRecordsUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
       }
     }
-    const tab = document.querySelector('.tab[data="' + screenId + '"]');
-    // HC321-UAT12F: Snapshot drill-down used to click the tab (which already
-    // loads Timeline/Trends) and then call loadTimeline/loadTrends again.
-    // Two concurrent unified-timeline GETs on S24 raced the encrypted vault
-    // until fetch() failed with TypeError: Failed to fetch.
+    // HC321-UAT12H: do not tab.click() Timeline/Trends. index.html onclick only
+    // switches screens, but bind() SCREEN_LOADERS also fire on click and call
+    // loadTimeline() without a metric — that second unfiltered GET overwrote
+    // Heart Rate → Filtered Timeline on S24 after the cooldown window, or when
+    // the tab listener ran before lastNav was visible to that handler.
     if (screenId === "consumer_trends_screen" || screenId === "consumer_timeline_screen") {
       lastNavAt = Date.now();
       lastNavScreen = screenId;
+      activateConsumerScreen(screenId);
+      if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
+      if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
+      return;
     }
+    const tab = document.querySelector('.tab[data="' + screenId + '"]');
     if (tab) tab.click();
-    if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
-    if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
   }
 
   function reportRows(value, prefix, rows, depth) {
@@ -614,7 +650,11 @@
         }
         lastNavAt = now;
         lastNavScreen = screenId;
-        SCREEN_LOADERS[screenId]();
+        if (screenId === "consumer_timeline_screen" || screenId === "consumer_trends_screen") {
+          SCREEN_LOADERS[screenId](metricFilter);
+        } else {
+          SCREEN_LOADERS[screenId]();
+        }
       });
     });
     const trendsRefresh = document.getElementById("consumer_trends_refresh");
@@ -673,6 +713,7 @@
   global.HCConsumerSurfaces = {
     loadTrends, loadObservations, loadTimeline, loadReport, openFiltered, parseJsonResponse,
     compactTimelineEntries, consumerMetricLabel, groupedCardLines, eventCardLines,
-    categoryLine, extractSample, canonicalizeMetric,
+    categoryLine, extractSample, canonicalizeMetric, buildTimelineQuery,
+    activateConsumerScreen, matchesMetricFilter,
   };
 })(typeof window !== "undefined" ? window : globalThis);

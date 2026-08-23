@@ -407,9 +407,14 @@ def timeline_entry_matches_metric(
             str(related),
             str(entry.get("primary_category") or ""),
         ]
-    ).lower()
+    ).lower().replace("_", " ")
+    # HC321-UAT12H: short aliases such as "hr" must not match "hours" / "other".
+    # Prefer measurement tokens; only allow longer explicit metric phrases in text.
     for token in want:
-        if token and token.replace("_", " ") in blob:
+        needle = str(token or "").strip().lower().replace("_", " ")
+        if len(needle) < 4:
+            continue
+        if needle in blob:
             return True
     return False
 

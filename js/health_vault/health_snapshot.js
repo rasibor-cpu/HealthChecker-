@@ -1159,9 +1159,10 @@
       HCVaultUI.setMetricFilter(primary, aliases, category || null);
     }
     if (global.HCConsumerSurfaces && typeof HCConsumerSurfaces.openFiltered === "function") {
+      const timelineOrTrends = surface === "timeline" || surface === "trends";
       HCConsumerSurfaces.openFiltered(surface, {
         metric: primary,
-        metrics: aliases,
+        metrics: timelineOrTrends ? (primary ? [primary] : []) : aliases,
         category: category || null,
       });
       return;

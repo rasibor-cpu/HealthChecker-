@@ -659,7 +659,7 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
     assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12g"' in sw
+    assert 'CACHE_REVISION = "hc321uat12h"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -961,7 +961,7 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12g"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12h"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
 
 
 def _assert_json_not_html(response):
@@ -1246,17 +1246,19 @@ def test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth():
     assert api_return >= 0
     assert first_respond > api_return
     assert lastNav_before_click_prevents_double_fetch(surfaces)
-    assert 'CACHE_REVISION = "hc321uat12g"' in sw
-    assert "consumer_surfaces.js?v=hc321uat12g" in html
-    assert "service-worker.js?v=hc321uat12g" in html
+    assert 'CACHE_REVISION = "hc321uat12h"' in sw
+    assert "consumer_surfaces.js?v=hc321uat12h" in html
+    assert "service-worker.js?v=hc321uat12h" in html
 
 
 def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
     open_fn = surfaces.split("function openFiltered", 1)[1]
     last_nav = open_fn.find("lastNavScreen = screenId")
+    activate = open_fn.find("activateConsumerScreen(screenId)")
+    load = open_fn.find("loadTimeline(metricFilter)")
+    ret = open_fn.find("return;")
     click = open_fn.find("tab.click()")
-    second_load = open_fn.find("loadTimeline(metricFilter)")
-    return 0 <= last_nav < click < second_load
+    return 0 <= last_nav < activate < load < ret <= click or 0 <= last_nav < activate < load < ret
 
 
 def test_uat12f_consumer_projection_cannot_be_parsed_as_html_shell():
@@ -1460,6 +1462,8 @@ const ctx = {{
   console: console,
   document: documentStub,
   window: {{}},
+  URLSearchParams: URLSearchParams,
+  Set: Set,
   fetch: function () {{ return Promise.reject(new Error('fetch_unused')); }},
 }};
 ctx.window = ctx;
@@ -1640,12 +1644,12 @@ def test_uat12g_uat12f_batched_list_measurements_still_present():
     assert "store.list_measurements(document_id=doc['id'])" not in source
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12g"' in sw
+    assert 'CACHE_REVISION = "hc321uat12h"' in sw
     assert "if (isForbiddenCacheUrl(req.url)) return;" in sw
     fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
-    assert "consumer_surfaces.js?v=hc321uat12g" in html
-    assert "service-worker.js?v=hc321uat12g" in html
+    assert "consumer_surfaces.js?v=hc321uat12h" in html
+    assert "service-worker.js?v=hc321uat12h" in html
 
 
 def test_uat12g_authenticated_filtered_heart_rate_json_and_compaction_inputs():
@@ -1811,4 +1815,227 @@ console.log(JSON.stringify({
 
         assert len(store.list_documents()) == stored_docs
         assert len(store.list_observations() or []) == stored_obs
+
+
+def test_uat12h_heart_rate_filtered_navigation_sends_metric_and_not_unfiltered():
+    snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+    assert "openFilteredSurface" in snap
+    assert 'data-open-filtered="timeline"' in snap
+    assert "timelineOrTrends" in snap or 'surface === "timeline"' in snap
+    assert "buildTimelineQuery" in surfaces
+    assert "activateConsumerScreen" in surfaces
+    assert "timelineLoadSeq" in surfaces
+    open_fn = surfaces.split("function openFiltered", 1)[1]
+    assert "activateConsumerScreen(screenId)" in open_fn
+    assert "loadTimeline(metricFilter)" in open_fn
+    timeline_path = open_fn.split('screenId === "consumer_timeline_screen"', 1)[1]
+    assert "tab.click()" not in timeline_path.split("return;", 1)[0]
+    out = _node_surfaces_eval(
+        """
+const q = CS.buildTimelineQuery({metric:'heart_rate', metrics:['heart_rate','steps','sleep_duration']});
+const empty = CS.buildTimelineQuery({});
+console.log(JSON.stringify({
+  path: q.path,
+  metric: q.filterMetric,
+  emptyPath: empty.path,
+  emptyMetric: empty.filterMetric,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["path"] == "/api/health-vault/timeline?unified=true&metric=heart_rate"
+    assert payload["metric"] == "heart_rate"
+    assert "metrics=" not in payload["path"]
+    assert payload["emptyPath"] == "/api/health-vault/timeline?unified=true"
+    assert payload["emptyMetric"] is None
+
+
+def test_uat12h_s24_open_filtered_does_not_start_second_unfiltered_load():
+    out = _node_surfaces_eval(
+        r"""
+const fetches = [];
+function el(name, attrs) {
+  const node = {
+    className: '',
+    childNodes: [],
+    listeners: {},
+    attributes: Object.assign({}, attrs || {}),
+    classList: {
+      add: function (c) { node.className = (node.className + ' ' + c).trim(); },
+      remove: function (c) { node.className = node.className.split(/\s+/).filter(x => x && x !== c).join(' '); },
+    },
+    getAttribute: function (k) { return node.attributes[k] == null ? null : String(node.attributes[k]); },
+    setAttribute: function (k, v) { node.attributes[k] = String(v); },
+    appendChild: function (child) { node.childNodes.push(child); return child; },
+    replaceChildren: function () { node.childNodes = []; },
+    querySelector: function (sel) {
+      if (sel === '[data-consumer-state]') return node._state;
+      if (sel === '[data-consumer-content]') return node._content;
+      return null;
+    },
+    addEventListener: function (type, fn) {
+      node.listeners[type] = node.listeners[type] || [];
+      node.listeners[type].push(fn);
+    },
+    click: function () {
+      (node.listeners.click || []).forEach(fn => fn({ preventDefault: function () {} }));
+    },
+  };
+  return node;
+}
+const timelineTab = el('div', {data:'consumer_timeline_screen'});
+const screen = el('div', {id:'consumer_timeline_screen'});
+screen._state = el('div');
+screen._content = el('div');
+document.getElementById = function (id) { return id === 'consumer_timeline_screen' ? screen : null; };
+document.querySelector = function (sel) {
+  if (String(sel).indexOf('consumer_timeline_screen') >= 0) return timelineTab;
+  return null;
+};
+document.querySelectorAll = function (sel) {
+  if (String(sel).indexOf('tab') >= 0) return [timelineTab];
+  if (String(sel) === '.screen') return [screen];
+  return [];
+};
+fetch = function (url) {
+  fetches.push(String(url));
+  return Promise.resolve({
+    ok: true, status: 200,
+    headers: { get: function () { return 'application/json'; } },
+    text: async function () { return JSON.stringify({entries:[]}); },
+  });
+};
+CS.openFiltered('timeline', {metric:'heart_rate', metrics:['heart_rate']});
+timelineTab.click();
+const done = Date.now() + 30;
+while (Date.now() < done) {}
+console.log(JSON.stringify({
+  fetches: fetches,
+  onlyHr: fetches.length === 1 && fetches[0] === '/api/health-vault/timeline?unified=true&metric=heart_rate',
+  unfiltered: fetches.filter(u => u.indexOf('metric=') < 0),
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["fetches"] == ["/api/health-vault/timeline?unified=true&metric=heart_rate"]
+    assert payload["onlyHr"] is True
+    assert payload["unfiltered"] == []
+
+
+def test_uat12h_api_heart_rate_filter_excludes_steps_sleep_spo2_hours_blob():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from backend.health_vault.api import create_health_vault_app
+    from backend.health_vault.timeline import timeline_entry_matches_metric
+
+    sleep_hours = {
+        "date": "2026-08-18",
+        "summary": "Sleep 7 hours",
+        "trend_impact": "sleep_duration: 7 hours",
+        "primary_category": "other",
+        "measurements": [{"metric": "sleep_duration", "value": 7, "units": "hr"}],
+    }
+    assert timeline_entry_matches_metric(sleep_hours, metric="heart_rate") is False
+    assert timeline_entry_matches_metric(
+        {"measurements": [{"metric": "steps", "value": 5400}], "summary": "Steps"},
+        metric="heart_rate",
+    ) is False
+    assert timeline_entry_matches_metric(
+        {"measurements": [{"metric": "oxygen_saturation", "value": 97}], "summary": "SpO2"},
+        metric="heart_rate",
+    ) is False
+    assert timeline_entry_matches_metric(
+        {"measurements": [{"metric": "heart_rate", "value": 76, "units": "bpm"}], "summary": "Heart rate"},
+        metric="heart_rate",
+    ) is True
+
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        app = create_health_vault_app(
+            store=store,
+            production=True,
+            bootstrap_password="Boot-Pass-UAT12Exx",
+        )
+        rows = (
+            ("heart_rate", 76, "bpm", "heart-rate.json"),
+            ("steps", 5400, "count", "steps.json"),
+            ("sleep_duration", 7, "hr", "sleep.json"),
+            ("oxygen_saturation", 97, "%", "spo2.json"),
+        )
+        for i, (metric, value, units, name) in enumerate(rows):
+            store.store(
+                document=MedicalDocument(
+                    id=f"uat12h-{metric}",
+                    patient_id="00000",
+                    document_type="continuous_monitoring_observation",
+                    source_system="health_connect_sync",
+                    original_filename=name,
+                    measured_at=f"2026-08-18T12:{i:02d}:00Z",
+                    primary_category="other",
+                    sha256=f"{i + 20:064d}"[:64],
+                ),
+                measurements=[
+                    Measurement(metric=metric, value=value, units=units, measured_at=f"2026-08-18T12:{i:02d}:00Z")
+                ],
+                content=b"x",
+            )
+        client = TestClient(app)
+        headers = {**_uat12e_login(client), "Accept": "application/json"}
+        filtered = client.get(
+            "/api/health-vault/timeline?unified=true&metric=heart_rate",
+            headers=headers,
+        )
+        body = _assert_json_not_html(filtered)
+        assert filtered.status_code == 200
+        assert body.get("filter_metric") == "heart_rate"
+        metrics = []
+        for entry in body["entries"]:
+            blob = __import__("json").dumps(entry).lower()
+            assert "steps.json" not in blob
+            assert "sleep.json" not in blob
+            assert "spo2.json" not in blob
+            for row in entry.get("measurements") or []:
+                metrics.append(row.get("metric"))
+        assert metrics == ["heart_rate"]
+        compact = _node_surfaces_eval(
+            "const events = "
+            + __import__("json").dumps(body["entries"])
+            + """;
+const groups = CS.compactTimelineEntries(events);
+const labels = groups.map(g => g.kind === 'group' ? CS.consumerMetricLabel(g.metric) : (g.event && (g.event.summary || '')));
+console.log(JSON.stringify({
+  cards: groups.length,
+  labels: labels,
+  lines: groups[0] && groups[0].kind === 'group' ? CS.groupedCardLines(groups[0]) : [],
+  showObs: true,
+}));
+"""
+        )
+        grouped = __import__("json").loads(compact)
+        assert grouped["cards"] == 1
+        assert grouped["labels"] == ["Heart Rate"]
+        assert "Steps" not in grouped["labels"]
+        assert "Sleep" not in grouped["labels"]
+        assert "Oxygen Saturation" not in grouped["labels"]
+        assert "Show observations" in (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+        assert grouped["lines"][0] == "Heart Rate"
+
+
+def test_uat12h_compaction_and_batching_still_present():
+    source = (ROOT / "backend" / "health_vault" / "timeline.py").read_text(encoding="utf-8")
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+    assert "measurements_by_document = _measurements_by_document(store.list_measurements())" in source
+    assert 'store.list_measurements(document_id=doc["id"])' not in source
+    assert "compactTimelineEntries" in surfaces
+    assert "Show observations" in surfaces
+    assert "Category: Not available" not in surfaces
+    sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12h"' in sw
+    fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
+    assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
+    assert "consumer_surfaces.js?v=hc321uat12h" in html
+    assert "health_snapshot.js?v=hc321uat12h" in html
 
