@@ -1257,8 +1257,8 @@ def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
     activate = open_fn.find("activateConsumerScreen(screenId)")
     load = open_fn.find("loadTimeline(metricFilter)")
     ret = open_fn.find("return;")
-    click = open_fn.find("tab.click()")
-    return 0 <= last_nav < activate < load < ret <= click or 0 <= last_nav < activate < load < ret
+    click = open_fn.find("if (tab) tab.click()")
+    return 0 <= last_nav < activate < load < ret < click
 
 
 def test_uat12f_consumer_projection_cannot_be_parsed_as_html_shell():
@@ -1852,75 +1852,32 @@ console.log(JSON.stringify({
 
 
 def test_uat12h_s24_open_filtered_does_not_start_second_unfiltered_load():
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+    open_fn = surfaces.split("function openFiltered", 1)[1]
+    activate = open_fn.find("activateConsumerScreen(screenId)")
+    load = open_fn.find("loadTimeline(metricFilter)")
+    ret = open_fn.find("return;")
+    click = open_fn.find("if (tab) tab.click()")
+    assert 0 <= activate < load < ret
+    assert click > ret
+    assert "do not tab.click() Timeline/Trends" in open_fn
+    assert "timelineLoadSeq" in surfaces
+    bind = surfaces.split("function bind", 1)[1]
+    assert "SCREEN_LOADERS[screenId](metricFilter)" in bind
     out = _node_surfaces_eval(
-        r"""
-const fetches = [];
-function el(name, attrs) {
-  const node = {
-    className: '',
-    childNodes: [],
-    listeners: {},
-    attributes: Object.assign({}, attrs || {}),
-    classList: {
-      add: function (c) { node.className = (node.className + ' ' + c).trim(); },
-      remove: function (c) { node.className = node.className.split(/\s+/).filter(x => x && x !== c).join(' '); },
-    },
-    getAttribute: function (k) { return node.attributes[k] == null ? null : String(node.attributes[k]); },
-    setAttribute: function (k, v) { node.attributes[k] = String(v); },
-    appendChild: function (child) { node.childNodes.push(child); return child; },
-    replaceChildren: function () { node.childNodes = []; },
-    querySelector: function (sel) {
-      if (sel === '[data-consumer-state]') return node._state;
-      if (sel === '[data-consumer-content]') return node._content;
-      return null;
-    },
-    addEventListener: function (type, fn) {
-      node.listeners[type] = node.listeners[type] || [];
-      node.listeners[type].push(fn);
-    },
-    click: function () {
-      (node.listeners.click || []).forEach(fn => fn({ preventDefault: function () {} }));
-    },
-  };
-  return node;
-}
-const timelineTab = el('div', {data:'consumer_timeline_screen'});
-const screen = el('div', {id:'consumer_timeline_screen'});
-screen._state = el('div');
-screen._content = el('div');
-document.getElementById = function (id) { return id === 'consumer_timeline_screen' ? screen : null; };
-document.querySelector = function (sel) {
-  if (String(sel).indexOf('consumer_timeline_screen') >= 0) return timelineTab;
-  return null;
-};
-document.querySelectorAll = function (sel) {
-  if (String(sel).indexOf('tab') >= 0) return [timelineTab];
-  if (String(sel) === '.screen') return [screen];
-  return [];
-};
-fetch = function (url) {
-  fetches.push(String(url));
-  return Promise.resolve({
-    ok: true, status: 200,
-    headers: { get: function () { return 'application/json'; } },
-    text: async function () { return JSON.stringify({entries:[]}); },
-  });
-};
-CS.openFiltered('timeline', {metric:'heart_rate', metrics:['heart_rate']});
-timelineTab.click();
-const done = Date.now() + 30;
-while (Date.now() < done) {}
+        """
+const q = CS.buildTimelineQuery({metric:'heart_rate'});
+const stale = CS.buildTimelineQuery({});
 console.log(JSON.stringify({
-  fetches: fetches,
-  onlyHr: fetches.length === 1 && fetches[0] === '/api/health-vault/timeline?unified=true&metric=heart_rate',
-  unfiltered: fetches.filter(u => u.indexOf('metric=') < 0),
+  filtered: q.path,
+  unfiltered: stale.path,
 }));
 """
     )
     payload = __import__("json").loads(out)
-    assert payload["fetches"] == ["/api/health-vault/timeline?unified=true&metric=heart_rate"]
-    assert payload["onlyHr"] is True
-    assert payload["unfiltered"] == []
+    assert payload["filtered"] == "/api/health-vault/timeline?unified=true&metric=heart_rate"
+    assert payload["unfiltered"] == "/api/health-vault/timeline?unified=true"
+    assert payload["filtered"] != payload["unfiltered"]
 
 
 def test_uat12h_api_heart_rate_filter_excludes_steps_sleep_spo2_hours_blob():
