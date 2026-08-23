@@ -2,7 +2,7 @@ TASK=HC321-UAT12G_FILTERED_TIMELINE_CONSUMER_COMPACTION
 RESULT_FILE=HC321_UAT12G_TIMELINE_COMPACTION_RESULT.txt
 GENERATED_UTC=2026-08-23T02:16:28Z
 BRANCH=css-agent/hc321-uat12g-timeline-compact-dd01
-HEAD=43628c44f80aa2332dbdd7e892af53aa55e01e71
+HEAD=171a830a62496d0a0d6d1153b6ee393a46df7c26
 PR=https://github.com/rasibor-cpu/HealthChecker-/pull/6
 BASE_BRANCH=hc311-encrypted-vault-at-rest
 LINEAGE=origin/css-agent/hc321-uat12f-timeline-fetch-eab4
@@ -116,7 +116,7 @@ service-worker.js?v=hc321uat12g
   (isForbiddenCacheUrl early return before event.respondWith)
 
 BRANCH=css-agent/hc321-uat12g-timeline-compact-dd01
-HEAD=43628c44f80aa2332dbdd7e892af53aa55e01e71
+HEAD=171a830a62496d0a0d6d1153b6ee393a46df7c26
 PR=https://github.com/rasibor-cpu/HealthChecker-/pull/6
 LIVE_DEPLOY_PERFORMED=NO
 CSS_8765_UNTOUCHED=YES
