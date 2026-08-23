@@ -39,6 +39,7 @@
     const response = await fetch(path, {
       headers: Object.assign({ Accept: "application/json" }, headers()),
       cache: "no-store",
+      credentials: "same-origin",
     });
     if (response.status === 401 || response.status === 403) {
       if (dashboard()) dashboard().handleLogout();
@@ -241,6 +242,14 @@
       }
     }
     const tab = document.querySelector('.tab[data="' + screenId + '"]');
+    // HC321-UAT12F: Snapshot drill-down used to click the tab (which already
+    // loads Timeline/Trends) and then call loadTimeline/loadTrends again.
+    // Two concurrent unified-timeline GETs on S24 raced the encrypted vault
+    // until fetch() failed with TypeError: Failed to fetch.
+    if (screenId === "consumer_trends_screen" || screenId === "consumer_timeline_screen") {
+      lastNavAt = Date.now();
+      lastNavScreen = screenId;
+    }
     if (tab) tab.click();
     if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
     if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);

@@ -659,7 +659,7 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
     assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12e"' in sw
+    assert 'CACHE_REVISION = "hc321uat12f"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -961,7 +961,7 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12e"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12f"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
 
 
 def _assert_json_not_html(response):
@@ -1205,3 +1205,230 @@ def test_uat12e_filtered_surfaces_authenticated_json_never_html():
         assert "./js/health_vault/trends.js" in sw
         assert "isNavigationRequest(req)" in sw
         assert "network_failed" in sw
+
+
+def test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth():
+    """Reproduce the exact S24 Heart Rate → Filtered Timeline browser request.
+
+    Snapshot (working) uses GET /api/health-vault/health-snapshot?metric=heart_rate
+    with Authorization + cache:no-store. Timeline (failing) used the same Bearer
+    token plus Accept: application/json against
+    GET /api/health-vault/timeline?unified=true&metric=heart_rate.
+    The UI error was fetch()'s TypeError message "Failed to fetch" — a dropped
+    connection — not the UAT12E HTML-shell parse error and not a 401 JSON body.
+    """
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+    snap = (ROOT / "js" / "health_vault" / "health_snapshot.js").read_text(encoding="utf-8")
+    dash = (ROOT / "js" / "health_vault" / "dashboard.js").read_text(encoding="utf-8")
+    sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    timeline_js = (ROOT / "js" / "health_vault" / "timeline.js").read_text(encoding="utf-8")
+
+    assert 'data-open-filtered="timeline"' in snap
+    assert "openFilteredSurface" in snap
+    assert "HCConsumerSurfaces.openFiltered" in snap
+    assert "/api/health-vault/timeline?" in surfaces
+    assert 'unified: "true"' in surfaces or "unified: 'true'" in surfaces
+    assert 'params.set("metric"' in surfaces
+    assert 'Accept: "application/json"' in surfaces
+    assert 'cache: "no-store"' in surfaces
+    assert 'credentials: "same-origin"' in surfaces
+    assert "getAuthorizationHeaders" in surfaces
+    assert 'Authorization": `Bearer ${this.token}`' in dash or "Authorization" in dash
+    assert "/api/health-vault/health-snapshot?metric=" in snap
+    assert 'cache: "no-store"' in snap
+    assert "/api/" not in timeline_js
+    assert "isForbiddenCacheUrl(req.url)) return" in sw.replace("\n", "") or "isForbiddenCacheUrl(req.url)) return" in sw
+    assert "if (isForbiddenCacheUrl(req.url)) return;" in sw
+    fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
+    api_return = fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;")
+    first_respond = fetch_handler.find("event.respondWith")
+    assert api_return >= 0
+    assert first_respond > api_return
+    assert lastNav_before_click_prevents_double_fetch(surfaces)
+    assert 'CACHE_REVISION = "hc321uat12f"' in sw
+    assert "consumer_surfaces.js?v=hc321uat12f" in html
+    assert "service-worker.js?v=hc321uat12f" in html
+
+
+def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
+    open_fn = surfaces.split("function openFiltered", 1)[1]
+    last_nav = open_fn.find("lastNavScreen = screenId")
+    click = open_fn.find("tab.click()")
+    second_load = open_fn.find("loadTimeline(metricFilter)")
+    return 0 <= last_nav < click < second_load
+
+
+def test_uat12f_consumer_projection_cannot_be_parsed_as_html_shell():
+    import json
+
+    from backend.health_vault.timeline import project_consumer_timeline_entry
+
+    fat = {
+        "date": "2026-08-21T14:50:45Z",
+        "summary": "Heart rate 76 bpm",
+        "primary_category": "other",
+        "trend_impact": "heart_rate: stable",
+        "document": {
+            "id": "doc-hr",
+            "original_filename": "heart-rate.json",
+            "extracted_text": "<html><body>app shell</body></html>" * 40,
+            "ocr_text": "x" * 8000,
+        },
+        "measurements": [{"metric": "heart_rate", "value": 76, "units": "bpm"}],
+        "fhir_resources": {"document": "DocumentReference"},
+        "payload": {"metric": "heart_rate", "raw_blob": "<!doctype html>"},
+    }
+    slim = project_consumer_timeline_entry(fat)
+    blob = json.dumps(slim).lower()
+    assert "extracted_text" not in blob
+    assert "ocr_text" not in blob
+    assert "<html" not in blob
+    assert "<!doctype" not in blob
+    assert "heart_rate" in blob
+    assert slim["document"]["original_filename"] == "heart-rate.json"
+
+
+def test_uat12f_s24_authenticated_filtered_timeline_avoids_n_plus_one_and_failed_to_fetch():
+    """The S24 blocker: authenticated GET timeline?unified=true&metric=heart_rate.
+
+    Before UAT12F, build_timeline called list_measurements(document_id=...) once
+    per vault document. Each call decrypts the whole encrypted index, so a live
+    Health Connect vault (thousands of rows) stalled past the Cloudflare/S24
+    fetch deadline and the browser surfaced TypeError: Failed to fetch.
+    Snapshot/Records/Trends stayed small and succeeded with the same Bearer token.
+    """
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from backend.health_vault.api import create_health_vault_app
+    from backend.health_vault.timeline import build_unified_timeline
+
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        app = create_health_vault_app(
+            store=store,
+            production=True,
+            bootstrap_password="Boot-Pass-UAT12Exx",
+        )
+        n_docs = 48
+        for i in range(n_docs):
+            metric = "heart_rate" if i % 3 == 0 else "steps"
+            store.store(
+                document=MedicalDocument(
+                    id=f"uat12f-doc-{i}",
+                    patient_id="00000",
+                    document_type="continuous_monitoring_observation",
+                    source_system="health_connect_companion",
+                    original_filename=f"{metric}-{i}.json",
+                    measured_at=f"2026-08-21T14:{i % 60:02d}:{i % 60:02d}Z",
+                    primary_category="other",
+                    sha256=f"{i:064d}"[:64],
+                ),
+                measurements=[
+                    Measurement(
+                        metric=metric,
+                        value=60 + i,
+                        units="bpm" if metric == "heart_rate" else "count",
+                        measured_at=f"2026-08-21T14:{i % 60:02d}:{i % 60:02d}Z",
+                    )
+                ],
+                content=("extracted-text-shell <html>not-json</html> " + str(i)).encode("utf-8"),
+            )
+        for i, (metric, value) in enumerate(
+            (("heart_rate", 70), ("heart_rate", 72), ("heart_rate", 76), ("steps", 1000), ("steps", 2000), ("steps", 5400))
+        ):
+            store.upsert_observation(
+                {
+                    "patient_id": "00000",
+                    "metric_type": metric,
+                    "value": value,
+                    "unit": "bpm" if metric == "heart_rate" else "count",
+                    "measured_at": f"2026-08-21T13:{30 + i:02d}:45Z",
+                    "source": "health_connect_companion",
+                    "connector_id": "health_connect",
+                    "fingerprint": f"uat12f-{metric}-{i}",
+                    "observation_id": f"uat12f-obs-{metric}-{i}",
+                }
+            )
+
+        measurement_calls: list[dict] = []
+        original_list = store.list_measurements
+
+        def _counting_list_measurements(**filters):
+            measurement_calls.append(dict(filters))
+            return original_list(**filters)
+
+        store.list_measurements = _counting_list_measurements  # type: ignore[method-assign]
+
+        client = TestClient(app)
+        browser_headers = {
+            **_uat12e_login(client),
+            "Accept": "application/json",
+        }
+
+        measurement_calls.clear()
+        unfiltered = client.get(
+            "/api/health-vault/timeline?unified=true",
+            headers=browser_headers,
+        )
+        unfiltered_body = _assert_json_not_html(unfiltered)
+        assert unfiltered.status_code == 200
+        assert unfiltered.headers.get("content-type", "").lower().startswith("application/json")
+        assert isinstance(unfiltered_body.get("entries"), list)
+        assert unfiltered_body.get("entries")
+        assert len(measurement_calls) == 1
+        assert "document_id" not in measurement_calls[0]
+
+        measurement_calls.clear()
+        filtered = client.get(
+            "/api/health-vault/timeline?unified=true&metric=heart_rate",
+            headers=browser_headers,
+        )
+        body = _assert_json_not_html(filtered)
+        assert filtered.status_code == 200
+        assert filtered.headers.get("content-type", "").lower().startswith("application/json")
+        assert body.get("filter_metric") == "heart_rate"
+        assert len(measurement_calls) == 1
+        assert "document_id" not in measurement_calls[0]
+        assert body.get("entries")
+        blob = __import__("json").dumps(body).lower()
+        assert "heart_rate" in blob
+        assert "<html" not in blob
+        assert "extracted-text-shell" not in blob
+        assert "failed to fetch" not in blob
+        for entry in body["entries"]:
+            entry_blob = __import__("json").dumps(entry).lower()
+            assert "heart_rate" in entry_blob
+            assert "extracted_text" not in entry_blob
+            doc = entry.get("document") or {}
+            assert "extracted_text" not in doc
+            assert "ocr_text" not in doc
+
+        snapshot = client.get(
+            "/api/health-vault/health-snapshot?metric=heart_rate",
+            headers={"Authorization": browser_headers["Authorization"]},
+        )
+        snap_body = _assert_json_not_html(snapshot)
+        assert snapshot.status_code == 200
+        assert snap_body.get("metric_id") == "heart_rate"
+        assert isinstance(snap_body.get("history"), list)
+
+        records = client.get("/api/records?metric=heart_rate", headers=browser_headers)
+        records_body = _assert_json_not_html(records)
+        assert records.status_code == 200
+        names = [row.get("original_filename") for row in records_body["records"]]
+        assert any(str(name).startswith("heart_rate-") for name in names)
+        assert not any(str(name).startswith("steps-") for name in names)
+
+        trends = client.get("/api/health-vault/trends?metric=heart_rate", headers=browser_headers)
+        trends_body = _assert_json_not_html(trends)
+        assert trends.status_code == 200
+        assert "heart_rate" in (trends_body.get("trends") or {})
+        assert "steps" not in (trends_body.get("trends") or {})
+
+        stored_before = len(store.list_documents())
+        _ = build_unified_timeline(store, patient_id="00000")
+        assert len(store.list_documents()) == stored_before
+        assert len(store.list_measurements()) >= n_docs
+

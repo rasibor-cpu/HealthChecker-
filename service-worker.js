@@ -12,7 +12,7 @@
  */
 
 const CACHE_NAME = "hc-guardian-v1";
-const CACHE_REVISION = "hc321uat12e";
+const CACHE_REVISION = "hc321uat12f";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** HC-325 R3 / HC-321-C1: network-first for dashboard scripts (Ctrl+F5 does not bypass an active SW). */
@@ -139,6 +139,10 @@ function isNavigationRequest(req) {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  // HC321-UAT12F: never wrap /api/ in respondWith. A controlling SW that
+  // intercepts the unified timeline GET can surface TypeError: Failed to fetch
+  // on S24 when the encrypted vault response is large or slow, while the
+  // smaller Snapshot GET still succeeds. Let the browser fetch APIs natively.
   if (isForbiddenCacheUrl(req.url)) return;
 
   // HC-325 R3: navigations + executive/dashboard/guardian JS are network-first so a

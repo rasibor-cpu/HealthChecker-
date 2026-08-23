@@ -1118,7 +1118,7 @@ if (window.HCContinuousMonitoring) {
     sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat10');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12e').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12f').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }
@@ -1143,6 +1143,6 @@ if (window.HCContinuousMonitoring) {
   });
 })();
 </script>
-<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12e"></script>
+<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12f"></script>
 </body>
 </html>

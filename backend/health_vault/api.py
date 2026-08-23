@@ -413,23 +413,31 @@ def create_health_vault_app(
         metric: str | None = None,
         metrics: str | None = None,
     ) -> JSONResponse:
-        patient_id = _request_patient(request) if production_mode else "default-patient"
-        from backend.health_vault.timeline import build_unified_timeline, filter_timeline_entries
+        """Authenticated consumer timeline. Slim JSON only — never the HTML app shell."""
+        try:
+            patient_id = _request_patient(request) if production_mode else (
+                str(getattr(request.state, "patient_id", None) or "default-patient")
+            )
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        from backend.health_vault.timeline import (
+            build_consumer_timeline_response,
+            build_unified_timeline,
+        )
 
         entries = (
             build_unified_timeline(vault, patient_id=patient_id)
             if unified
             else build_timeline(vault, patient_id=patient_id)
         )
-        filtered = filter_timeline_entries(entries, metric=metric, metrics=metrics)
         return JSONResponse(
             _sanitize_value(
-                {
-                    "entries": filtered,
-                    "unified": bool(unified),
-                    "filter_metric": metric,
-                    "filter_metrics": [part.strip() for part in str(metrics or "").split(",") if part.strip()],
-                }
+                build_consumer_timeline_response(
+                    entries,
+                    unified=bool(unified),
+                    metric=metric,
+                    metrics=metrics,
+                )
             )
         )
 

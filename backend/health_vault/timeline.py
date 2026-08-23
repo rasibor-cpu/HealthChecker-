@@ -11,6 +11,76 @@ from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.vault_store import VaultStore
 
 
+CONSUMER_TIMELINE_LIMIT = 400
+
+_CONSUMER_ENTRY_KEYS = (
+    "date",
+    "measured_at",
+    "report_date",
+    "imported_at",
+    "primary_category",
+    "category_label",
+    "category",
+    "group_id",
+    "group_title",
+    "sequence_number",
+    "page_number",
+    "trend_impact",
+    "original_link",
+    "entry_kind",
+    "provenance",
+    "source",
+    "severity",
+    "summary",
+    "event_type",
+    "dedupe_key",
+)
+
+_CONSUMER_DOCUMENT_KEYS = (
+    "id",
+    "patient_id",
+    "document_type",
+    "source_system",
+    "original_filename",
+    "measured_at",
+    "report_date",
+    "imported_at",
+    "primary_category",
+    "secondary_categories",
+    "group_id",
+    "group_title",
+    "sequence_number",
+    "page_number",
+    "provenance",
+    "storage_uri",
+    "status",
+)
+
+_CONSUMER_MEASUREMENT_KEYS = (
+    "metric",
+    "metric_type",
+    "value",
+    "units",
+    "unit",
+    "measured_at",
+    "source",
+    "document_id",
+)
+
+_CONSUMER_PAYLOAD_KEYS = (
+    "metric",
+    "metric_type",
+    "value",
+    "unit",
+    "units",
+    "source",
+    "g",
+    "sys",
+    "dia",
+    "ts",
+)
+
+
 def _measurements_by_document(measurements: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for measurement in measurements:
@@ -18,6 +88,52 @@ def _measurements_by_document(measurements: list[dict[str, Any]]) -> dict[str, l
         if document_id:
             grouped[document_id].append(measurement)
     return dict(grouped)
+
+
+def _pick(source: dict[str, Any] | None, keys: tuple[str, ...]) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        return {}
+    return {key: source[key] for key in keys if key in source}
+
+
+def project_consumer_timeline_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Display/transport projection — does not delete stored clinical documents."""
+    out = _pick(entry, _CONSUMER_ENTRY_KEYS)
+    document = entry.get("document") if isinstance(entry.get("document"), dict) else None
+    slim_document = _pick(document, _CONSUMER_DOCUMENT_KEYS)
+    out["document"] = slim_document or None
+    measurements = entry.get("measurements") or []
+    out["measurements"] = [
+        _pick(row, _CONSUMER_MEASUREMENT_KEYS) for row in measurements if isinstance(row, dict)
+    ]
+    payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else None
+    if payload:
+        out["payload"] = _pick(payload, _CONSUMER_PAYLOAD_KEYS)
+    return out
+
+
+def build_consumer_timeline_response(
+    entries: list[dict[str, Any]],
+    *,
+    unified: bool,
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+    limit: int = CONSUMER_TIMELINE_LIMIT,
+) -> dict[str, Any]:
+    filtered = filter_timeline_entries(entries, metric=metric, metrics=metrics)
+    cap = max(1, int(limit or CONSUMER_TIMELINE_LIMIT))
+    truncated = len(filtered) > cap
+    projected = [project_consumer_timeline_entry(entry) for entry in filtered[:cap]]
+    metric_list = [part.strip() for part in str(metrics or "").split(",") if part.strip()] if not isinstance(metrics, list) else [str(part).strip() for part in metrics if str(part).strip()]
+    return {
+        "entries": projected,
+        "unified": bool(unified),
+        "filter_metric": metric,
+        "filter_metrics": metric_list,
+        "truncated": truncated,
+        "returned_count": len(projected),
+        "matched_count": len(filtered),
+    }
 
 
 def build_timeline(
@@ -42,6 +158,12 @@ def build_timeline(
     trends = store.get_trends(patient_id=patient_id)
     entries: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
+    # HC321-UAT12F: encrypted production indexes decrypt on every _read_index.
+    # list_measurements(document_id=...) used to re-read the whole vault once per
+    # document, which stalled the S24 Filtered Timeline fetch until the browser
+    # reported TypeError: Failed to fetch. Batch the measurement load instead.
+    if measurements_by_document is None:
+        measurements_by_document = _measurements_by_document(store.list_measurements())
     for doc in store.list_documents():
         if doc.get("patient_id", "default-patient") != patient_id:
             continue
@@ -50,11 +172,7 @@ def build_timeline(
             secondary = doc.get("secondary_categories") or []
             if primary != category and category not in secondary:
                 continue
-        measurements = (
-            list(measurements_by_document.get(str(doc["id"]), []))
-            if measurements_by_document is not None
-            else store.list_measurements(document_id=doc["id"])
-        )
+        measurements = list(measurements_by_document.get(str(doc["id"]), []))
         related = {}
         for m in measurements:
             metric = str(m.get("metric") or "").lower()
