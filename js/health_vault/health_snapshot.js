@@ -593,6 +593,9 @@
             tags: m.tags || doc.tags,
             document_id: m.document_id,
             invalid: m.invalid,
+            fingerprint: m.fingerprint,
+            observation_id: m.observation_id || m.id,
+            source_record_id: m.source_record_id,
           });
         });
       }
@@ -1005,22 +1008,60 @@
     );
   }
 
+  function fallbackObservationIdentity(row) {
+    const metric = observationMetric(row);
+    const measured = parseIso(row && row.measured_at);
+    let ts = "";
+    if (measured != null) {
+      ts = new Date(measured).toISOString().replace(/\.\d{3}Z$/, "Z");
+    } else {
+      ts = String((row && row.measured_at) || "").slice(0, 19);
+    }
+    const num = asNumber(row && row.value);
+    const valueKey = num != null ? String(num) : String(row && row.value != null ? row.value : "");
+    const units = String((row && (row.units || row.unit)) || "").toLowerCase();
+    return "fallback:" + metric + "|" + valueKey + "|" + ts + "|" + units;
+  }
+
+  function observationDisplayIdentity(row) {
+    const fp = String((row && row.fingerprint) || "").trim();
+    if (fp) return "fp:" + fp;
+    const oid = String((row && (row.observation_id || row.id)) || "").trim();
+    if (oid) return "id:" + oid;
+    return fallbackObservationIdentity(row);
+  }
+
+  function dedupeObservationHistory(rows) {
+    const seenFp = {};
+    const seenId = {};
+    const seenFallback = {};
+    const out = [];
+    (rows || []).forEach(function (row) {
+      const fp = String((row && row.fingerprint) || "").trim();
+      const oid = String((row && (row.observation_id || row.id)) || "").trim();
+      const fb = fallbackObservationIdentity(row);
+      if (fp && seenFp[fp]) return;
+      if (oid && seenId[oid]) return;
+      if (seenFallback[fb]) return;
+      if (fp) seenFp[fp] = true;
+      if (oid) seenId[oid] = true;
+      seenFallback[fb] = true;
+      out.push(row);
+    });
+    return out;
+  }
+
   function summarizeHistory(rows, metricId) {
     const aliases = metricAliasesFor(metricId);
-    const eligible = (rows || [])
-      .filter(function (r) {
-        return aliases.indexOf(observationMetric(r)) >= 0 && isValidObservation(r);
-      })
-      .sort(function (a, b) {
-        return String(b.measured_at || "").localeCompare(String(a.measured_at || ""));
-      });
-    const nums = eligible
-      .map(function (r) {
-        return asNumber(r.value);
-      })
-      .filter(function (v) {
-        return v != null;
-      });
+    const eligible = dedupeObservationHistory(
+      (rows || [])
+        .filter(function (r) {
+          return aliases.indexOf(observationMetric(r)) >= 0 && isValidObservation(r);
+        })
+        .sort(function (a, b) {
+          return String(b.measured_at || "").localeCompare(String(a.measured_at || ""));
+        })
+    );
     const history = eligible.slice(0, 40).map(function (r) {
       const hist = evaluateConsumerStatus({
         metric: observationMetric(r),
@@ -1038,11 +1079,20 @@
         measured_at: r.measured_at,
         provenance: r.provenance,
         source: r.source,
+        fingerprint: r.fingerprint,
+        observation_id: r.observation_id || r.id,
         historical_status: hist.status,
         historical_status_text: hist.status_text,
         historical_status_color: hist.status_color,
       };
     });
+    const nums = history
+      .map(function (r) {
+        return asNumber(r.value);
+      })
+      .filter(function (v) {
+        return v != null;
+      });
     let stats = null;
     if (nums.length) {
       stats = {
@@ -1109,9 +1159,10 @@
       HCVaultUI.setMetricFilter(primary, aliases, category || null);
     }
     if (global.HCConsumerSurfaces && typeof HCConsumerSurfaces.openFiltered === "function") {
+      const timelineOrTrends = surface === "timeline" || surface === "trends";
       HCConsumerSurfaces.openFiltered(surface, {
         metric: primary,
-        metrics: aliases,
+        metrics: timelineOrTrends ? (primary ? [primary] : []) : aliases,
         category: category || null,
       });
       return;
@@ -1131,8 +1182,25 @@
   function renderDrillDown(root, detail) {
     if (!root) return;
     const card = (detail && detail.card) || {};
-    const history = (detail && detail.history) || [];
-    const stats = (detail && detail.stats) || null;
+    const history = dedupeObservationHistory((detail && detail.history) || []);
+    let stats = (detail && detail.stats) || null;
+    const nums = history
+      .map(function (row) {
+        return asNumber(row.value);
+      })
+      .filter(function (v) {
+        return v != null;
+      });
+    if (nums.length) {
+      stats = {
+        sample_count: nums.length,
+        average: Math.round((nums.reduce(function (a, b) {
+          return a + b;
+        }, 0) / nums.length) * 100) / 100,
+        minimum: Math.min.apply(null, nums),
+        maximum: Math.max.apply(null, nums),
+      };
+    }
     const color = String(card.status_color || "GREY").toLowerCase();
     const histColor = String(card.historical_status_color || card.status_color || "GREY").toLowerCase();
     const sourceMetric =
@@ -1606,6 +1674,10 @@
     openMetricDetail: openMetricDetail,
     closeDrillDown: closeDrillDown,
     metricAliasesFor: metricAliasesFor,
+    observationDisplayIdentity: observationDisplayIdentity,
+    fallbackObservationIdentity: fallbackObservationIdentity,
+    dedupeObservationHistory: dedupeObservationHistory,
+    summarizeHistory: summarizeHistory,
     loadLayout: loadLayout,
     saveLayout: saveLayout,
     applyTheme: applyTheme,

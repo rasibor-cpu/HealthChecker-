@@ -18,13 +18,34 @@
   function headers() { return dashboard() ? dashboard().getAuthorizationHeaders() : {}; }
   function authenticated() { return !!(dashboard() && dashboard().token); }
 
+  async function parseJsonResponse(response) {
+    const ct = String((response.headers && response.headers.get("content-type")) || "").toLowerCase();
+    if (ct.indexOf("text/html") >= 0) {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+    const text = await response.text();
+    const trimmed = String(text || "").trim();
+    if (!trimmed || trimmed.charAt(0) === "<") {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (_err) {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+  }
+
   async function request(path) {
-    const response = await fetch(path, { headers: headers(), cache: "no-store" });
+    const response = await fetch(path, {
+      headers: Object.assign({ Accept: "application/json" }, headers()),
+      cache: "no-store",
+      credentials: "same-origin",
+    });
     if (response.status === 401 || response.status === 403) {
       if (dashboard()) dashboard().handleLogout();
       throw new Error("Your session expired. Please sign in again.");
     }
-    const body = await response.json();
+    const body = await parseJsonResponse(response);
     if (!response.ok) throw new Error(body.error || "HealthChecker could not load this view.");
     return body;
   }
@@ -108,7 +129,15 @@
       .map(value => String(value || "").toLowerCase());
     const view = begin("consumer_trends_screen");
     try {
-      const trendsPayload = widget(await summary(force), "trends_widget").payload || {};
+      let trendsPayload = {};
+      if (global.HCConsumerTrends && typeof HCConsumerTrends.loadFiltered === "function") {
+        trendsPayload = await HCConsumerTrends.loadFiltered({
+          metric: filterMetric,
+          metrics: filterMetrics,
+        }) || {};
+      } else {
+        trendsPayload = widget(await summary(force), "trends_widget").payload || {};
+      }
       const trends = trendsPayload.trends || {};
       const exclusions = trendsPayload.exclusions || [];
       let entries = Object.entries(trends);
@@ -154,43 +183,367 @@
     } catch (error) { finish(view, error.message); }
   }
 
+  const METRIC_ALIASES = {
+    pulse: "heart_rate",
+    hr: "heart_rate",
+    spo2: "oxygen_saturation",
+    ldl_c: "ldl",
+    ldl_cholesterol: "ldl",
+    exercise_minutes: "activity_minutes",
+  };
+
+  const METRIC_LABELS = {
+    heart_rate: "Heart Rate",
+    resting_hr: "Resting Heart Rate",
+    oxygen_saturation: "Oxygen Saturation",
+    sleep_duration: "Sleep",
+    steps: "Steps",
+    exercise_minutes: "Activity",
+    activity_minutes: "Activity",
+    blood_pressure: "Blood Pressure",
+    glucose: "Glucose",
+    weight: "Weight",
+    bmi: "BMI",
+  };
+
+  const MEANINGLESS_CATEGORY = {
+    "": true,
+    "not available": true,
+    "n/a": true,
+    na: true,
+    none: true,
+    unknown: true,
+    other: true,
+    null: true,
+    undefined: true,
+    "-": true,
+  };
+
+  function canonicalizeMetric(metric) {
+    const key = String(metric || "").toLowerCase().trim();
+    return METRIC_ALIASES[key] || key;
+  }
+
+  function consumerMetricLabel(metric) {
+    const key = canonicalizeMetric(metric);
+    if (METRIC_LABELS[key]) return METRIC_LABELS[key];
+    return String(metric || "").replace(/_/g, " ").replace(/\b[a-z]/g, ch => ch.toUpperCase());
+  }
+
+  function entryDay(event) {
+    const raw = (event && (event.measured_at || event.date || event.report_date || event.imported_at)) || "";
+    const text = String(raw);
+    return text.length >= 10 ? text.slice(0, 10) : (text || "Timeline");
+  }
+
+  function sourceLabel(event) {
+    const doc = event && event.document && typeof event.document === "object" ? event.document : {};
+    return String(
+      (event && (event.provenance || event.source)) ||
+      doc.provenance ||
+      doc.source_system ||
+      ""
+    ).trim();
+  }
+
+  function provenanceBucket(event) {
+    const doc = event && event.document && typeof event.document === "object" ? event.document : {};
+    const blob = [
+      event && event.provenance,
+      event && event.source,
+      event && event.entry_kind,
+      doc.provenance,
+      doc.source_system,
+      doc.document_type,
+    ].join(" ").toLowerCase();
+    if (/health_connect|companion|wearable|monitoring|hc_v6/.test(blob)) return "health_connect";
+    if ((event && event.entry_kind) === "guardian_event") return "guardian";
+    if (/clinical|lab|laboratory/.test(blob)) return "clinical";
+    return "other";
+  }
+
+  function asFiniteNumber(value) {
+    if (value == null || value === "") return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function formatValue(value, unit) {
+    const num = asFiniteNumber(value);
+    let shown = value == null ? "" : String(value);
+    if (num != null) {
+      shown = Math.abs(num - Math.round(num)) < 1e-6 ? String(Math.round(num)) : String(Math.round(num * 100) / 100);
+    }
+    const suffix = String(unit || "").trim();
+    return suffix ? shown + " " + suffix : shown;
+  }
+
+  function extractSample(event) {
+    const measurements = (event && event.measurements) || [];
+    const metrics = [];
+    let sample = null;
+    measurements.forEach(row => {
+      if (!row || typeof row !== "object") return;
+      const metric = canonicalizeMetric(row.metric || row.metric_type);
+      const value = asFiniteNumber(row.value);
+      if (!metric || value == null) return;
+      if (metrics.indexOf(metric) < 0) metrics.push(metric);
+      const measuredAt = row.measured_at || (event && (event.measured_at || event.date)) || "";
+      if (!sample || String(measuredAt || "").localeCompare(String(sample.measuredAt || "")) > 0) {
+        sample = {
+          metric: metric,
+          value: value,
+          unit: row.units || row.unit || "",
+          measuredAt: measuredAt,
+        };
+      }
+    });
+    if (!sample && event && event.payload && typeof event.payload === "object") {
+      const metric = canonicalizeMetric(event.payload.metric || event.payload.metric_type);
+      const value = asFiniteNumber(event.payload.value);
+      if (metric && value != null) {
+        metrics.push(metric);
+        sample = {
+          metric: metric,
+          value: value,
+          unit: event.payload.units || event.payload.unit || "",
+          measuredAt: event.payload.ts || event.measured_at || event.date || "",
+        };
+      }
+    }
+    return {
+      compactable: !!(sample && metrics.length === 1),
+      metric: sample && sample.metric,
+      value: sample && sample.value,
+      unit: sample && sample.unit,
+      measuredAt: sample && sample.measuredAt,
+      metrics: metrics,
+    };
+  }
+
+  function categoryLine(event) {
+    const raw = String((event && (event.primary_category || event.category || event.category_label)) || "").trim();
+    const key = raw.toLowerCase().replace(/_/g, " ");
+    if (!raw || MEANINGLESS_CATEGORY[key]) return "";
+    return "Category: " + raw.replace(/_/g, " ");
+  }
+
+  function eventCardLines(event) {
+    const sample = extractSample(event);
+    const lines = [];
+    if (sample.compactable) {
+      lines.push(consumerMetricLabel(sample.metric));
+      lines.push(formatValue(sample.value, sample.unit));
+    } else {
+      const summary = (event && (event.summary || event.trend_impact || event.event_type)) ||
+        (event && event.document && event.document.original_filename) || "";
+      if (summary) lines.push(String(summary));
+    }
+    const category = categoryLine(event);
+    if (category) lines.push(category);
+    const source = sourceLabel(event);
+    if (source) lines.push("Source: " + source);
+    return lines;
+  }
+
+  function groupedCardLines(group) {
+    const lines = [];
+    lines.push(consumerMetricLabel(group.metric));
+    const count = group.underlyingCount;
+    lines.push(count === 1 ? "1 observation" : String(count) + " observations");
+    if (group.latest && group.latest.value != null) {
+      lines.push("Latest: " + formatValue(group.latest.value, group.latest.unit || group.unit));
+    }
+    if (group.count >= 2 && group.min != null && group.max != null) {
+      const unit = (group.latest && group.latest.unit) || group.unit || "";
+      lines.push("Range: " + formatValue(group.min, "") + "–" + formatValue(group.max, unit));
+    }
+    if (group.count >= 2 && group.average != null) {
+      lines.push("Average: " + formatValue(group.average, (group.latest && group.latest.unit) || group.unit || ""));
+    }
+    if (group.source) lines.push("Source: " + group.source);
+    return lines;
+  }
+
+  function compactTimelineEntries(events) {
+    const groups = [];
+    const index = Object.create(null);
+    (events || []).forEach(event => {
+      const sample = extractSample(event);
+      const bucket = provenanceBucket(event);
+      const groupable = sample.compactable && bucket === "health_connect";
+      if (!groupable) {
+        groups.push({ kind: "event", event: event, underlyingCount: 1 });
+        return;
+      }
+      const day = entryDay(event);
+      const key = day + "|" + sample.metric + "|" + bucket;
+      let group = index[key];
+      if (!group) {
+        group = {
+          kind: "group",
+          day: day,
+          metric: sample.metric,
+          bucket: bucket,
+          source: sourceLabel(event),
+          events: [],
+          samples: [],
+        };
+        index[key] = group;
+        groups.push(group);
+      }
+      group.events.push(event);
+      group.samples.push(sample);
+      if (sourceLabel(event)) group.source = sourceLabel(event);
+    });
+    groups.forEach(group => {
+      if (group.kind !== "group") return;
+      group.underlyingCount = group.events.length;
+      const nums = group.samples.map(row => row.value).filter(value => value != null);
+      group.count = nums.length;
+      group.min = nums.length ? Math.min.apply(null, nums) : null;
+      group.max = nums.length ? Math.max.apply(null, nums) : null;
+      group.average = nums.length
+        ? Math.round((nums.reduce(function (sum, value) { return sum + value; }, 0) / nums.length) * 100) / 100
+        : null;
+      group.latest = group.samples.slice().sort(function (a, b) {
+        return String(b.measuredAt || "").localeCompare(String(a.measuredAt || ""));
+      })[0] || null;
+      group.unit = (group.latest && group.latest.unit) || "";
+    });
+    return groups;
+  }
+
+  function matchesMetricFilter(event, want) {
+    if (!want || !want.size) return true;
+    const sample = extractSample(event);
+    if (sample.metric && (want.has(sample.metric) || want.has(String(sample.metric).replace(/_/g, "")))) {
+      return true;
+    }
+    const metrics = sample.metrics || [];
+    for (let i = 0; i < metrics.length; i++) {
+      if (want.has(metrics[i]) || want.has(String(metrics[i]).replace(/_/g, ""))) return true;
+    }
+    const blob = [
+      event && event.summary,
+      event && event.trend_impact,
+      event && event.event_type,
+      event && event.primary_category,
+    ].join(" ").toLowerCase().replace(/_/g, " ");
+    for (const key of want) {
+      const needle = String(key || "").toLowerCase().replace(/_/g, " ").trim();
+      if (needle.length < 4) continue;
+      if (blob.indexOf(needle) >= 0) return true;
+    }
+    return false;
+  }
+
+  function timelineGroupCard(target, group) {
+    const article = document.createElement("article");
+    article.className = "card";
+    article.setAttribute("data-timeline-group", group.metric || "");
+    article.setAttribute("data-underlying-count", String(group.underlyingCount));
+    const heading = document.createElement("h4");
+    heading.className = "section-title";
+    heading.textContent = group.day || "Timeline";
+    article.appendChild(heading);
+    groupedCardLines(group).forEach(value => {
+      const row = document.createElement("p");
+      row.className = "small";
+      row.textContent = String(value);
+      article.appendChild(row);
+    });
+    if (group.underlyingCount > 1) {
+      const details = document.createElement("details");
+      details.className = "timeline-observation-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Show observations";
+      details.appendChild(summary);
+      group.samples.slice().sort(function (a, b) {
+        return String(b.measuredAt || "").localeCompare(String(a.measuredAt || ""));
+      }).forEach(sample => {
+        const row = document.createElement("p");
+        row.className = "small";
+        const stamp = String(sample.measuredAt || "");
+        const time = stamp.length >= 16 ? stamp.slice(11, 16) : stamp;
+        row.textContent = time
+          ? time + " — " + formatValue(sample.value, sample.unit)
+          : formatValue(sample.value, sample.unit);
+        details.appendChild(row);
+      });
+      article.appendChild(details);
+    }
+    target.appendChild(article);
+  }
+
+  let timelineLoadSeq = 0;
+
+  function buildTimelineQuery(options) {
+    const rawMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || "";
+    const filterMetric = canonicalizeMetric(rawMetric);
+    const params = new URLSearchParams({ unified: "true" });
+    if (filterMetric) params.set("metric", filterMetric);
+    return {
+      path: "/api/health-vault/timeline?" + params.toString(),
+      filterMetric: filterMetric || null,
+      want: filterMetric ? new Set([filterMetric]) : new Set(),
+    };
+  }
+
+  function activateConsumerScreen(screenId) {
+    const tabs = document.querySelectorAll("#tabs_navbar .tab");
+    for (let i = 0; i < tabs.length; i++) tabs[i].classList.remove("active");
+    const tab = document.querySelector('#tabs_navbar .tab[data="' + screenId + '"]') ||
+      document.querySelector('.tab[data="' + screenId + '"]');
+    if (tab) tab.classList.add("active");
+    const screens = document.querySelectorAll(".screen");
+    for (let i = 0; i < screens.length; i++) screens[i].classList.remove("active");
+    const screen = document.getElementById(screenId);
+    if (screen) screen.classList.add("active");
+  }
+
   async function loadTimeline(options) {
-    const filterMetric = (options && options.metric) || (metricFilter && metricFilter.metric) || null;
-    const filterMetrics = ((options && options.metrics) || (metricFilter && metricFilter.metrics) || [])
-      .map(value => String(value || "").toLowerCase());
-    const want = new Set(filterMetrics.concat(filterMetric ? [String(filterMetric).toLowerCase()] : []));
+    const query = buildTimelineQuery(options);
+    const seq = ++timelineLoadSeq;
     const view = begin("consumer_timeline_screen");
     try {
-      const body = await request("/api/health-vault/timeline?unified=true");
+      const body = await request(query.path);
+      if (seq !== timelineLoadSeq) return;
       let events = Array.isArray(body.entries) ? body.entries : [];
-      if (want.size) {
-        events = events.filter(event => {
-          const blob = JSON.stringify(event || {}).toLowerCase();
-          for (const key of want) {
-            if (!key) continue;
-            if (blob.indexOf(key) >= 0 || blob.indexOf(key.replace(/_/g, " ")) >= 0) return true;
-          }
-          return false;
+      if (query.want.size) events = events.filter(event => matchesMetricFilter(event, query.want));
+      let groups = compactTimelineEntries(events);
+      if (query.filterMetric) {
+        groups = groups.filter(group => {
+          if (group.kind === "group") return group.metric === query.filterMetric;
+          const sample = extractSample(group.event);
+          if (sample.metric) return sample.metric === query.filterMetric;
+          return matchesMetricFilter(group.event, query.want);
         });
       }
-      if (!events.length) {
-        empty(view.content, filterMetric
-          ? `No timeline events matched ${String(filterMetric).replace(/_/g, " ")}.`
+      if (!groups.length) {
+        empty(view.content, query.filterMetric
+          ? `No timeline events matched ${consumerMetricLabel(query.filterMetric)}.`
           : "Your timeline is empty. Imported records and measurements will appear here.");
       }
-      events.forEach(event => card(view.content, event.date ? String(event.date).slice(0, 10) : "Timeline event", [
-        event.summary || event.trend_impact || event.event_type,
-        `Category: ${event.primary_category || event.category || "Not available"}`,
-        `Source: ${event.provenance || event.source || "Not available"}`,
-      ]));
+      groups.forEach(group => {
+        if (group.kind === "group") {
+          timelineGroupCard(view.content, group);
+          return;
+        }
+        card(view.content, entryDay(group.event), eventCardLines(group.event));
+      });
       finish(view);
-    } catch (error) { finish(view, error.message); }
+    } catch (error) {
+      if (seq !== timelineLoadSeq) return;
+      finish(view, error.message);
+    }
   }
 
   function openFiltered(surface, options) {
+    const primary = canonicalizeMetric(options && options.metric ? String(options.metric) : "");
     metricFilter = {
-      metric: options && options.metric ? String(options.metric) : null,
-      metrics: (options && options.metrics) || [],
+      metric: primary || null,
+      metrics: primary ? [primary] : ((options && options.metrics) || []).map(canonicalizeMetric).filter(Boolean),
       category: options && options.category ? options.category : null,
     };
     const map = {
@@ -201,13 +554,29 @@
       trends: "consumer_trends_screen",
     };
     const screenId = map[surface] || surface;
-    if (screenId === "health_records_screen" && global.HCVaultUI && HCVaultUI.setMetricFilter) {
-      HCVaultUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+    if (screenId === "health_records_screen") {
+      if (global.HCVaultUI && HCVaultUI.setMetricFilter) {
+        HCVaultUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+      }
+      if (global.HCRecordsUI && typeof HCRecordsUI.setMetricFilter === "function") {
+        HCRecordsUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+      }
+    }
+    // HC321-UAT12H: do not tab.click() Timeline/Trends. index.html onclick only
+    // switches screens, but bind() SCREEN_LOADERS also fire on click and call
+    // loadTimeline() without a metric — that second unfiltered GET overwrote
+    // Heart Rate → Filtered Timeline on S24 after the cooldown window, or when
+    // the tab listener ran before lastNav was visible to that handler.
+    if (screenId === "consumer_trends_screen" || screenId === "consumer_timeline_screen") {
+      lastNavAt = Date.now();
+      lastNavScreen = screenId;
+      activateConsumerScreen(screenId);
+      if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
+      if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
+      return;
     }
     const tab = document.querySelector('.tab[data="' + screenId + '"]');
     if (tab) tab.click();
-    if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
-    if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
   }
 
   function reportRows(value, prefix, rows, depth) {
@@ -281,7 +650,11 @@
         }
         lastNavAt = now;
         lastNavScreen = screenId;
-        SCREEN_LOADERS[screenId]();
+        if (screenId === "consumer_timeline_screen" || screenId === "consumer_trends_screen") {
+          SCREEN_LOADERS[screenId](metricFilter);
+        } else {
+          SCREEN_LOADERS[screenId]();
+        }
       });
     });
     const trendsRefresh = document.getElementById("consumer_trends_refresh");
@@ -337,5 +710,10 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
   else bind();
-  global.HCConsumerSurfaces = { loadTrends, loadObservations, loadTimeline, loadReport, openFiltered };
+  global.HCConsumerSurfaces = {
+    loadTrends, loadObservations, loadTimeline, loadReport, openFiltered, parseJsonResponse,
+    compactTimelineEntries, consumerMetricLabel, groupedCardLines, eventCardLines,
+    categoryLine, extractSample, canonicalizeMetric, buildTimelineQuery,
+    activateConsumerScreen, matchesMetricFilter,
+  };
 })(typeof window !== "undefined" ? window : globalThis);

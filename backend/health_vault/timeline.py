@@ -6,7 +6,79 @@ from collections import defaultdict
 from typing import Any
 
 from backend.health_vault.date_extraction import timeline_sort_key
+from backend.health_vault.health_snapshot import metric_filter_aliases, snapshot_metric_id
+from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.vault_store import VaultStore
+
+
+CONSUMER_TIMELINE_LIMIT = 400
+
+_CONSUMER_ENTRY_KEYS = (
+    "date",
+    "measured_at",
+    "report_date",
+    "imported_at",
+    "primary_category",
+    "category_label",
+    "category",
+    "group_id",
+    "group_title",
+    "sequence_number",
+    "page_number",
+    "trend_impact",
+    "original_link",
+    "entry_kind",
+    "provenance",
+    "source",
+    "severity",
+    "summary",
+    "event_type",
+    "dedupe_key",
+)
+
+_CONSUMER_DOCUMENT_KEYS = (
+    "id",
+    "patient_id",
+    "document_type",
+    "source_system",
+    "original_filename",
+    "measured_at",
+    "report_date",
+    "imported_at",
+    "primary_category",
+    "secondary_categories",
+    "group_id",
+    "group_title",
+    "sequence_number",
+    "page_number",
+    "provenance",
+    "storage_uri",
+    "status",
+)
+
+_CONSUMER_MEASUREMENT_KEYS = (
+    "metric",
+    "metric_type",
+    "value",
+    "units",
+    "unit",
+    "measured_at",
+    "source",
+    "document_id",
+)
+
+_CONSUMER_PAYLOAD_KEYS = (
+    "metric",
+    "metric_type",
+    "value",
+    "unit",
+    "units",
+    "source",
+    "g",
+    "sys",
+    "dia",
+    "ts",
+)
 
 
 def _measurements_by_document(measurements: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -16,6 +88,52 @@ def _measurements_by_document(measurements: list[dict[str, Any]]) -> dict[str, l
         if document_id:
             grouped[document_id].append(measurement)
     return dict(grouped)
+
+
+def _pick(source: dict[str, Any] | None, keys: tuple[str, ...]) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        return {}
+    return {key: source[key] for key in keys if key in source}
+
+
+def project_consumer_timeline_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Display/transport projection — does not delete stored clinical documents."""
+    out = _pick(entry, _CONSUMER_ENTRY_KEYS)
+    document = entry.get("document") if isinstance(entry.get("document"), dict) else None
+    slim_document = _pick(document, _CONSUMER_DOCUMENT_KEYS)
+    out["document"] = slim_document or None
+    measurements = entry.get("measurements") or []
+    out["measurements"] = [
+        _pick(row, _CONSUMER_MEASUREMENT_KEYS) for row in measurements if isinstance(row, dict)
+    ]
+    payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else None
+    if payload:
+        out["payload"] = _pick(payload, _CONSUMER_PAYLOAD_KEYS)
+    return out
+
+
+def build_consumer_timeline_response(
+    entries: list[dict[str, Any]],
+    *,
+    unified: bool,
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+    limit: int = CONSUMER_TIMELINE_LIMIT,
+) -> dict[str, Any]:
+    filtered = filter_timeline_entries(entries, metric=metric, metrics=metrics)
+    cap = max(1, int(limit or CONSUMER_TIMELINE_LIMIT))
+    truncated = len(filtered) > cap
+    projected = [project_consumer_timeline_entry(entry) for entry in filtered[:cap]]
+    metric_list = [part.strip() for part in str(metrics or "").split(",") if part.strip()] if not isinstance(metrics, list) else [str(part).strip() for part in metrics if str(part).strip()]
+    return {
+        "entries": projected,
+        "unified": bool(unified),
+        "filter_metric": metric,
+        "filter_metrics": metric_list,
+        "truncated": truncated,
+        "returned_count": len(projected),
+        "matched_count": len(filtered),
+    }
 
 
 def build_timeline(
@@ -40,6 +158,12 @@ def build_timeline(
     trends = store.get_trends(patient_id=patient_id)
     entries: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
+    # HC321-UAT12F: encrypted production indexes decrypt on every _read_index.
+    # list_measurements(document_id=...) used to re-read the whole vault once per
+    # document, which stalled the S24 Filtered Timeline fetch until the browser
+    # reported TypeError: Failed to fetch. Batch the measurement load instead.
+    if measurements_by_document is None:
+        measurements_by_document = _measurements_by_document(store.list_measurements())
     for doc in store.list_documents():
         if doc.get("patient_id", "default-patient") != patient_id:
             continue
@@ -48,11 +172,7 @@ def build_timeline(
             secondary = doc.get("secondary_categories") or []
             if primary != category and category not in secondary:
                 continue
-        measurements = (
-            list(measurements_by_document.get(str(doc["id"]), []))
-            if measurements_by_document is not None
-            else store.list_measurements(document_id=doc["id"])
-        )
+        measurements = list(measurements_by_document.get(str(doc["id"]), []))
         related = {}
         for m in measurements:
             metric = str(m.get("metric") or "").lower()
@@ -244,6 +364,70 @@ def _load_hc_v6_entries() -> list[dict[str, Any]]:
         return out
     except Exception:
         return []
+
+
+def _entry_metric_tokens(entry: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for measurement in entry.get("measurements") or []:
+        mid = canonicalize_metric(measurement.get("metric") or measurement.get("metric_type") or "")
+        if mid:
+            tokens.add(mid)
+            tokens.add(snapshot_metric_id(mid))
+    payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+    for raw in (
+        entry.get("summary"),
+        entry.get("trend_impact"),
+        entry.get("primary_category"),
+        payload.get("metric"),
+        payload.get("metric_type"),
+    ):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        tokens.add(canonicalize_metric(text))
+        tokens.add(snapshot_metric_id(text))
+    return {item for item in tokens if item}
+
+
+def timeline_entry_matches_metric(
+    entry: dict[str, Any],
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+) -> bool:
+    want = metric_filter_aliases(metric, metrics)
+    if not want:
+        return True
+    tokens = _entry_metric_tokens(entry)
+    if tokens & want:
+        return True
+    related = entry.get("trend_impact") or ""
+    blob = " ".join(
+        [
+            str(entry.get("summary") or ""),
+            str(related),
+            str(entry.get("primary_category") or ""),
+        ]
+    ).lower().replace("_", " ")
+    # HC321-UAT12H: short aliases such as "hr" must not match "hours" / "other".
+    # Prefer measurement tokens; only allow longer explicit metric phrases in text.
+    for token in want:
+        needle = str(token or "").strip().lower().replace("_", " ")
+        if len(needle) < 4:
+            continue
+        if needle in blob:
+            return True
+    return False
+
+
+def filter_timeline_entries(
+    entries: list[dict[str, Any]],
+    metric: str | None = None,
+    metrics: list[str] | str | None = None,
+) -> list[dict[str, Any]]:
+    want = metric_filter_aliases(metric, metrics)
+    if not want:
+        return list(entries or [])
+    return [entry for entry in (entries or []) if timeline_entry_matches_metric(entry, metric, metrics)]
 
 
 def build_unified_timeline(store: VaultStore, **kwargs: Any) -> list[dict[str, Any]]:

@@ -1,0 +1,100 @@
+TASK=HC321-UAT12H_FILTERED_TIMELINE_METRIC_PROPAGATION
+RESULT_FILE=HC321_UAT12H_TIMELINE_FILTER_PROPAGATION_RESULT.txt
+GENERATED_UTC=2026-08-23T02:52:00Z
+BRANCH=css-agent/hc321-uat12h-timeline-filter-dd01
+REPAIR_COMMIT=0a7e27846e70dfb9cc555a866618fab8b6e0f546
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/7
+BASE_BRANCH=hc311-encrypted-vault-at-rest
+LINEAGE=css-agent/hc321-uat12g-timeline-compact-dd01 @ 9389e3f
+
+ROOT_CAUSE=
+Two cooperating defects made Heart Rate → Filtered Timeline show Steps, Sleep,
+and Oxygen Saturation even though UAT12G compaction itself was correct.
+
+1. FILTER PROPAGATION / DOUBLE LOAD
+   health_snapshot.js Filtered Timeline → HCConsumerSurfaces.openFiltered()
+   set metricFilter and called loadTimeline({metric:heart_rate}), but also
+   tab.click() on Timeline. index.html onclick only switches screens, yet
+   consumer_surfaces bind() SCREEN_LOADERS fire on the same click and call
+   loadTimeline() with no options. That second GET is
+   /api/health-vault/timeline?unified=true (no metric). On S24 that unfiltered
+   response can complete after the Heart Rate request and overwrite the UI
+   with compacted Steps / Sleep / SpO2 / Heart Rate cards.
+
+2. SERVER FILTER OVER-MATCH
+   timeline_entry_matches_metric() treated the short alias "hr" as a substring
+   of summary/trend text. Sleep rows containing "hours" could pass
+   metric=heart_rate. Tightened to measurement-token match plus phrases of
+   length >= 4 only.
+
+REQUEST_URL_PROOF=
+Heart Rate → Filtered Timeline now builds exactly:
+  GET /api/health-vault/timeline?unified=true&metric=heart_rate
+Proven by CS.buildTimelineQuery({metric:'heart_rate'}) and by openFiltered
+using that query. Extra alias lists are not appended as metrics=.
+
+DOUBLE_LOAD_RESULT=
+PASS. Timeline/Trends openFiltered activates the screen with
+activateConsumerScreen() and returns before if (tab) tab.click().
+One loadTimeline(metricFilter). Stale responses ignored via timelineLoadSeq.
+Navbar Timeline/Trends loaders now pass metricFilter instead of bare
+loadTimeline().
+
+FILTER_PROPAGATION_RESULT=
+PASS. Snapshot openFilteredSurface sends metric=primary only for
+timeline/trends. openFiltered canonicalizes to heart_rate and stores
+metricFilter.metric=heart_rate before the single load.
+
+HEART_RATE_ONLY_RESULT=
+PASS. Authenticated metric=heart_rate API returns HR documents only.
+Sleep "7 hours", steps, and SpO2 do not match. Compacted labels are
+["Heart Rate"] only.
+
+COMPACTION_REGRESSION_RESULT=
+PASS. compactTimelineEntries, Show observations, Category omission, and
+same-day grouping remain.
+
+PERFORMANCE_REGRESSION_RESULT=
+PASS. UAT12F batched list_measurements() path unchanged. No per-document
+decrypt.
+
+FILES_CHANGED=
+js/health_vault/consumer_surfaces.js
+js/health_vault/health_snapshot.js
+backend/health_vault/timeline.py
+service-worker.js
+index.html
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+HC321_UAT12H_TIMELINE_FILTER_PROPAGATION_RESULT.txt
+
+FOCUSED_TESTS=
+python3 -m pytest tests/test_hc321_health_snapshot.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py -q
+75 passed
+
+BROADER_TESTS=
+Governed consumer regression gate: 301 passed, 3 failed
+PRE-EXISTING Linux multipart UploadFile TypeAdapter / pydantic 2.13 (not UAT12H):
+  test_hc320b_production_security_closure.py::test_legacy_timeline_and_import_ignore_forged_patient_identity
+  test_hc317c_consumer_records_ui.py::test_authenticated_upload_list_detail_and_encrypted_download
+  test_hc317c_consumer_records_ui.py::test_records_ui_authentication_required_and_forged_tokens_rejected
+
+SERVICE_WORKER_VERSION=
+hc321uat12h
+CACHE_REVISION=hc321uat12h
+consumer_surfaces.js?v=hc321uat12h
+health_snapshot.js?v=hc321uat12h
+service-worker.js?v=hc321uat12h
+/api/ remains outside service-worker interception
+
+BRANCH=css-agent/hc321-uat12h-timeline-filter-dd01
+HEAD=PENDING_PUSH
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/7
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES
+FINAL_STATUS=READY_FOR_GOVERNED_DEPLOY
+
+NOTEPAD_LAUNCH=
+notepad.exe is not present on this Linux cloud host.
+mousepad opens this result file.

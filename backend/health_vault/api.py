@@ -407,13 +407,53 @@ def create_health_vault_app(
         return get_batch_config().to_dict()
 
     @app.get("/api/health-vault/timeline")
-    def timeline(request: Request, unified: bool = False) -> dict[str, Any]:
-        patient_id = _request_patient(request) if production_mode else "default-patient"
-        if unified:
-            from backend.health_vault.timeline import build_unified_timeline
+    def timeline(
+        request: Request,
+        unified: bool = False,
+        metric: str | None = None,
+        metrics: str | None = None,
+    ) -> JSONResponse:
+        """Authenticated consumer timeline. Slim JSON only — never the HTML app shell."""
+        try:
+            patient_id = _request_patient(request) if production_mode else (
+                str(getattr(request.state, "patient_id", None) or "default-patient")
+            )
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        from backend.health_vault.timeline import (
+            build_consumer_timeline_response,
+            build_unified_timeline,
+        )
 
-            return _sanitize_value({"entries": build_unified_timeline(vault, patient_id=patient_id), "unified": True})
-        return _sanitize_value({"entries": build_timeline(vault, patient_id=patient_id), "unified": False})
+        entries = (
+            build_unified_timeline(vault, patient_id=patient_id)
+            if unified
+            else build_timeline(vault, patient_id=patient_id)
+        )
+        return JSONResponse(
+            _sanitize_value(
+                build_consumer_timeline_response(
+                    entries,
+                    unified=bool(unified),
+                    metric=metric,
+                    metrics=metrics,
+                )
+            )
+        )
+
+    @app.get("/api/health-vault/trends")
+    def health_vault_trends(
+        request: Request,
+        metric: str | None = None,
+        metrics: str | None = None,
+    ) -> JSONResponse:
+        """Authenticated JSON trends surface. Never returns the HTML app shell."""
+        try:
+            pid = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        payload = dashboard_service.get_trends_payload(pid, metric=metric, metrics=metrics)
+        return JSONResponse(_sanitize_value(payload))
 
     @app.get("/api/health-vault/doctor-visit")
     def doctor_visit(request: Request) -> dict[str, Any]:
@@ -1142,12 +1182,20 @@ def create_health_vault_app(
         request: Request,
         category: str | None = None,
         status: str | None = None,
+        metric: str | None = None,
+        metrics: str | None = None,
     ) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        records = records_service.list_records(pid, category=category, status=status)
+        records = records_service.list_records(
+            pid,
+            category=category,
+            status=status,
+            metric=metric,
+            metrics=metrics,
+        )
         return JSONResponse({"records": [record.to_summary_dict() for record in records]})
 
     # Register the static upload route before the document-id route so Starlette
