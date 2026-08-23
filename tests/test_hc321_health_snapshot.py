@@ -659,7 +659,7 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
     assert "health_snapshot.js?v=hc321uat12" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12f"' in sw
+    assert 'CACHE_REVISION = "hc321uat12g"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -961,7 +961,7 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12f"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12g"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
 
 
 def _assert_json_not_html(response):
@@ -1246,9 +1246,9 @@ def test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth():
     assert api_return >= 0
     assert first_respond > api_return
     assert lastNav_before_click_prevents_double_fetch(surfaces)
-    assert 'CACHE_REVISION = "hc321uat12f"' in sw
-    assert "consumer_surfaces.js?v=hc321uat12f" in html
-    assert "service-worker.js?v=hc321uat12f" in html
+    assert 'CACHE_REVISION = "hc321uat12g"' in sw
+    assert "consumer_surfaces.js?v=hc321uat12g" in html
+    assert "service-worker.js?v=hc321uat12g" in html
 
 
 def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
@@ -1431,4 +1431,384 @@ def test_uat12f_s24_authenticated_filtered_timeline_avoids_n_plus_one_and_failed
         _ = build_unified_timeline(store, patient_id="00000")
         assert len(store.list_documents()) == stored_before
         assert len(store.list_measurements()) >= n_docs
+
+
+def _node_surfaces_eval(script: str) -> str:
+    import subprocess
+
+    prelude = f"""
+const fs = require('fs');
+const vm = require('vm');
+const documentStub = {{
+  readyState: 'complete',
+  getElementById: function () {{ return null; }},
+  querySelectorAll: function () {{ return []; }},
+  querySelector: function () {{ return null; }},
+  addEventListener: function () {{}},
+  createElement: function (name) {{
+    return {{
+      tagName: String(name || '').toUpperCase(),
+      className: '',
+      textContent: '',
+      childNodes: [],
+      setAttribute: function () {{}},
+      appendChild: function (node) {{ this.childNodes.push(node); return node; }},
+    }};
+  }},
+}};
+const ctx = {{
+  console: console,
+  document: documentStub,
+  window: {{}},
+  fetch: function () {{ return Promise.reject(new Error('fetch_unused')); }},
+}};
+ctx.window = ctx;
+ctx.globalThis = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/consumer_surfaces.js")!r}, 'utf8'), ctx);
+const CS = ctx.HCConsumerSurfaces;
+{script}
+"""
+    proc = subprocess.run(["node", "-e", prelude], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return proc.stdout.strip()
+
+
+def test_uat12g_display_compacts_same_day_heart_rate_health_connect_rows():
+    out = _node_surfaces_eval(
+        """
+const day = '2026-08-18';
+const values = [56,58,60,62,64,65,66,67,68,69,70,71,72,73,74,75,76,76,77,78];
+const events = values.map((value, i) => ({
+  date: day + 'T12:' + String(i).padStart(2,'0') + ':00Z',
+  measured_at: day + 'T12:' + String(i).padStart(2,'0') + ':00Z',
+  primary_category: 'other',
+  entry_kind: 'document',
+  provenance: 'health_connect_companion',
+  document: {
+    document_type: 'continuous_monitoring_observation',
+    source_system: 'health_connect_companion',
+    primary_category: 'other',
+  },
+  measurements: [{metric:'heart_rate', value, units:'bpm', measured_at: day + 'T12:' + String(i).padStart(2,'0') + ':00Z'}],
+}));
+events.push({
+  date: day + 'T18:00:00Z',
+  measured_at: day + 'T18:00:00Z',
+  primary_category: 'other',
+  entry_kind: 'document',
+  provenance: 'health_connect_companion',
+  document: { document_type: 'continuous_monitoring_observation', source_system: 'health_connect_companion' },
+  measurements: [{metric:'steps', value:5400, units:'count', measured_at: day + 'T18:00:00Z'}],
+});
+const hundreds = [];
+for (let i = 0; i < 120; i++) {
+  hundreds.push({
+    date: '2026-08-19T08:' + String(i % 60).padStart(2,'0') + ':00Z',
+    measured_at: '2026-08-19T08:' + String(i % 60).padStart(2,'0') + ':00Z',
+    primary_category: 'other',
+    provenance: 'health_connect_sync',
+    document: { document_type: 'continuous_monitoring_observation', source_system: 'health_connect_sync' },
+    measurements: [{metric:'heart_rate', value: 70 + (i % 5), units:'bpm', measured_at: '2026-08-19T08:' + String(i % 60).padStart(2,'0') + ':00Z'}],
+  });
+}
+const groups = CS.compactTimelineEntries(events);
+const hr = groups.find(g => g.kind === 'group' && g.metric === 'heart_rate');
+const steps = groups.find(g => g.kind === 'group' && g.metric === 'steps');
+const lines = CS.groupedCardLines(hr);
+const cat = CS.categoryLine(events[0]);
+const eventLines = CS.eventCardLines(events[0]);
+const compactHundreds = CS.compactTimelineEntries(hundreds);
+console.log(JSON.stringify({
+  groupCount: groups.length,
+  hrCount: hr && hr.underlyingCount,
+  hrLatest: hr && hr.latest && hr.latest.value,
+  hrMin: hr && hr.min,
+  hrMax: hr && hr.max,
+  hrDay: hr && hr.day,
+  stepsCount: steps && steps.underlyingCount,
+  label: CS.consumerMetricLabel('heart_rate'),
+  sleep: CS.consumerMetricLabel('sleep_duration'),
+  activity: CS.consumerMetricLabel('exercise_minutes'),
+  spo2: CS.consumerMetricLabel('oxygen_saturation'),
+  lines: lines,
+  categoryLine: cat,
+  eventLines: eventLines,
+  storedEvents: events.length,
+  hundredCards: compactHundreds.length,
+  hundredUnderlying: compactHundreds[0] && compactHundreds[0].underlyingCount,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["groupCount"] == 2
+    assert payload["hrCount"] == 20
+    assert payload["hrLatest"] == 78
+    assert payload["hrMin"] == 56
+    assert payload["hrMax"] == 78
+    assert payload["hrDay"] == "2026-08-18"
+    assert payload["stepsCount"] == 1
+    assert payload["label"] == "Heart Rate"
+    assert payload["sleep"] == "Sleep"
+    assert payload["activity"] == "Activity"
+    assert payload["spo2"] == "Oxygen Saturation"
+    assert payload["lines"][0] == "Heart Rate"
+    assert "20 observations" in payload["lines"]
+    assert "Latest: 78 bpm" in payload["lines"]
+    assert any(line.startswith("Range: 56–78") for line in payload["lines"])
+    assert any(line.startswith("Source:") for line in payload["lines"])
+    assert payload["categoryLine"] == ""
+    assert "Category: Not available" not in payload["eventLines"]
+    assert "Not available" not in payload["eventLines"]
+    assert payload["storedEvents"] == 21
+    assert payload["hundredCards"] == 1
+    assert payload["hundredUnderlying"] == 120
+
+
+def test_uat12g_never_renders_category_not_available():
+    surfaces = (ROOT / "js" / "health_vault" / "consumer_surfaces.js").read_text(encoding="utf-8")
+    assert "Category: ${" not in surfaces
+    assert "Category: Not available" not in surfaces
+    assert "compactTimelineEntries" in surfaces
+    assert "Show observations" in surfaces
+    assert "1 observation" in surfaces
+    out = _node_surfaces_eval(
+        """
+const missing = {date:'2026-08-18', primary_category:'', summary:'Imported note'};
+const other = {date:'2026-08-18', primary_category:'other', summary:'HC row'};
+const lab = {date:'2026-08-18', primary_category:'laboratory_report', summary:'Lab PDF'};
+console.log(JSON.stringify({
+  missing: CS.categoryLine(missing),
+  other: CS.categoryLine(other),
+  lab: CS.categoryLine(lab),
+  missingLines: CS.eventCardLines(missing),
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["missing"] == ""
+    assert payload["other"] == ""
+    assert payload["lab"] == "Category: laboratory report"
+    assert "Category: Not available" not in payload["missingLines"]
+    blob = " ".join(payload["missingLines"])
+    assert "Not available" not in blob
+
+
+def test_uat12g_does_not_merge_distinct_metrics_or_clinical_rows():
+    out = _node_surfaces_eval(
+        """
+const events = [
+  {
+    date: '2026-08-18T10:00:00Z', measured_at: '2026-08-18T10:00:00Z',
+    provenance: 'health_connect_companion',
+    document: { document_type: 'continuous_monitoring_observation', source_system: 'health_connect_companion' },
+    measurements: [{metric:'heart_rate', value:76, units:'bpm', measured_at:'2026-08-18T10:00:00Z'}],
+  },
+  {
+    date: '2026-08-18T11:00:00Z', measured_at: '2026-08-18T11:00:00Z',
+    provenance: 'health_connect_companion',
+    document: { document_type: 'continuous_monitoring_observation', source_system: 'health_connect_companion' },
+    measurements: [{metric:'oxygen_saturation', value:97, units:'%', measured_at:'2026-08-18T11:00:00Z'}],
+  },
+  {
+    date: '2026-08-18T12:00:00Z', measured_at: '2026-08-18T12:00:00Z',
+    primary_category: 'laboratory_report',
+    provenance: 'clinical_lab',
+    document: { document_type: 'laboratory_report', source_system: 'clinical_lab', original_filename: 'lab.pdf' },
+    measurements: [{metric:'heart_rate', value:88, units:'bpm', measured_at:'2026-08-18T12:00:00Z'}],
+    summary: 'Lab PDF',
+  },
+];
+const groups = CS.compactTimelineEntries(events);
+console.log(JSON.stringify({
+  kinds: groups.map(g => [g.kind, g.metric || (g.event && g.event.summary), g.underlyingCount]),
+  count: groups.length,
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["count"] == 3
+    assert payload["kinds"][0][:2] == ["group", "heart_rate"]
+    assert payload["kinds"][1][:2] == ["group", "oxygen_saturation"]
+    assert payload["kinds"][2][0] == "event"
+
+
+def test_uat12g_uat12f_batched_list_measurements_still_present():
+    source = (ROOT / "backend" / "health_vault" / "timeline.py").read_text(encoding="utf-8")
+    assert "measurements_by_document = _measurements_by_document(store.list_measurements())" in source
+    assert 'store.list_measurements(document_id=doc["id"])' not in source
+    assert "store.list_measurements(document_id=doc['id'])" not in source
+    sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc321uat12g"' in sw
+    assert "if (isForbiddenCacheUrl(req.url)) return;" in sw
+    fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
+    assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
+    assert "consumer_surfaces.js?v=hc321uat12g" in html
+    assert "service-worker.js?v=hc321uat12g" in html
+
+
+def test_uat12g_authenticated_filtered_heart_rate_json_and_compaction_inputs():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from backend.health_vault.api import create_health_vault_app
+
+    with tempfile.TemporaryDirectory() as td:
+        store = VaultStore(root=Path(td), encryption_key=b"U" * 32)
+        app = create_health_vault_app(
+            store=store,
+            production=True,
+            bootstrap_password="Boot-Pass-UAT12Exx",
+        )
+        values = [56, 60, 64, 70, 76, 78]
+        for i, value in enumerate(values):
+            store.store(
+                document=MedicalDocument(
+                    id=f"uat12g-hr-{i}",
+                    patient_id="00000",
+                    document_type="continuous_monitoring_observation",
+                    source_system="health_connect_companion",
+                    original_filename=f"heart-rate-{i}.json",
+                    measured_at=f"2026-08-18T12:{i:02d}:00Z",
+                    primary_category="other",
+                    sha256=f"{i + 10:064d}"[:64],
+                ),
+                measurements=[
+                    Measurement(
+                        metric="heart_rate",
+                        value=value,
+                        units="bpm",
+                        measured_at=f"2026-08-18T12:{i:02d}:00Z",
+                    )
+                ],
+                content=b"hr",
+            )
+        store.store(
+            document=MedicalDocument(
+                id="uat12g-steps",
+                patient_id="00000",
+                document_type="continuous_monitoring_observation",
+                source_system="health_connect_companion",
+                original_filename="steps.json",
+                measured_at="2026-08-18T18:00:00Z",
+                primary_category="other",
+                sha256="c" * 64,
+            ),
+            measurements=[
+                Measurement(metric="steps", value=5400, units="count", measured_at="2026-08-18T18:00:00Z")
+            ],
+            content=b"steps",
+        )
+        store.store(
+            document=MedicalDocument(
+                id="uat12g-other-patient",
+                patient_id="99999",
+                document_type="continuous_monitoring_observation",
+                source_system="health_connect_companion",
+                original_filename="other-patient-hr.json",
+                measured_at="2026-08-18T19:00:00Z",
+                primary_category="other",
+                sha256="d" * 64,
+            ),
+            measurements=[
+                Measurement(metric="heart_rate", value=99, units="bpm", measured_at="2026-08-18T19:00:00Z")
+            ],
+            content=b"other",
+        )
+        for i, value in enumerate((70, 72, 76)):
+            store.upsert_observation(
+                {
+                    "patient_id": "00000",
+                    "metric_type": "heart_rate",
+                    "value": value,
+                    "unit": "bpm",
+                    "measured_at": f"2026-08-18T11:{i:02d}:00Z",
+                    "source": "health_connect_companion",
+                    "connector_id": "health_connect",
+                    "fingerprint": f"uat12g-hr-{i}",
+                    "observation_id": f"uat12g-obs-hr-{i}",
+                }
+            )
+
+        stored_docs = len(store.list_documents())
+        stored_obs = len(store.list_observations() or [])
+        measurement_calls: list[dict] = []
+        original_list = store.list_measurements
+
+        def _counting_list_measurements(**filters):
+            measurement_calls.append(dict(filters))
+            return original_list(**filters)
+
+        store.list_measurements = _counting_list_measurements  # type: ignore[method-assign]
+        client = TestClient(app)
+        headers = {**_uat12e_login(client), "Accept": "application/json"}
+
+        measurement_calls.clear()
+        filtered = client.get(
+            "/api/health-vault/timeline?unified=true&metric=heart_rate",
+            headers=headers,
+        )
+        body = _assert_json_not_html(filtered)
+        assert filtered.status_code == 200
+        assert str(filtered.headers.get("content-type") or "").lower().startswith("application/json")
+        assert body.get("filter_metric") == "heart_rate"
+        assert len(measurement_calls) == 1
+        assert "document_id" not in measurement_calls[0]
+        entries = body["entries"]
+        assert len(entries) == 6
+        assert all("heart_rate" in __import__("json").dumps(entry).lower() for entry in entries)
+        assert all("other-patient-hr" not in __import__("json").dumps(entry) for entry in entries)
+        compact = _node_surfaces_eval(
+            "const events = "
+            + __import__("json").dumps(entries)
+            + """;
+const groups = CS.compactTimelineEntries(events);
+const hr = groups.filter(g => g.kind === 'group' && g.metric === 'heart_rate');
+console.log(JSON.stringify({
+  cards: groups.length,
+  hrCards: hr.length,
+  underlying: hr.reduce((n, g) => n + g.underlyingCount, 0),
+  latest: hr[0] && hr[0].latest && hr[0].latest.value,
+  min: hr[0] && hr[0].min,
+  max: hr[0] && hr[0].max,
+  lines: hr[0] ? CS.groupedCardLines(hr[0]) : [],
+}));
+"""
+        )
+        grouped = __import__("json").loads(compact)
+        assert grouped["cards"] == 1
+        assert grouped["hrCards"] == 1
+        assert grouped["underlying"] == 6
+        assert grouped["latest"] == 78
+        assert grouped["min"] == 56
+        assert grouped["max"] == 78
+        assert grouped["lines"][0] == "Heart Rate"
+        assert "6 observations" in grouped["lines"]
+        assert "Latest: 78 bpm" in grouped["lines"]
+        assert any("Range: 56–78" in line for line in grouped["lines"])
+        assert "Category: Not available" not in grouped["lines"]
+
+        snapshot = client.get("/api/health-vault/health-snapshot?metric=heart_rate", headers=headers)
+        snap_body = _assert_json_not_html(snapshot)
+        assert snapshot.status_code == 200
+        assert snap_body.get("metric_id") == "heart_rate"
+        history = snap_body.get("history") or []
+        assert isinstance(history, list)
+
+        records = client.get("/api/records?metric=heart_rate", headers=headers)
+        records_body = _assert_json_not_html(records)
+        assert records.status_code == 200
+        names = [row.get("original_filename") for row in records_body["records"]]
+        assert any(str(name).startswith("heart-rate-") for name in names)
+        assert "steps.json" not in names
+
+        trends = client.get("/api/health-vault/trends?metric=heart_rate", headers=headers)
+        trends_body = _assert_json_not_html(trends)
+        assert trends.status_code == 200
+        assert "heart_rate" in (trends_body.get("trends") or {})
+        assert "steps" not in (trends_body.get("trends") or {})
+
+        assert len(store.list_documents()) == stored_docs
+        assert len(store.list_observations() or []) == stored_obs
 
