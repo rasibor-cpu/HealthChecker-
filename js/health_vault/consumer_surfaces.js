@@ -18,13 +18,34 @@
   function headers() { return dashboard() ? dashboard().getAuthorizationHeaders() : {}; }
   function authenticated() { return !!(dashboard() && dashboard().token); }
 
+  async function parseJsonResponse(response) {
+    const ct = String((response.headers && response.headers.get("content-type")) || "").toLowerCase();
+    if (ct.indexOf("text/html") >= 0) {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+    const text = await response.text();
+    const trimmed = String(text || "").trim();
+    if (!trimmed || trimmed.charAt(0) === "<") {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (_err) {
+      throw new Error("HealthChecker returned a page instead of data. Sign in and retry.");
+    }
+  }
+
   async function request(path) {
-    const response = await fetch(path, { headers: headers(), cache: "no-store" });
+    const response = await fetch(path, {
+      headers: Object.assign({ Accept: "application/json" }, headers()),
+      cache: "no-store",
+      credentials: "same-origin",
+    });
     if (response.status === 401 || response.status === 403) {
       if (dashboard()) dashboard().handleLogout();
       throw new Error("Your session expired. Please sign in again.");
     }
-    const body = await response.json();
+    const body = await parseJsonResponse(response);
     if (!response.ok) throw new Error(body.error || "HealthChecker could not load this view.");
     return body;
   }
@@ -108,7 +129,15 @@
       .map(value => String(value || "").toLowerCase());
     const view = begin("consumer_trends_screen");
     try {
-      const trendsPayload = widget(await summary(force), "trends_widget").payload || {};
+      let trendsPayload = {};
+      if (global.HCConsumerTrends && typeof HCConsumerTrends.loadFiltered === "function") {
+        trendsPayload = await HCConsumerTrends.loadFiltered({
+          metric: filterMetric,
+          metrics: filterMetrics,
+        }) || {};
+      } else {
+        trendsPayload = widget(await summary(force), "trends_widget").payload || {};
+      }
       const trends = trendsPayload.trends || {};
       const exclusions = trendsPayload.exclusions || [];
       let entries = Object.entries(trends);
@@ -161,7 +190,10 @@
     const want = new Set(filterMetrics.concat(filterMetric ? [String(filterMetric).toLowerCase()] : []));
     const view = begin("consumer_timeline_screen");
     try {
-      const body = await request("/api/health-vault/timeline?unified=true");
+      const params = new URLSearchParams({ unified: "true" });
+      if (filterMetric) params.set("metric", String(filterMetric));
+      if (filterMetrics.length) params.set("metrics", filterMetrics.join(","));
+      const body = await request("/api/health-vault/timeline?" + params.toString());
       let events = Array.isArray(body.entries) ? body.entries : [];
       if (want.size) {
         events = events.filter(event => {
@@ -201,10 +233,23 @@
       trends: "consumer_trends_screen",
     };
     const screenId = map[surface] || surface;
-    if (screenId === "health_records_screen" && global.HCVaultUI && HCVaultUI.setMetricFilter) {
-      HCVaultUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+    if (screenId === "health_records_screen") {
+      if (global.HCVaultUI && HCVaultUI.setMetricFilter) {
+        HCVaultUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+      }
+      if (global.HCRecordsUI && typeof HCRecordsUI.setMetricFilter === "function") {
+        HCRecordsUI.setMetricFilter(metricFilter.metric, metricFilter.metrics, metricFilter.category);
+      }
     }
     const tab = document.querySelector('.tab[data="' + screenId + '"]');
+    // HC321-UAT12F: Snapshot drill-down used to click the tab (which already
+    // loads Timeline/Trends) and then call loadTimeline/loadTrends again.
+    // Two concurrent unified-timeline GETs on S24 raced the encrypted vault
+    // until fetch() failed with TypeError: Failed to fetch.
+    if (screenId === "consumer_trends_screen" || screenId === "consumer_timeline_screen") {
+      lastNavAt = Date.now();
+      lastNavScreen = screenId;
+    }
     if (tab) tab.click();
     if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
     if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);
@@ -337,5 +382,5 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
   else bind();
-  global.HCConsumerSurfaces = { loadTrends, loadObservations, loadTimeline, loadReport, openFiltered };
+  global.HCConsumerSurfaces = { loadTrends, loadObservations, loadTimeline, loadReport, openFiltered, parseJsonResponse };
 })(typeof window !== "undefined" ? window : globalThis);

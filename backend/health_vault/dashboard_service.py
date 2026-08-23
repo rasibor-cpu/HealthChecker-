@@ -542,3 +542,36 @@ class DashboardService:
             widgets=ordered_widgets,
             display_name=display_name,
         )
+
+    def get_trends_payload(
+        self,
+        patient_id: str,
+        *,
+        metric: str | None = None,
+        metrics: list[str] | str | None = None,
+    ) -> dict[str, Any]:
+        """Authenticated JSON trends payload, optionally filtered to one Snapshot metric."""
+        from backend.health_vault.health_snapshot import metric_filter_aliases, snapshot_metric_id
+        from backend.health_vault.metric_normalization import canonicalize_metric
+
+        summary = self.get_summary(patient_id)
+        payload: dict[str, Any] = {"trends": {}, "exclusions": [], "priority_metric": None}
+        for widget in summary.widgets:
+            if getattr(widget, "widget_id", None) == "trends_widget":
+                payload = dict(widget.payload or {})
+                break
+        want = metric_filter_aliases(metric, metrics)
+        if want:
+            trends = payload.get("trends") or {}
+            payload["trends"] = {
+                key: value
+                for key, value in trends.items()
+                if canonicalize_metric(key) in want
+                or snapshot_metric_id(key) in want
+                or str(key).lower() in want
+            }
+            payload["exclusions"] = []
+            payload["filter_metrics"] = sorted(want)
+        payload.setdefault("trends", {})
+        payload.setdefault("exclusions", [])
+        return payload
