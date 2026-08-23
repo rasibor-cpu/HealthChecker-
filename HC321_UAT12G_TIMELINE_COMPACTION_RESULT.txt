@@ -1,0 +1,32 @@
+TASK=HC321-UAT12G_FILTERED_TIMELINE_CONSUMER_COMPACTION
+RESULT_FILE=HC321_UAT12G_TIMELINE_COMPACTION_RESULT.txt
+GENERATED_UTC=2026-08-23T02:20:00Z
+
+ROOT_CAUSE=Filtered Timeline loaded after UAT12F, but the default consumer renderer printed one card per Health Connect document with summary/trend_impact plus a hard-coded "Category: Not available" (or meaningless "other") and no Heart Rate value/unit. Same-day repetitive observations therefore appeared as hundreds of identical-looking cards.
+
+FILES_CHANGED=js/health_vault/consumer_surfaces.js; service-worker.js; index.html; tests/test_hc321_health_snapshot.py; tests/test_hc325_r2_live_executive_data_path.py; tests/test_hc325_r3_live_executive_path_finalization.py; HC321_UAT12G_TIMELINE_COMPACTION_RESULT.txt
+
+DISPLAY_COMPACTION_RESULT=PASS. Same-day Health Connect observations compact by day + normalized metric + health_connect provenance into one card (label, observation count, latest value+unit, min/max range, optional average, source). "Show observations" expands underlying samples. Different metrics (heart_rate vs steps) stay separate. Clinical/guardian rows are not merged into Health Connect groups.
+
+CATEGORY_NOT_AVAILABLE_RESULT=PASS. Renderer no longer interpolates Category with a "Not available" fallback. Empty/other/unknown categories are omitted. Meaningful categories such as laboratory_report still render.
+
+FILTERED_HEART_RATE_RESULT=PASS. Authenticated GET /api/health-vault/timeline?unified=true&metric=heart_rate returns HTTP 200 application/json, no HTML shell, heart-rate-relevant entries only. Client grouping uses measurement metric (not JSON blob hiding). Patient scoping unchanged (HC-318 production middleware + patient_id on build_timeline).
+
+UNDERLYING_EVENT_PRESERVATION=PASS. Compaction is display-only. API still returns individual slim entries. Vault documents/observations/measurements are not deleted or rewritten. Group cards expose data-underlying-count and "Show observations".
+
+PERFORMANCE_REGRESSION_RESULT=PASS. UAT12F batched list_measurements() path remains. timeline.py still uses _measurements_by_document(store.list_measurements()) and does not call list_measurements(document_id=doc["id"]). UAT12F + UAT12G tests assert a single unfiltered/filtered timeline GET decrypts measurements once.
+
+FOCUSED_TESTS=python3 -m pytest tests/test_hc321_health_snapshot.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py -q → 70 passed
+
+BROADER_TESTS=governed consumer gate (HC321 snapshot/UAT1/C1, HC201, HC316, HC318, HC319, HC325 R2/R3, HC301, HC320B, HC317C) → 296 passed, 3 failed. Pre-existing Linux multipart UploadFile TypeAdapter failures (not UAT12G): test_legacy_timeline_and_import_ignore_forged_patient_identity (GET timeline assertions pass; POST import fails); test_authenticated_upload_list_detail_and_encrypted_download; test_records_ui_authentication_required_and_forged_tokens_rejected.
+
+SERVICE_WORKER_VERSION=hc321uat12g
+BRANCH=css-agent/hc321-uat12g-timeline-compact-eab4
+HEAD=pending_commit
+PR=pending
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES
+FINAL_STATUS=READY_FOR_GOVERNED_DEPLOY
+
+NOTEPAD_LAUNCH=mousepad fallback (notepad.exe not on this Linux host)
+STOP=code/tests/PR only; governed :8766 deploy was not performed and is not authorized in this task.
