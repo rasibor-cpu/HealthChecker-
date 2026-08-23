@@ -22,7 +22,7 @@ BROADER_TESTS=governed consumer gate (HC321 snapshot/UAT1/C1, HC201, HC316, HC31
 
 SERVICE_WORKER_VERSION=hc321uat12g
 BRANCH=css-agent/hc321-uat12g-timeline-compact-eab4
-HEAD=pending_commit
+HEAD=c35dfdb
 PR=pending
 LIVE_DEPLOY_PERFORMED=NO
 CSS_8765_UNTOUCHED=YES
