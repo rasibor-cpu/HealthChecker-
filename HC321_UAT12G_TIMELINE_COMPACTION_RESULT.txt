@@ -1,0 +1,143 @@
+TASK=HC321-UAT12G_FILTERED_TIMELINE_CONSUMER_COMPACTION
+RESULT_FILE=HC321_UAT12G_TIMELINE_COMPACTION_RESULT.txt
+GENERATED_UTC=2026-08-23T02:16:28Z
+BRANCH=css-agent/hc321-uat12g-timeline-compact-dd01
+HEAD=43628c44f80aa2332dbdd7e892af53aa55e01e71
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/6
+BASE_BRANCH=hc311-encrypted-vault-at-rest
+LINEAGE=origin/css-agent/hc321-uat12f-timeline-fetch-eab4
+
+ROOT_CAUSE=
+Filtered Timeline API (UAT12F) already returned HTTP 200 application/json with
+slim per-event entries including measurements.metric/value/units. The mobile
+consumer renderer in js/health_vault/consumer_surfaces.js painted one card per
+entry and always emitted `Category: ${primary_category || category || "Not available"}`.
+Health Connect heart-rate rows typically have primary_category "other"/empty, so
+S24 showed hundreds of same-day cards with "Category: Not available" and no
+Heart Rate value/unit. Storage/API semantics were not the defect.
+
+FILES_CHANGED=
+js/health_vault/consumer_surfaces.js
+service-worker.js
+index.html
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+HC321_UAT12G_TIMELINE_COMPACTION_RESULT.txt
+
+DISPLAY_COMPACTION_RESULT=
+PASS. Consumer renderer groups Health Connect observations by day + normalized
+metric + provenance bucket. Same-day Heart Rate Health Connect rows become one
+card:
+  2026-08-18
+  Heart Rate
+  N observations
+  Latest: <value> bpm
+  Range: <min>–<max> bpm
+  Source: <stored provenance/source_system>
+  Show observations (expansion of underlying samples)
+120 same-day HR Health Connect rows compact to 1 card (underlying count 120).
+Steps on the same day stay a separate metric group. Clinical/lab rows are not
+merged with Health Connect. Distinct metrics are never combined.
+
+CATEGORY_NOT_AVAILABLE_RESULT=
+PASS. Renderer no longer interpolates Category with a "Not available" fallback.
+Empty / other / n/a / unknown categories omit the Category line entirely.
+Meaningful categories (e.g. laboratory_report) still render as Category: laboratory report.
+
+FILTERED_HEART_RATE_RESULT=
+PASS. Authenticated GET /api/health-vault/timeline?unified=true&metric=heart_rate
+returns HTTP 200 application/json, not an HTML shell. filter_metric=heart_rate.
+Entries are heart-rate-only. Other-patient heart-rate documents are excluded
+(HC-318 session patient scoping). Client grouping then shows one Heart Rate
+card with correct count/latest/min/max/unit/source.
+
+UNDERLYING_EVENT_PRESERVATION=
+PASS. Compaction is display-only. API still returns individual slim entries.
+Vault document count and observation count are unchanged after the filtered
+Timeline GET. No stored observation is deleted, rewritten, or suppressed.
+"Show observations" expands the grouped samples.
+
+PERFORMANCE_REGRESSION_RESULT=
+PASS. UAT12F batched path remains:
+  measurements_by_document = _measurements_by_document(store.list_measurements())
+No per-document list_measurements(document_id=...) path. Authenticated filtered
+Timeline GET still invokes list_measurements exactly once without document_id.
+Slim consumer projection (no extracted-text blobs) unchanged.
+
+FOCUSED_TESTS=
+python3 -m pytest tests/test_hc321_health_snapshot.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py -q
+71 passed
+
+  test_uat12g_display_compacts_same_day_heart_rate_health_connect_rows
+  test_uat12g_never_renders_category_not_available
+  test_uat12g_does_not_merge_distinct_metrics_or_clinical_rows
+  test_uat12g_uat12f_batched_list_measurements_still_present
+  test_uat12g_authenticated_filtered_heart_rate_json_and_compaction_inputs
+  test_uat12f_s24_authenticated_filtered_timeline_avoids_n_plus_one_and_failed_to_fetch
+  test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth
+  test_uat12e_history_dedupes_duplicate_hr_samples_without_deleting_store
+  test_uat12e_filtered_surfaces_authenticated_json_never_html
+
+BROADER_TESTS=
+Governed consumer regression gate:
+  test_hc321_health_snapshot.py
+  test_hc321_uat1_consumer_browser_android_fixes.py
+  test_hc321_c1_consumer_functional_completion.py
+  test_hc201i_executive_dashboard.py
+  test_hc201c_production_readiness.py
+  test_hc201_health_vault.py
+  test_hc201h_confirmed_ingestion.py
+  test_hc316c_consumer_dashboard.py
+  test_hc316b_dashboard_backend.py
+  test_hc318b_authentication_foundation.py
+  test_hc319c_mobile_identity_and_api_only.py
+  test_hc319a_consumer_runtime.py
+  test_hc325_r2_live_executive_data_path.py
+  test_hc325_r3_live_executive_path_finalization.py
+  test_hc301_health_guardian.py
+  test_hc320b_production_security_closure.py
+  test_hc317c_consumer_records_ui.py
+297 passed, 3 failed
+
+PRE-EXISTING Linux-only failures (multipart UploadFile TypeAdapter / pydantic 2.13;
+not caused by this repair; same class as UAT12F):
+  test_hc320b_production_security_closure.py::test_legacy_timeline_and_import_ignore_forged_patient_identity
+    (GET timeline patient-scoping assertions passed; failure is later POST import)
+  test_hc317c_consumer_records_ui.py::test_authenticated_upload_list_detail_and_encrypted_download
+  test_hc317c_consumer_records_ui.py::test_records_ui_authentication_required_and_forged_tokens_rejected
+
+SERVICE_WORKER_VERSION=
+hc321uat12g
+CACHE_REVISION=hc321uat12g
+consumer_surfaces.js?v=hc321uat12g
+service-worker.js?v=hc321uat12g
+/api/ remains outside service-worker caching/interception
+  (isForbiddenCacheUrl early return before event.respondWith)
+
+BRANCH=css-agent/hc321-uat12g-timeline-compact-dd01
+HEAD=43628c44f80aa2332dbdd7e892af53aa55e01e71
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/6
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES
+FINAL_STATUS=READY_FOR_GOVERNED_DEPLOY
+
+PRESERVED=
+- UAT12F batched list_measurements performance
+- Authenticated Timeline JSON (no HTML shell)
+- Snapshot Heart Rate drill-down
+- Snapshot display dedupe
+- Filtered Records
+- Filtered Trends
+- Records/Trends JSON-only handling
+- Existing provenance
+- Encrypted-vault behavior
+- All clinical/Health Connect stored data
+- HC-318 authenticated patient scoping
+- CSS :8765 not touched
+- FINANCE dirty workspace not reset/cleaned/stashed
+- :8766 not recycled
+
+NOTEPAD_LAUNCH=
+notepad.exe is not present on this Linux cloud host (command not found).
+Attempting mousepad on the result file as the local Notepad equivalent.
