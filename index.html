@@ -295,6 +295,17 @@ textarea{
           <option value="weight">Weight</option>
         </select>
       </div>
+      <div style="margin-bottom: 12px;">
+        <label for="config_reporting_region"><strong class="small">Preferred Reporting Region (units):</strong></label>
+        <select id="config_reporting_region" style="margin-top: 4px; margin-bottom: 0;">
+          <option value="">Canonical (as stored)</option>
+          <option value="CA">Canada (mmol/L glucose)</option>
+          <option value="NG">Nigeria (mmol/L glucose)</option>
+          <option value="GB">United Kingdom (mmol/L glucose)</option>
+          <option value="US">United States (mg/dL glucose)</option>
+        </select>
+        <p class="muted small">Changes how values are shown. Historical originals stay in the vault.</p>
+      </div>
       <button id="save_config_btn" style="width: auto; padding: 8px 16px; margin: 0;">Save Preferences</button>
     </div>
 
@@ -711,15 +722,15 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat12i"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat12j"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
 <script src="js/health_vault/health_guardian.js"></script>
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
-<script src="js/health_vault/dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/records.js?v=hc321uat12i"></script>
+<script src="js/health_vault/dashboard.js?v=hc321uat12j"></script>
+<script src="js/health_vault/records.js?v=hc321uat12j"></script>
 <script src="js/health_vault/trends.js?v=hc321uat12e"></script>
 <script>
 const KEY = 'HC_V6';
@@ -1120,12 +1131,12 @@ if (window.HCContinuousMonitoring) {
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (reloading) return;
-    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321uat12i') return;
+    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321uat12j') return;
     reloading = true;
-    sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat12i');
+    sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat12j');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12i').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12j').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }
@@ -1150,6 +1161,6 @@ if (window.HCContinuousMonitoring) {
   });
 })();
 </script>
-<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12i"></script>
+<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12j"></script>
 </body>
 </html>

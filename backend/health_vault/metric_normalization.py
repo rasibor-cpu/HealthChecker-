@@ -1,12 +1,24 @@
 """
-HC-201H — Canonical metric names and unit-compatible normalization for trends.
+HC-201H / HC321-UAT12J — Canonical metric names and unit-compatible normalization.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-NORMALIZER_VERSION = "hc201h.metric.v1"
+from backend.health_vault.clinical_semantics import (
+    CLASS_ALIASES,
+    GLYCEMIC_TREND_CLASSES,
+    RENAL_CLASSES,
+    classify_clinical_observation,
+)
+from backend.health_vault.unit_conversion import (
+    CANONICAL_UNITS as _CLINICAL_CANONICAL_UNITS,
+    NORMALIZER_VERSION,
+    UNIT_NORMALIZATION_REQUIRES_VERIFICATION,
+    convert_reference_range,
+    to_canonical,
+)
 
 # Alias → canonical metric
 METRIC_ALIASES = {
@@ -47,8 +59,6 @@ METRIC_ALIASES = {
     "ldl_cholesterol": "ldl",
     "hdl": "hdl",
     "triglycerides": "triglycerides",
-    "systolic_bp": "systolic_bp",
-    "diastolic_bp": "diastolic_bp",
 }
 
 CANONICAL_UNITS = {
@@ -63,10 +73,7 @@ CANONICAL_UNITS = {
     "sleep_latency": "min",
     "respiratory_rate": "breaths/min",
     "skin_temperature_delta": "C",
-    "glucose": "mg/dL",
     "hba1c": "%",
-    "egfr": "mL/min/1.73m2",
-    "creatinine": "umol/L",
     "weight": "kg",
     "bmi": "kg/m2",
     "sleep_score": "score",
@@ -79,15 +86,18 @@ CANONICAL_UNITS = {
     "hdl": "mg/dL",
     "triglycerides": "mg/dL",
 }
+CANONICAL_UNITS.update(_CLINICAL_CANONICAL_UNITS)
 
-# Metrics allowed into classical / clinical trend engine
 TREND_METRICS = {
     "systolic_bp",
+    "systolic_bp_sitting",
+    "systolic_bp_standing",
+    "systolic_bp_supine",
     "diastolic_bp",
-    "glucose",
+    "diastolic_bp_sitting",
+    "diastolic_bp_standing",
+    "diastolic_bp_supine",
     "hba1c",
-    "egfr",
-    "creatinine",
     "weight",
     "resting_hr",
     "heart_rate",
@@ -97,11 +107,23 @@ TREND_METRICS = {
     "sleep_score",
     "respiratory_rate",
     "ldl",
+    "hemoglobin",
+    "hematocrit",
+    "sodium",
+    "potassium",
+    "magnesium",
+    "inr",
+    "troponin_i_hs",
+    "troponin_t_hs",
+    "albumin_serum",
+    "protein_total_serum",
+    "calcium_total",
+    "calcium_ionized",
 }
+TREND_METRICS.update(GLYCEMIC_TREND_CLASSES)
+TREND_METRICS.update(c for c in RENAL_CLASSES if c != "uacr")
+TREND_METRICS.add("uacr")
 
-# HC-321-C1: monitoring / Health Connect observational trend eligibility.
-# Kept separate from TREND_METRICS so wearable SpO2/steps/etc. do not dilute
-# stricter clinical/lab eligibility rules, while still participating in trends.
 MONITORING_TREND_METRICS = {
     "heart_rate",
     "resting_hr",
@@ -116,40 +138,66 @@ MONITORING_TREND_METRICS = {
     "exercise_minutes",
 }
 
-# Unit families that may convert
 _DURATION_HOURS = {"h", "hr", "hrs", "hour", "hours"}
 _DURATION_MIN = {"min", "mins", "minute", "minutes", "m"}
-_GLUCOSE_MG = {"mg/dl", "mg/dL"}
-_GLUCOSE_MMOL = {"mmol/l", "mmol/L"}
-_CREAT_UMOL = {"umol/l", "µmol/l", "μmol/l", "umol/L"}
-_CREAT_MG = {"mg/dl", "mg/dL"}
 
 
 def canonicalize_metric(metric: str | None) -> str:
     key = str(metric or "unknown").strip().lower()
+    if key in CLASS_ALIASES:
+        return CLASS_ALIASES[key]
     return METRIC_ALIASES.get(key, key)
 
 
-def normalize_measurement(raw: dict[str, Any] | Any) -> dict[str, Any]:
+def normalize_measurement(
+    raw: dict[str, Any] | Any,
+    *,
+    document_type: str | None = None,
+    source_system: str | None = None,
+    source_facility: str | None = None,
+) -> dict[str, Any]:
     """
     Return a measurement dict with:
-      metric (canonical), units (canonical when known),
-      value (normalized), original_value, original_units,
+      metric (observation class), units (canonical when known),
+      value (canonical), original_value, original_units,
       unit_compatible, normalization_version
+    Originals are never overwritten.
     """
     if hasattr(raw, "to_dict"):
         data = raw.to_dict()
     else:
         data = dict(raw or {})
 
-    original_metric = str(data.get("metric") or "unknown")
-    canonical = canonicalize_metric(original_metric)
-    original_value = data.get("value")
-    original_units = data.get("units")
+    original_metric = str(
+        data.get("original_analyte_name")
+        or data.get("original_metric")
+        or data.get("metric")
+        or "unknown"
+    )
+    original_value = data.get("original_value")
+    original_units = data.get("original_units")
+    if original_value is None:
+        original_value = data.get("value")
+    if original_units is None:
+        original_units = data.get("units")
+
+    classified = classify_clinical_observation(
+        metric=str(data.get("metric") or original_metric),
+        original_name=original_metric,
+        specimen=data.get("specimen"),
+        context=data.get("context") or data.get("collection_context"),
+        document_type=document_type or data.get("document_type"),
+        source_system=source_system or data.get("source_system"),
+    )
+    canonical = classified["observation_class"]
+    if canonical in METRIC_ALIASES and canonical not in CLASS_ALIASES:
+        canonical = METRIC_ALIASES.get(canonical, canonical)
+
     value = original_value
     units = original_units
     compatible = True
     notes: list[str] = []
+    conversion_flag = None
 
     target = CANONICAL_UNITS.get(canonical)
     u = str(original_units or "").strip()
@@ -169,75 +217,72 @@ def normalize_measurement(raw: dict[str, Any] | Any) -> dict[str, Any]:
         "sleep_latency",
     }:
         if not u or u_l in _DURATION_HOURS:
-            # Historical vault used hours — convert to minutes
-            if not u or u_l in _DURATION_HOURS:
-                value = round(num * 60.0, 3) if (not u or u_l in _DURATION_HOURS) else num
-                if not u or u_l in _DURATION_HOURS:
-                    units = "min"
-                    notes.append("hours_to_minutes")
+            value = round(num * 60.0, 3)
+            units = "min"
+            notes.append("hours_to_minutes")
         elif u_l in _DURATION_MIN:
             value = num
             units = "min"
         else:
             compatible = False
             notes.append("unknown_duration_unit")
-    elif num is not None and canonical == "glucose":
-        if not u or u_l in {x.lower() for x in _GLUCOSE_MG}:
-            value = num
-            units = "mg/dL"
-        elif u_l in {x.lower() for x in _GLUCOSE_MMOL}:
-            value = round(num * 18.0182, 3)
-            units = "mg/dL"
-            notes.append("mmol_L_to_mg_dL")
-        else:
-            compatible = False
-            notes.append("incompatible_glucose_unit")
-    elif num is not None and canonical == "creatinine":
-        if not u or u_l in {x.lower() for x in _CREAT_UMOL}:
-            value = num
-            units = "umol/L"
-        elif u_l in {x.lower() for x in _CREAT_MG}:
-            value = round(num * 88.4, 3)
-            units = "umol/L"
-            notes.append("mg_dL_to_umol_L")
-        else:
-            compatible = False
-            notes.append("incompatible_creatinine_unit")
     elif num is not None and target:
-        if not u or u.replace("²", "2") == target or u_l == target.lower():
+        converted = to_canonical(
+            observation_class=canonical,
+            original_value=original_value,
+            original_units=original_units,
+        )
+        value = converted["value"]
+        units = converted["units"]
+        compatible = bool(converted["unit_compatible"])
+        conversion_flag = converted.get("conversion_flag")
+        notes.extend(converted.get("normalization_notes") or [])
+    elif num is not None and canonical == "respiratory_rate":
+        if u_l in {"/min", "br/min", "breaths/min", "bpm", ""}:
             value = num
-            units = target
-        elif u and u_l not in {target.lower(), target.lower().replace("²", "2")}:
-            # Same family names with slight spelling — accept common RR aliases
-            if canonical == "respiratory_rate" and u_l in {"/min", "br/min", "breaths/min", "bpm"}:
-                value = num
-                units = "breaths/min"
-            else:
-                # Do not convert unknown incompatible units
-                compatible = u_l == target.lower()
-                if not compatible:
-                    notes.append("unit_mismatch_no_conversion")
-                    value = num
-                    units = u or target
+            units = "breaths/min"
         else:
+            compatible = False
+            notes.append("unit_mismatch_no_conversion")
             value = num
-            units = target or u
+            units = u
 
+    canonical_range = data.get("canonical_reference_range")
+    if data.get("reference_range") and original_units and units and str(original_units) != str(units):
+        canonical_range = convert_reference_range(
+            data.get("reference_range"),
+            str(original_units),
+            str(units),
+            canonical,
+        )
+
+    facility = source_facility or data.get("source_facility")
     data.update(
         {
             "metric": canonical,
+            "observation_class": canonical,
             "value": value,
             "units": units,
-            "original_metric": original_metric,
+            "original_metric": data.get("original_metric") or original_metric,
+            "original_analyte_name": original_metric,
             "original_value": original_value,
             "original_units": original_units,
+            "specimen": classified.get("specimen") or data.get("specimen"),
+            "context": classified.get("context") or data.get("context"),
+            "source_facility": facility,
+            "canonical_reference_range": canonical_range,
             "unit_compatible": compatible,
+            "conversion_flag": conversion_flag,
             "normalization_version": NORMALIZER_VERSION,
             "normalization_notes": notes,
+            "semantics_version": classified.get("semantics_version"),
         }
     )
+    if conversion_flag == UNIT_NORMALIZATION_REQUIRES_VERIFICATION and UNIT_NORMALIZATION_REQUIRES_VERIFICATION not in notes:
+        notes.append(UNIT_NORMALIZATION_REQUIRES_VERIFICATION)
+        data["normalization_notes"] = notes
     return data
 
 
-def normalize_measurements(items: list[Any]) -> list[dict[str, Any]]:
-    return [normalize_measurement(m) for m in items or []]
+def normalize_measurements(items: list[Any], **kwargs: Any) -> list[dict[str, Any]]:
+    return [normalize_measurement(m, **kwargs) for m in items or []]

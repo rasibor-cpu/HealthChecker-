@@ -43,7 +43,7 @@ def test_post_login_and_session_change_trigger_server_refresh():
     assert "hc:session-changed" in dash
     assert "authenticated: !!this.token" in dash
     assert "HCConsumerDashboard.token && window.HCExecutiveDashboard" in html
-    assert "dashboard.js?v=hc321c1" in html
+    assert "dashboard.js?v=hc321uat12j" in html
 
 
 def test_production_shaped_briefing_maps_nonzero_vault_summary_fields():
@@ -96,13 +96,13 @@ def test_no_competing_legacy_initializer_after_consumer_init():
 def test_service_worker_navigation_is_network_first_with_skip_waiting():
     sw = _read("service-worker.js")
     html = _read("index.html")
-    assert 'CACHE_REVISION = "hc321uat12i"' in sw
+    assert 'CACHE_REVISION = "hc321uat12j"' in sw
     assert "isNavigationRequest" in sw
     assert "SKIP_WAITING" in sw
     assert "clients.claim()" in sw
     assert "client.navigate" in sw
     assert "controllerchange" in html
-    assert "service-worker.js?v=hc321uat12i" in html
+    assert "service-worker.js?v=hc321uat12j" in html
 
 
 def test_guardian_server_backed_contract_intact():
