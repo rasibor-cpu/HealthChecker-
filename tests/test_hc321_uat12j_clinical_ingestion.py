@@ -304,8 +304,8 @@ def test_ui_contract_and_lineage_assets():
     surfaces = (ROOT / "js/health_vault/consumer_surfaces.js").read_text(encoding="utf-8")
     assert 'id="config_reporting_region"' in html
     assert "reporting_region" in js
-    assert 'CACHE_REVISION = "hc323a"' in sw
-    assert "service-worker.js?v=hc323a" in html
+    assert 'CACHE_REVISION = "hc324a"' in sw
+    assert "service-worker.js?v=hc324a" in html
     assert "compactTimelineEntries" in surfaces
     assert "openFiltered" in snap
     assert (ROOT / "tests" / "test_hc322a_consumer_screenshot_policy.py").exists()

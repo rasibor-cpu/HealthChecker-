@@ -310,14 +310,18 @@
       const refreshed = `Last refreshed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       const syncAt = path.last_health_connect_sync_at || path.last_sync_attempt_at;
       const latest = path.latest_measurement_at;
+      const hcInventory = path.latest_health_connect_inventory_at;
       const syncLine = syncAt ? `Last Health Connect sync ${this.formatDate(syncAt)}` : "Last Health Connect sync: not available";
       const latestLine = latest ? `Latest measurement ${this.formatDate(latest)}` : "Latest measurement: not available";
+      const hcLine = hcInventory
+        ? `Latest in Health Connect ${this.formatDate(hcInventory)}`
+        : "Latest in Health Connect: not reported by companion";
       let stale = "";
       if (latest) {
         const ageMs = Date.now() - Date.parse(latest);
         if (Number.isFinite(ageMs) && ageMs > 36 * 3600000) stale = " · Data may be stale";
       }
-      this.text("records_last_refreshed", `${refreshed}. ${syncLine}. ${latestLine}${stale}`);
+      this.text("records_last_refreshed", `${refreshed}. ${syncLine}. ${latestLine}. ${hcLine}${stale}`);
     }
 
     emptyCopy() {

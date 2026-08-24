@@ -657,9 +657,9 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert 'id="hc_health_snapshot"' in consumer.split('id="dashboard_widgets_target"', 1)[0]
     assert html.index('id="hc_health_snapshot"') < html.index('id="dashboard_widgets_target"')
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
-    assert "health_snapshot.js?v=hc323a" in html
+    assert "health_snapshot.js?v=hc324a" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc323a"' in sw
+    assert 'CACHE_REVISION = "hc324a"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -961,7 +961,7 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc323a"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc324a"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
 
 
 def _assert_json_not_html(response):
@@ -1246,9 +1246,9 @@ def test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth():
     assert api_return >= 0
     assert first_respond > api_return
     assert lastNav_before_click_prevents_double_fetch(surfaces)
-    assert 'CACHE_REVISION = "hc323a"' in sw
-    assert "consumer_surfaces.js?v=hc323a" in html
-    assert "service-worker.js?v=hc323a" in html
+    assert 'CACHE_REVISION = "hc324a"' in sw
+    assert "consumer_surfaces.js?v=hc324a" in html
+    assert "service-worker.js?v=hc324a" in html
 
 
 def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
@@ -1644,12 +1644,12 @@ def test_uat12g_uat12f_batched_list_measurements_still_present():
     assert "store.list_measurements(document_id=doc['id'])" not in source
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc323a"' in sw
+    assert 'CACHE_REVISION = "hc324a"' in sw
     assert "if (isForbiddenCacheUrl(req.url)) return;" in sw
     fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
-    assert "consumer_surfaces.js?v=hc323a" in html
-    assert "service-worker.js?v=hc323a" in html
+    assert "consumer_surfaces.js?v=hc324a" in html
+    assert "service-worker.js?v=hc324a" in html
 
 
 def test_uat12g_authenticated_filtered_heart_rate_json_and_compaction_inputs():
@@ -1990,9 +1990,9 @@ def test_uat12h_compaction_and_batching_still_present():
     assert "Category: Not available" not in surfaces
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc323a"' in sw
+    assert 'CACHE_REVISION = "hc324a"' in sw
     fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
-    assert "consumer_surfaces.js?v=hc323a" in html
-    assert "health_snapshot.js?v=hc323a" in html
+    assert "consumer_surfaces.js?v=hc324a" in html
+    assert "health_snapshot.js?v=hc324a" in html
 

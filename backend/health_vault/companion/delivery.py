@@ -44,6 +44,23 @@ def _latest_measured_by_metric(rows: list[dict[str, Any]]) -> dict[str, str]:
     return latest
 
 
+def merge_iso_latest_maps(*maps: Any) -> dict[str, str]:
+    """Keep the later ISO timestamp per metric. Empty maps must not erase prior values."""
+    latest: dict[str, str] = {}
+    for mapping in maps:
+        if not isinstance(mapping, dict):
+            continue
+        for key, value in mapping.items():
+            metric = str(key or "")
+            measured = str(value or "")
+            if not metric or not measured:
+                continue
+            previous = latest.get(metric)
+            if previous is None or measured > previous:
+                latest[metric] = measured
+    return latest
+
+
 def _parse_ts(value: str) -> datetime:
     text = value[:-1] + "+00:00" if value.endswith("Z") else value
     return datetime.fromisoformat(text).astimezone(timezone.utc)
@@ -451,26 +468,42 @@ class CompanionDeliveryService:
                 prior_ids.add(rid)
         merged_tombs = merged_tombs[-50:]
 
+        incoming_hc = body.get("health_connect_status") if isinstance(body.get("health_connect_status"), dict) else {}
+        prior_hc = prior_status.get("health_connect") if isinstance(prior_status.get("health_connect"), dict) else {}
+        merged_latest = merge_iso_latest_maps(
+            prior_status.get("latest_received_by_metric"),
+            prior_hc.get("latest_by_metric"),
+            prior_hc.get("inventory_latest_by_metric"),
+            incoming_hc.get("latest_by_metric"),
+            incoming_hc.get("inventory_latest_by_metric"),
+            _latest_measured_by_metric(validated),
+        )
+        merged_hc = dict(prior_hc)
+        merged_hc.update(incoming_hc)
+        merged_hc["latest_by_metric"] = merged_latest
+        if incoming_hc.get("inventory_latest_by_metric") or prior_hc.get("inventory_latest_by_metric"):
+            merged_hc["inventory_latest_by_metric"] = merge_iso_latest_maps(
+                prior_hc.get("inventory_latest_by_metric"),
+                incoming_hc.get("inventory_latest_by_metric"),
+            )
+
         try:
             self.store.save_companion_status(
                 {
                     "schema_version": "hc.companion_status.v1",
                     "device_id": device.get("device_id"),
                     "last_attempt_at": now_ts,
-                    "last_success_at": now_ts if durable else None,
+                    "last_success_at": now_ts if durable else (prior_status.get("last_success_at") or None),
                     "last_batch_id": batch_id,
-                    "health_connect": body.get("health_connect_status") or {},
+                    "health_connect": merged_hc,
                     "permissions": body.get("permissions") or {},
                     "workmanager": body.get("workmanager") or {},
                     "queued_observations": body.get("queued_observations"),
                     "deletion_tombstones": merged_tombs,
                     "clinical_history_deleted": False,
                     "delivery_error": None if durable else (ingest.get("errors") or ["ingest_failed"]),
-                    "latest_received_by_metric": _latest_measured_by_metric(validated),
-                    "companion_batch_latest_at": max(
-                        (str(row.get("measured_at") or "") for row in validated),
-                        default="",
-                    ) or None,
+                    "latest_received_by_metric": merged_latest,
+                    "companion_batch_latest_at": merged_latest and max(merged_latest.values()) or None,
                 }
             )
         except Exception:
