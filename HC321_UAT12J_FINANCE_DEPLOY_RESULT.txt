@@ -1,0 +1,109 @@
+TASK=HC321-UAT12J_GOVERNED_FINANCE_DEPLOY_FINAL_LIVE_ACCEPTANCE_PREP
+RESULT_FILE=HC321_UAT12J_FINANCE_DEPLOY_RESULT.txt
+GENERATED_UTC=2026-08-24T16:20:00Z
+AUTHORITATIVE_SOURCE_BRANCH=css-agent/hc321-uat12j-clinical-ingest-9f1a
+EXPECTED_HEAD=59d54669aac9f496bc0c484bbec318a10c6b4344
+EXPECTED_SW=hc321uat12j
+
+HOST=NOT_FINANCE (Linux cloud agent hostname=cursor, Ubuntu 24.04; COMPUTERNAME unset; no C:\ProgramData\HealthChecker)
+SOURCE_HEAD=59d54669aac9f496bc0c484bbec318a10c6b4344
+SOURCE_HEAD_MATCH=YES
+DEPLOY_WORKTREE_CLEAN=YES (/tmp/hc321-uat12j-deploy-worktree detached at EXPECTED_HEAD; git status porcelain=0; used for source verification only; no runtime start)
+SOURCE_SW_VERSION=hc321uat12j
+OLD_8766_PID=NOT_OBSERVABLE
+OLD_8766_IDENTITY=NOT_OBSERVABLE
+OLD_8766_STOPPED=NO (host precheck failed; no process stop attempted)
+NEW_PARENT_PID=NOT_STARTED
+NEW_CHILD_PID=NOT_STARTED
+NEW_PROCESS_TREE=NOT_STARTED
+LOOPBACK_ROOT=UNREACHABLE (127.0.0.1:8766 connection refused on this host)
+LOOPBACK_SW_VERSION=NOT_OBSERVABLE
+LOOPBACK_TIMELINE_CONTROL=NOT_OBSERVABLE
+LOOPBACK_RECORDS_CONTROL=NOT_OBSERVABLE
+LOOPBACK_SNAPSHOT_CONTROL=NOT_OBSERVABLE
+PUBLIC_ROOT=HTTP/2 200 text/html (https://health.capitalstratasystems.com/ still serving pre-UAT12J assets; last-modified Sun, 23 Aug 2026 02:54:59 GMT)
+PUBLIC_SW_VERSION=hc321uat12h (cache-busted GET /service-worker.js?v=hc321uat12j returned CACHE_REVISION=hc321uat12h from origin; Cloudflare config not modified)
+PUBLIC_TIMELINE_CONTROL=HTTP/2 401 application/json {"ok":false,"error":"Unauthorized","code":"unauthorized"}
+PUBLIC_RECORDS_CONTROL=HTTP/2 401 application/json {"ok":false,"error":"Unauthorized","code":"unauthorized"}
+PUBLIC_SNAPSHOT_CONTROL=HTTP/2 401 application/json {"ok":false,"error":"Unauthorized","code":"unauthorized"}
+CSS_8765_BEFORE=NOT_OBSERVABLE_FROM_THIS_HOST (127.0.0.1:8765 connection refused; Finance CSS not on this pod)
+CSS_8765_AFTER=NOT_OBSERVABLE_FROM_THIS_HOST (no stop/start/bind attempted)
+MAIN_WORKSPACE_UNTOUCHED=YES
+PRODUCTION_DATA_MUTATED=NO
+FINAL_STATUS=BLOCKED_HOST_PRECHECK_FAILED_NOT_FINANCE
+
+================================================================
+PRECHECKS
+================================================================
+1. HOST=FINANCE — FAIL. This run is a Cursor cloud Linux pod (hostname cursor),
+   not the governed Finance Windows workstation. No WinRM/RDP/SSH to Finance.
+   No C:\ProgramData\HealthChecker\config\production.json.
+   powershell / pwsh / notepad.exe absent.
+2. Origin branch HEAD matches EXPECTED_HEAD exactly — PASS.
+   git fetch origin css-agent/hc321-uat12j-clinical-ingest-9f1a
+   origin SHA = 59d54669aac9f496bc0c484bbec318a10c6b4344
+3. Isolated clean deployment worktree — PASS (created, not started).
+   git worktree add --detach /tmp/hc321-uat12j-deploy-worktree 59d54669aac9f496bc0c484bbec318a10c6b4344
+4. Source asset verification at EXPECTED_HEAD — PASS:
+   service-worker.js CACHE_REVISION = hc321uat12j
+   HC322A screenshot lineage present (tests/test_hc322a_consumer_screenshot_policy.py)
+   UAT12H filtered-timeline assets present (compactTimelineEntries / openFiltered)
+   UAT12I records IA present (clinical_document vs Device Data surfaces)
+   UAT12J clinical_semantics.py + unit_conversion.py + ClinicalLabPanelParser +
+   Brantford fixture present
+5. CSS :8765 — not reachable from this host; no bind/kill/curl against a live
+   CSS process was possible. No CSS process was started or stopped.
+
+================================================================
+RUNTIME SWITCH
+================================================================
+NOT PERFORMED. HOST MUST BE FINANCE. Stopping or starting 127.0.0.1:8766 on this
+Linux pod would not be the governed HealthChecker Uvicorn runtime on Finance and
+could not use scripts/start_healthchecker_production.ps1 with
+C:\ProgramData\HealthChecker\config\production.json.
+
+No HealthChecker child was identified or killed.
+start_healthchecker_production.ps1 was not invoked.
+Cloudflare tunnel/config was not modified (public origin is still hc321uat12h;
+query-string cache-bust still returned origin uat12h, so this is origin content
+not a Cloudflare-only cache artifact requiring config change).
+
+================================================================
+VERIFY (read-only; no Brantford import; no vault writes)
+================================================================
+Loopback :8766 on this host: no listener. Controls not executed.
+Public HTTPS (current live origin, NOT UAT12J):
+  GET / → 200
+  GET /service-worker.js?v=hc321uat12j → 200, CACHE_REVISION=hc321uat12h
+  GET /api/health-vault/timeline?unified=true&metric=heart_rate unauth → 401 JSON
+  GET /api/records unauth → 401 JSON
+  GET /api/health-vault/health-snapshot?metric=heart_rate unauth → 401 JSON
+
+================================================================
+SAFETY
+================================================================
+LIVE_DEPLOY_PERFORMED=NO
+PRODUCTION_DATA_MUTATED=NO
+CSS_8765_UNTOUCHED=YES
+DIRTY_MAIN_WORKSPACE_RESET_STASH_CLEAN=NOT_PERFORMED
+PR_MERGED=NO
+FORCE_PUSH=NO
+CLOUDFLARE_CONFIG_MODIFIED=NO
+BRANTFORD_IMPORT_PERFORMED=NO
+
+================================================================
+NOTEPAD_LAUNCH
+================================================================
+notepad.exe is not present on this Linux cloud host.
+mousepad opened this result file on DISPLAY=:1 as the local fallback.
+
+================================================================
+BLOCKER FOR READY_FOR_FINAL_S24_UAT
+================================================================
+Re-run this exact command on HOST=FINANCE against isolated worktree pinned to
+59d54669aac9f496bc0c484bbec318a10c6b4344 using
+scripts/start_healthchecker_production.ps1 and
+C:\ProgramData\HealthChecker\config\production.json.
+Do not merge PRs. Do not recycle CSS :8765. Do not import Brantford during deploy
+verification.
+Live public origin remains hc321uat12h until that governed :8766 recycle.
