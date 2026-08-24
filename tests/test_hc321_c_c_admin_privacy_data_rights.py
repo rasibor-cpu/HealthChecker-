@@ -43,7 +43,12 @@ def client(tmp_path):
         changed = test_client.post(
             "/api/auth/password/change",
             headers={"Authorization": f"Bearer {token}"},
-            json={"current_password": "owner-password-xx", "new_password": "owner-password-yy"},
+            json={"current_password": "owner-password-xx", "new_password": "owner-password-yy",
+                  "recovery_answers": [
+                      {"question_id": "CQ01", "answer": "Westfield School"},
+                      {"question_id": "CQ02", "answer": "Toronto"},
+                      {"question_id": "CQ03", "answer": "Buster"},
+                  ]},
         )
         assert changed.status_code == 200
         yield test_client, changed.json()["token"], vault
@@ -77,7 +82,12 @@ def test_admin_create_disable_role_and_unauthorized(client):
     changed = test_client.post(
         "/api/auth/password/change",
         headers={"Authorization": f"Bearer {ut}"},
-        json={"current_password": "secondary-pass", "new_password": "secondary-pass2"},
+        json={"current_password": "secondary-pass", "new_password": "secondary-pass2",
+              "recovery_answers": [
+                  {"question_id": "CQ01", "answer": "Westfield School"},
+                  {"question_id": "CQ02", "answer": "Toronto"},
+                  {"question_id": "CQ03", "answer": "Buster"},
+              ]},
     )
     ut = changed.json()["token"]
     denied = test_client.get("/api/admin/users", headers={"Authorization": f"Bearer {ut}"})

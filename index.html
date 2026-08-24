@@ -218,24 +218,50 @@ textarea{
 
 <div id="login_screen" class="screen" style="max-width: 400px; margin: 40px auto; padding: 20px; background: var(--card); border-radius: 12px; display: none;">
   <h3 class="section-title">Login to HealthChecker</h3>
-  <label class="small muted">Patient ID</label>
-  <input id="login_patient_id" placeholder="Patient ID (e.g. 00000)" style="margin-top: 4px;" autocomplete="username" />
-  <label class="small muted">Password</label>
-  <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" />
-  <button id="login_btn">Sign In</button>
-  <div id="login_error" class="bad small" style="margin-top: 10px; font-weight: bold;"></div>
+  <div id="login_credentials">
+    <label class="small muted">Patient ID</label>
+    <input id="login_patient_id" placeholder="Patient ID (e.g. 00000)" style="margin-top: 4px;" autocomplete="username" />
+    <label class="small muted">Password</label>
+    <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" />
+    <button id="login_btn">Sign In</button>
+    <button id="forgot_password_btn" type="button" class="secondary">Forgot password?</button>
+    <div id="login_error" class="bad small" style="margin-top: 10px; font-weight: bold;"></div>
+  </div>
   <form id="password_change_form" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
     <h4 class="section-title">Change your temporary password</h4>
-    <p class="small muted">A new password is required before health information can be accessed.</p>
+    <p class="small muted">Replace the temporary sign-in password and choose three recovery questions before health information can be accessed.</p>
     <label class="small muted" for="current_password">Temporary/current password</label>
     <input id="current_password" type="password" autocomplete="current-password" />
     <label class="small muted" for="new_password">New password (8+ characters)</label>
     <input id="new_password" type="password" autocomplete="new-password" minlength="8" />
     <label class="small muted" for="confirm_password">Confirm new password</label>
     <input id="confirm_password" type="password" autocomplete="new-password" minlength="8" />
+    <div id="password_change_questions" class="small"></div>
     <button id="password_change_btn" type="submit">Change password and continue</button>
     <div id="password_change_error" class="bad small" role="alert"></div>
   </form>
+  <div id="password_recovery_flow" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
+    <h4 class="section-title">Forgot password</h4>
+    <p class="small muted">Identify your account, answer your recovery questions, then set a new password. You will return to sign-in afterward.</p>
+    <div id="recovery_start_step">
+      <label class="small muted" for="recovery_user_id">Patient ID</label>
+      <input id="recovery_user_id" autocomplete="username" />
+      <button id="recovery_start_btn" type="button">Continue</button>
+    </div>
+    <div id="recovery_verify_step" hidden>
+      <div id="recovery_question_fields"></div>
+      <button id="recovery_verify_btn" type="button">Verify answers</button>
+    </div>
+    <div id="recovery_complete_step" hidden>
+      <label class="small muted" for="recovery_new_password">New password (8+ characters)</label>
+      <input id="recovery_new_password" type="password" autocomplete="new-password" minlength="8" />
+      <label class="small muted" for="recovery_confirm_password">Confirm new password</label>
+      <input id="recovery_confirm_password" type="password" autocomplete="new-password" minlength="8" />
+      <button id="recovery_complete_btn" type="button">Set new password</button>
+    </div>
+    <button id="recovery_cancel_btn" type="button" class="secondary">Back to sign in</button>
+    <div id="recovery_error" class="bad small" role="alert"></div>
+  </div>
 </div>
 
 <nav id="tabs_navbar">
@@ -371,7 +397,28 @@ textarea{
   <h3 id="consumer_settings_title" class="section-title">Settings</h3>
   <div class="card">
     <p id="consumer_settings_identity" class="small"></p>
+    <p id="consumer_settings_password_status" class="small muted"></p>
     <div id="consumer_settings_ops" class="small" aria-live="polite"></div>
+    <form id="settings_password_form" style="margin: 12px 0;">
+      <h4 class="section-title">Change password</h4>
+      <label class="small muted" for="settings_current_password">Current password</label>
+      <input id="settings_current_password" type="password" autocomplete="current-password" />
+      <label class="small muted" for="settings_new_password">New password (8+ characters)</label>
+      <input id="settings_new_password" type="password" autocomplete="new-password" minlength="8" />
+      <label class="small muted" for="settings_confirm_password">Confirm new password</label>
+      <input id="settings_confirm_password" type="password" autocomplete="new-password" minlength="8" />
+      <button id="settings_password_btn" type="submit">Update password</button>
+      <div id="settings_password_error" class="bad small" role="alert"></div>
+    </form>
+    <form id="settings_recovery_form" style="margin: 12px 0;">
+      <h4 class="section-title">Recovery questions</h4>
+      <p class="small muted">Verify your current password before replacing recovery questions.</p>
+      <label class="small muted" for="settings_recovery_current">Current password</label>
+      <input id="settings_recovery_current" type="password" autocomplete="current-password" />
+      <div id="settings_recovery_questions" class="small"></div>
+      <button id="settings_recovery_btn" type="submit">Save recovery questions</button>
+      <div id="settings_recovery_error" class="bad small" role="alert"></div>
+    </form>
     <button id="consumer_settings_theme" type="button">Switch light/dark theme</button>
     <button id="consumer_settings_customize" type="button" class="secondary">Customize dashboard</button>
     <button id="consumer_settings_support_bundle" type="button" class="secondary">Export support bundle</button>

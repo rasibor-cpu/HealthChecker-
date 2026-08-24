@@ -248,6 +248,10 @@ def create_health_vault_app(
         "/api/auth/session",
         "/api/auth/password/change",
         "/api/auth/logout",
+        "/api/auth/recovery/catalog",
+        "/api/auth/recovery/start",
+        "/api/auth/recovery/verify",
+        "/api/auth/recovery/complete",
         "/api/companion/pair/confirm",
         "/api/companion/observations",
         "/api/companion/status",
@@ -900,8 +904,59 @@ def create_health_vault_app(
             result = auth_service.change_password(
                 _bearer_token(request), str(body.get("current_password") or ""),
                 str(body.get("new_password") or ""),
+                confirmation=body.get("confirm_password", body.get("confirmation")),
+                recovery_answers=body.get("recovery_answers"),
             )
             return JSONResponse({"ok": True, **result})
+        except AuthenticationError as exc:
+            return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
+
+    @app.get("/api/auth/recovery/catalog")
+    async def auth_recovery_catalog() -> JSONResponse:
+        from backend.health_vault.consumer_recovery import catalog_public
+
+        return JSONResponse({"ok": True, "questions": catalog_public()})
+
+    @app.post("/api/auth/recovery/start")
+    async def auth_recovery_start(body: dict[str, Any]) -> JSONResponse:
+        user_id = body.get("user_id") or body.get("patient_id") or ""
+        result = auth_service.recovery_start(str(user_id))
+        return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/auth/recovery/verify")
+    async def auth_recovery_verify(body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.recovery_verify(
+                str(body.get("recovery_id") or ""), body.get("answers"),
+            )
+            return JSONResponse({"ok": True, **result})
+        except AuthenticationError:
+            return JSONResponse(
+                {"ok": False, "error": "Recovery could not be completed.", "code": "invalid_recovery"},
+                status_code=401,
+            )
+
+    @app.post("/api/auth/recovery/complete")
+    async def auth_recovery_complete(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.recovery_complete(
+                _bearer_token(request),
+                str(body.get("new_password") or ""),
+                confirmation=body.get("confirm_password", body.get("confirmation")),
+            )
+            return JSONResponse({"ok": True, **result})
+        except AuthenticationError as exc:
+            return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
+
+    @app.post("/api/auth/recovery/enroll")
+    async def auth_recovery_enroll(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.replace_recovery_questions(
+                _bearer_token(request),
+                str(body.get("current_password") or ""),
+                body.get("recovery_answers"),
+            )
+            return JSONResponse(result)
         except AuthenticationError as exc:
             return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
 

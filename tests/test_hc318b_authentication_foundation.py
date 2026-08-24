@@ -60,7 +60,12 @@ def test_first_login_is_restricted_until_secure_password_change(auth_app):
 
     changed = client.post(
         "/api/auth/password/change", headers=headers,
-        json={"current_password": "123456", "new_password": "Robert-Secure-2026"},
+        json={"current_password": "123456", "new_password": "Robert-Secure-2026",
+              "recovery_answers": [
+                  {"question_id": "CQ01", "answer": "Westfield School"},
+                  {"question_id": "CQ02", "answer": "Toronto"},
+                  {"question_id": "CQ03", "answer": "Buster"},
+              ]},
     )
     assert changed.status_code == 200
     body = changed.json()
@@ -68,7 +73,7 @@ def test_first_login_is_restricted_until_secure_password_change(auth_app):
     assert body["password_changed_at"]
     changed_at = datetime.fromisoformat(body["password_changed_at"].replace("Z", "+00:00"))
     expires = datetime.fromisoformat(body["password_expiry_date"].replace("Z", "+00:00"))
-    assert timedelta(days=29, hours=23) < expires - changed_at <= timedelta(days=30)
+    assert timedelta(days=89, hours=23) < expires - changed_at <= timedelta(days=90)
     assert client.get("/api/dashboard/summary", headers=headers).status_code == 401
     full_headers = {"Authorization": f"Bearer {body['token']}"}
     assert client.get("/api/dashboard/summary", headers=full_headers).status_code == 200

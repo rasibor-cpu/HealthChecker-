@@ -7,9 +7,16 @@
   let summary = null;
   let records = [];
   let preferences = null;
+  let catalog = null;
+  let recoveryId = null;
+  let recoveryToken = null;
 
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
+
+  function setSecurityGate(active) {
+    if (window.HCConsumerNav) HCConsumerNav.setSecurityGate(!!active);
+  }
 
   function saveSession(value) {
     session = value;
@@ -48,7 +55,8 @@
 
   async function request(path, options) {
     const response = await fetch(path, { ...(options || {}), headers: { ...authHeaders(), ...((options || {}).headers || {}) } });
-    if (session && (response.status === 401 || response.status === 403)) {
+    const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
+    if (session && (response.status === 401 || response.status === 403) && !gated) {
       await logout(false);
       throw new Error(response.status === 403 ? "Password change required" : "Session expired");
     }
@@ -62,6 +70,103 @@
     byId("mobile_consumer").hidden = !active;
   }
 
+  async function loadCatalog() {
+    if (catalog && catalog.length) return catalog;
+    const body = await fetch("/api/auth/recovery/catalog").then(res => res.json());
+    catalog = body.questions || [];
+    return catalog;
+  }
+
+  function renderQuestionPickers(containerId, prefix) {
+    const host = byId(containerId);
+    if (!host) return;
+    host.replaceChildren();
+    for (let i = 1; i <= 3; i++) {
+      const label = document.createElement("label");
+      label.textContent = "Recovery question " + i;
+      const select = document.createElement("select");
+      select.id = prefix + "_q" + i;
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "Choose a question";
+      select.appendChild(blank);
+      (catalog || []).forEach(question => {
+        const option = document.createElement("option");
+        option.value = question.question_id;
+        option.textContent = question.prompt;
+        select.appendChild(option);
+      });
+      const answer = document.createElement("input");
+      answer.id = prefix + "_a" + i;
+      answer.type = "text";
+      answer.autocomplete = "off";
+      host.appendChild(label);
+      host.appendChild(select);
+      host.appendChild(answer);
+    }
+  }
+
+  function collectAnswers(prefix) {
+    const rows = [];
+    for (let i = 1; i <= 3; i++) {
+      const question = byId(prefix + "_q" + i);
+      const answer = byId(prefix + "_a" + i);
+      rows.push({ question_id: question ? question.value : "", answer: answer ? answer.value : "" });
+    }
+    return rows;
+  }
+
+  function renderRecoveryPrompts(containerId, questions) {
+    const host = byId(containerId);
+    if (!host) return;
+    host.replaceChildren();
+    (questions || []).forEach(question => {
+      const label = document.createElement("label");
+      label.textContent = question.prompt;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.autocomplete = "off";
+      input.dataset.questionId = question.question_id;
+      host.appendChild(label);
+      host.appendChild(input);
+    });
+  }
+
+  function collectPromptAnswers(containerId) {
+    const host = byId(containerId);
+    if (!host) return [];
+    return Array.from(host.querySelectorAll("input")).map(input => ({
+      question_id: input.dataset.questionId,
+      answer: input.value,
+    }));
+  }
+
+  function hideLoginExtras() {
+    const loginBtn = byId("mobile_login_button");
+    const forgot = byId("mobile_forgot_password_btn");
+    if (loginBtn) loginBtn.hidden = true;
+    if (forgot) forgot.hidden = true;
+  }
+
+  function showLoginExtras() {
+    const loginBtn = byId("mobile_login_button");
+    const forgot = byId("mobile_forgot_password_btn");
+    if (loginBtn) loginBtn.hidden = false;
+    if (forgot) forgot.hidden = false;
+    byId("mobile_password_change").hidden = true;
+    byId("mobile_recovery_flow").hidden = true;
+  }
+
+  async function enterPasswordGate() {
+    setSecurityGate(true);
+    showAuthenticated(false);
+    hideLoginExtras();
+    byId("mobile_recovery_flow").hidden = true;
+    byId("mobile_password_change").hidden = false;
+    await loadCatalog();
+    renderQuestionPickers("mobile_password_questions", "mobile_enroll");
+  }
+
   async function login() {
     const error = byId("mobile_login_error");
     error.textContent = "";
@@ -70,12 +175,13 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: byId("mobile_user_id").value.trim(), password: byId("mobile_password").value })
       });
-      saveSession({ token: body.token, userId: body.user_id, name: body.name });
+      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
       byId("mobile_password").value = "";
       if (body.must_change_password) {
-        byId("mobile_password_change").hidden = false;
+        await enterPasswordGate();
         return;
       }
+      setSecurityGate(false);
       showAuthenticated(true);
       await loadDashboard();
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
@@ -95,11 +201,18 @@
     try {
       const body = await request("/api/auth/password/change", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_password: byId("mobile_current_password").value, new_password: next })
+        body: JSON.stringify({
+          current_password: byId("mobile_current_password").value,
+          new_password: next,
+          confirm_password: byId("mobile_confirm_password").value,
+          recovery_answers: collectAnswers("mobile_enroll"),
+        })
       });
-      saveSession({ token: body.token, userId: body.user_id, name: body.name });
+      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
       ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => { byId(id).value = ""; });
       byId("mobile_password_change").hidden = true;
+      showLoginExtras();
+      setSecurityGate(false);
       showAuthenticated(true);
       await loadDashboard();
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
@@ -113,7 +226,10 @@
     summary = null;
     records = [];
     preferences = null;
-    if (window.HCConsumerNav) HCConsumerNav.reset();
+    if (window.HCConsumerNav) {
+      HCConsumerNav.setSecurityGate(false);
+      HCConsumerNav.reset();
+    }
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
     const snap = byId("hc_health_snapshot");
     if (snap) snap.replaceChildren();
@@ -157,6 +273,12 @@
     byId("mobile_identity").textContent = session.name && session.name !== session.userId
       ? `Signed in as ${session.name} (Patient ID: ${session.userId})`
       : `Signed in as Patient ID ${session.userId}`;
+    const passwordStatus = byId("mobile_password_status");
+    if (passwordStatus) {
+      passwordStatus.textContent = session && session.expiresAt
+        ? ("Password expires " + String(session.expiresAt).slice(0, 10) + ".")
+        : "";
+    }
     byId("mobile_theme").value = preferences.theme === "dark" ? "dark" : "light";
     byId("mobile_priority_metric").value = preferences.priority_metric || "";
     if (window.HCHealthSnapshot && typeof HCHealthSnapshot.refresh === "function") {
@@ -215,6 +337,9 @@
 
   async function showView(name, options) {
     options = options || {};
+    if (window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate()) {
+      return;
+    }
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
@@ -261,6 +386,10 @@
           target.appendChild(card);
         });
       }
+      if (name === "settings") {
+        await loadCatalog();
+        renderQuestionPickers("mobile_settings_recovery_questions", "mobile_settings_enroll");
+      }
       byId("mobile_status").textContent = "";
     } catch (error) { byId("mobile_status").textContent = error.message; }
   }
@@ -299,7 +428,13 @@
       if (!raw) return showAuthenticated(false);
       session = JSON.parse(raw);
       const current = await request("/api/auth/session");
-      session.userId = current.user_id; session.name = current.name;
+      session.userId = current.user_id;
+      session.name = current.name;
+      session.expiresAt = current.password_expires_at || current.password_expiry_date;
+      if (current.must_change_password || current.scope !== "full") {
+        await enterPasswordGate();
+        return;
+      }
       showAuthenticated(true);
       await showView("dashboard");
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
@@ -307,8 +442,139 @@
     } catch (_) { await logout(false); }
   }
 
+  function showRecoveryFlow() {
+    setSecurityGate(true);
+    showAuthenticated(false);
+    hideLoginExtras();
+    byId("mobile_password_change").hidden = true;
+    byId("mobile_recovery_flow").hidden = false;
+    byId("mobile_recovery_start_step").hidden = false;
+    byId("mobile_recovery_verify_step").hidden = true;
+    byId("mobile_recovery_complete_step").hidden = true;
+    byId("mobile_recovery_error").textContent = "";
+    recoveryId = null;
+    recoveryToken = null;
+  }
+
+  function cancelRecoveryFlow() {
+    recoveryId = null;
+    recoveryToken = null;
+    setSecurityGate(false);
+    showLoginExtras();
+    showAuthenticated(false);
+  }
+
+  async function handleRecoveryStart() {
+    const error = byId("mobile_recovery_error");
+    error.textContent = "";
+    const body = await fetch("/api/auth/recovery/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: byId("mobile_recovery_user_id").value.trim() }),
+    }).then(res => res.json());
+    recoveryId = body.recovery_id;
+    renderRecoveryPrompts("mobile_recovery_question_fields", body.questions || []);
+    byId("mobile_recovery_start_step").hidden = true;
+    byId("mobile_recovery_verify_step").hidden = false;
+  }
+
+  async function handleRecoveryVerify() {
+    const error = byId("mobile_recovery_error");
+    error.textContent = "";
+    const response = await fetch("/api/auth/recovery/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recovery_id: recoveryId,
+        answers: collectPromptAnswers("mobile_recovery_question_fields"),
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      error.textContent = "Recovery could not be completed.";
+      return;
+    }
+    recoveryToken = body.token;
+    byId("mobile_recovery_verify_step").hidden = true;
+    byId("mobile_recovery_complete_step").hidden = false;
+  }
+
+  async function handleRecoveryComplete() {
+    const error = byId("mobile_recovery_error");
+    const next = byId("mobile_recovery_new_password").value;
+    const confirm = byId("mobile_recovery_confirm_password").value;
+    error.textContent = "";
+    if (next.length < 8 || next !== confirm) {
+      error.textContent = "New passwords must match and contain at least 8 characters.";
+      return;
+    }
+    const response = await fetch("/api/auth/recovery/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + (recoveryToken || "") },
+      body: JSON.stringify({ new_password: next, confirm_password: confirm }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      error.textContent = body.error || "Recovery could not be completed.";
+      return;
+    }
+    saveSession(null);
+    cancelRecoveryFlow();
+    byId("mobile_login_error").textContent = "Password updated. Sign in with your new password.";
+  }
+
+  async function handleSettingsPassword(event) {
+    event.preventDefault();
+    const error = byId("mobile_settings_password_error");
+    const next = byId("mobile_settings_new").value;
+    error.textContent = "";
+    if (next.length < 8 || next !== byId("mobile_settings_confirm").value) {
+      error.textContent = "New passwords must match and contain at least 8 characters.";
+      return;
+    }
+    try {
+      const body = await request("/api/auth/password/change", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: byId("mobile_settings_current").value,
+          new_password: next,
+          confirm_password: byId("mobile_settings_confirm").value,
+        }),
+      });
+      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
+      ["mobile_settings_current", "mobile_settings_new", "mobile_settings_confirm"].forEach(id => { byId(id).value = ""; });
+    } catch (err) { error.textContent = err.message; }
+  }
+
+  async function handleSettingsRecovery(event) {
+    event.preventDefault();
+    const error = byId("mobile_settings_recovery_error");
+    error.textContent = "";
+    try {
+      await request("/api/auth/recovery/enroll", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: byId("mobile_settings_recovery_current").value,
+          recovery_answers: collectAnswers("mobile_settings_enroll"),
+        }),
+      });
+      byId("mobile_settings_recovery_current").value = "";
+    } catch (err) { error.textContent = err.message; }
+  }
+
   byId("mobile_login_button").addEventListener("click", login);
   byId("mobile_password_change").addEventListener("submit", changePassword);
+  byId("mobile_forgot_password_btn").addEventListener("click", showRecoveryFlow);
+  byId("mobile_recovery_start_btn").addEventListener("click", () => handleRecoveryStart().catch(err => {
+    byId("mobile_recovery_error").textContent = err.message;
+  }));
+  byId("mobile_recovery_verify_btn").addEventListener("click", () => handleRecoveryVerify().catch(err => {
+    byId("mobile_recovery_error").textContent = "Recovery could not be completed.";
+  }));
+  byId("mobile_recovery_complete_btn").addEventListener("click", () => handleRecoveryComplete().catch(err => {
+    byId("mobile_recovery_error").textContent = err.message;
+  }));
+  byId("mobile_recovery_cancel_btn").addEventListener("click", cancelRecoveryFlow);
+  byId("mobile_settings_password_form").addEventListener("submit", handleSettingsPassword);
+  byId("mobile_settings_recovery_form").addEventListener("submit", handleSettingsRecovery);
   byId("mobile_logout_button").addEventListener("click", () => logout(true));
   byId("mobile_upload_button").addEventListener("click", upload);
   byId("mobile_save_preferences").addEventListener("click", savePreferences);

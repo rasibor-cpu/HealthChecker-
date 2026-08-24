@@ -87,6 +87,10 @@ def test_every_production_clinical_route_rejects_missing_and_forged_sessions(tmp
         ("GET", "/api/auth/session"),
         ("POST", "/api/auth/password/change"),
         ("POST", "/api/auth/logout"),
+        ("GET", "/api/auth/recovery/catalog"),
+        ("POST", "/api/auth/recovery/start"),
+        ("POST", "/api/auth/recovery/verify"),
+        ("POST", "/api/auth/recovery/complete"),
         ("POST", "/api/companion/pair/confirm"),
         ("POST", "/api/companion/observations"),
         ("GET", "/api/companion/status"),
@@ -212,6 +216,11 @@ def test_bootstrap_password_cannot_return_after_change_or_registry_damage(tmp_pa
         json={
             "current_password": "Controlled-Enrollment-Only",
             "new_password": "Robert-Production-Password",
+            "recovery_answers": [
+                {"question_id": "CQ01", "answer": "Westfield School"},
+                {"question_id": "CQ02", "answer": "Toronto"},
+                {"question_id": "CQ03", "answer": "Buster"},
+            ],
         },
     )
     assert changed.status_code == 200
