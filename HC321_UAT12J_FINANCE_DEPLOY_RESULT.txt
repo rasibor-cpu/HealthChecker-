@@ -96,6 +96,7 @@ NOTEPAD_LAUNCH
 ================================================================
 notepad.exe is not present on this Linux cloud host.
 mousepad opened this result file on DISPLAY=:1 as the local fallback.
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/12
 
 ================================================================
 BLOCKER FOR READY_FOR_FINAL_S24_UAT
