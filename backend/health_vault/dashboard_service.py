@@ -431,6 +431,12 @@ class DashboardService:
         health_connect_sync = _health_connect_sync_summary(
             self.store, patient_id, observations=patient_observations
         )
+        from backend.health_vault.freshness_path import build_freshness_path
+        freshness_path = build_freshness_path(
+            self.store,
+            patient_id,
+            companion_status=self.store.get_companion_status() if hasattr(self.store, "get_companion_status") else None,
+        )
         trend_exclusions = _trend_exclusion_notes(
             observations=patient_observations,
             patient_id=patient_id,
@@ -469,6 +475,7 @@ class DashboardService:
                     "monitoring_latest": monitoring_latest,
                     "health_connect_observation_count": health_connect_observation_count,
                     "health_connect_sync": health_connect_sync,
+                    "freshness_path": freshness_path,
                 }
             ),
             "key_observations": DashboardWidget(

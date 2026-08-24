@@ -4,6 +4,11 @@ from collections import Counter, defaultdict
 from typing import Any
 from backend.health_vault.batch_import import BatchImportService, sanitize_filename
 from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+from backend.health_vault.consumer_records import (
+    classify_consumer_record,
+    health_connect_source_label,
+)
+from backend.health_vault.freshness_path import build_freshness_path
 from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.vault_store import VaultStore
 from backend.health_vault.models import (
@@ -26,6 +31,8 @@ _CLINICAL_CATEGORIES = {
     RecordCategory.BLOOD_PRESSURE,
     RecordCategory.ECG,
     RecordCategory.MEDICATION,
+    RecordCategory.IMAGING,
+    RecordCategory.CLINICAL_DOCUMENT,
 }
 _CLINICAL_TYPE_TOKENS = (
     "laboratory",
@@ -59,6 +66,11 @@ _SEARCH_METRIC_ALIASES = {
     "blood pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
     "blood_pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
     "bp": ("systolic_bp", "diastolic_bp"),
+    "heart rate": ("heart_rate", "resting_hr"),
+    "heart_rate": ("heart_rate", "resting_hr"),
+    "oxygen": ("oxygen_saturation",),
+    "sleep": ("sleep_duration", "deep_sleep_duration", "rem_sleep_duration"),
+    "steps": ("steps",),
     "medication": ("medication",),
     "ecg": ("ecg",),
 }
@@ -67,12 +79,26 @@ def map_category(cat_str: str | None) -> RecordCategory:
     if not cat_str:
         return RecordCategory.OTHER
     cat_str = cat_str.lower()
+    if cat_str in RecordCategory._value2member_map_:
+        return RecordCategory(cat_str)
+    if "cardiovascular" in cat_str:
+        return RecordCategory.CARDIOVASCULAR
+    if "activity" in cat_str or "fitness" in cat_str or "steps" in cat_str:
+        return RecordCategory.ACTIVITY
+    if "respiratory" in cat_str or "oxygen" in cat_str:
+        return RecordCategory.RESPIRATORY
+    if "imaging" in cat_str or "radiology" in cat_str:
+        return RecordCategory.IMAGING
+    if "hospital" in cat_str or "clinical_document" in cat_str or "discharge" in cat_str:
+        return RecordCategory.CLINICAL_DOCUMENT
     if "pressure" in cat_str:
         return RecordCategory.BLOOD_PRESSURE
     if "sleep" in cat_str:
         return RecordCategory.SLEEP
-    if "ecg" in cat_str or "cardio" in cat_str:
+    if "ecg" in cat_str:
         return RecordCategory.ECG
+    if "cardio" in cat_str:
+        return RecordCategory.CARDIOVASCULAR
     if "glucose" in cat_str or "diabetes" in cat_str:
         return RecordCategory.GLUCOSE
     if "kidney" in cat_str or "renal" in cat_str:
@@ -81,7 +107,7 @@ def map_category(cat_str: str | None) -> RecordCategory:
         return RecordCategory.LABS
     if "weight" in cat_str or "body" in cat_str:
         return RecordCategory.WEIGHT
-    if "med" in cat_str:
+    if "med" in cat_str or "prescription" in cat_str:
         return RecordCategory.MEDICATION
     return RecordCategory.OTHER
 
@@ -293,6 +319,7 @@ class RecordsService:
         doc: dict[str, Any],
         include_linkage: bool = False,
         metrics_count: int | None = None,
+        metric_names: list[str] | None = None,
     ) -> HealthRecord:
         doc_id = doc["id"]
         patient_id = doc.get("patient_id", "default-patient")
@@ -354,6 +381,31 @@ class RecordsService:
                 else len(self.store.list_measurements(document_id=doc_id))
             )
 
+        consumer = classify_consumer_record(
+            filename=doc.get("original_filename") or doc_id,
+            document_type=doc.get("document_type"),
+            source_system=doc.get("source_system"),
+            stored_category=doc.get("primary_category"),
+            metrics=metric_names or [
+                str(row.get("metric") or "")
+                for row in measurements
+                if row.get("metric")
+            ],
+            measured_at=doc.get("measured_at"),
+        )
+        if consumer["record_category"] != RecordCategory.OTHER:
+            category = consumer["record_category"]
+        metadata = {key: doc.get(key) for key in (
+            "document_type", "mime_type", "interpretation", "parser_version",
+            "parser_confidence", "classification_confidence", "classification_method",
+            "date_confidence", "date_source", "secondary_categories",
+        )}
+        metadata["display_title"] = consumer["display_title"]
+        metadata["consumer_category"] = consumer["consumer_category"]
+        metadata["consumer_category_label"] = consumer["consumer_category_label"]
+        metadata["technical_filename"] = consumer["technical_filename"]
+        metadata["consumer_metric"] = consumer.get("metric")
+
         return HealthRecord(
             document_id=doc_id,
             patient_id=patient_id,
@@ -364,11 +416,7 @@ class RecordsService:
             measured_at=doc.get("measured_at"),
             size_bytes=doc.get("size_bytes"),
             metrics_count=metrics_count,
-            metadata={key: doc.get(key) for key in (
-                "document_type", "mime_type", "interpretation", "parser_version",
-                "parser_confidence", "classification_confidence", "classification_method",
-                "date_confidence", "date_source", "secondary_categories",
-            )},
+            metadata=metadata,
             source_provenance=self._source_provenance(doc),
             linkage=linkage,
             lifecycle=self._lifecycle(doc) if include_linkage else [],
@@ -383,17 +431,20 @@ class RecordsService:
         metric: str | None = None,
         metrics: list[str] | str | None = None,
         measurement_counts: dict[str, int] | None = None,
+        metrics_by_document: dict[str, list[str]] | None = None,
     ) -> list[HealthRecord]:
         patient_docs = [
             doc for doc in self.store.list_documents() if self._patient_id(doc) == patient_id
         ]
         if measurement_counts is None:
             measurement_counts = self._measurement_counts_by_document(self.store.list_measurements())
+        names_by_doc = metrics_by_document or {}
         records = [
             self._build_record(
                 doc,
                 include_linkage=False,
                 metrics_count=measurement_counts.get(str(doc["id"]), 0),
+                metric_names=names_by_doc.get(str(doc["id"])),
             )
             for doc in patient_docs
         ]
@@ -441,7 +492,7 @@ class RecordsService:
             return list(records)
         wanted_metrics = set()
         for key, aliases in _SEARCH_METRIC_ALIASES.items():
-            if key in needle or needle in key:
+            if key in needle or (len(needle) >= 3 and needle in key):
                 wanted_metrics.update(aliases)
         wanted_metrics.add(canonicalize_metric(needle.replace(" ", "_")))
         wanted_metrics.discard("")
@@ -453,6 +504,19 @@ class RecordsService:
                 continue
             blob = _record_blob(record)
             if needle in blob:
+                matched.append(record)
+                continue
+            meta = record.metadata or {}
+            consumer_bits = " ".join(
+                str(part or "")
+                for part in (
+                    meta.get("display_title"),
+                    meta.get("consumer_category"),
+                    meta.get("consumer_category_label"),
+                    meta.get("consumer_metric"),
+                )
+            ).lower()
+            if needle in consumer_bits:
                 matched.append(record)
                 continue
             doc_metrics = metrics_by_document.get(record.document_id) or []
@@ -467,8 +531,11 @@ class RecordsService:
         measurements: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         latest_value: dict[str, tuple[str, Any, str]] = {}
+        device_ids = {record.document_id for record in device_records}
         for measurement in measurements:
             document_id = str(measurement.get("document_id") or "")
+            if device_ids and document_id not in device_ids:
+                continue
             metric = canonicalize_metric(
                 measurement.get("metric") or measurement.get("metric_type") or ""
             )
@@ -499,6 +566,8 @@ class RecordsService:
                     "latest_units": "",
                     "latest_at": None,
                     "source": "health_connect_companion",
+                    "consumer_category": (record.metadata or {}).get("consumer_category"),
+                    "consumer_category_label": (record.metadata or {}).get("consumer_category_label"),
                 },
             )
             bucket["record_count"] += 1
@@ -527,6 +596,8 @@ class RecordsService:
         metrics: list[str] | str | None = None,
         q: str | None = None,
         surface: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> dict[str, Any]:
         """Group Health Records for the consumer UI without mutating stored documents."""
         measurements = list(self.store.list_measurements() or [])
@@ -535,6 +606,7 @@ class RecordsService:
         all_records = self.list_records(
             patient_id,
             measurement_counts=measurement_counts,
+            metrics_by_document=metrics_by_document,
         )
         classified = [(record, classify_record_surface(record)) for record in all_records]
         surface_counts = {
@@ -545,7 +617,14 @@ class RecordsService:
         for _record, class_name in classified:
             surface_counts[class_name] = surface_counts.get(class_name, 0) + 1
         device_records = [record for record, class_name in classified if class_name == SURFACE_DEVICE]
-        summaries = self._device_summaries(device_records, metrics_by_document, measurements)
+        patient_document_ids = {record.document_id for record in all_records}
+        patient_measurements = [
+            row
+            for row in measurements
+            if str(row.get("document_id") or "") in patient_document_ids
+            or str(row.get("patient_id") or "") == patient_id
+        ]
+        summaries = self._device_summaries(device_records, metrics_by_document, patient_measurements)
 
         filtered = list(all_records)
         if category:
@@ -571,7 +650,7 @@ class RecordsService:
             visible = self._search_records(filtered, query, metrics_by_document)
             mode = "search"
         elif metric or metrics:
-            visible = filtered
+            visible = self._presentation_dedupe(filtered)
             mode = "metric_drilldown"
         elif surface_key in {SURFACE_DEVICE, "device"}:
             visible = []
@@ -596,24 +675,111 @@ class RecordsService:
             key=lambda record: (record.measured_at or record.imported_at, record.document_id),
             reverse=True,
         )
+        total_visible = len(visible)
+        page_offset = max(0, int(offset or 0))
+        apply_page = limit is not None and mode in {"metric_drilldown", "search", SURFACE_CLINICAL, SURFACE_IMPORTED}
+        if apply_page:
+            page_limit = max(1, min(int(limit), 200))
+            page_rows = visible[page_offset: page_offset + page_limit]
+        else:
+            page_limit = None
+            page_rows = visible
+        freshness = build_freshness_path(self.store, patient_id)
+        source_card = self._health_connect_source_card(
+            patient_id,
+            device_records,
+            summaries,
+            freshness,
+        )
+        counts = {
+            "clinical_documents": surface_counts.get(SURFACE_CLINICAL, 0),
+            "imported_reports": surface_counts.get(SURFACE_IMPORTED, 0),
+            "device_data": surface_counts.get(SURFACE_DEVICE, 0),
+            "health_connect_observations": surface_counts.get(SURFACE_DEVICE, 0),
+            "documents": surface_counts.get(SURFACE_CLINICAL, 0) + surface_counts.get(SURFACE_IMPORTED, 0),
+        }
         return {
-            "records": [self._summary_dict(record) for record in visible],
+            "records": [self._summary_dict(record) for record in page_rows],
             "vault_record_count": len(all_records),
             "mode": mode,
+            "counts": counts,
             "surface_counts": {
-                "clinical_documents": surface_counts.get(SURFACE_CLINICAL, 0),
-                "imported_reports": surface_counts.get(SURFACE_IMPORTED, 0),
-                "device_data": surface_counts.get(SURFACE_DEVICE, 0),
+                "clinical_documents": counts["clinical_documents"],
+                "imported_reports": counts["imported_reports"],
+                "device_data": counts["device_data"],
             },
             "device_data": {
                 "summaries": summaries,
-                "record_count": surface_counts.get(SURFACE_DEVICE, 0),
+                "record_count": counts["device_data"],
                 "preserved": True,
+                "source": source_card,
+            },
+            "health_connect_source": source_card,
+            "freshness_path": freshness,
+            "page": {
+                "limit": page_limit,
+                "offset": page_offset,
+                "total": total_visible,
+                "has_more": bool(apply_page and (page_offset + len(page_rows) < total_visible)),
             },
             "search": {
                 "term": query,
-                "match_count": len(visible) if query else 0,
+                "match_count": total_visible if query else 0,
             },
+        }
+
+    @staticmethod
+    def _presentation_dedupe(records: list[HealthRecord]) -> list[HealthRecord]:
+        """Collapse exact Health Connect filename duplicates in listings only."""
+        seen: set[str] = set()
+        unique: list[HealthRecord] = []
+        for record in records:
+            key = str(record.original_filename or record.document_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(record)
+        return unique
+
+    def _health_connect_source_card(
+        self,
+        patient_id: str,
+        device_records: list[HealthRecord],
+        summaries: list[dict[str, Any]],
+        freshness: dict[str, Any],
+    ) -> dict[str, Any]:
+        origins: list[str] = []
+        want_patient = str(patient_id or "default-patient")
+        for row in self.store.list_observations() or []:
+            if str(row.get("patient_id") or "default-patient") != want_patient:
+                continue
+            device = row.get("device") if isinstance(row.get("device"), dict) else {}
+            origin = device.get("data_origin") or device.get("package") or ""
+            if origin:
+                origins.append(str(origin))
+        latest_at = freshness.get("latest_measurement_at")
+        currentness = "unknown"
+        for row in (freshness.get("by_metric") or {}).values():
+            if row.get("vault_latest_at") == latest_at:
+                currentness = row.get("currentness") or currentness
+                break
+        return {
+            "label": health_connect_source_label(origins),
+            "source": "health_connect_companion",
+            "observation_count": len(device_records),
+            "metric_types": [row["metric"] for row in summaries],
+            "metric_labels": [row["label"] for row in summaries],
+            "last_observation_at": latest_at,
+            "last_sync_at": freshness.get("last_health_connect_sync_at"),
+            "last_sync_attempt_at": freshness.get("last_sync_attempt_at"),
+            "currentness": currentness,
+            "status_text": (
+                "Stale"
+                if currentness == "stale"
+                else ("Current" if currentness == "current" else "Unknown")
+            ),
+            "view_observations": True,
+            "preserved": True,
         }
 
     def _display_measurements(self, patient_id: str, measurements: list[dict[str, Any]]) -> list[dict[str, Any]]:

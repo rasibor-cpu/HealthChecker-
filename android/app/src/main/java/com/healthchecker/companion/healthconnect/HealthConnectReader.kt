@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
+import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -44,7 +45,8 @@ class HealthConnectReader(
         val grantedTypeCount: Int = 0,
         val missingTypeCount: Int = 0,
         /** Scope fingerprint that must be persisted with [nextChangesToken] after durable ack. */
-        val proposedTokenScope: String? = null
+        val proposedTokenScope: String? = null,
+        val latestByMetric: Map<String, String> = emptyMap()
     ) {
         companion object {
             fun fromPending(
@@ -64,8 +66,17 @@ class HealthConnectReader(
                     QueryDisposition.PERFORMED_OK
                 },
                 partialPermissionWarning = partialPermissionWarning,
-                proposedTokenScope = tokenScope
+                proposedTokenScope = tokenScope,
+                latestByMetric = latestFrom(observations)
             )
+            fun latestFrom(observations: List<CompanionObservation>): Map<String, String> {
+                val out = linkedMapOf<String, String>()
+                observations.forEach { obs ->
+                    val prior = out[obs.metricType]
+                    if (prior == null || obs.measuredAt > prior) out[obs.metricType] = obs.measuredAt
+                }
+                return out
+            }
         }
     }
 
@@ -115,7 +126,8 @@ class HealthConnectReader(
                 partialPermissionWarning = partial,
                 grantedTypeCount = granted.size,
                 missingTypeCount = missing.size,
-                proposedTokenScope = scope
+                proposedTokenScope = scope,
+                latestByMetric = FetchResult.latestFrom(observations)
             )
         }
 
@@ -156,7 +168,8 @@ class HealthConnectReader(
                 grantedTypeCount = granted.size,
                 missingTypeCount = missing.size,
                 proposedTokenScope = scope,
-                error = "changes_token_invalidated_reinitialized"
+                error = "changes_token_invalidated_reinitialized",
+                latestByMetric = FetchResult.latestFrom(recovered)
             )
         }
         return FetchResult(
@@ -168,7 +181,8 @@ class HealthConnectReader(
             partialPermissionWarning = partial,
             grantedTypeCount = granted.size,
             missingTypeCount = missing.size,
-            proposedTokenScope = scope
+            proposedTokenScope = scope,
+            latestByMetric = FetchResult.latestFrom(observations)
         )
     }
 
@@ -271,14 +285,18 @@ class HealthConnectReader(
                     )
                 }
         }
+        if (BloodGlucoseRecord::class in allowed) {
+            client.readRecords(
+                ReadRecordsRequest(BloodGlucoseRecord::class, timeRangeFilter = filter)
+            ).records.forEach { r ->
+                out += mapGlucose(r)
+            }
+        }
         if (SleepSessionRecord::class in allowed) {
             client.readRecords(
                 ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = filter)
             ).records.forEach { r ->
-                val hours = java.time.Duration.between(r.startTime, r.endTime).toMinutes() / 60.0
-                out += ObservationMapper.sleepDurationHours(
-                    r.metadata.id, hours, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
-                )
+                out += mapSleepSession(r)
             }
         }
         if (ExerciseSessionRecord::class in allowed) {
@@ -296,6 +314,68 @@ class HealthConnectReader(
                     receivedAt = ObservationMapper.instantToIso(Instant.now()),
                     device = mapOf("data_origin" to r.metadata.dataOrigin.packageName)
                 )
+            }
+        }
+        return out
+    }
+
+    private fun mapGlucose(record: BloodGlucoseRecord): CompanionObservation {
+        val interstitial = record.specimenSource == BloodGlucoseRecord.SPECIMEN_SOURCE_INTERSTITIAL_FLUID
+        return ObservationMapper.glucose(
+            record.metadata.id,
+            record.level.inMillimolesPerLiter,
+            record.time,
+            record.metadata.dataOrigin.packageName,
+            interstitial,
+            record.zoneOffset
+        )
+    }
+
+    private fun mapSleepSession(record: SleepSessionRecord): List<CompanionObservation> {
+        val origin = record.metadata.dataOrigin.packageName
+        val zone = record.startZoneOffset
+        val hours = java.time.Duration.between(record.startTime, record.endTime).toMinutes() / 60.0
+        val out = mutableListOf(
+            ObservationMapper.sleepDurationHours(
+                record.metadata.id, hours, record.startTime, origin, zone
+            )
+        )
+        var deep = 0L
+        var rem = 0L
+        var light = 0L
+        var awake = 0L
+        var firstSleep: Instant? = null
+        record.stages.forEach { stage ->
+            val minutes = java.time.Duration.between(stage.startTime, stage.endTime).toMinutes()
+            when (stage.stage) {
+                SleepSessionRecord.STAGE_TYPE_DEEP -> deep += minutes
+                SleepSessionRecord.STAGE_TYPE_REM -> rem += minutes
+                SleepSessionRecord.STAGE_TYPE_LIGHT -> light += minutes
+                SleepSessionRecord.STAGE_TYPE_AWAKE, SleepSessionRecord.STAGE_TYPE_OUT_OF_BED -> awake += minutes
+            }
+            val sleeping = stage.stage == SleepSessionRecord.STAGE_TYPE_DEEP ||
+                stage.stage == SleepSessionRecord.STAGE_TYPE_REM ||
+                stage.stage == SleepSessionRecord.STAGE_TYPE_LIGHT ||
+                stage.stage == SleepSessionRecord.STAGE_TYPE_SLEEPING
+            if (sleeping && firstSleep == null) firstSleep = stage.startTime
+        }
+        if (deep > 0) {
+            out += ObservationMapper.sleepStageMinutes(record.metadata.id, "deep_sleep_duration", deep.toDouble(), record.startTime, origin, zone)
+        }
+        if (rem > 0) {
+            out += ObservationMapper.sleepStageMinutes(record.metadata.id, "rem_sleep_duration", rem.toDouble(), record.startTime, origin, zone)
+        }
+        if (light > 0) {
+            out += ObservationMapper.sleepStageMinutes(record.metadata.id, "light_sleep_duration", light.toDouble(), record.startTime, origin, zone)
+        }
+        if (awake > 0) {
+            out += ObservationMapper.sleepStageMinutes(record.metadata.id, "sleep_awake_duration", awake.toDouble(), record.startTime, origin, zone)
+        }
+        val latencyStart = firstSleep
+        if (latencyStart != null) {
+            val latency = java.time.Duration.between(record.startTime, latencyStart).toMinutes().toDouble()
+            if (latency >= 0) {
+                out += ObservationMapper.sleepStageMinutes(record.metadata.id, "sleep_latency", latency, record.startTime, origin, zone)
             }
         }
         return out
@@ -344,15 +424,8 @@ class HealthConnectReader(
                     record.metadata.dataOrigin.packageName, record.zoneOffset
                 )
             )
-            is SleepSessionRecord -> {
-                val hours = java.time.Duration.between(record.startTime, record.endTime).toMinutes() / 60.0
-                listOf(
-                    ObservationMapper.sleepDurationHours(
-                        record.metadata.id, hours, record.startTime,
-                        record.metadata.dataOrigin.packageName, record.startZoneOffset
-                    )
-                )
-            }
+            is SleepSessionRecord -> mapSleepSession(record)
+            is BloodGlucoseRecord -> listOf(mapGlucose(record))
             is ExerciseSessionRecord -> {
                 val minutes = java.time.Duration.between(record.startTime, record.endTime).toMinutes().toDouble()
                 listOf(

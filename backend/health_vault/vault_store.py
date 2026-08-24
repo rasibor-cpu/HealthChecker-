@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.models import MedicalDocument, Measurement, utc_now
 from backend.health_vault.vault_crypto import (
     KEY_BYTES as VAULT_KEY_BYTES,
@@ -326,6 +327,29 @@ class VaultStore:
                     for row in document_rows
                     if row.get("sha256")
                 },
+                "source_identities": {
+                    (
+                        str(row.get("patient_id") or "default-patient"),
+                        canonicalize_metric(row.get("metric_type") or row.get("metric") or "")
+                        or str(row.get("metric_type") or row.get("metric") or ""),
+                        str(row.get("source_record_id") or ""),
+                    ): row
+                    for row in observation_rows
+                    if row.get("source_record_id")
+                },
+                "observation_ids": {
+                    str(row.get("observation_id")): row
+                    for row in observation_rows
+                    if row.get("observation_id")
+                },
+                "documents_by_filename": {
+                    (
+                        str(row.get("patient_id") or "default-patient"),
+                        str(row.get("original_filename") or ""),
+                    ): row
+                    for row in document_rows
+                    if row.get("original_filename")
+                },
             }
             try:
                 yield batch
@@ -351,6 +375,54 @@ class VaultStore:
         patient_key = str(patient_id or "default-patient")
         row = batch["fingerprints"].get((patient_key, str(fingerprint)))
         return dict(row) if isinstance(row, dict) else None
+
+    def batch_get_observation_by_source_identity(
+        self,
+        batch: dict[str, Any],
+        *,
+        patient_id: str,
+        metric: str,
+        source_record_id: str | None,
+        observation_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if source_record_id:
+            metric_key = canonicalize_metric(metric) or str(metric or "")
+            row = (batch.get("source_identities") or {}).get(
+                (str(patient_id or "default-patient"), metric_key, str(source_record_id))
+            )
+            if isinstance(row, dict):
+                return dict(row)
+        if observation_id:
+            row = (batch.get("observation_ids") or {}).get(str(observation_id))
+            if isinstance(row, dict) and str(row.get("patient_id") or "default-patient") == str(
+                patient_id or "default-patient"
+            ):
+                return dict(row)
+        return None
+
+    def get_observation_by_source_identity(
+        self,
+        *,
+        patient_id: str,
+        metric: str,
+        source_record_id: str | None,
+        observation_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        want_patient = str(patient_id or "default-patient")
+        want_metric = canonicalize_metric(metric) or str(metric or "")
+        source_id = str(source_record_id or "").strip()
+        obs_id = str(observation_id or "").strip()
+        for row in self.list_observations():
+            if str(row.get("patient_id") or "default-patient") != want_patient:
+                continue
+            row_metric = canonicalize_metric(row.get("metric_type") or row.get("metric") or "") or str(
+                row.get("metric_type") or row.get("metric") or ""
+            )
+            if source_id and str(row.get("source_record_id") or "") == source_id and row_metric == want_metric:
+                return dict(row)
+            if obs_id and str(row.get("observation_id") or "") == obs_id:
+                return dict(row)
+        return None
 
     def batch_store(
         self,
@@ -490,6 +562,12 @@ class VaultStore:
         if fp:
             batch["fingerprint_positions"][(patient_key, fp)] = position
             batch["fingerprints"][(patient_key, fp)] = row
+        source_id = str(row.get("source_record_id") or "")
+        if source_id:
+            batch.setdefault("source_identities", {})[
+                (patient_key, str(row.get("metric_type") or row.get("metric") or ""), source_id)
+            ] = row
+        batch.setdefault("observation_ids", {})[oid] = row
 
         self._audit(
             data,

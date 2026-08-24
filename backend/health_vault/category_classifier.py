@@ -14,6 +14,7 @@ PRIMARY_CATEGORIES = (
     "blood_pressure",
     "sleep",
     "ecg_cardiology",
+    "cardiovascular",
     "glucose_diabetes",
     "kidney_renal",
     "laboratory_report",
@@ -22,6 +23,7 @@ PRIMARY_CATEGORIES = (
     "respiratory_oxygen",
     "activity_fitness",
     "hospital_clinical_report",
+    "imaging",
     "symptom_record",
     "other",
 )
@@ -29,15 +31,17 @@ PRIMARY_CATEGORIES = (
 CATEGORY_LABELS = {
     "blood_pressure": "Blood Pressure",
     "sleep": "Sleep",
-    "ecg_cardiology": "ECG / Heart",
-    "glucose_diabetes": "Glucose",
+    "ecg_cardiology": "ECG",
+    "cardiovascular": "Cardiovascular",
+    "glucose_diabetes": "Glucose / Metabolic",
     "kidney_renal": "Kidney",
-    "laboratory_report": "Labs",
+    "laboratory_report": "Laboratory",
     "weight_body_metrics": "Weight",
-    "medication": "Medications",
-    "respiratory_oxygen": "Respiratory",
+    "medication": "Medication / Prescription",
+    "respiratory_oxygen": "Respiratory / Oxygen",
     "activity_fitness": "Activity",
-    "hospital_clinical_report": "Hospital / Clinical",
+    "hospital_clinical_report": "Clinical Document",
+    "imaging": "Imaging",
     "symptom_record": "Symptoms",
     "other": "Other",
 }
@@ -56,6 +60,8 @@ _METRIC_CATEGORY = {
     "sleep_latency": "sleep",
     "deep_sleep_duration": "sleep",
     "rem_sleep_duration": "sleep",
+    "light_sleep_duration": "sleep",
+    "sleep_awake_duration": "sleep",
     "energy_score": "sleep",
     "hrv": "sleep",
     "hrv_rmssd": "sleep",
@@ -65,8 +71,8 @@ _METRIC_CATEGORY = {
     "ecg_result": "ecg_cardiology",
     "heart_rhythm": "ecg_cardiology",
     "average_hr": "ecg_cardiology",
-    "heart_rate": "ecg_cardiology",
-    "resting_hr": "ecg_cardiology",
+    "heart_rate": "cardiovascular",
+    "resting_hr": "cardiovascular",
     "glucose": "glucose_diabetes",
     "glucose_fasting": "glucose_diabetes",
     "glucose_random": "glucose_diabetes",
@@ -106,6 +112,10 @@ _METRIC_CATEGORY = {
     "medication": "medication",
     "respiratory_rate": "respiratory_oxygen",
     "spo2": "respiratory_oxygen",
+    "oxygen_saturation": "respiratory_oxygen",
+    "steps": "activity_fitness",
+    "exercise_minutes": "activity_fitness",
+    "activity_minutes": "activity_fitness",
 }
 
 _DOC_TYPE_CATEGORY = {
@@ -117,6 +127,7 @@ _DOC_TYPE_CATEGORY = {
     "libre_cgm_report": "glucose_diabetes",
     "laboratory_pdf": "laboratory_report",
     "hospital_report": "hospital_clinical_report",
+    "imaging_report": "imaging",
     "medication_report": "medication",
     "galaxy_watch_report": "activity_fitness",
 }
@@ -132,6 +143,7 @@ _FILENAME_HINTS = (
     (("med", "rx", "prescription", "medication"), "medication"),
     (("spo2", "oxygen", "respiratory"), "respiratory_oxygen"),
     (("hospital", "discharge", "clinical"), "hospital_clinical_report"),
+    (("imag", "radiology", "xray", "mri", "ct "), "imaging"),
     (("symptom", "pain"), "symptom_record"),
 )
 

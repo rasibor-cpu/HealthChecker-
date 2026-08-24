@@ -390,7 +390,7 @@ def test_ui_contract_does_not_list_raw_device_json_by_default():
     assert "clinical_document" in js
     assert "data-device-metric" in js
     assert "VaultStore" not in js
-    assert 'CACHE_REVISION = "hc321uat12j"' in sw
+    assert 'CACHE_REVISION = "hc323a"' in sw
     assert "records" in sw
-    assert "service-worker.js?v=hc321uat12j" in html
-    assert "records.js?v=hc321uat12j" in html
+    assert "service-worker.js?v=hc323a" in html
+    assert "records.js?v=hc323a" in html

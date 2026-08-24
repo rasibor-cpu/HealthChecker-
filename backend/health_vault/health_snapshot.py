@@ -406,8 +406,8 @@ def freshness_label(
         days = max(1, seconds // 86400)
         relative = f"{days} day{'s' if days != 1 else ''} ago"
     if currentness == CURRENTNESS_STALE:
-        return f"Last recorded {relative} (not current)"
-    return f"Updated {relative}"
+        return f"Last measured {relative} (not current)"
+    return f"Last measured {relative}"
 
 
 def consumer_status_from_flag(flag: str | None) -> str:

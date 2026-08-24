@@ -169,6 +169,48 @@ object ObservationMapper {
         device = mapOf("data_origin" to dataOrigin, "session_based" to "true")
     )
 
+    fun sleepStageMinutes(
+        recordId: String,
+        stageMetric: String,
+        minutes: Double,
+        start: Instant,
+        dataOrigin: String,
+        zoneOffset: ZoneOffset? = null
+    ): CompanionObservation = CompanionObservation(
+        observationId = UUID.nameUUIDFromBytes((stageMetric + ":" + recordId).toByteArray()).toString(),
+        sourceRecordId = recordId + ":" + stageMetric,
+        metricType = stageMetric,
+        value = minutes,
+        unit = "min",
+        measuredAt = instantToIso(start, zoneOffset),
+        receivedAt = instantToIso(Instant.now()),
+        acquisitionMode = "DELAYED",
+        device = mapOf("data_origin" to dataOrigin, "session_based" to "true", "derived_from" to "sleep_session_stages")
+    )
+
+    fun glucose(
+        recordId: String,
+        mmolPerLiter: Double,
+        time: Instant,
+        dataOrigin: String,
+        interstitial: Boolean,
+        zoneOffset: ZoneOffset? = null
+    ): CompanionObservation = CompanionObservation(
+        observationId = UUID.nameUUIDFromBytes(("glu:" + recordId).toByteArray()).toString(),
+        sourceRecordId = recordId,
+        metricType = if (interstitial) "glucose_cgm_interstitial" else "glucose_capillary",
+        value = mmolPerLiter,
+        unit = "mmol/L",
+        measuredAt = instantToIso(time, zoneOffset),
+        receivedAt = instantToIso(Instant.now()),
+        acquisitionMode = "DELAYED",
+        trendDirection = null,
+        device = mapOf(
+            "data_origin" to dataOrigin,
+            "specimen" to if (interstitial) "interstitial" else "capillary"
+        )
+    )
+
     /** Reject ECG fabrication — always empty for HC-303A. */
     fun ecgUnsupported(): List<CompanionObservation> = emptyList()
 

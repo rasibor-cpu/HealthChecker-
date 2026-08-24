@@ -82,7 +82,7 @@ def test_health_connect_batch_duplicate_fingerprint_is_idempotent(tmp_path: Path
     assert len(persisted) == 1
 
     skipped = result["skipped_observations"]
-    assert skipped[0]["reason"] == "duplicate_fingerprint"
+    assert skipped[0]["reason"] in {"duplicate_fingerprint", "duplicate_source_identity"}
 
 
 def test_health_connect_batch_commit_failure_rolls_back_payloads_and_events(

@@ -330,8 +330,8 @@
       const days = Math.max(1, Math.floor(seconds / 86400));
       relative = days + " day" + (days === 1 ? "" : "s") + " ago";
     }
-    if (currentness === "stale") return "Last recorded " + relative + " (not current)";
-    return "Updated " + relative;
+    if (currentness === "stale") return "Last measured " + relative + " (not current)";
+    return "Last measured " + relative;
   }
 
   function computeFreshness(metric, measuredAt, nowMs) {
@@ -857,7 +857,7 @@
       out.status_reason = "stale";
       if (out.freshness_label && String(out.freshness_label).indexOf("Updated") === 0) {
         out.freshness_label =
-          String(out.freshness_label).replace(/^Updated/, "Last recorded") +
+          String(out.freshness_label).replace(/^Updated/, "Last measured") +
           (String(out.freshness_label).indexOf("not current") >= 0 ? "" : " (not current)");
       }
       out.accessibility_label = accessibilityLabel(out);

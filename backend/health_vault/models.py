@@ -484,11 +484,16 @@ class RecordCategory(str, Enum):
     BLOOD_PRESSURE = "blood_pressure"
     SLEEP = "sleep"
     ECG = "ecg_cardiology"
+    CARDIOVASCULAR = "cardiovascular"
+    ACTIVITY = "activity_fitness"
+    RESPIRATORY = "respiratory_oxygen"
     GLUCOSE = "glucose_diabetes"
     KIDNEY = "kidney_renal"
     LABS = "laboratory_report"
     WEIGHT = "weight_body_metrics"
     MEDICATION = "medication"
+    IMAGING = "imaging"
+    CLINICAL_DOCUMENT = "hospital_clinical_report"
     OTHER = "other"
 
 
@@ -544,9 +549,14 @@ class HealthRecord:
     lifecycle: list[RecordProcessingEvent] = field(default_factory=list)
 
     def to_summary_dict(self) -> dict[str, Any]:
+        meta = self.metadata or {}
         return {
             "document_id": self.document_id,
             "original_filename": self.original_filename,
+            "display_title": meta.get("display_title") or self.original_filename,
+            "consumer_category": meta.get("consumer_category"),
+            "consumer_category_label": meta.get("consumer_category_label"),
+            "technical_filename": meta.get("technical_filename") or self.original_filename,
             "primary_category": self.primary_category.value if isinstance(self.primary_category, RecordCategory) else self.primary_category,
             "status": self.status.value if isinstance(self.status, RecordStatus) else self.status,
             "measured_at": self.measured_at,
@@ -555,7 +565,7 @@ class HealthRecord:
             "metrics_count": self.metrics_count,
             "source_system": self.source_provenance.get("source_system"),
             "provenance": self.source_provenance.get("provenance"),
-            "document_type": (self.metadata or {}).get("document_type"),
+            "document_type": meta.get("document_type"),
         }
 
     def to_detail_dict(self) -> dict[str, Any]:

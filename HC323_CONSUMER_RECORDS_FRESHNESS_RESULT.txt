@@ -1,0 +1,117 @@
+TASK=HC323_CONSUMER_RECORDS_FRESHNESS_OBSERVATION_UX
+RESULT_FILE=HC323_CONSUMER_RECORDS_FRESHNESS_RESULT.txt
+GENERATED_UTC=2026-08-24T18:10:00Z
+
+PREFLIGHT
+CURRENT_WORKSPACE_ON_START=css-agent/hc321-uat12j-clinical-ingest-9f1a
+START_HEAD=59d54669aac9f496bc0c484bbec318a10c6b4344
+AUTHORITATIVE_SOURCE=css-agent/hc321-uat12j-clinical-ingest-9f1a (includes UAT12I records IA + UAT12J clinical semantics + HC322A screenshots)
+NEWER_WORK_PRESERVED=YES (branched from UAT12J HEAD 59d5466; UAT12I grouping and UAT12J clinical ingest not rewritten)
+RESET_STASH_CLEAN_MAIN=NOT_PERFORMED
+LINEAGE=main 755a7e7 -> HC322A de9c010 -> UAT12I dbbe8ca (PR #10) -> UAT12J 59d5466 (PR #11) -> HC323 this branch
+BASELINE_TESTS_BEFORE_CHANGE=
+  tests/test_hc321_uat12i_records_architecture.py
+  tests/test_hc321_uat12j_clinical_ingestion.py
+  tests/test_hc322a_consumer_screenshot_policy.py
+  tests/test_hc317c_consumer_records_ui.py
+  tests/test_hc310e_batch_ingestion.py
+  tests/test_hc321_c1_consumer_functional_completion.py
+  RESULT=35 passed, 2 failed (pre-existing pydantic 2.13 multipart UploadFile on 317C upload/auth tests)
+
+ROOT_CAUSES
+HEALTH_RECORDS_UUID_WALL=
+  Persistence stores one MedicalDocument per Health Connect observation
+  (original_filename=health_connect_<metric>_<uuid>.json). That is working ingestion
+  and was not deleted. Live UAT still served hc321uat12h, so UAT12I
+  surface=clinical_document was not on the public origin. Consumer titles still
+  used original_filename; categories fell through to Other because HC documents
+  have no stored primary_category.
+DUPLICATE_RECORD=
+  Exact filename health_connect_heart_rate_83b902b6-...json can appear twice when
+  fingerprint material (value/source serialization) differs while source_record_id
+  is the same. Idempotency now keys on patient+canonical metric+source_record_id
+  (and observation_id) before fingerprint. Presentation also collapses identical
+  filenames in metric drill-down. Underlying duplicate vault rows are not deleted.
+FRESHNESS_PATH=
+  Inspectable on this Linux host: vault latest vs companion last_success_at vs API.
+  Live Health Connect on-device and source-app private stores are NOT inspectable here.
+  Seeded/live vault measurements stop at 18 Aug 2026 while companion last_success_at can
+  be 24 Aug 2026. Break classification:
+  health_connect_or_source_app_not_writing_newer_samples
+  when a later sync attempt exists than the latest persisted measurement.
+  Libre 284 mg/dL, Samsung Health Monitor BP/ECG, sleep score/energy are source-app
+  screenshots only unless Health Connect actually holds those records.
+
+HEALTH_CONNECT_CAPABILITY_MATRIX
+Datatype | HC API | Permission | Companion implemented | Samsung Health likely | Notes
+Heart rate | YES HeartRateRecord | READ_HEART_RATE | YES | YES | samples ingested
+Steps | YES StepsRecord | READ_STEPS | YES | YES
+Oxygen saturation | YES OxygenSaturationRecord | READ_OXYGEN_SATURATION | YES | YES
+Sleep duration | YES SleepSessionRecord | READ_SLEEP | YES | YES | session start/end
+Sleep stages | YES SleepSessionRecord.stages | same sleep permission | YES (HC323) | YES if written to HC
+Sleep latency | derived from first sleeping stage | same | YES (HC323) | only if stages present
+Sleep score | NO native HC type | n/a | NO | Samsung Health app only
+Sleep oxygen | no dedicated HC sleep-SpO2 type | n/a | NO | may exist as ordinary SpO2 samples
+Energy score | NO native HC type | n/a | NO | Samsung Health app only
+Blood pressure | YES BloodPressureRecord | READ_BLOOD_PRESSURE | YES (sys/dia) | Samsung Health Monitor may not write to HC
+BP pulse | not on BloodPressureRecord | n/a | NO | screenshot-only unless a HR sample exists
+ECG | ElectrocardiogramRecord not in this catalog | n/a | NO (intentionally unsupported) | Samsung Health Monitor screenshot-only
+Glucose | YES BloodGlucoseRecord | READ_BLOOD_GLUCOSE | YES (HC323) capillary vs interstitial | Libre 3 only if it writes to HC; trend arrows not in HC BloodGlucoseRecord
+Glucose trend arrow | not on BloodGlucoseRecord | n/a | NO | do not invent from screenshots
+
+BEFORE_AFTER_HEALTH_RECORDS
+BEFORE (live uat12h / ungrouped listing): 8318 records, each health_connect_<metric>_<uuid>.json as a card, category Other.
+AFTER (this increment, test vault): default surface lists clinical documents with human titles plus one Health Connect source card (e.g. Health Connect — Samsung Health, observation count, latest measurement, last sync, View observations). Device Data still groups metrics. Underlying JSON remains in the vault. GET /api/records without surface remains the full listing for API compatibility.
+
+ACCEPTANCE
+Health Records no UUID wall by default: PASS (tests). Live origin still uat12h until governed deploy.
+Observations remain accessible via Device Data / metric drill-down: PASS
+Freshness path instrumented (vault/API/companion; HC on-device not inspectable here): PASS with remaining device-side blocker
+Dashboard cards freshness/status: PASS (existing snapshot + Last measured / Last refreshed / Last sync labels)
+Provenance retained (technical filename in details): PASS
+Screenshots FLAG_SECURE clear-only: PASS (ScreenshotPolicy.kt still clearFlags only; ConsumerLauncherActivity never sets FLAG_SECURE)
+Security patient scoping: PASS (source-card origins and device latest values scoped; tests assert no cross-patient leak)
+Add records workflow preserved: PASS (upload panel/API unchanged except titles)
+
+FOCUSED_TESTS
+python3 -m pytest tests/test_hc323_consumer_records_freshness.py tests/test_hc321_uat12i_records_architecture.py tests/test_hc321_uat12j_clinical_ingestion.py tests/test_hc322a_consumer_screenshot_policy.py tests/test_hc310e_batch_ingestion.py tests/test_hc321_health_snapshot.py
+RESULT=90 passed
+RELATED= tests/test_hc317c_consumer_records_ui.py tests/test_hc321_c1_consumer_functional_completion.py tests/test_hc321_uat1_consumer_browser_android_fixes.py tests/test_hc319d_mobile_consumer_launcher.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py
+RELATED_RESULT=42 passed, 2 failed (pre-existing pydantic 2.13 multipart UploadFile on 317C)
+
+ANDROID_BUILD
+assembleDebug not run: ANDROID_HOME unset; no SDK on this Linux cloud host.
+ARTIFACT=NOT_BUILT_SDK_MISSING
+Do not use debug keystore as a production-release fallback.
+
+MANUAL_UAT_STEPS
+1. On Finance, recycle governed :8766 to this HEAD via start_healthchecker_production.ps1 (do not touch CSS :8765).
+2. On S24: from a host with Android SDK, build debug APK without weakening signing:
+   cd android && ./gradlew :app:assembleDebug
+   artifact android/app/build/outputs/apk/debug/app-debug.apk
+3. Login. Confirm Dashboard Health Snapshot cards, timestamps, stale labelled stale.
+4. Open Health Records: documents count + Health Connect observation count; no UUID wall.
+5. Open Health Connect source card → Device Data groups → View observations (paginated).
+6. Timeline/Observations still show individual points. Add records still uploads through the vault.
+7. Screenshot Welcome, Snapshot, Records, Trends, Observations, Timeline, Reports.
+8. Confirm Last refreshed ≠ Latest measurement ≠ Last Health Connect sync.
+
+REMAINING_EXTERNAL_BLOCKERS
+HOST_NOT_FINANCE: cannot recycle live :8766 or inspect live Health Connect / Samsung Health / Libre stores.
+ANDROID_SDK_MISSING: cannot produce APK on this pod.
+LIVE_PUBLIC_ORIGIN still hc321uat12h until governed deploy.
+Libre/Samsung Monitor datatypes that are not in Health Connect remain unavailable programmatically.
+
+FLAG_SECURE_EVIDENCE
+android/app/src/main/java/com/healthchecker/companion/ui/ScreenshotPolicy.kt — clearFlags only
+android/app/src/main/java/com/healthchecker/companion/ui/ConsumerLauncherActivity.kt — never sets FLAG_SECURE
+android/app/src/main/java/com/healthchecker/companion/ui/SecureWindowPolicy.kt — documents that FLAG_SECURE is not applied by the consumer launcher
+tests/test_hc322a_consumer_screenshot_policy.py — PASS
+
+SERVICE_WORKER_VERSION=hc323a
+BRANCH=css-agent/hc323-consumer-records-freshness-9f1a
+HEAD=86bb2891270a7210a1e86d7cb62a959703d97d78
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/13
+PRODUCTION_DATA_MUTATED=NO
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES

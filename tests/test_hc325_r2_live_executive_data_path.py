@@ -137,7 +137,7 @@ def test_dashboard_js_refreshes_executive_after_summary_load():
 
 def test_service_worker_network_first_for_executive_js():
     sw = Path(__file__).resolve().parents[1].joinpath("service-worker.js").read_text(encoding="utf-8")
-    assert "hc321uat12j" in sw
+    assert "hc323a" in sw
     assert "NETWORK_FIRST_JS" in sw
     assert "executive_dashboard" in sw
     assert "isNavigationRequest" in sw
