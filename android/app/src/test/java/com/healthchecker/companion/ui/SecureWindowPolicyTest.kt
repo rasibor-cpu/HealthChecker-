@@ -18,10 +18,12 @@ class SecureWindowPolicyTest {
     }
 
     @Test
-    fun passwordAndCredentialSurfacesRemainSecured() {
-        assertTrue(SecureWindowPolicy.shouldSecureWindow(loginSurfaceVisible = true))
-        assertTrue(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
-        assertTrue(SecureWindowPolicy.shouldSecureWindow(credentialOrSecretVisible = true))
+    fun loginAndPasswordSurfacesDoNotRequestFlagSecure() {
+        assertFalse(SecureWindowPolicy.shouldSecureWindow(loginSurfaceVisible = true))
+        assertFalse(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
+        assertFalse(SecureWindowPolicy.shouldSecureWindow(credentialOrSecretVisible = true))
+        assertFalse(ScreenshotPolicy.isScreenshotBlockingEnabled())
+        assertFalse(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
     }
 
     @Test
