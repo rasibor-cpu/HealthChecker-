@@ -1184,19 +1184,23 @@ def create_health_vault_app(
         status: str | None = None,
         metric: str | None = None,
         metrics: str | None = None,
+        q: str | None = None,
+        surface: str | None = None,
     ) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        records = records_service.list_records(
+        payload = records_service.consumer_records_payload(
             pid,
             category=category,
             status=status,
             metric=metric,
             metrics=metrics,
+            q=q,
+            surface=surface,
         )
-        return JSONResponse({"records": [record.to_summary_dict() for record in records]})
+        return JSONResponse(payload)
 
     # Register the static upload route before the document-id route so Starlette
     # does not interpret "upload" as a document identifier and return 405.

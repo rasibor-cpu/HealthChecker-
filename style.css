@@ -524,6 +524,41 @@ body.light-theme .kpi {
     align-items: center;
     border-left: 4px solid var(--accent);
 }
+
+.records-surface-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 8px;
+}
+.records-surface-tab {
+    width: auto;
+    min-height: 42px;
+    margin: 0;
+    background: #222;
+    color: gold;
+    border: 1px solid gold;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.records-surface-tab[aria-selected="true"] {
+    background: gold;
+    color: #000;
+    font-weight: bold;
+}
+.records-device-card .record-card-meta {
+    margin-bottom: 4px;
+}
+body.light-theme .records-surface-tab {
+    background: #fff;
+    color: #333;
+    border-color: #c9a227;
+}
+body.light-theme .records-surface-tab[aria-selected="true"] {
+    background: #c9a227;
+    color: #111;
+}
 .records-controls input,
 .records-controls select {
     margin-top: 4px;

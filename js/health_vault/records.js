@@ -5,7 +5,12 @@
   class RecordsUI {
     constructor() {
       this.records = [];
+      this.deviceSummaries = [];
+      this.surfaceCounts = {};
+      this.vaultRecordCount = 0;
+      this.surface = "clinical_document";
       this.searchTerm = "";
+      this.searchTimer = null;
       this.metricFilter = null;
       this.metricAliases = [];
       this.selectedFile = null;
@@ -83,10 +88,17 @@
       if (category) category.addEventListener("change", () => this.refreshRecords());
       if (status) status.addEventListener("change", () => this.refreshRecords());
 
+      document.querySelectorAll("[data-records-surface]").forEach(button => {
+        button.addEventListener("click", () => {
+          this.setSurface(button.getAttribute("data-records-surface"));
+        });
+      });
+
       const search = document.getElementById("records_search");
       if (search) search.addEventListener("input", () => {
-        this.searchTerm = search.value.trim().toLowerCase();
-        this.renderRecords();
+        this.searchTerm = search.value.trim();
+        if (this.searchTimer) clearTimeout(this.searchTimer);
+        this.searchTimer = setTimeout(() => this.refreshRecords(), 250);
       });
 
       const input = document.getElementById("records_file_input");
@@ -116,6 +128,11 @@
 
       const list = document.getElementById("records_list");
       if (list) list.addEventListener("click", event => {
+        const metricButton = event.target.closest("[data-device-metric]");
+        if (metricButton) {
+          this.setMetricFilter(metricButton.getAttribute("data-device-metric"));
+          return;
+        }
         const button = event.target.closest("[data-record-detail]");
         if (button) this.openDetail(button.getAttribute("data-record-detail"));
       });
@@ -147,6 +164,10 @@
       if (this.listRequest) this.listRequest.abort();
       if (this.detailRequest) this.detailRequest.abort();
       this.records = [];
+      this.deviceSummaries = [];
+      this.surfaceCounts = {};
+      this.vaultRecordCount = 0;
+      this.surface = "clinical_document";
       this.searchTerm = "";
       this.metricFilter = null;
       this.metricAliases = [];
@@ -154,10 +175,11 @@
       this.selectFile(null);
       const search = document.getElementById("records_search");
       if (search) search.value = "";
+      this.syncSurfaceTabs();
       this.closeDetail();
       this.toggleUpload(false);
       this.renderRecords();
-      this.text("records_count", "0");
+      this.text("records_count", "0 records");
     }
 
     async refreshRecords() {
@@ -174,14 +196,19 @@
         if (status && status.value) params.set("status", status.value);
         if (this.metricFilter) params.set("metric", this.metricFilter);
         if (this.metricAliases && this.metricAliases.length) params.set("metrics", this.metricAliases.join(","));
+        if (this.searchTerm) params.set("q", this.searchTerm);
+        else if (!this.metricFilter) params.set("surface", this.surface || "clinical_document");
         const response = await this.request(`/api/records${params.toString() ? `?${params}` : ""}`, {
           signal: this.listRequest.signal,
         });
         if (!response.ok) throw new Error("records_load_failed");
         const body = await this.readJson(response);
         this.records = Array.isArray(body.records) ? body.records : [];
+        this.deviceSummaries = (((body.device_data || {}).summaries) || []);
+        this.surfaceCounts = body.surface_counts || {};
+        this.vaultRecordCount = Number(body.vault_record_count || this.records.length);
         this.renderRecords();
-        this.text("records_count", String(this.records.length));
+        this.text("records_count", this.countLabel());
         this.text("records_last_refreshed", `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
       } catch (error) {
         if (error.name !== "AbortError" && error.message !== "authentication_required") {
@@ -205,25 +232,109 @@
       this.refreshRecords();
     }
 
+    setSurface(surface) {
+      this.surface = surface || "clinical_document";
+      this.metricFilter = null;
+      this.metricAliases = [];
+      this.syncSurfaceTabs();
+      this.refreshRecords();
+    }
+
+    syncSurfaceTabs() {
+      document.querySelectorAll("[data-records-surface]").forEach(button => {
+        button.setAttribute("aria-selected", String(button.getAttribute("data-records-surface") === this.surface));
+      });
+    }
+
     filteredRecords() {
-      let records = this.records;
+      return this.records;
+    }
+
+    showingDeviceSummaries() {
+      return this.surface === "device_data" && !this.metricFilter && !this.searchTerm;
+    }
+
+    countLabel() {
+      const vault = this.vaultRecordCount || this.records.length;
       if (this.searchTerm) {
-        records = records.filter(record => [
-          record.original_filename,
-          record.primary_category,
-          record.source_system,
-          record.status,
-        ].some(value => String(value || "").toLowerCase().includes(this.searchTerm)));
+        return `${this.records.length} matches · ${vault} in vault`;
       }
-      return records;
+      if (this.metricFilter) {
+        return `${this.records.length} ${this.label(this.metricFilter)} records · ${vault} in vault`;
+      }
+      if (this.showingDeviceSummaries()) {
+        const device = Number((this.surfaceCounts || {}).device_data || 0);
+        return `${this.deviceSummaries.length} device groups · ${device} telemetry records preserved · ${vault} in vault`;
+      }
+      if (this.surface === "imported_reports") {
+        return `${this.records.length} imported reports · ${vault} in vault`;
+      }
+      return `${this.records.length} clinical documents · ${vault} in vault`;
+    }
+
+    emptyCopy() {
+      if (this.searchTerm) {
+        return {
+          title: "No matching records.",
+          copy: "Nothing in the vault matched this search. Clinical documents and device telemetry remain stored; try a filename, source, or metric name.",
+        };
+      }
+      if (this.surface === "device_data") {
+        return {
+          title: "No device data groups.",
+          copy: "Health Connect telemetry is preserved in the vault when present. It is grouped here instead of listing thousands of JSON files.",
+        };
+      }
+      if (this.surface === "imported_reports") {
+        return {
+          title: "No imported reports.",
+          copy: "Batch or inbox imports that are not classified as clinical documents will appear here.",
+        };
+      }
+      return {
+        title: "No clinical documents found.",
+        copy: "Add a laboratory, imaging, ECG, prescription, or visit report. Device telemetry stays in the vault and is summarized under Device Data.",
+      };
     }
 
     renderRecords() {
       const target = document.getElementById("records_list");
       if (!target) return;
+      if (this.showingDeviceSummaries()) {
+        const summaries = this.deviceSummaries || [];
+        this.state("records_empty", summaries.length === 0);
+        this.applyEmptyCopy();
+        target.innerHTML = summaries.map(row => {
+          const latest = row.latest_value == null
+            ? "No latest value"
+            : `${row.latest_value}${row.latest_units ? ` ${row.latest_units}` : ""}`;
+          const when = row.latest_at ? this.formatDate(row.latest_at) : "Not available";
+          return `
+          <article class="card record-card records-device-card">
+            <div class="record-card-heading">
+              <div>
+                <h4>${this.escape(row.label || this.label(row.metric))}</h4>
+                <div class="muted small">Latest ${this.escape(when)}</div>
+              </div>
+              <span class="badge">${this.escape(Number(row.record_count || 0))} records</span>
+            </div>
+            <div class="record-card-meta small">
+              <span>Latest: ${this.escape(latest)}</span>
+              <span>Source: ${this.escape(row.source || "health_connect_companion")}</span>
+              <span>Telemetry preserved in vault</span>
+            </div>
+            <button type="button" class="secondary records-inline-action" data-device-metric="${this.escapeAttr(row.metric)}">View observations</button>
+          </article>`;
+        }).join("");
+        return;
+      }
       const records = this.filteredRecords();
       this.state("records_empty", records.length === 0);
-      target.innerHTML = records.map(record => {
+      this.applyEmptyCopy();
+      const drilldown = this.metricFilter
+        ? `<p class="muted small">Showing underlying ${this.escape(this.label(this.metricFilter))} telemetry. Source JSON remains in the vault.</p>`
+        : "";
+      target.innerHTML = drilldown + records.map(record => {
         const intelligence = this.intelligenceByDocument.get(record.document_id);
         const intelligenceText = intelligence == null
           ? "Intelligence: check details"
@@ -246,6 +357,12 @@
             <button type="button" class="secondary records-inline-action" data-record-detail="${this.escapeAttr(record.document_id)}">View details</button>
           </article>`;
       }).join("");
+    }
+
+    applyEmptyCopy() {
+      const empty = this.emptyCopy();
+      this.text("records_empty_title", empty.title);
+      this.text("records_empty_copy", empty.copy);
     }
 
     clearFilters() {
