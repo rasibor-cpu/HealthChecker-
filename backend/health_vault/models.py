@@ -527,6 +527,8 @@ class HealthRecord:
             "size_bytes": self.size_bytes,
             "metrics_count": self.metrics_count,
             "source_system": self.source_provenance.get("source_system"),
+            "provenance": self.source_provenance.get("provenance"),
+            "document_type": (self.metadata or {}).get("document_type"),
         }
 
     def to_detail_dict(self) -> dict[str, Any]:

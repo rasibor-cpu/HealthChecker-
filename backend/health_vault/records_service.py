@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any
 from backend.health_vault.batch_import import BatchImportService, sanitize_filename
 from backend.health_vault.health_intelligence import HealthIntelligenceEngine
+from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.vault_store import VaultStore
 from backend.health_vault.models import (
     HealthRecord,
@@ -13,6 +14,58 @@ from backend.health_vault.models import (
     RecordLinkage,
     utc_now,
 )
+
+SURFACE_CLINICAL = "clinical_document"
+SURFACE_IMPORTED = "imported_report"
+SURFACE_DEVICE = "device_data"
+
+_CLINICAL_CATEGORIES = {
+    RecordCategory.LABS,
+    RecordCategory.GLUCOSE,
+    RecordCategory.KIDNEY,
+    RecordCategory.BLOOD_PRESSURE,
+    RecordCategory.ECG,
+    RecordCategory.MEDICATION,
+}
+_CLINICAL_TYPE_TOKENS = (
+    "laboratory",
+    "lab_report",
+    "imaging",
+    "radiology",
+    "ecg",
+    "ekg",
+    "prescription",
+    "medication",
+    "consult",
+    "discharge",
+    "referral",
+    "hospital",
+    "visit_note",
+    "clinical_report",
+)
+_DEVICE_METRIC_LABELS = {
+    "heart_rate": "Heart Rate",
+    "resting_hr": "Resting Heart Rate",
+    "steps": "Steps",
+    "sleep_duration": "Sleep",
+    "sleep_score": "Sleep score",
+    "oxygen_saturation": "Oxygen Saturation",
+    "exercise_minutes": "Exercise",
+    "activity_minutes": "Activity",
+    "weight": "Weight",
+}
+_SEARCH_METRIC_ALIASES = {
+    "creatinine": ("creatinine",),
+    "egfr": ("egfr",),
+    "hba1c": ("hba1c",),
+    "a1c": ("hba1c",),
+    "glucose": ("glucose", "cgm_glucose"),
+    "blood pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
+    "blood_pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
+    "bp": ("systolic_bp", "diastolic_bp"),
+    "medication": ("medication",),
+    "ecg": ("ecg",),
+}
 
 def map_category(cat_str: str | None) -> RecordCategory:
     if not cat_str:
@@ -35,6 +88,96 @@ def map_category(cat_str: str | None) -> RecordCategory:
     if "med" in cat_str:
         return RecordCategory.MEDICATION
     return RecordCategory.OTHER
+
+
+def _record_blob(record: HealthRecord) -> str:
+    meta = record.metadata or {}
+    prov = record.source_provenance or {}
+    category = (
+        record.primary_category.value
+        if isinstance(record.primary_category, RecordCategory)
+        else str(record.primary_category or "")
+    )
+    status = (
+        record.status.value
+        if isinstance(record.status, RecordStatus)
+        else str(record.status or "")
+    )
+    tags = prov.get("tags") or []
+    return " ".join(
+        str(part or "")
+        for part in (
+            record.original_filename,
+            record.source_system if hasattr(record, "source_system") else None,
+            prov.get("source_system"),
+            prov.get("provenance"),
+            prov.get("acquisition_method"),
+            meta.get("document_type"),
+            category,
+            status,
+            " ".join(str(tag) for tag in tags),
+        )
+    ).lower()
+
+
+def is_device_telemetry_record(record: HealthRecord) -> bool:
+    """True for Health Connect / continuous-monitoring JSON telemetry documents."""
+    meta = record.metadata or {}
+    if meta.get("document_type") == "continuous_monitoring_observation":
+        return True
+    blob = _record_blob(record)
+    filename = str(record.original_filename or "").lower()
+    if filename.startswith("health_connect_"):
+        return True
+    return "health_connect" in blob or "continuous_monitoring" in blob or "hc302" in blob
+
+
+def classify_record_surface(record: HealthRecord) -> str:
+    """Presentation class only — does not rewrite stored documents."""
+    if is_device_telemetry_record(record):
+        return SURFACE_DEVICE
+    blob = _record_blob(record)
+    if record.primary_category in _CLINICAL_CATEGORIES:
+        return SURFACE_CLINICAL
+    if any(token in blob for token in _CLINICAL_TYPE_TOKENS):
+        return SURFACE_CLINICAL
+    if "manual_upload" in blob:
+        return SURFACE_CLINICAL
+    return SURFACE_IMPORTED
+
+
+def existing_client_search_matches(record: HealthRecord, term: str) -> bool:
+    """Reproduce the pre-UAT12I client filter: filename/category/source/status only."""
+    needle = str(term or "").strip().lower()
+    if not needle:
+        return True
+    category = (
+        record.primary_category.value
+        if isinstance(record.primary_category, RecordCategory)
+        else str(record.primary_category or "")
+    )
+    status = (
+        record.status.value
+        if isinstance(record.status, RecordStatus)
+        else str(record.status or "")
+    )
+    source = (record.source_provenance or {}).get("source_system") or ""
+    return any(
+        needle in str(value or "").lower()
+        for value in (record.original_filename, category, source, status)
+    )
+
+
+def _metric_from_filename(filename: str) -> str:
+    name = str(filename or "").lower()
+    if name.startswith("health_connect_"):
+        parts = name.split("_")
+        # health_connect_<metric...>_<uuid>.json
+        if len(parts) >= 4:
+            metric = "_".join(parts[2:-1])
+            return canonicalize_metric(metric.replace(".json", ""))
+    return ""
+
 
 def map_status(status_str: str | None, requires_review: bool) -> RecordStatus:
     if requires_review:
@@ -279,6 +422,203 @@ class RecordsService:
             records = [record for record in records if record.document_id in matching_docs]
         records.sort(key=lambda record: (record.measured_at or record.imported_at, record.document_id), reverse=True)
         return records
+
+    def _metrics_by_document(self, measurements: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for measurement in measurements if measurements is not None else self.store.list_measurements():
+            document_id = str(measurement.get("document_id") or "")
+            metric = canonicalize_metric(
+                measurement.get("metric") or measurement.get("metric_type") or ""
+            )
+            if document_id and metric:
+                grouped[document_id].append(metric)
+        return dict(grouped)
+
+    def _search_records(
+        self,
+        records: list[HealthRecord],
+        term: str,
+        metrics_by_document: dict[str, list[str]],
+    ) -> list[HealthRecord]:
+        needle = str(term or "").strip().lower()
+        if not needle:
+            return list(records)
+        wanted_metrics = set()
+        for key, aliases in _SEARCH_METRIC_ALIASES.items():
+            if key in needle or needle in key:
+                wanted_metrics.update(aliases)
+        wanted_metrics.add(canonicalize_metric(needle.replace(" ", "_")))
+        wanted_metrics.discard("")
+        wanted_metrics.discard("unknown")
+        matched: list[HealthRecord] = []
+        for record in records:
+            if existing_client_search_matches(record, needle):
+                matched.append(record)
+                continue
+            blob = _record_blob(record)
+            if needle in blob:
+                matched.append(record)
+                continue
+            doc_metrics = metrics_by_document.get(record.document_id) or []
+            if wanted_metrics and any(metric in wanted_metrics for metric in doc_metrics):
+                matched.append(record)
+        return matched
+
+    def _device_summaries(
+        self,
+        device_records: list[HealthRecord],
+        metrics_by_document: dict[str, list[str]],
+        measurements: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        latest_value: dict[str, tuple[str, Any, str]] = {}
+        for measurement in measurements:
+            document_id = str(measurement.get("document_id") or "")
+            metric = canonicalize_metric(
+                measurement.get("metric") or measurement.get("metric_type") or ""
+            )
+            measured_at = str(measurement.get("measured_at") or "")
+            if not metric:
+                continue
+            previous = latest_value.get(metric)
+            if previous is None or measured_at > previous[0]:
+                latest_value[metric] = (
+                    measured_at,
+                    measurement.get("value"),
+                    str(measurement.get("units") or ""),
+                )
+        buckets: dict[str, dict[str, Any]] = {}
+        for record in device_records:
+            metrics = metrics_by_document.get(record.document_id) or []
+            metric = metrics[0] if metrics else _metric_from_filename(record.original_filename)
+            metric = canonicalize_metric(metric) if metric else "other"
+            bucket = buckets.setdefault(
+                metric,
+                {
+                    "metric": metric,
+                    "label": _DEVICE_METRIC_LABELS.get(
+                        metric, metric.replace("_", " ").title()
+                    ),
+                    "record_count": 0,
+                    "latest_value": None,
+                    "latest_units": "",
+                    "latest_at": None,
+                    "source": "health_connect_companion",
+                },
+            )
+            bucket["record_count"] += 1
+            stamp = record.measured_at or record.imported_at
+            if stamp and (not bucket["latest_at"] or str(stamp) > str(bucket["latest_at"])):
+                bucket["latest_at"] = stamp
+            live = latest_value.get(metric)
+            if live:
+                bucket["latest_at"] = live[0] or bucket["latest_at"]
+                bucket["latest_value"] = live[1]
+                bucket["latest_units"] = live[2]
+        return sorted(buckets.values(), key=lambda row: row["label"])
+
+    def _summary_dict(self, record: HealthRecord) -> dict[str, Any]:
+        payload = record.to_summary_dict()
+        payload["surface"] = classify_record_surface(record)
+        return payload
+
+    def consumer_records_payload(
+        self,
+        patient_id: str,
+        *,
+        category: str | None = None,
+        status: str | None = None,
+        metric: str | None = None,
+        metrics: list[str] | str | None = None,
+        q: str | None = None,
+        surface: str | None = None,
+    ) -> dict[str, Any]:
+        """Group Health Records for the consumer UI without mutating stored documents."""
+        measurements = list(self.store.list_measurements() or [])
+        measurement_counts = self._measurement_counts_by_document(measurements)
+        metrics_by_document = self._metrics_by_document(measurements)
+        all_records = self.list_records(
+            patient_id,
+            measurement_counts=measurement_counts,
+        )
+        classified = [(record, classify_record_surface(record)) for record in all_records]
+        surface_counts = {
+            SURFACE_CLINICAL: 0,
+            SURFACE_IMPORTED: 0,
+            SURFACE_DEVICE: 0,
+        }
+        for _record, class_name in classified:
+            surface_counts[class_name] = surface_counts.get(class_name, 0) + 1
+        device_records = [record for record, class_name in classified if class_name == SURFACE_DEVICE]
+        summaries = self._device_summaries(device_records, metrics_by_document, measurements)
+
+        filtered = list(all_records)
+        if category:
+            expected_category = map_category(category)
+            filtered = [record for record in filtered if record.primary_category == expected_category]
+        if status:
+            expected_status = map_status(status, False)
+            filtered = [record for record in filtered if record.status == expected_status]
+        if metric or metrics:
+            from backend.health_vault.health_snapshot import metric_filter_aliases, snapshot_metric_id
+
+            want = metric_filter_aliases(metric, metrics)
+            matching_docs = {
+                document_id
+                for document_id, names in metrics_by_document.items()
+                if any(name in want or snapshot_metric_id(name) in want for name in names)
+            }
+            filtered = [record for record in filtered if record.document_id in matching_docs]
+
+        query = str(q or "").strip()
+        surface_key = str(surface or "").strip().lower()
+        if query:
+            visible = self._search_records(filtered, query, metrics_by_document)
+            mode = "search"
+        elif metric or metrics:
+            visible = filtered
+            mode = "metric_drilldown"
+        elif surface_key in {SURFACE_DEVICE, "device"}:
+            visible = []
+            mode = SURFACE_DEVICE
+        elif surface_key in {SURFACE_IMPORTED, "imported_reports"}:
+            visible = [
+                record for record in filtered if classify_record_surface(record) == SURFACE_IMPORTED
+            ]
+            mode = SURFACE_IMPORTED
+        elif surface_key in {SURFACE_CLINICAL, "clinical_documents"}:
+            visible = [
+                record for record in filtered if classify_record_surface(record) == SURFACE_CLINICAL
+            ]
+            mode = SURFACE_CLINICAL
+        else:
+            # Omitted surface keeps the historical full listing for API callers
+            # and dashboard-adjacent tests. The consumer UI requests a surface.
+            visible = filtered
+            mode = "all"
+
+        visible.sort(
+            key=lambda record: (record.measured_at or record.imported_at, record.document_id),
+            reverse=True,
+        )
+        return {
+            "records": [self._summary_dict(record) for record in visible],
+            "vault_record_count": len(all_records),
+            "mode": mode,
+            "surface_counts": {
+                "clinical_documents": surface_counts.get(SURFACE_CLINICAL, 0),
+                "imported_reports": surface_counts.get(SURFACE_IMPORTED, 0),
+                "device_data": surface_counts.get(SURFACE_DEVICE, 0),
+            },
+            "device_data": {
+                "summaries": summaries,
+                "record_count": surface_counts.get(SURFACE_DEVICE, 0),
+                "preserved": True,
+            },
+            "search": {
+                "term": query,
+                "match_count": len(visible) if query else 0,
+            },
+        }
 
     def get_record_details(self, patient_id: str, document_id: str) -> HealthRecord | None:
         docs = self.store.list_documents()

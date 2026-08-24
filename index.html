@@ -375,13 +375,20 @@ textarea{
   </div>
 
   <div id="records_summary_panel" class="card records-summary-card">
-    <strong><span id="records_count">0</span> records</strong>
+    <strong><span id="records_count">0</span></strong>
     <span id="records_last_refreshed" class="muted small">Not loaded yet</span>
   </div>
 
+  <div id="records_surface_tabs" class="records-surface-tabs" role="tablist" aria-label="Health Records surfaces">
+    <button type="button" class="records-surface-tab" id="records_tab_clinical" data-records-surface="clinical_document" aria-selected="true">Clinical Documents</button>
+    <button type="button" class="records-surface-tab" id="records_tab_imported" data-records-surface="imported_reports" aria-selected="false">Imported Reports</button>
+    <button type="button" class="records-surface-tab" id="records_tab_device" data-records-surface="device_data" aria-selected="false">Device Data</button>
+  </div>
+  <p id="records_surface_note" class="muted small">Clinical documents are listed here. High-frequency Health Connect telemetry is grouped under Device Data and remains in the vault.</p>
+
   <div class="card records-controls" aria-label="Record filters">
     <label for="records_search" class="small">Search records</label>
-    <input id="records_search" type="search" placeholder="Search filename, category, source, or status" autocomplete="off" />
+    <input id="records_search" type="search" placeholder="Search filename, category, source, status, or metric" autocomplete="off" />
     <div class="records-filter-grid">
       <label class="small" for="records_category_filter">Category
         <select id="records_category_filter">
@@ -434,8 +441,8 @@ textarea{
   <div id="records_loading" class="card records-state" hidden aria-live="polite">Loading your records…</div>
   <div id="records_error" class="card records-state bad" hidden role="alert"></div>
   <div id="records_empty" class="card records-state muted" hidden>
-    <strong>No records found.</strong>
-    <p class="small">Add your first report, or clear the current filters and search.</p>
+    <strong id="records_empty_title">No clinical documents found.</strong>
+    <p id="records_empty_copy" class="small">Add a laboratory, imaging, ECG, prescription, or visit report. Device telemetry stays in the vault and is summarized under Device Data.</p>
   </div>
   <div id="records_list" class="records-list" aria-live="polite"></div>
 
@@ -704,7 +711,7 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc321uat12h"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc321uat12i"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
@@ -712,7 +719,7 @@ textarea{
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
 <script src="js/health_vault/dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/records.js"></script>
+<script src="js/health_vault/records.js?v=hc321uat12i"></script>
 <script src="js/health_vault/trends.js?v=hc321uat12e"></script>
 <script>
 const KEY = 'HC_V6';
@@ -1113,12 +1120,12 @@ if (window.HCContinuousMonitoring) {
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (reloading) return;
-    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321uat10') return;
+    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc321uat12i') return;
     reloading = true;
-    sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat10');
+    sessionStorage.setItem('hc_sw_reload_rev', 'hc321uat12i');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12h').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc321uat12i').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }
@@ -1143,6 +1150,6 @@ if (window.HCContinuousMonitoring) {
   });
 })();
 </script>
-<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12h"></script>
+<script src="js/health_vault/consumer_surfaces.js?v=hc321uat12i"></script>
 </body>
 </html>

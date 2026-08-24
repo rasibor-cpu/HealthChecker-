@@ -1,0 +1,133 @@
+TASK=HC321-UAT12I_HEALTH_RECORDS_EVIDENCE_AND_INFORMATION_ARCHITECTURE
+RESULT_FILE=HC321_UAT12I_HEALTH_RECORDS_IA_RESULT.txt
+GENERATED_UTC=2026-08-24T16:10:00Z
+BRANCH=css-agent/hc321-uat12i-records-ia-9f1a
+BASE_BRANCH=hc322a-uat-screenshot-integration
+LINEAGE=hc322a-uat-screenshot-integration @ de9c010 (UAT12H 54338cb)
+
+LIVE_S24_HEALTH_RECORDS=
+authenticated encrypted Health Vault boundary loads
+total records: 8318
+Health Connect records present
+examples:
+  health_connect_steps_<uuid>.json
+  health_connect_heart_rate_<uuid>.json
+  health_connect_sleep_duration_<uuid>.json
+  health_connect_oxygen_saturation_<uuid>.json
+measured: 18 Aug 2026
+status: Imported
+each example: 1 extracted metrics
+source: health_connect_companion
+VAULT_NOT_EMPTY=YES
+REIMPORT_REQUIRED=NO
+PRODUCTION_DATA_MUTATED=NO
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES
+
+HEALTH_RECORDS_UI_RESULT=
+PASS for vault load / 8318 count / HC JSON examples / 1 extracted metric / source health_connect_companion.
+FAIL as consumer UX: default list was thousands of Health Connect JSON files.
+UAT12I presentation-layer tabs: Clinical Documents | Imported Reports | Device Data.
+Default consumer list requests surface=clinical_document.
+Device Data returns metric summaries (Heart Rate, Steps, Sleep, Oxygen Saturation, Exercise) with drill-down via existing metric= filter.
+GET /api/records without surface remains the full listing for API/dashboard compatibility.
+DashboardService.list_records() remains unfiltered so records_count stays 8318.
+
+VAULT_RECORD_COUNT=8318
+HC_RECORDS_PRESENT=YES
+HC_METRIC_EXTRACTION_RESULT=PASS (one create_measurement per continuous_monitoring_observation JSON; UI "1 extracted metrics")
+NON_HC_CLINICAL_RECORDS_PRESENT=NO for glycemic/renal/clinical BP/ECG/medication among live-eligible measurements (C1 2026-08-20 inventory: MEASUREMENTS=8317, EXEC_HC_OBS=8308, patient 00000; leftover ~10 documents are not lab glucose/HbA1c/eGFR/creatinine/systolic_bp/diastolic_bp panels). This Linux pod cannot open C:\ProgramData\HealthChecker\data\vault. Filters/search cannot retrieve clinical documents that are not stored.
+
+EXISTING_CLIENT_SEARCH_BEFORE_CHANGE=
+Client filteredRecords() matched substring on original_filename, primary_category, source_system, status only.
+Against live HC filenames health_connect_<metric>_<uuid>.json:
+SEARCH_CREATININE_RESULT=0 (existing client) / 0 (server q=; no creatinine measurements)
+SEARCH_EGFR_RESULT=0 (existing client) / 0 (server q=; no eGFR measurements)
+SEARCH_HBA1C_RESULT=0 (existing client) / 0 (server q=; no HbA1c measurements)
+SEARCH_GLUCOSE_RESULT=0 (existing client, including a lab whose filename lacks "glucose") / 0 on live C1 inventory / 1 in fixture when a glucose measurement exists (server q= uses extracted metrics)
+SEARCH_BP_RESULT=0 (existing client) / 0 (server q=; no systolic_bp/diastolic_bp)
+SEARCH_MEDICATION_RESULT=0 (existing client) / 0 (server q=)
+SEARCH_ECG_RESULT=0 (existing client) / 0 (server q=; no samsung_health_ecg documents)
+Existing client WOULD match "heart" / "health_connect" / "imported" against HC filenames/source/status. That is telemetry noise, not clinical retrieval.
+
+WHY_THE_EIGHT_SYMPTOMS=
+1. 8318 records: monitoring/ingestion.py stores one MedicalDocument per HC observation
+   original_filename=f"{connector_id}_{obs.metric_type}_{obs.observation_id}.json"
+   document_type=continuous_monitoring_observation
+   plus one create_measurement. This is persistence working, not an ingestion outage.
+2. "1 extracted metrics": one measurement row per telemetry JSON by design.
+3. Timeline reads unified timeline / measurements (UAT12F batched list_measurements, UAT12G compaction, UAT12H Heart Rate filter). It consumes the same vault observations the Health Records list showed as JSON files.
+4. Observations continuous-monitoring cards come from dashboard _monitoring_observation_cards (latest HC reading + MonitoringEngine.compute_freshness). Samples measured 18 Aug 2026 vs audit ~24 Aug are correctly stale (age > freshness_window * stale_escalation_multiplier). Not a load failure.
+5-7. Glycemic / renal / cardiovascular BP-pulse missing-data warnings are exact HealthIntelligenceEngine strings. Dashboard concatenates monitoring cards + persisted get_patient_observations() and does NOT call generate_observations() on load. _get_metric_series uses eligible clinical TREND_METRICS for glucose/hba1c/egfr/creatinine/systolic+diastolic. C1 inventory has zero of those. HC heart_rate must not be treated as clinical pulse/BP. METRIC_ALIASES pulse→heart_rate is a landmine if generate_observations() is re-run against HC data; UAT12I does not do that.
+8. Doctor Visit uses profile.diagnoses/medications (empty), ECG document_type==samsung_health_ecg (absent), trends egfr, systolic_bp/diastolic_bp, sleep_score (not sleep_duration), glucose/hba1c. Monitoring trends for heart_rate/steps/sleep_duration/oxygen_saturation/exercise_minutes do not fill those keys. n/a and None are correct empty clinical report fields.
+
+CANONICALIZATION_RESULT=
+pulse→heart_rate; hr→heart_rate; systolic→systolic_bp; spo2→oxygen_saturation.
+cgm_glucose is NOT aliased to glucose in METRIC_ALIASES (stays cgm_glucose).
+Clinical TREND_METRICS and MONITORING_TREND_METRICS remain separate planes; TrendEngine prefers clinical series and never merges wearable+lab into one direction.
+
+PATIENT_SCOPE_RESULT=PASS (live patient 00000; list_records / consumer payload / dashboard scoped by authenticated patient_id; cross-patient creatinine fixture is not returned)
+
+TREND_ENGINE_RESULT=PASS monitoring plane only for live HC keys (exercise_minutes, heart_rate, oxygen_saturation, sleep_duration, steps) with provenance health_connect_observational. No egfr, glucose, hba1c, systolic_bp, sleep_score clinical series.
+
+REPORT_DATA_RESULT=
+diagnoses=[] / medications=[] / recent_ecg=[] /
+kidney_trend=n/a / blood_pressure_trend=n/a / n/a /
+sleep_trend=n/a (looks up sleep_score, vault has sleep_duration) /
+diabetes_trend=n/a · HbA1c n/a.
+Do not fill Doctor Visit from Health Connect telemetry.
+
+HEALTH_RECORDS_INFORMATION_ARCHITECTURE_RESULT=
+PASS presentation-layer grouping. Vault documents are not deleted, collapsed, or rewritten.
+Clinical Documents: labs/imaging/ECG/medication/manual_upload/clinical type tokens.
+Imported Reports: remaining non-device documents (e.g. gmail scans).
+Device Data: summaries by metric with record_count + latest value; View observations uses metric=heart_rate drill-down (UAT12E path preserved).
+Search q= searches filename/category/source/status (legacy) plus blob + extracted metric aliases without requiring the clinical term to appear in the HC JSON filename.
+Mobile consumer Health Records requests surface=clinical_document so it is not flooded.
+
+ROOT_CAUSE=
+Health Connect ingestion persists one vault document per observation and the consumer Health Records screen listed every document. Downstream Observations/Doctor Visit empty clinical domains are missing lab/profile/ECG evidence, not a generic ingestion failure. High-frequency telemetry belongs on Dashboard / Observations / Trends / Timeline, with Health Records reserved for clinical documents plus an auditable Device Data grouping.
+
+FIX_SCOPE=
+Presentation-layer classification and GET /api/records q=/surface= grouping only.
+No vault deletes. No re-import/reseed. No clinical/HC plane merge. No Doctor Visit semantic fill from wearables. No generate_observations() rewrite.
+
+REGRESSION_TESTS=
+tests/test_hc321_uat12i_records_architecture.py
+tests/test_hc317c_consumer_records_ui.py (asset/isolation/filter/dashboard; Linux pydantic 2.13 UploadFile TypeAdapter still breaks multipart upload tests — pre-existing)
+tests/test_hc317b_records_backend.py (non-upload)
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+FOCUSED_RESULT=88 passed (excluding known pydantic multipart upload failures)
+
+FILES_CHANGED=
+backend/health_vault/records_service.py
+backend/health_vault/api.py
+backend/health_vault/models.py
+js/health_vault/records.js
+js/health_vault/mobile_consumer.js
+index.html
+style.css
+service-worker.js
+tests/test_hc321_uat12i_records_architecture.py
+tests/test_hc317c_consumer_records_ui.py
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+HC321_UAT12I_HEALTH_RECORDS_IA_RESULT.txt
+
+SERVICE_WORKER_VERSION=
+hc321uat12i
+CACHE_REVISION=hc321uat12i
+records.js?v=hc321uat12i
+consumer_surfaces.js?v=hc321uat12i
+health_snapshot.js?v=hc321uat12i
+service-worker.js?v=hc321uat12i
+NETWORK_FIRST_JS includes records.js
+/api/ remains outside service-worker interception
+
+FINAL_STATUS=READY_FOR_GOVERNED_DEPLOY
+NOTEPAD_LAUNCH=
+notepad.exe is not present on this Linux cloud host.
+This pod cannot open the production vault and did not recycle CSS :8765.

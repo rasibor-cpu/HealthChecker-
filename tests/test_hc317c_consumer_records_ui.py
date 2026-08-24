@@ -46,10 +46,18 @@ def test_records_ui_assets_and_navigation_contract():
     assert 'id="records_upload_panel"' in html
     assert 'id="records_list"' in html
     assert 'id="record_detail_dialog"' in html
-    assert 'src="js/health_vault/records.js"' in html
+    assert 'id="records_surface_tabs"' in html
+    assert 'data-records-surface="clinical_document"' in html
+    assert 'data-records-surface="imported_reports"' in html
+    assert 'data-records-surface="device_data"' in html
+    assert 'src="js/health_vault/records.js' in html
     assert "HCRecordsUI.refreshRecords()" in html
 
     assert "class RecordsUI" in js
+    assert 'params.set("surface"' in js
+    assert 'params.set("q"' in js
+    assert "device_data" in js
+    assert "clinical_document" in js
     assert '"/api/records/upload"' in js
     assert "`/api/records/${encodeURIComponent(documentId)}`" in js
     assert "`/api/records/download/${encodeURIComponent(documentId)}`" in js

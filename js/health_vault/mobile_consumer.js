@@ -151,7 +151,7 @@
   }
 
   async function loadRecords() {
-    const body = await request("/api/records");
+    const body = await request("/api/records?surface=clinical_document");
     records = Array.isArray(body.records) ? body.records : [];
     renderList(clearContent("mobile_records"), records, "No records available. Use Import to add your first report.", (card, row) => {
       text(card, row.original_filename || row.title || "Health record");
