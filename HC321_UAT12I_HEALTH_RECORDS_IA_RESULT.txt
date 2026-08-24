@@ -2,6 +2,8 @@ TASK=HC321-UAT12I_HEALTH_RECORDS_EVIDENCE_AND_INFORMATION_ARCHITECTURE
 RESULT_FILE=HC321_UAT12I_HEALTH_RECORDS_IA_RESULT.txt
 GENERATED_UTC=2026-08-24T16:10:00Z
 BRANCH=css-agent/hc321-uat12i-records-ia-9f1a
+HEAD=f249762
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/10
 BASE_BRANCH=hc322a-uat-screenshot-integration
 LINEAGE=hc322a-uat-screenshot-integration @ de9c010 (UAT12H 54338cb)
 
