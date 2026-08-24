@@ -718,4 +718,234 @@ body.light-theme .records-drop-zone {
     .records-detail-dialog { scroll-behavior: auto; }
 }
 
-
+/* HC325-R3 — compact authenticated /mobile Health Snapshot (S24 above-the-fold).
+   Status colours reuse the HC321 Health Snapshot semantics; no second palette. */
+body.mobile-consumer {
+    --bg: #0b1220;
+    --card: #0f1a30;
+    --text: #eaf0ff;
+    --muted: #9fb1d1;
+    --ok: #2dd4bf;
+    --warn: #fbbf24;
+    --bad: #fb7185;
+    --accent: #4da3ff;
+    --line: #233458;
+    --status-green: #2dd4bf;
+    --status-amber: #fbbf24;
+    --status-red: #fb7185;
+    --status-grey: #9fb1d1;
+    --status-green-bg: rgba(45, 212, 191, 0.12);
+    --status-amber-bg: rgba(251, 191, 36, 0.12);
+    --status-red-bg: rgba(251, 113, 133, 0.12);
+    --status-grey-bg: rgba(159, 177, 209, 0.10);
+    background: var(--bg);
+    color: var(--text);
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+    line-height: 1.35;
+}
+body.mobile-consumer.light-theme {
+    --bg: #f7f8fb;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #5c6b80;
+    --line: #d5dbe8;
+    --status-green: #0f7a5c;
+    --status-amber: #9a6700;
+    --status-red: #b42318;
+    --status-grey: #5c6b80;
+    --status-green-bg: #e6f7f1;
+    --status-amber-bg: #fff8e6;
+    --status-red-bg: #fde8e6;
+    --status-grey-bg: #f1f3f6;
+    background: var(--bg);
+    color: var(--text);
+}
+body.mobile-consumer header,
+body.mobile-consumer .mobile-app-header {
+    padding: 6px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    background: #101a32;
+    color: var(--text);
+}
+body.mobile-consumer.light-theme header,
+body.mobile-consumer.light-theme .mobile-app-header {
+    background: #eaeaea;
+    color: #1a1a1a;
+}
+body.mobile-consumer #mobile_nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px 8px;
+}
+body.mobile-consumer #mobile_nav button,
+body.mobile-consumer button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 6px 8px;
+    font-size: 12px;
+}
+body.mobile-consumer #mobile_status {
+    min-height: 0;
+    margin: 0 8px;
+    font-size: 12px;
+    color: var(--muted);
+}
+body.mobile-consumer .card {
+    padding: 8px;
+    margin: 4px 8px 8px;
+    background: var(--card);
+    border-color: var(--line);
+}
+body.mobile-consumer .card p,
+body.mobile-consumer .mobile-dash-meta {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 2px 0;
+}
+body.mobile-consumer .mobile-dash-title,
+body.mobile-consumer #mobile_dashboard h1 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0 0 4px;
+}
+body.mobile-consumer .hc-health-snapshot {
+    margin-bottom: 8px;
+}
+body.mobile-consumer .hc-snapshot-header .section-title {
+    font-size: 16px;
+    margin: 0 0 2px;
+    color: var(--text);
+}
+body.mobile-consumer .hc-snapshot-sub,
+body.mobile-consumer .hc-snapshot-attention {
+    font-size: 12px;
+    margin: 0 0 6px;
+    padding: 4px 6px;
+    border-radius: 8px;
+}
+body.mobile-consumer .hc-metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+body.mobile-consumer .hc-metric-card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    min-height: 44px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    margin: 0;
+    font-weight: 400;
+    font-size: 13px;
+}
+body.mobile-consumer .hc-metric-card:focus {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+body.mobile-consumer .hc-metric-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 2px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .hc-metric-value {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .hc-metric-unit {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+}
+body.mobile-consumer .hc-metric-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 800;
+}
+body.mobile-consumer .hc-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+}
+body.mobile-consumer .hc-metric-freshness,
+body.mobile-consumer .hc-metric-trend {
+    font-size: 11px;
+    margin-top: 2px;
+    line-height: 1.25;
+    color: var(--muted);
+}
+body.mobile-consumer .hc-metric-source {
+    font-size: 10px;
+    margin-top: 1px;
+    line-height: 1.2;
+    color: var(--muted);
+}
+body.mobile-consumer .hc-status-green {
+    border-color: var(--status-green);
+    background: var(--status-green-bg);
+}
+body.mobile-consumer .hc-status-green .hc-metric-status,
+body.mobile-consumer .hc-snapshot-attention.hc-status-green {
+    color: var(--status-green);
+}
+body.mobile-consumer .hc-status-green .hc-status-dot {
+    background: var(--status-green);
+}
+body.mobile-consumer .hc-status-amber {
+    border-color: var(--status-amber);
+    background: var(--status-amber-bg);
+}
+body.mobile-consumer .hc-status-amber .hc-metric-status,
+body.mobile-consumer .hc-snapshot-attention.hc-status-amber {
+    color: var(--status-amber);
+}
+body.mobile-consumer .hc-status-amber .hc-status-dot {
+    background: var(--status-amber);
+}
+body.mobile-consumer .hc-status-red {
+    border-color: var(--status-red);
+    background: var(--status-red-bg);
+}
+body.mobile-consumer .hc-status-red .hc-metric-status,
+body.mobile-consumer .hc-snapshot-attention.hc-status-red {
+    color: var(--status-red);
+}
+body.mobile-consumer .hc-status-red .hc-status-dot {
+    background: var(--status-red);
+}
+body.mobile-consumer .hc-status-grey {
+    border-color: var(--status-grey);
+    background: var(--status-grey-bg);
+}
+body.mobile-consumer .hc-status-grey .hc-metric-status,
+body.mobile-consumer .hc-snapshot-attention.hc-status-grey {
+    color: var(--status-grey);
+}
+body.mobile-consumer .hc-status-grey .hc-status-dot {
+    background: var(--status-grey);
+}
+body.mobile-consumer .hc-snapshot-drilldown .hc-drill-back,
+body.mobile-consumer .hc-drill-actions button {
+    width: auto;
+    min-height: 44px;
+    margin: 0 0 8px 0;
+}
+body.mobile-consumer .hc-snapshot-customize {
+    display: none;
+}

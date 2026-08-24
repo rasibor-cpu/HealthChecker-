@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body class="mobile-consumer">
-  <header>HealthChecker+</header>
+  <header class="mobile-app-header">HealthChecker+</header>
   <main id="mobile_app">
     <section id="mobile_login" class="card">
       <h1>Sign in</h1>
@@ -40,7 +40,11 @@
         <button type="button" data-mobile-view="settings">Settings</button>
       </nav>
       <p id="mobile_status" role="status" aria-live="polite"></p>
-      <section id="mobile_dashboard" class="card" data-mobile-panel><h1>Dashboard</h1><div data-mobile-content></div></section>
+      <section id="mobile_dashboard" class="card mobile-dash-panel" data-mobile-panel>
+        <h1 class="mobile-dash-title">Dashboard</h1>
+        <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
+        <div data-mobile-content></div>
+      </section>
       <section id="mobile_records" class="card" data-mobile-panel hidden><h1>Records</h1><div data-mobile-content></div></section>
       <section id="mobile_trends" class="card" data-mobile-panel hidden><h1>Trends</h1><div data-mobile-content></div></section>
       <section id="mobile_observations" class="card" data-mobile-panel hidden><h1>Observations</h1><div data-mobile-content></div></section>
@@ -84,6 +88,7 @@
       </section>
     </section>
   </main>
+  <script src="/js/health_vault/health_snapshot.js"></script>
   <script src="/js/health_vault/mobile_consumer.js"></script>
 </body>
 </html>

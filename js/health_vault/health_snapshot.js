@@ -72,6 +72,49 @@
     "activity_minutes",
   ];
 
+  // Authenticated /mobile landing order (HC325-R3). Desktop DEFAULT_ORDER is unchanged.
+  const MOBILE_LANDING_ORDER = [
+    "heart_rate",
+    "blood_pressure",
+    "glucose",
+    "oxygen_saturation",
+    "steps",
+    "sleep_duration",
+    "egfr",
+    "resting_hr",
+    "sleep_score",
+    "weight",
+    "bmi",
+    "ldl",
+    "hba1c",
+    "activity_minutes",
+  ];
+
+  const LAYOUT_KEY_MOBILE = "hc_mobile_dashboard_layout_v1";
+
+  function isMobileConsumer() {
+    try {
+      const doc = global.document;
+      return !!(
+        doc &&
+        doc.body &&
+        doc.body.classList &&
+        typeof doc.body.classList.contains === "function" &&
+        doc.body.classList.contains("mobile-consumer")
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function defaultOrderForSurface() {
+    return isMobileConsumer() ? MOBILE_LANDING_ORDER : DEFAULT_ORDER;
+  }
+
+  function layoutStorageKey() {
+    return isMobileConsumer() ? LAYOUT_KEY_MOBILE : LAYOUT_KEY;
+  }
+
   const FRESHNESS_WINDOWS = {
     heart_rate: 180,
     resting_hr: 1440,
@@ -871,7 +914,7 @@
         return normalizeSnapshotCard(c, nowMs);
       }),
       loadLayout(),
-      DEFAULT_ORDER
+      defaultOrderForSurface()
     );
   }
 
@@ -914,17 +957,18 @@
   }
 
   function loadLayout() {
+    const fallback = { order: defaultOrderForSurface().slice(), hidden: [] };
     try {
-      const raw = localStorage.getItem(LAYOUT_KEY);
-      return raw ? JSON.parse(raw) : { order: DEFAULT_ORDER.slice(), hidden: [] };
+      const raw = localStorage.getItem(layoutStorageKey());
+      return raw ? JSON.parse(raw) : fallback;
     } catch (_) {
-      return { order: DEFAULT_ORDER.slice(), hidden: [] };
+      return fallback;
     }
   }
 
   function saveLayout(layout) {
     try {
-      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+      localStorage.setItem(layoutStorageKey(), JSON.stringify(layout));
     } catch (_) {}
     return layout;
   }
@@ -1165,6 +1209,19 @@
         metrics: timelineOrTrends ? (primary ? [primary] : []) : aliases,
         category: category || null,
       });
+      return;
+    }
+    if (isMobileConsumer()) {
+      const viewMap = {
+        records: "records",
+        health_records: "records",
+        vault: "records",
+        timeline: "timeline",
+        trends: "trends",
+      };
+      const view = viewMap[surface];
+      const btn = view ? document.querySelector('[data-mobile-view="' + view + '"]') : null;
+      if (btn) btn.click();
       return;
     }
     const tabMap = {
@@ -1515,25 +1572,64 @@
     const list = cards || buildCards();
     _lastSnapshotCards = list.slice();
     const layout = loadLayout();
+    const mobile = isMobileConsumer();
     const empty =
       '<p class="muted small">No current HealthChecker observations yet. Import records or add a reading to populate this snapshot.</p>';
     const grid =
       list.length > 0
         ? '<div class="hc-metric-grid">' + list.map(renderHealthMetricCard).join("") + "</div>"
         : empty;
+    const headerCopy = mobile
+      ? '<p class="small muted hc-snapshot-sub">Latest valid HealthChecker data</p>'
+      : '<p class="small muted">Your current health picture based on the latest valid HealthChecker data — not continuous real-time measurement.</p>';
+    const customize = mobile ? "" : renderCustomize(layout, Object.keys(METRIC_SPECS));
     root.innerHTML =
       '<section class="hc-health-snapshot" aria-label="Health Snapshot">' +
       '<div class="hc-snapshot-header">' +
       "<h3 class=\"section-title\">Health Snapshot</h3>" +
-      '<p class="small muted">Your current health picture based on the latest valid HealthChecker data — not continuous real-time measurement.</p>' +
+      attentionBannerHtml(list) +
+      headerCopy +
       "</div>" +
       grid +
-      renderCustomize(layout, Object.keys(METRIC_SPECS)) +
-      '<p class="small muted">' +
+      customize +
+      '<p class="small muted hc-snapshot-disclaimer">' +
       esc(DISCLAIMER) +
       "</p></section>";
     bindCardClicks(root);
-    bindCustomize(root);
+    if (!mobile) bindCustomize(root);
+  }
+
+  function attentionBannerHtml(cards) {
+    if (!isMobileConsumer()) return "";
+    const list = cards || [];
+    const attention = list.filter(function (c) {
+      return c.status === STATUS_ATTENTION;
+    }).length;
+    const caution = list.filter(function (c) {
+      return c.status === STATUS_CAUTION;
+    }).length;
+    const unknown = list.filter(function (c) {
+      return c.status === STATUS_UNKNOWN;
+    }).length;
+    let label = "Attention: none";
+    let tone = "green";
+    if (attention) {
+      label = "Attention: " + attention + (attention === 1 ? " metric" : " metrics");
+      tone = "red";
+    } else if (caution) {
+      label = "Caution: " + caution + (caution === 1 ? " metric" : " metrics");
+      tone = "amber";
+    } else if (unknown) {
+      label = "Unknown or missing: " + unknown;
+      tone = "grey";
+    }
+    return (
+      '<p class="hc-snapshot-attention hc-status-' +
+      tone +
+      '" data-attention-indicator="true">' +
+      esc(label) +
+      "</p>"
+    );
   }
 
   function authHeaders() {
@@ -1550,12 +1646,19 @@
     } catch (_) {}
     try {
       const raw = global.sessionStorage.getItem("hc_auth_session");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed.token ? { Authorization: "Bearer " + parsed.token } : null;
-    } catch (_) {
-      return null;
-    }
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.token) return { Authorization: "Bearer " + parsed.token };
+      }
+    } catch (_) {}
+    try {
+      const mobileRaw = global.sessionStorage.getItem("hc_mobile_auth_session");
+      if (mobileRaw) {
+        const parsed = JSON.parse(mobileRaw);
+        if (parsed && parsed.token) return { Authorization: "Bearer " + parsed.token };
+      }
+    } catch (_) {}
+    return null;
   }
 
   function renderLocal() {
@@ -1652,6 +1755,7 @@
     COLOR_RED: COLOR_RED,
     COLOR_GREY: COLOR_GREY,
     DEFAULT_ORDER: DEFAULT_ORDER,
+    MOBILE_LANDING_ORDER: MOBILE_LANDING_ORDER,
     canonicalize: canonicalize,
     isValidObservation: isValidObservation,
     selectLatestValid: selectLatestValid,
