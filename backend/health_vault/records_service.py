@@ -55,11 +55,7 @@ _DEVICE_METRIC_LABELS = {
     "weight": "Weight",
 }
 _SEARCH_METRIC_ALIASES = {
-    "creatinine": ("creatinine",),
-    "egfr": ("egfr",),
-    "hba1c": ("hba1c",),
-    "a1c": ("hba1c",),
-    "glucose": ("glucose", "cgm_glucose"),
+    "creatinine": ("creatinine", "creatinine_serum", "creatinine_urine"),
     "blood pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
     "blood_pressure": ("systolic_bp", "diastolic_bp", "blood_pressure"),
     "bp": ("systolic_bp", "diastolic_bp"),
@@ -344,7 +340,7 @@ class RecordsService:
 
             linkage = RecordLinkage(
                 document_id=doc_id,
-                extracted_measurements=measurements,
+                extracted_measurements=self._display_measurements(patient_id, measurements),
                 timeline_events=linked_t_events,
                 ai_observations=linked_obs,
                 trend_references=linked_trends,
@@ -619,6 +615,21 @@ class RecordsService:
                 "match_count": len(visible) if query else 0,
             },
         }
+
+    def _display_measurements(self, patient_id: str, measurements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        from backend.health_vault.models import UserDashboardPreferences
+        from backend.health_vault.unit_conversion import apply_display_units
+
+        profile = self.store.get_profile(patient_id=patient_id) or {}
+        prefs = UserDashboardPreferences.from_dict(profile.get("dashboard_preferences") or {})
+        return [
+            apply_display_units(
+                dict(row),
+                region=prefs.reporting_region,
+                unit_overrides=prefs.unit_overrides,
+            )
+            for row in measurements
+        ]
 
     def get_record_details(self, patient_id: str, document_id: str) -> HealthRecord | None:
         docs = self.store.list_documents()

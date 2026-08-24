@@ -319,8 +319,11 @@ class GenericJsonParser(_Base):
 
 
 def register_builtin_parsers(registry=None) -> None:
+    from backend.health_vault.parsers.clinical_lab import ClinicalLabPanelParser
+
     reg = registry or DEFAULT_REGISTRY
     for cls in (
+        ClinicalLabPanelParser,
         SamsungHealthParser,
         GalaxyWatchParser,
         LifeLabsParser,

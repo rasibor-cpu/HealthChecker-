@@ -23,7 +23,15 @@ logger = logging.getLogger("hc315.health_intelligence")
 _LABELS = {
     "egfr": "Kidney function (eGFR)",
     "creatinine": "Creatinine",
+    "creatinine_serum": "Serum creatinine",
+    "creatinine_urine": "Urine creatinine",
     "glucose": "Glucose",
+    "glucose_fasting": "Fasting glucose",
+    "glucose_random": "Random glucose",
+    "glucose_postprandial": "Postprandial glucose",
+    "glucose_cgm_interstitial": "CGM interstitial glucose",
+    "glucose_capillary": "Capillary glucose",
+    "glucose_serum_plasma": "Serum/plasma glucose",
     "hba1c": "HbA1c",
     "systolic": "Systolic blood pressure",
     "diastolic": "Diastolic blood pressure",
@@ -118,11 +126,24 @@ class HealthIntelligenceEngine:
         has_renal = False
         has_cardiovascular = False
 
-        # 1. DIABETES/GLYCEMIC ANALYSIS
-        glucose_items = self._get_metric_series("glucose", patient_id)
-        if glucose_items:
+        # 1. DIABETES/GLYCEMIC ANALYSIS — like-for-like classes only
+        from backend.health_vault.clinical_semantics import GLYCEMIC_TREND_CLASSES
+
+        _GLUCOSE_LABEL = {
+            "glucose_fasting": "fasting glucose",
+            "glucose_random": "random glucose",
+            "glucose_postprandial": "postprandial glucose",
+            "glucose_cgm_interstitial": "CGM interstitial glucose",
+            "glucose_capillary": "capillary glucose",
+            "glucose_serum_plasma": "serum/plasma glucose",
+            "glucose": "glucose (context unspecified)",
+        }
+        for klass in GLYCEMIC_TREND_CLASSES:
+            glucose_items = self._get_metric_series(klass, patient_id)
+            if not glucose_items:
+                continue
             has_glycemic = True
-            processed_metrics.add("glucose")
+            processed_metrics.add(klass)
             values = [float(item["value"]) for item in glucose_items]
             evidence = [
                 EvidenceReference(
@@ -131,30 +152,26 @@ class HealthIntelligenceEngine:
                     measurement_id=item.get("measurement_id") or item.get("id"),
                 ) for item in glucose_items
             ]
-
             mean_val = sum(values) / len(values)
             variance = sum((x - mean_val) ** 2 for x in values) / len(values)
             std_dev = math.sqrt(variance)
-
-            fact = f"Mean glucose is {mean_val:.1f} mg/dL with standard deviation of {std_dev:.1f} mg/dL."
-            
-            # Interpret variability & trend direction
-            direction = trend_map.get("glucose", {}).get("direction", "stable")
+            label = _GLUCOSE_LABEL.get(klass, klass.replace("_", " "))
+            units = glucose_items[-1].get("units") or "mg/dL"
+            fact = f"Mean {label} is {mean_val:.1f} {units} with standard deviation of {std_dev:.1f} {units}."
+            direction = trend_map.get(klass, {}).get("direction", "stable")
             if std_dev > 20:
-                interpretation = f"Glucose levels show high variability ({direction} trend)."
+                interpretation = f"{label} shows high variability ({direction} trend)."
             else:
-                interpretation = f"Glucose levels are stable with normal variability ({direction} trend)."
-            
+                interpretation = f"{label} is stable with normal variability ({direction} trend)."
             explanation = (
-                f"Calculated glycemic standard deviation over {len(values)} measurements. "
-                "Higher variability can suggest blood sugar fluctuations."
+                f"Calculated {label} standard deviation over {len(values)} measurements. "
+                "This series is not merged with other glucose specimen or timing classes."
             )
-            
             obs = HealthObservation(
                 patient_id=patient_id,
                 observation_id=str(uuid4()),
                 category="glycemic",
-                metric="glucose",
+                metric=klass,
                 fact=fact,
                 interpretation=interpretation,
                 measured_at=utc_now(),
@@ -248,7 +265,14 @@ class HealthIntelligenceEngine:
             observations.append(obs.to_dict())
 
         # Creatinine & Proteinuria Check
-        for metric, category in [("creatinine", "renal"), ("uacr", "renal"), ("protein", "renal")]:
+        for metric, category in [
+            ("creatinine_serum", "renal"),
+            ("creatinine", "renal"),
+            ("creatinine_urine", "renal"),
+            ("uacr", "renal"),
+            ("protein", "renal"),
+            ("protein_urine", "renal"),
+        ]:
             items = self._get_metric_series(metric, patient_id)
             if items:
                 has_renal = True

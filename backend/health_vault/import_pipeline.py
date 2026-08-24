@@ -243,31 +243,47 @@ class ImportPipeline:
             normalized_meas = []
             for m in measurements:
                 raw = m.to_dict() if hasattr(m, "to_dict") else dict(m)
-                norm = normalize_measurement(raw)
-                obj = create_measurement(
-                    **{
-                        k: norm[k]
-                        for k in (
-                            "measurement_id",
-                            "document_id",
-                            "category",
-                            "metric",
-                            "value",
-                            "units",
-                            "reference_range",
-                            "abnormal_flag",
-                            "confidence",
-                            "measured_at",
-                            "fhir_resource",
-                        )
-                        if k in norm
-                    }
+                norm = normalize_measurement(
+                    raw,
+                    document_type=document.document_type,
+                    source_system=document.source_system,
+                    source_facility=(
+                        raw.get("source_facility")
+                        or req.get("source_facility")
+                        or document.source_system
+                    ),
                 )
-                obj.original_metric = norm.get("original_metric")
-                obj.original_value = norm.get("original_value")
-                obj.original_units = norm.get("original_units")
-                obj.unit_compatible = bool(norm.get("unit_compatible", True))
-                obj.normalization_version = norm.get("normalization_version")
+                obj = create_measurement(**{
+                    k: norm[k]
+                    for k in (
+                        "measurement_id",
+                        "document_id",
+                        "category",
+                        "metric",
+                        "value",
+                        "units",
+                        "reference_range",
+                        "abnormal_flag",
+                        "confidence",
+                        "measured_at",
+                        "fhir_resource",
+                        "original_metric",
+                        "original_value",
+                        "original_units",
+                        "original_analyte_name",
+                        "observation_class",
+                        "specimen",
+                        "context",
+                        "source_facility",
+                        "canonical_reference_range",
+                        "conversion_flag",
+                        "unit_compatible",
+                        "normalization_version",
+                        "semantics_version",
+                        "provenance",
+                    )
+                    if k in norm
+                })
                 normalized_meas.append(obj)
             measurements = normalized_meas
 
@@ -377,7 +393,7 @@ class ImportPipeline:
             self.bus.publish(TREND_UPDATED, {"metrics": list(trends.keys())})
 
             t_doc = time.perf_counter()
-            doctor_report = self.doctor.generate()
+            doctor_report = self.doctor.generate(patient_id=patient_id)
             observations = self.intelligence.generate_observations(patient_id=patient_id)
             timings["doctor_ms"] = (time.perf_counter() - t_doc) * 1000
             self.bus.publish(DOCTOR_REPORT_UPDATED, {"title": doctor_report.get("title")})

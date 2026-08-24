@@ -340,7 +340,7 @@ def test_canonicalization_patient_scope_trends_and_doctor_visit(vault_app):
 
     assert canonicalize_metric("pulse") == "heart_rate"
     assert canonicalize_metric("hr") == "heart_rate"
-    assert canonicalize_metric("cgm_glucose") == "cgm_glucose"
+    assert canonicalize_metric("cgm_glucose") == "glucose_cgm_interstitial"
     assert canonicalize_metric("systolic") == "systolic_bp"
     assert canonicalize_metric("spo2") == "oxygen_saturation"
 
@@ -390,7 +390,7 @@ def test_ui_contract_does_not_list_raw_device_json_by_default():
     assert "clinical_document" in js
     assert "data-device-metric" in js
     assert "VaultStore" not in js
-    assert 'CACHE_REVISION = "hc321uat12i"' in sw
+    assert 'CACHE_REVISION = "hc321uat12j"' in sw
     assert "records" in sw
-    assert "service-worker.js?v=hc321uat12i" in html
-    assert "records.js?v=hc321uat12i" in html
+    assert "service-worker.js?v=hc321uat12j" in html
+    assert "records.js?v=hc321uat12j" in html

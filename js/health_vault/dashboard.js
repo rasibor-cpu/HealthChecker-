@@ -445,6 +445,10 @@
       if (prioritySel) {
         prioritySel.value = this.preferences.priority_metric || "";
       }
+      const regionSel = document.getElementById("config_reporting_region");
+      if (regionSel) {
+        regionSel.value = this.preferences.reporting_region || "";
+      }
     }
 
     async savePreferencesFromUI() {
@@ -452,6 +456,7 @@
 
       const listEl = document.getElementById("config_widgets_list");
       const prioritySel = document.getElementById("config_priority_metric");
+      const regionSel = document.getElementById("config_reporting_region");
 
       const visible = [];
       listEl.querySelectorAll("[data-widget-visible]").forEach(cb => {
@@ -463,6 +468,9 @@
       this.preferences.visible_widgets = visible;
       if (prioritySel) {
         this.preferences.priority_metric = prioritySel.value || null;
+      }
+      if (regionSel) {
+        this.preferences.reporting_region = regionSel.value || null;
       }
 
       await this.savePreferences(this.preferences);

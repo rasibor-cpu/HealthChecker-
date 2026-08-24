@@ -78,8 +78,17 @@ class Measurement:
     original_metric: str | None = None
     original_value: Any = None
     original_units: str | None = None
+    original_analyte_name: str | None = None
+    observation_class: str | None = None
+    specimen: str | None = None
+    context: str | None = None
+    source_facility: str | None = None
+    canonical_reference_range: str | None = None
+    conversion_flag: str | None = None
     unit_compatible: bool = True
     normalization_version: str | None = None
+    semantics_version: str | None = None
+    provenance: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -165,8 +174,22 @@ def create_measurement(**kwargs: Any) -> Measurement:
         reference_range=kwargs.get("reference_range"),
         abnormal_flag=kwargs.get("abnormal_flag"),
         confidence=kwargs.get("confidence"),
-        measured_at=kwargs.get("measured_at"),
+        measured_at=kwargs.get("measured_at") or kwargs.get("collection_timestamp"),
         fhir_resource=kwargs.get("fhir_resource") or "Observation",
+        original_metric=kwargs.get("original_metric"),
+        original_value=kwargs.get("original_value"),
+        original_units=kwargs.get("original_units"),
+        original_analyte_name=kwargs.get("original_analyte_name") or kwargs.get("analyte") or kwargs.get("name"),
+        observation_class=kwargs.get("observation_class"),
+        specimen=kwargs.get("specimen"),
+        context=kwargs.get("context") or kwargs.get("collection_context"),
+        source_facility=kwargs.get("source_facility"),
+        canonical_reference_range=kwargs.get("canonical_reference_range"),
+        conversion_flag=kwargs.get("conversion_flag"),
+        unit_compatible=bool(kwargs["unit_compatible"]) if "unit_compatible" in kwargs else True,
+        normalization_version=kwargs.get("normalization_version"),
+        semantics_version=kwargs.get("semantics_version"),
+        provenance=kwargs.get("provenance"),
     )
 
 
@@ -386,6 +409,8 @@ class UserDashboardPreferences:
         "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
     ])
     priority_metric: str | None = None
+    reporting_region: str | None = None
+    unit_overrides: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -401,6 +426,8 @@ class UserDashboardPreferences:
                 "status_summary", "key_observations", "trends_widget", "timeline_widget", "import_wizard"
             ]),
             priority_metric=data.get("priority_metric"),
+            reporting_region=(str(data["reporting_region"]).upper() if data.get("reporting_region") else None),
+            unit_overrides=dict(data.get("unit_overrides") or {}),
         )
 
 

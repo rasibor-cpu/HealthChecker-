@@ -1,0 +1,116 @@
+TASK=HC321-UAT12J_CLINICAL_RECORD_INGESTION_SEMANTIC_NORMALIZATION
+RESULT_FILE=HC321_UAT12J_CLINICAL_INGESTION_RESULT.txt
+GENERATED_UTC=2026-08-24T16:40:00Z
+BRANCH=css-agent/hc321-uat12j-clinical-ingest-9f1a
+BASE_BRANCH=css-agent/hc321-uat12i-records-ia-9f1a
+LINEAGE=css-agent/hc321-uat12i-records-ia-9f1a @ dbbe8ca
+
+ROOT_CAUSE_CLINICAL_ABSENCE=
+Live vault 8318 records / 8308 Health Connect observations contain no eligible
+clinical lab series (creatinine, eGFR, glucose/HbA1c, clinical BP, ECG, medications).
+UAT12I correctly stopped listing HC JSON as Health Records. V1 still lacked
+specimen-aware observation classes, analyte-aware unit conversion, regional
+display, and a controlled clinical import fixture, so Observations/Doctor Visit
+could not light up renal/glycemic domains even after a real report import.
+
+CLINICAL_IMPORT_RESULT=PASS
+Structured hospital/ER JSON lab panels parse through ClinicalLabPanelParser
+into vault documents + extracted measurements, then timeline, trends, HI
+observations, Health Records (clinical_document), and Doctor Visit.
+
+BRANTFORD_FIXTURE_RESULT=PASS
+tests/fixtures/brantford_general_er_2026-08-23.json (fixture-only values modeled
+on a Brantford General ER panel dated 23 Aug 2026) imports hemoglobin, hematocrit,
+RBC, WBC, neutrophils, creatinine (serum), eGFR, urea, random glucose, sodium,
+potassium, calcium (total), magnesium, albumin (serum), total protein, Troponin I HS,
+INR, and qualitative urinalysis. Production vault was not used.
+
+SEMANTIC_SEPARATION_RESULT=PASS
+glucose_fasting, glucose_random, glucose_postprandial, glucose_cgm_interstitial,
+glucose_capillary, glucose_serum_plasma remain distinct trend keys. Fasting is
+not plotted as random; CGM interstitial is not treated as lab serum/plasma.
+
+SPECIMEN_CONTEXT_RESULT=PASS
+Creatinine with specimen=serum → creatinine_serum; urine protein stays urine;
+random context → glucose_random; original analyte name/specimen/context/facility/
+timestamp/range/flag/provenance/confidence persist on the measurement.
+
+CANONICAL_UNIT_RESULT=PASS
+Original mmol/L glucose 6.2 stored as canonical mg/dL from originals; second
+normalize_measurement pass does not stack conversion.
+
+REGIONAL_UNIT_PREFERENCE_RESULT=PASS
+UserDashboardPreferences.reporting_region (CA/NG/GB mmol/L glucose; US mg/dL).
+Customize dashboard control does not rewrite stored originals.
+
+REFERENCE_RANGE_CONVERSION_RESULT=PASS
+Ranges convert from original units to the display unit (e.g. 3.6-11.1 mmol/L → 65-200 mg/dL).
+
+AMBIGUOUS_UNIT_GUARD_RESULT=PASS
+Missing or unknown units set UNIT_NORMALIZATION_REQUIRES_VERIFICATION and
+unit_compatible=False without auto-conversion.
+
+RENAL_OBSERVATIONS_RESULT=PASS
+Health Intelligence sees eGFR and serum creatinine; missing-renal warning is not emitted.
+
+GLYCEMIC_OBSERVATIONS_RESULT=PASS
+Random glucose is labeled random; fasting series remains absent/unmerged.
+
+DOCTOR_VISIT_RESULT=PASS
+kidney_trend uses eGFR; diabetes_trend uses random glucose context (not fasting).
+generate(patient_id) now scopes to the importing patient.
+
+HEALTH_RECORDS_RESULT=PASS
+Imported report is a clinical_document; provenance remains; search creatinine matches.
+
+DEVICE_DATA_REGRESSION_RESULT=PASS
+HC JSON still grouped under Device Data; clinical surface stays empty for telemetry.
+
+TIMELINE_FILTER_REGRESSION_RESULT=PASS
+UAT12H compactTimelineEntries / openFiltered / health_snapshot tests still pass.
+
+SCREENSHOT_LINEAGE_RESULT=PASS
+tests/test_hc322a_consumer_screenshot_policy.py still present and passing.
+
+FOCUSED_TESTS=
+python3 -m pytest tests/test_hc321_uat12j_clinical_ingestion.py tests/test_hc201h_confirmed_ingestion.py tests/test_hc321_uat12i_records_architecture.py tests/test_hc321_c1_consumer_functional_completion.py tests/test_hc321_health_snapshot.py tests/test_hc325_r2_live_executive_data_path.py tests/test_hc325_r3_live_executive_path_finalization.py tests/test_hc322a_consumer_screenshot_policy.py tests/test_hc315c_trend_intelligence.py -q
+119 passed
+
+BROADER_TESTS=
+Same lineage gate as above. Pre-existing Linux pydantic 2.13 multipart UploadFile
+TypeAdapter failures are unchanged and were not re-run as pass criteria.
+
+FILES_CHANGED=
+backend/health_vault/clinical_semantics.py
+backend/health_vault/unit_conversion.py
+backend/health_vault/metric_normalization.py
+backend/health_vault/models.py
+backend/health_vault/import_pipeline.py
+backend/health_vault/parsers/clinical_lab.py
+backend/health_vault/parsers/__init__.py
+backend/health_vault/health_intelligence.py
+backend/health_vault/doctor_visit.py
+backend/health_vault/records_service.py
+backend/health_vault/category_classifier.py
+backend/health_vault/trend_engine.py
+js/health_vault/dashboard.js
+index.html
+service-worker.js
+tests/fixtures/brantford_general_er_2026-08-23.json
+tests/test_hc321_uat12j_clinical_ingestion.py
+tests/test_hc321_uat12i_records_architecture.py
+tests/test_hc321_health_snapshot.py
+tests/test_hc325_r2_live_executive_data_path.py
+tests/test_hc325_r3_live_executive_path_finalization.py
+HC321_UAT12J_CLINICAL_INGESTION_RESULT.txt
+
+SERVICE_WORKER_VERSION=hc321uat12j
+CACHE_REVISION=hc321uat12j
+
+BRANCH=css-agent/hc321-uat12j-clinical-ingest-9f1a
+HEAD=PENDING_PUSH
+PR=PENDING
+LIVE_DEPLOY_PERFORMED=NO
+PRODUCTION_DATA_MUTATED=NO
+CSS_8765_UNTOUCHED=YES
+FINAL_STATUS=READY_FOR_GOVERNED_DEPLOY
