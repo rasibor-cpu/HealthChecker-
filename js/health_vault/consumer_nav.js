@@ -42,6 +42,7 @@
   var current = DASHBOARD;
   var overlays = [];
   var applying = false;
+  var securityGate = false;
 
   function canonicalize(route) {
     var key = String(route == null ? "" : route).trim();
@@ -80,6 +81,10 @@
 
   function note(route, options) {
     options = options || {};
+    if (securityGate) {
+      updateBackUi();
+      return current;
+    }
     var dest = canonicalize(route);
     if (options.deepLink) {
       closeAllOverlays();
@@ -110,6 +115,7 @@
   }
 
   function apply(route, options) {
+    if (securityGate) return;
     applying = true;
     try {
       var dest = canonicalize(route);
@@ -155,6 +161,10 @@
 
   function back(options) {
     options = options || {};
+    if (securityGate) {
+      updateBackUi();
+      return { handled: true, route: current, gated: true };
+    }
     if (overlays.length) {
       var overlay = overlays.pop();
       try {
@@ -181,6 +191,7 @@
   }
 
   function handleSystemBack() {
+    if (securityGate) return true;
     return back().handled === true;
   }
 
@@ -198,6 +209,7 @@
   }
 
   function peekDeepLink(search) {
+    if (securityGate) return null;
     try {
       var query = search != null ? search : ((global.location && location.search) || "");
       var q = String(query || "");
@@ -231,10 +243,22 @@
   }
 
   function reset() {
+    securityGate = false;
     closeAllOverlays();
     stack = [];
     overlays = [];
     current = DASHBOARD;
+    updateBackUi();
+  }
+
+  function setSecurityGate(active) {
+    securityGate = !!active;
+    if (securityGate) {
+      closeAllOverlays();
+      stack = [];
+      overlays = [];
+      current = DASHBOARD;
+    }
     updateBackUi();
   }
 
@@ -277,6 +301,8 @@
     dismissOverlay: dismissOverlay,
     peekDeepLink: peekDeepLink,
     reset: reset,
+    setSecurityGate: setSecurityGate,
+    isSecurityGate: function () { return securityGate; },
     desktopScreenId: function (route) { return DESKTOP_SCREEN[canonicalize(route)] || route; },
     currentRoute: function () { return current; },
     stackRoutes: function () {
@@ -287,6 +313,7 @@
     },
     isApplying: function () { return applying; },
     canLeaveApp: function () {
+      if (securityGate) return false;
       return isDashboard(current) && stack.length === 0 && overlays.length === 0;
     },
   };

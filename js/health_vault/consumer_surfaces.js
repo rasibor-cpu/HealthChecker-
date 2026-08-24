@@ -16,7 +16,7 @@
 
   function dashboard() { return global.HCConsumerDashboard; }
   function headers() { return dashboard() ? dashboard().getAuthorizationHeaders() : {}; }
-  function authenticated() { return !!(dashboard() && dashboard().token); }
+  function authenticated() { return !!(dashboard() && dashboard().token && !dashboard().securityGate); }
 
   async function parseJsonResponse(response) {
     const ct = String((response.headers && response.headers.get("content-type")) || "").toLowerCase();
@@ -615,6 +615,15 @@
       identity.textContent = name && name !== dash.patientId
         ? `Signed in as ${name} (Patient ID: ${dash.patientId}).`
         : `Signed in as Patient ID ${dash.patientId}.`;
+    }
+    const status = document.getElementById("consumer_settings_password_status");
+    if (status && dashboard() && typeof dashboard().passwordStatusText === "function") {
+      status.textContent = dashboard().passwordStatusText();
+    }
+    if (dashboard() && typeof dashboard().loadRecoveryCatalog === "function") {
+      dashboard().loadRecoveryCatalog().then(() => {
+        dashboard().renderQuestionPickers("settings_recovery_questions", "settings_enroll");
+      }).catch(() => {});
     }
     const ops = document.getElementById("consumer_settings_ops");
     if (!ops || !authenticated()) return;

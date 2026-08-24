@@ -692,6 +692,11 @@ def test_uat10_authenticated_dashboard_snapshot_render_path():
                 json={
                     "current_password": "Boot-Pass-UAT10xx",
                     "new_password": "Owner-UAT10-Password1",
+                    "recovery_answers": [
+                        {"question_id": "CQ01", "answer": "Westfield School"},
+                        {"question_id": "CQ02", "answer": "Toronto"},
+                        {"question_id": "CQ03", "answer": "Buster"},
+                    ],
                 },
             )
             assert changed.status_code == 200
@@ -983,7 +988,12 @@ def _uat12e_login(client, password="Boot-Pass-UAT12Exx"):
         changed = client.post(
             "/api/auth/password/change",
             headers={"Authorization": f"Bearer {token}"},
-            json={"current_password": password, "new_password": "Owner-UAT12E-Password1"},
+            json={"current_password": password, "new_password": "Owner-UAT12E-Password1",
+                  "recovery_answers": [
+                      {"question_id": "CQ01", "answer": "Westfield School"},
+                      {"question_id": "CQ02", "answer": "Toronto"},
+                      {"question_id": "CQ03", "answer": "Buster"},
+                  ]},
         )
         assert changed.status_code == 200, changed.text
         token = changed.json()["token"]

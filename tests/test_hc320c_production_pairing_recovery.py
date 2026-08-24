@@ -35,7 +35,12 @@ def test_pairing_generator_after_full_auth_and_secondary_isolation(tmp_path):
 
     changed = client.post("/api/auth/password/change", headers={
         "Authorization": f"Bearer {restricted.json()['token']}"
-    }, json={"current_password": "Owner-Temporary-Password", "new_password": "Owner-Production-Password"})
+    }, json={"current_password": "Owner-Temporary-Password", "new_password": "Owner-Production-Password",
+             "recovery_answers": [
+                 {"question_id": "CQ01", "answer": "Westfield School"},
+                 {"question_id": "CQ02", "answer": "Toronto"},
+                 {"question_id": "CQ03", "answer": "Buster"},
+             ]})
     assert changed.status_code == 200
     owner_start = client.post("/api/companion/pair/start", headers={
         "Authorization": f"Bearer {changed.json()['token']}"

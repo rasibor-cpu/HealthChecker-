@@ -17,6 +17,12 @@
       this._lastRefreshAt = 0;
       this._summaryFetchedAt = 0;
       this._loginInFlight = false;
+      this.securityGate = false;
+      this.passwordExpiresAt = null;
+      this.recoveryEnrolled = false;
+      this._catalog = null;
+      this._recoveryId = null;
+      this._recoveryToken = null;
       // Soft throttle for repeated auto-refresh / rapid navigation (ms).
       this.REFRESH_COOLDOWN_MS = 4000;
       this.SUMMARY_TTL_MS = 15000;
@@ -25,11 +31,39 @@
     init() {
       this.loadSession();
       this.bindEvents();
-      this.updateUIVisibility();
-      
-      if (this.token) {
-        this.refresh();
+      this.bootstrapSession();
+    }
+
+    async bootstrapSession() {
+      if (!this.token) {
+        this.updateUIVisibility();
+        return;
       }
+      try {
+        const response = await fetch("/api/auth/session", { headers: this.getAuthorizationHeaders() });
+        const data = await response.json();
+        if (!response.ok) throw new Error("expired");
+        this.applySessionMeta(data);
+        if (data.must_change_password || data.scope !== "full") {
+          await this.enterSecurityGate();
+          return;
+        }
+        this.updateUIVisibility();
+        await this.refresh();
+      } catch (_err) {
+        this.clearSession();
+        this.updateUIVisibility();
+      }
+    }
+
+    applySessionMeta(data) {
+      this.passwordExpiresAt = data.password_expires_at || data.password_expiry_date || null;
+      this.recoveryEnrolled = !!data.recovery_enrolled;
+    }
+
+    setSecurityGate(active) {
+      this.securityGate = !!active;
+      if (global.HCConsumerNav) HCConsumerNav.setSecurityGate(!!active);
     }
 
     loadSession() {
@@ -86,6 +120,7 @@
     }
 
     openScreen(screenId) {
+      if (this.securityGate) return;
       const tab = document.querySelector(`[data="${screenId}"]`);
       if (tab) tab.click();
     }
@@ -126,14 +161,35 @@
         event.preventDefault();
         this.handlePasswordChange();
       };
+      const forgotBtn = document.getElementById("forgot_password_btn");
+      if (forgotBtn) forgotBtn.onclick = () => this.showRecoveryFlow();
+      const recoveryStart = document.getElementById("recovery_start_btn");
+      if (recoveryStart) recoveryStart.onclick = () => this.handleRecoveryStart();
+      const recoveryVerify = document.getElementById("recovery_verify_btn");
+      if (recoveryVerify) recoveryVerify.onclick = () => this.handleRecoveryVerify();
+      const recoveryComplete = document.getElementById("recovery_complete_btn");
+      if (recoveryComplete) recoveryComplete.onclick = () => this.handleRecoveryComplete();
+      const recoveryCancel = document.getElementById("recovery_cancel_btn");
+      if (recoveryCancel) recoveryCancel.onclick = () => this.cancelRecoveryFlow();
+      const settingsPassword = document.getElementById("settings_password_form");
+      if (settingsPassword) settingsPassword.onsubmit = event => {
+        event.preventDefault();
+        this.handleSettingsPasswordChange();
+      };
+      const settingsRecovery = document.getElementById("settings_recovery_form");
+      if (settingsRecovery) settingsRecovery.onsubmit = event => {
+        event.preventDefault();
+        this.handleSettingsRecoveryReplace();
+      };
     }
 
     updateUIVisibility() {
       const loginScreen = document.getElementById("login_screen");
       const tabsNavbar = document.getElementById("tabs_navbar");
       const consumerContainer = document.getElementById("consumer_dashboard_container");
+      const showApp = !!(this.token && !this.securityGate);
 
-      if (this.token) {
+      if (showApp) {
         if (loginScreen) loginScreen.style.display = "none";
         if (tabsNavbar) tabsNavbar.style.display = "flex";
         if (consumerContainer) consumerContainer.style.display = "block";
@@ -142,7 +198,7 @@
         if (tabsNavbar) tabsNavbar.style.display = "none";
         if (consumerContainer) consumerContainer.style.display = "none";
         
-        // Hide all screens when logged out
+        // Hide all screens when logged out or gated
         document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
         if (loginScreen) loginScreen.classList.add("active");
       }
@@ -187,14 +243,16 @@
         const data = await res.json();
         const loginName = (data.name && data.name !== data.patient_id) ? data.name : null;
         this.saveSession(data.patient_id, data.token, loginName);
+        this.applySessionMeta(data);
         
         if (pidEl) pidEl.value = "";
         if (pwdEl) pwdEl.value = "";
 
         if (data.must_change_password) {
-          this.showPasswordChange();
+          await this.enterSecurityGate();
           return;
         }
+        this.setSecurityGate(false);
         this.updateUIVisibility();
         
         // Switch active tab to dashboard
@@ -215,17 +273,105 @@
     handleLogout() {
       if (this.token) fetch("/api/auth/logout", { method: "POST", headers: this.getAuthorizationHeaders() }).catch(() => {});
       this.clearSession();
+      this.setSecurityGate(false);
       this.updateUIVisibility();
       if (global.HCConsumerNav) HCConsumerNav.reset();
     }
 
-    showPasswordChange() {
+    async loadRecoveryCatalog() {
+      if (this._catalog && this._catalog.length) return this._catalog;
+      const response = await fetch("/api/auth/recovery/catalog");
+      const data = await response.json();
+      this._catalog = data.questions || [];
+      return this._catalog;
+    }
+
+    renderQuestionPickers(containerId, prefix) {
+      const host = document.getElementById(containerId);
+      if (!host) return;
+      host.replaceChildren();
+      const catalog = this._catalog || [];
+      for (let i = 1; i <= 3; i++) {
+        const label = document.createElement("label");
+        label.className = "small muted";
+        label.textContent = "Recovery question " + i;
+        const select = document.createElement("select");
+        select.id = prefix + "_q" + i;
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "Choose a question";
+        select.appendChild(blank);
+        catalog.forEach(question => {
+          const option = document.createElement("option");
+          option.value = question.question_id;
+          option.textContent = question.prompt;
+          select.appendChild(option);
+        });
+        const answer = document.createElement("input");
+        answer.id = prefix + "_a" + i;
+        answer.type = "text";
+        answer.autocomplete = "off";
+        host.appendChild(label);
+        host.appendChild(select);
+        host.appendChild(answer);
+      }
+    }
+
+    collectAnswers(prefix) {
+      const rows = [];
+      for (let i = 1; i <= 3; i++) {
+        const question = document.getElementById(prefix + "_q" + i);
+        const answer = document.getElementById(prefix + "_a" + i);
+        rows.push({ question_id: question ? question.value : "", answer: answer ? answer.value : "" });
+      }
+      return rows;
+    }
+
+    renderRecoveryPrompts(containerId, questions) {
+      const host = document.getElementById(containerId);
+      if (!host) return;
+      host.replaceChildren();
+      (questions || []).forEach((question, index) => {
+        const label = document.createElement("label");
+        label.className = "small muted";
+        label.textContent = question.prompt || ("Question " + (index + 1));
+        const input = document.createElement("input");
+        input.type = "text";
+        input.autocomplete = "off";
+        input.dataset.questionId = question.question_id;
+        host.appendChild(label);
+        host.appendChild(input);
+      });
+    }
+
+    collectPromptAnswers(containerId) {
+      const host = document.getElementById(containerId);
+      if (!host) return [];
+      return Array.from(host.querySelectorAll("input")).map(input => ({
+        question_id: input.dataset.questionId,
+        answer: input.value,
+      }));
+    }
+
+    async enterSecurityGate() {
+      this.setSecurityGate(true);
+      await this.showPasswordChange();
+      this.updateUIVisibility();
+    }
+
+    async showPasswordChange() {
       const loginScreen = document.getElementById("login_screen");
       const form = document.getElementById("password_change_form");
+      const credentials = document.getElementById("login_credentials");
+      const recovery = document.getElementById("password_recovery_flow");
       if (loginScreen) loginScreen.style.display = "block";
+      if (credentials) credentials.hidden = true;
+      if (recovery) recovery.hidden = true;
       if (form) form.hidden = false;
       const loginButton = document.getElementById("login_btn");
       if (loginButton) loginButton.hidden = true;
+      await this.loadRecoveryCatalog();
+      this.renderQuestionPickers("password_change_questions", "enroll");
     }
 
     async handlePasswordChange() {
@@ -240,7 +386,12 @@
       }
       const response = await fetch("/api/auth/password/change", {
         method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
-        body: JSON.stringify({ current_password: current ? current.value : "", new_password: next.value }),
+        body: JSON.stringify({
+          current_password: current ? current.value : "",
+          new_password: next.value,
+          confirm_password: confirm ? confirm.value : "",
+          recovery_answers: this.collectAnswers("enroll"),
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -248,8 +399,12 @@
         return;
       }
       this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
+      this.applySessionMeta(data);
+      this.setSecurityGate(false);
       const form = document.getElementById("password_change_form");
       if (form) form.hidden = true;
+      const credentials = document.getElementById("login_credentials");
+      if (credentials) credentials.hidden = false;
       const loginButton = document.getElementById("login_btn");
       if (loginButton) loginButton.hidden = false;
       [current, next, confirm].forEach(input => { if (input) input.value = ""; });
@@ -257,6 +412,161 @@
       const dashTab = document.querySelector('[data="dash"]');
       if (dashTab) dashTab.click();
       await this.refresh();
+    }
+
+    showRecoveryFlow() {
+      this.setSecurityGate(true);
+      const credentials = document.getElementById("login_credentials");
+      const change = document.getElementById("password_change_form");
+      const recovery = document.getElementById("password_recovery_flow");
+      const error = document.getElementById("recovery_error");
+      if (credentials) credentials.hidden = true;
+      if (change) change.hidden = true;
+      if (recovery) recovery.hidden = false;
+      if (error) error.textContent = "";
+      document.getElementById("recovery_start_step").hidden = false;
+      document.getElementById("recovery_verify_step").hidden = true;
+      document.getElementById("recovery_complete_step").hidden = true;
+      this._recoveryId = null;
+      this._recoveryToken = null;
+      this.updateUIVisibility();
+    }
+
+    cancelRecoveryFlow() {
+      this._recoveryId = null;
+      this._recoveryToken = null;
+      const recovery = document.getElementById("password_recovery_flow");
+      const credentials = document.getElementById("login_credentials");
+      const change = document.getElementById("password_change_form");
+      if (recovery) recovery.hidden = true;
+      if (change) change.hidden = true;
+      if (credentials) credentials.hidden = false;
+      const loginButton = document.getElementById("login_btn");
+      if (loginButton) loginButton.hidden = false;
+      this.setSecurityGate(false);
+      this.updateUIVisibility();
+    }
+
+    async handleRecoveryStart() {
+      const error = document.getElementById("recovery_error");
+      const userId = (document.getElementById("recovery_user_id") || {}).value || "";
+      if (error) error.textContent = "";
+      const response = await fetch("/api/auth/recovery/start", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId.trim() }),
+      });
+      const data = await response.json();
+      this._recoveryId = data.recovery_id;
+      this.renderRecoveryPrompts("recovery_question_fields", data.questions || []);
+      document.getElementById("recovery_start_step").hidden = true;
+      document.getElementById("recovery_verify_step").hidden = false;
+    }
+
+    async handleRecoveryVerify() {
+      const error = document.getElementById("recovery_error");
+      if (error) error.textContent = "";
+      const response = await fetch("/api/auth/recovery/verify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recovery_id: this._recoveryId,
+          answers: this.collectPromptAnswers("recovery_question_fields"),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (error) error.textContent = "Recovery could not be completed.";
+        return;
+      }
+      this._recoveryToken = data.token;
+      document.getElementById("recovery_verify_step").hidden = true;
+      document.getElementById("recovery_complete_step").hidden = false;
+    }
+
+    async handleRecoveryComplete() {
+      const error = document.getElementById("recovery_error");
+      const next = document.getElementById("recovery_new_password");
+      const confirm = document.getElementById("recovery_confirm_password");
+      if (error) error.textContent = "";
+      if (!next || next.value.length < 8 || next.value !== (confirm && confirm.value)) {
+        if (error) error.textContent = "New passwords must match and contain at least 8 characters.";
+        return;
+      }
+      const response = await fetch("/api/auth/recovery/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (this._recoveryToken || "") },
+        body: JSON.stringify({ new_password: next.value, confirm_password: confirm.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (error) error.textContent = data.error || "Recovery could not be completed.";
+        return;
+      }
+      this.clearSession();
+      this.cancelRecoveryFlow();
+      const loginError = document.getElementById("login_error");
+      if (loginError) loginError.textContent = "Password updated. Sign in with your new password.";
+    }
+
+    async handleSettingsPasswordChange() {
+      const current = document.getElementById("settings_current_password");
+      const next = document.getElementById("settings_new_password");
+      const confirm = document.getElementById("settings_confirm_password");
+      const error = document.getElementById("settings_password_error");
+      if (error) error.textContent = "";
+      if (!next || next.value.length < 8 || next.value !== (confirm && confirm.value)) {
+        if (error) error.textContent = "New passwords must match and contain at least 8 characters.";
+        return;
+      }
+      const response = await fetch("/api/auth/password/change", {
+        method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
+        body: JSON.stringify({
+          current_password: current ? current.value : "",
+          new_password: next.value,
+          confirm_password: confirm ? confirm.value : "",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (error) error.textContent = data.error || "Password change failed.";
+        return;
+      }
+      this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
+      this.applySessionMeta(data);
+      [current, next, confirm].forEach(input => { if (input) input.value = ""; });
+      if (error) error.textContent = "";
+      const status = document.getElementById("consumer_settings_password_status");
+      if (status) status.textContent = this.passwordStatusText();
+    }
+
+    async handleSettingsRecoveryReplace() {
+      const current = document.getElementById("settings_recovery_current");
+      const error = document.getElementById("settings_recovery_error");
+      if (error) error.textContent = "";
+      const response = await fetch("/api/auth/recovery/enroll", {
+        method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
+        body: JSON.stringify({
+          current_password: current ? current.value : "",
+          recovery_answers: this.collectAnswers("settings_enroll"),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (error) error.textContent = data.error || "Could not update recovery questions.";
+        return;
+      }
+      this.recoveryEnrolled = true;
+      if (current) current.value = "";
+      if (error) error.textContent = "";
+    }
+
+    passwordStatusText() {
+      if (!this.passwordExpiresAt) return "Password expiry is not available.";
+      try {
+        const expires = new Date(this.passwordExpiresAt);
+        return "Password expires " + expires.toISOString().slice(0, 10) + ".";
+      } catch (_err) {
+        return "Password expiry is not available.";
+      }
     }
 
     setRefreshState(message) {
@@ -268,7 +578,7 @@
     async refresh(options) {
       const opts = options || {};
       const force = !!opts.force;
-      if (!this.token) return;
+      if (!this.token || this.securityGate) return;
 
       const now = Date.now();
       if (this._refreshInFlight) {

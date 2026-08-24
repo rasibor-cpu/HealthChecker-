@@ -67,7 +67,7 @@ def test_authorized_recovery_preserves_identity_health_and_revokes_sessions(tmp_
     assert verify_password("Owner-New-Password", account["password_hash"])
     changed = datetime.fromisoformat(account["password_changed_at"].replace("Z", "+00:00"))
     expiry = datetime.fromisoformat(account["password_expiry_date"].replace("Z", "+00:00"))
-    assert timedelta(days=29, hours=23) < expiry - changed <= timedelta(days=30)
+    assert timedelta(days=89, hours=23) < expiry - changed <= timedelta(days=90)
     with pytest.raises(AuthenticationError):
         auth.resolve(owner_token)
     assert auth.resolve(secondary_token)[0].user_id == "secondary"
@@ -100,6 +100,11 @@ def test_recovery_is_not_exposed_as_public_api(tmp_path):
     store = VaultStore(root=tmp_path / "vault", encryption_key=KEY)
     app = create_health_vault_app(store, production=True, bootstrap_password="Owner-Old-Password")
     paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any("recover" in path or "reset-password" in path for path in paths)
+    assert "/api/auth/reset-password" not in paths
+    assert not any(
+        ("reset-password" in path or "local-recovery" in path)
+        or ("recover" in path and "/api/auth/recovery/" not in path)
+        for path in paths
+    )
     client = TestClient(app)
     assert client.post("/api/auth/reset-password", json={}).status_code in {401, 404}

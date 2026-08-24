@@ -32,7 +32,12 @@ def _owner_client(tmp_path):
     changed = client.post(
         "/api/auth/password/change",
         headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "owner-password-xx", "new_password": "owner-password-yy"},
+        json={"current_password": "owner-password-xx", "new_password": "owner-password-yy",
+              "recovery_answers": [
+                  {"question_id": "CQ01", "answer": "Westfield School"},
+                  {"question_id": "CQ02", "answer": "Toronto"},
+                  {"question_id": "CQ03", "answer": "Buster"},
+              ]},
     )
     return client, changed.json()["token"], vault
 

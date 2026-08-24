@@ -253,6 +253,11 @@ def test_authenticated_mobile_page_and_snapshot_api_are_patient_scoped():
                 json={
                     "current_password": "Boot-Pass-HC325R3xx",
                     "new_password": "Owner-HC325R3-Password1",
+                    "recovery_answers": [
+                        {"question_id": "CQ01", "answer": "Westfield School"},
+                        {"question_id": "CQ02", "answer": "Toronto"},
+                        {"question_id": "CQ03", "answer": "Buster"},
+                    ],
                 },
             )
             assert changed.status_code == 200
