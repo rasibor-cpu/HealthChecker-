@@ -15,6 +15,9 @@
     session = value;
     if (value) sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
     else sessionStorage.removeItem(SESSION_KEY);
+    try {
+      document.dispatchEvent(new CustomEvent("hc:session-changed", { detail: { authenticated: !!value } }));
+    } catch (_) {}
   }
 
   function text(parent, value, className) {
@@ -107,6 +110,8 @@
     records = [];
     preferences = null;
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
+    const snap = byId("hc_health_snapshot");
+    if (snap) snap.replaceChildren();
     showAuthenticated(false);
     if (notifyServer && token) {
       await fetch("/api/auth/logout", {
@@ -136,18 +141,22 @@
     const target = clearContent("mobile_dashboard");
     const status = widget("status_summary").payload;
     const imported = widget("import_wizard").payload;
-    text(target, session.name && session.name !== session.userId
-      ? `Welcome, ${session.name}`
-      : "My Health Dashboard");
-    text(target, `Overall status: ${label(summary.overall_status)}`);
-    text(target, `${Number(imported.records_count || 0)} records`);
-    text(target, `${Number(status.measurements_count || 0)} measurements`);
-    text(target, `${Number(summary.active_warnings_count || 0)} attention items`);
+    const attentionCount = Number(summary.active_warnings_count || 0);
+    text(target, `Overall status: ${label(summary.overall_status)}`, "mobile-dash-meta");
+    text(target, `${attentionCount} attention item${attentionCount === 1 ? "" : "s"}`, "mobile-dash-meta");
+    text(
+      target,
+      `${Number(imported.records_count || 0)} records · ${Number(status.measurements_count || 0)} measurements`,
+      "mobile-dash-meta"
+    );
     byId("mobile_identity").textContent = session.name && session.name !== session.userId
       ? `Signed in as ${session.name} (Patient ID: ${session.userId})`
       : `Signed in as Patient ID ${session.userId}`;
     byId("mobile_theme").value = preferences.theme === "dark" ? "dark" : "light";
     byId("mobile_priority_metric").value = preferences.priority_metric || "";
+    if (window.HCHealthSnapshot && typeof HCHealthSnapshot.refresh === "function") {
+      await HCHealthSnapshot.refresh();
+    }
   }
 
   async function loadRecords() {
