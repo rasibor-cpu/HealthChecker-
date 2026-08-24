@@ -72,9 +72,23 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         configureWebView()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // The consumer is a single-document application. Back exits rather
-                // than permitting history to cross the approved route boundary.
-                finish()
+                // Same-document in-app stack only. Do not use WebView.goBack():
+                // WebView history can leave the approved /mobile origin/path.
+                if (!::webView.isInitialized ||
+                    connectionPanel.visibility == View.VISIBLE ||
+                    webView.visibility != View.VISIBLE
+                ) {
+                    finish()
+                    return
+                }
+                webView.evaluateJavascript(ConsumerInAppBackPolicy.HANDLE_SCRIPT) { raw ->
+                    if (isDestroyed || isFinishing) return@evaluateJavascript
+                    if (!ConsumerInAppBackPolicy.didHandleInApp(raw)) {
+                        finish()
+                    } else {
+                        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+                    }
+                }
             }
         })
         loadConsumer()

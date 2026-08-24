@@ -45,18 +45,35 @@
         <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
         <div data-mobile-content></div>
       </section>
-      <section id="mobile_records" class="card" data-mobile-panel hidden><h1>Records</h1><div data-mobile-content></div></section>
-      <section id="mobile_trends" class="card" data-mobile-panel hidden><h1>Trends</h1><div data-mobile-content></div></section>
-      <section id="mobile_observations" class="card" data-mobile-panel hidden><h1>Observations</h1><div data-mobile-content></div></section>
-      <section id="mobile_timeline" class="card" data-mobile-panel hidden><h1>Timeline</h1><div data-mobile-content></div></section>
-      <section id="mobile_reports" class="card" data-mobile-panel hidden><h1>Reports</h1><div data-mobile-content></div></section>
+      <section id="mobile_records" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
+        <h1>Records</h1><div data-mobile-content></div>
+      </section>
+      <section id="mobile_trends" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
+        <h1>Trends</h1><div data-mobile-content></div>
+      </section>
+      <section id="mobile_observations" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
+        <h1>Observations</h1><div data-mobile-content></div>
+      </section>
+      <section id="mobile_timeline" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
+        <h1>Timeline</h1><div data-mobile-content></div>
+      </section>
+      <section id="mobile_reports" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
+        <h1>Reports</h1><div data-mobile-content></div>
+      </section>
       <section id="mobile_import" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
         <h1>Import</h1>
         <input id="mobile_record_file" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
         <button id="mobile_upload_button" type="button">Upload securely</button>
         <div data-mobile-content></div>
       </section>
       <section id="mobile_settings" class="card" data-mobile-panel hidden>
+        <button type="button" class="secondary" data-hc-back>← Back</button>
         <h1>Settings</h1>
         <p id="mobile_identity"></p>
         <label for="mobile_theme">Theme</label>
@@ -88,6 +105,7 @@
       </section>
     </section>
   </main>
+  <script src="/js/health_vault/consumer_nav.js"></script>
   <script src="/js/health_vault/health_snapshot.js"></script>
   <script src="/js/health_vault/mobile_consumer.js"></script>
 </body>

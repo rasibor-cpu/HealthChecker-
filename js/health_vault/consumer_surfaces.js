@@ -570,6 +570,7 @@
     if (screenId === "consumer_trends_screen" || screenId === "consumer_timeline_screen") {
       lastNavAt = Date.now();
       lastNavScreen = screenId;
+      if (global.HCConsumerNav) HCConsumerNav.note(screenId);
       activateConsumerScreen(screenId);
       if (screenId === "consumer_trends_screen") loadTrends(metricFilter);
       if (screenId === "consumer_timeline_screen") loadTimeline(metricFilter);

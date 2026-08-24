@@ -21,6 +21,8 @@ class ConsumerOriginPolicyTest {
         assertTrue(policy.isAllowed("https://health.example:8443/api/records?status=imported"))
         assertTrue(policy.isAllowed("https://health.example:8443/js/health_vault/mobile_consumer.js"))
         assertTrue(policy.isAllowed("https://health.example:8443/js/health_vault/health_snapshot.js"))
+        assertTrue(policy.isAllowed("https://health.example:8443/js/health_vault/consumer_nav.js"))
+        assertFalse(policy.isAllowed("https://health.example:8443/mobile#records"))
         assertFalse(policy.isAllowed("https://health.example:8443/"))
         assertFalse(policy.isAllowed("https://health.example:8443/index.html"))
         assertFalse(policy.isAllowed("https://health.example:8443/vault_storage/index.json"))
