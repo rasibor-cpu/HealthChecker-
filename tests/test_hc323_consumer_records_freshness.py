@@ -330,13 +330,14 @@ def test_ui_and_screenshot_contracts():
     assert "Last refreshed" in js
     assert "Last Health Connect sync" in js
     assert "Latest measurement" in js
+    assert "Latest in Health Connect" in js
     assert "display_title" in js
     assert "health_connect_source" in js
     assert "data-records-more" in js
     assert "Last refreshed just now" in dash
     assert "Last measured" in snap
-    assert 'CACHE_REVISION = "hc323a"' in sw
-    assert "service-worker.js?v=hc323a" in html
+    assert 'CACHE_REVISION = "hc324a"' in sw
+    assert "service-worker.js?v=hc324a" in html
     assert "FLAG_SECURE" in android
     assert "clearFlags" in android
     assert metric_from_health_connect_filename(

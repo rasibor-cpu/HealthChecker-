@@ -727,15 +727,15 @@ textarea{
 <script src="js/health_vault/ai_health_bridge.js"></script>
 <script src="js/health_vault/doctor_visit.js"></script>
 <script src="js/health_vault/executive_dashboard.js?v=hc321c1"></script>
-<script src="js/health_vault/health_snapshot.js?v=hc323a"></script>
+<script src="js/health_vault/health_snapshot.js?v=hc324a"></script>
 <script src="js/health_vault/alert_engine.js"></script>
 <script src="js/health_vault/baseline_engine.js"></script>
 <script src="js/health_vault/cgm_continuity.js"></script>
 <script src="js/health_vault/health_guardian.js"></script>
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
-<script src="js/health_vault/dashboard.js?v=hc323a"></script>
-<script src="js/health_vault/records.js?v=hc323a"></script>
+<script src="js/health_vault/dashboard.js?v=hc324a"></script>
+<script src="js/health_vault/records.js?v=hc324a"></script>
 <script src="js/health_vault/trends.js?v=hc321uat12e"></script>
 <script>
 const KEY = 'HC_V6';
@@ -1136,12 +1136,12 @@ if (window.HCContinuousMonitoring) {
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (reloading) return;
-    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc323a') return;
+    if (sessionStorage.getItem('hc_sw_reload_rev') === 'hc324a') return;
     reloading = true;
-    sessionStorage.setItem('hc_sw_reload_rev', 'hc323a');
+    sessionStorage.setItem('hc_sw_reload_rev', 'hc324a');
     window.location.reload();
   });
-  navigator.serviceWorker.register('./service-worker.js?v=hc323a').then(function (reg) {
+  navigator.serviceWorker.register('./service-worker.js?v=hc324a').then(function (reg) {
     if (reg && reg.waiting) {
       try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (_) {}
     }
@@ -1166,6 +1166,6 @@ if (window.HCContinuousMonitoring) {
   });
 })();
 </script>
-<script src="js/health_vault/consumer_surfaces.js?v=hc323a"></script>
+<script src="js/health_vault/consumer_surfaces.js?v=hc324a"></script>
 </body>
 </html>

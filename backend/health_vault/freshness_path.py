@@ -63,10 +63,18 @@ def build_freshness_path(
     hc_status = companion.get("health_connect") if isinstance(companion.get("health_connect"), dict) else {}
     companion_latest_by_metric = {}
     raw_latest = hc_status.get("latest_by_metric") or companion.get("latest_received_by_metric") or {}
+    raw_inventory = hc_status.get("inventory_latest_by_metric") or {}
     if isinstance(raw_latest, dict):
         companion_latest_by_metric = {
             canonicalize_metric(key) or str(key): str(value)
             for key, value in raw_latest.items()
+            if value
+        }
+    inventory_latest_by_metric: dict[str, str] = {}
+    if isinstance(raw_inventory, dict):
+        inventory_latest_by_metric = {
+            canonicalize_metric(key) or str(key): str(value)
+            for key, value in raw_inventory.items()
             if value
         }
 
@@ -96,8 +104,9 @@ def build_freshness_path(
             vault_latest = vault_at
         freshness = compute_freshness(metric=metric, measured_at=vault_at, now=None)
         companion_at = companion_latest_by_metric.get(metric)
+        hc_at = inventory_latest_by_metric.get(metric)
         by_metric[metric] = {
-            "health_connect_latest_at": None,
+            "health_connect_latest_at": hc_at,
             "companion_reported_latest_at": companion_at,
             "vault_latest_at": vault_at,
             "api_latest_at": vault_at,
@@ -114,6 +123,7 @@ def build_freshness_path(
         or hc_status.get("last_success_at")
         or None
     )
+    inventory_latest = max(inventory_latest_by_metric.values(), default=None) if inventory_latest_by_metric else None
     break_point = _classify_break(by_metric, companion_latest_by_metric, last_sync)
     return {
         "as_of": as_of,
@@ -122,8 +132,12 @@ def build_freshness_path(
         "last_health_connect_sync_at": last_sync,
         "last_sync_attempt_at": companion.get("last_attempt_at"),
         "latest_measurement_at": vault_latest,
+        "latest_health_connect_inventory_at": inventory_latest,
         "companion_observation_count": len(observations),
         "health_connect_inspectable_from_this_host": False,
+        "companion_reported_inventory": bool(inventory_latest_by_metric),
+        "granted_scope": hc_status.get("granted_scope"),
+        "catch_up_applied": hc_status.get("catch_up_applied"),
         "by_metric": by_metric,
         "break": break_point,
     }
@@ -144,6 +158,37 @@ def _classify_break(
         return {
             "boundary": "vault_empty_or_no_matching_observations",
             "detail": "No Health Connect observations for the audited metrics are persisted in this vault.",
+        }
+    inventory_ahead = [
+        metric
+        for metric, row in by_metric.items()
+        if row.get("health_connect_latest_at")
+        and (
+            not row.get("vault_latest_at")
+            or str(row.get("health_connect_latest_at")) > str(row.get("vault_latest_at"))
+        )
+    ]
+    if inventory_ahead:
+        companion_also_ahead = [
+            metric
+            for metric in inventory_ahead
+            if companion_latest.get(metric)
+            and str(companion_latest.get(metric))
+            > str((by_metric.get(metric) or {}).get("vault_latest_at") or "")
+        ]
+        if companion_also_ahead:
+            return {
+                "boundary": "companion_to_vault",
+                "detail": "Companion reported a later timestamp than the vault for: "
+                + ", ".join(companion_also_ahead),
+            }
+        return {
+            "boundary": "health_connect_has_newer_than_change_feed",
+            "detail": (
+                "Health Connect inventory is newer than the change-token fetch/vault for: "
+                + ", ".join(inventory_ahead)
+                + ". A bounded newest-first catch-up should run on the companion."
+            ),
         }
     mismatched = []
     for metric, companion_at in companion_latest.items():

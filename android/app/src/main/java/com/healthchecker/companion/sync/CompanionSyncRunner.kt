@@ -80,10 +80,19 @@ class CompanionSyncRunner(
                     healthConnectStatusJson = JSONObject()
                         .put("availability", capability.availability.name)
                         .put("fetched_observation_count", fetch.observations.size)
+                        .put("catch_up_applied", fetch.catchUpApplied)
+                        .put("catch_up_observation_count", fetch.catchUpObservationCount)
+                        .put("granted_scope", fetch.proposedTokenScope ?: "")
                         .put(
                             "latest_by_metric",
                             JSONObject().also { json ->
                                 fetch.latestByMetric.forEach { (metric, at) -> json.put(metric, at) }
+                            }
+                        )
+                        .put(
+                            "inventory_latest_by_metric",
+                            JSONObject().also { json ->
+                                fetch.inventoryLatestByMetric.forEach { (metric, at) -> json.put(metric, at) }
                             }
                         )
                         .toString(),

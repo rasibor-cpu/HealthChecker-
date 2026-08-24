@@ -46,7 +46,10 @@ class HealthConnectReader(
         val missingTypeCount: Int = 0,
         /** Scope fingerprint that must be persisted with [nextChangesToken] after durable ack. */
         val proposedTokenScope: String? = null,
-        val latestByMetric: Map<String, String> = emptyMap()
+        val latestByMetric: Map<String, String> = emptyMap(),
+        val inventoryLatestByMetric: Map<String, String> = emptyMap(),
+        val catchUpApplied: Boolean = false,
+        val catchUpObservationCount: Int = 0
     ) {
         companion object {
             fun fromPending(
@@ -117,17 +120,21 @@ class HealthConnectReader(
             val start = Instant.now().minus(initialHistoryDays, ChronoUnit.DAYS)
             val observations = readInitial(client, start, recordTypes)
             val freshToken = client.getChangesToken(ChangesTokenRequest(recordTypes))
-            return FetchResult(
-                observations = observations,
-                nextChangesToken = freshToken,
-                deletedRecordIds = emptyList(),
-                queryPerformed = true,
-                disposition = disposition,
-                partialPermissionWarning = partial,
-                grantedTypeCount = granted.size,
-                missingTypeCount = missing.size,
-                proposedTokenScope = scope,
-                latestByMetric = FetchResult.latestFrom(observations)
+            return enrichWithInventory(
+                client,
+                recordTypes,
+                FetchResult(
+                    observations = observations,
+                    nextChangesToken = freshToken,
+                    deletedRecordIds = emptyList(),
+                    queryPerformed = true,
+                    disposition = disposition,
+                    partialPermissionWarning = partial,
+                    grantedTypeCount = granted.size,
+                    missingTypeCount = missing.size,
+                    proposedTokenScope = scope,
+                    latestByMetric = FetchResult.latestFrom(observations)
+                )
             )
         }
 
@@ -158,31 +165,39 @@ class HealthConnectReader(
             val start = Instant.now().minus(initialHistoryDays, ChronoUnit.DAYS)
             val recovered = readInitial(client, start, recordTypes)
             val freshToken = client.getChangesToken(ChangesTokenRequest(recordTypes))
-            return FetchResult(
-                observations = recovered,
-                nextChangesToken = freshToken,
-                deletedRecordIds = emptyList(),
+            return enrichWithInventory(
+                client,
+                recordTypes,
+                FetchResult(
+                    observations = recovered,
+                    nextChangesToken = freshToken,
+                    deletedRecordIds = emptyList(),
+                    queryPerformed = true,
+                    disposition = disposition,
+                    partialPermissionWarning = partial,
+                    grantedTypeCount = granted.size,
+                    missingTypeCount = missing.size,
+                    proposedTokenScope = scope,
+                    error = "changes_token_invalidated_reinitialized",
+                    latestByMetric = FetchResult.latestFrom(recovered)
+                )
+            )
+        }
+        return enrichWithInventory(
+            client,
+            recordTypes,
+            FetchResult(
+                observations = observations,
+                nextChangesToken = nextToken,
+                deletedRecordIds = deleted,
                 queryPerformed = true,
                 disposition = disposition,
                 partialPermissionWarning = partial,
                 grantedTypeCount = granted.size,
                 missingTypeCount = missing.size,
                 proposedTokenScope = scope,
-                error = "changes_token_invalidated_reinitialized",
-                latestByMetric = FetchResult.latestFrom(recovered)
+                latestByMetric = FetchResult.latestFrom(observations)
             )
-        }
-        return FetchResult(
-            observations = observations,
-            nextChangesToken = nextToken,
-            deletedRecordIds = deleted,
-            queryPerformed = true,
-            disposition = disposition,
-            partialPermissionWarning = partial,
-            grantedTypeCount = granted.size,
-            missingTypeCount = missing.size,
-            proposedTokenScope = scope,
-            latestByMetric = FetchResult.latestFrom(observations)
         )
     }
 
@@ -214,106 +229,170 @@ class HealthConnectReader(
         proposedTokenScope = null
     )
 
+    private suspend fun enrichWithInventory(
+        client: HealthConnectClient,
+        allowed: Set<KClass<out Record>>,
+        result: FetchResult
+    ): FetchResult {
+        val inventory = try {
+            inventoryLatest(client, allowed)
+        } catch (_: Throwable) {
+            emptyMap()
+        }
+        val fetchedLatest = FetchResult.latestFrom(result.observations)
+        val need = FreshnessCatchUp.metricsNeedingCatchUp(inventory, fetchedLatest)
+        var observations = result.observations
+        var catchUpApplied = false
+        if (need.isNotEmpty()) {
+            val fetchedMax = fetchedLatest.values.maxOrNull()
+            val start = FreshnessCatchUp.catchUpStart(Instant.now(), fetchedMax)
+            val extra = try {
+                catchUpNewest(client, start, allowed)
+            } catch (_: Throwable) {
+                emptyList()
+            }
+            if (extra.isNotEmpty()) {
+                val seen = observations.map { it.sourceRecordId }.toHashSet()
+                val extraOnly = extra.filter { it.sourceRecordId !in seen }
+                if (extraOnly.isNotEmpty()) {
+                    observations = result.observations + FreshnessCatchUp.capNewest(extraOnly)
+                    catchUpApplied = true
+                }
+            }
+        }
+        val latest = FreshnessCatchUp.mergeLatest(fetchedLatest, FetchResult.latestFrom(observations), inventory)
+        return result.copy(
+            observations = observations,
+            latestByMetric = latest,
+            inventoryLatestByMetric = inventory,
+            catchUpApplied = catchUpApplied,
+            catchUpObservationCount = if (catchUpApplied) observations.size else 0
+        )
+    }
+
+    private suspend fun inventoryLatest(
+        client: HealthConnectClient,
+        allowed: Set<KClass<out Record>>
+    ): Map<String, String> {
+        val out = linkedMapOf<String, String>()
+        val filter = TimeRangeFilter.before(Instant.now().plusSeconds(1))
+        suspend fun <T : Record> latestOf(type: KClass<T>) {
+            if (type !in allowed) return
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = type,
+                    timeRangeFilter = filter,
+                    ascendingOrder = false,
+                    pageSize = 1
+                )
+            )
+            val record = response.records.firstOrNull() ?: return
+            mapRecord(record).forEach { obs ->
+                val previous = out[obs.metricType]
+                if (previous == null || obs.measuredAt > previous) out[obs.metricType] = obs.measuredAt
+            }
+        }
+        latestOf(HeartRateRecord::class)
+        latestOf(RestingHeartRateRecord::class)
+        latestOf(OxygenSaturationRecord::class)
+        latestOf(BloodPressureRecord::class)
+        latestOf(StepsRecord::class)
+        latestOf(WeightRecord::class)
+        latestOf(BloodGlucoseRecord::class)
+        latestOf(SleepSessionRecord::class)
+        latestOf(ExerciseSessionRecord::class)
+        return out
+    }
+
+    private suspend fun catchUpNewest(
+        client: HealthConnectClient,
+        start: Instant,
+        allowed: Set<KClass<out Record>>
+    ): List<CompanionObservation> {
+        val end = Instant.now().plusSeconds(1)
+        if (!start.isBefore(end)) return emptyList()
+        val filter = TimeRangeFilter.between(start, end)
+        val collected = mutableListOf<CompanionObservation>()
+        suspend fun <T : Record> pages(type: KClass<T>) {
+            if (type !in allowed) return
+            var token: String? = null
+            repeat(6) {
+                val response = client.readRecords(
+                    ReadRecordsRequest(
+                        recordType = type,
+                        timeRangeFilter = filter,
+                        ascendingOrder = false,
+                        pageSize = 50,
+                        pageToken = token
+                    )
+                )
+                response.records.forEach { collected += mapRecord(it) }
+                token = response.pageToken
+                if (token.isNullOrBlank()) return
+                if (collected.size >= FreshnessCatchUp.CATCH_UP_MAX_OBSERVATIONS * 2) return
+            }
+        }
+        pages(HeartRateRecord::class)
+        pages(RestingHeartRateRecord::class)
+        pages(OxygenSaturationRecord::class)
+        pages(BloodPressureRecord::class)
+        pages(StepsRecord::class)
+        pages(WeightRecord::class)
+        pages(BloodGlucoseRecord::class)
+        pages(SleepSessionRecord::class)
+        pages(ExerciseSessionRecord::class)
+        return FreshnessCatchUp.capNewest(collected)
+    }
+
+    private suspend fun <T : Record> readAllRecords(
+        client: HealthConnectClient,
+        type: KClass<T>,
+        filter: TimeRangeFilter,
+        pageSize: Int = 1000,
+        maxPages: Int = 15
+    ): List<T> {
+        val out = mutableListOf<T>()
+        var token: String? = null
+        repeat(maxPages) {
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = type,
+                    timeRangeFilter = filter,
+                    ascendingOrder = true,
+                    pageSize = pageSize,
+                    pageToken = token
+                )
+            )
+            @Suppress("UNCHECKED_CAST")
+            out += response.records as List<T>
+            token = response.pageToken
+            if (token.isNullOrBlank()) return out
+        }
+        return out
+    }
+
     private suspend fun readInitial(
         client: HealthConnectClient,
         start: Instant,
         allowed: Set<KClass<out Record>>
     ): List<CompanionObservation> {
+        val filter = TimeRangeFilter.between(start, Instant.now().plusSeconds(1))
         val out = mutableListOf<CompanionObservation>()
-        val filter = TimeRangeFilter.between(start, Instant.now())
-
-        if (HeartRateRecord::class in allowed) {
-            client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = filter))
-                .records.forEach { r ->
-                    val zone = r.startZoneOffset
-                    r.samples.forEachIndexed { idx, sample ->
-                        out += ObservationMapper.heartRate(
-                            recordId = r.metadata.id + ":$idx",
-                            bpm = sample.beatsPerMinute,
-                            time = sample.time,
-                            dataOrigin = r.metadata.dataOrigin.packageName,
-                            zoneOffset = zone
-                        )
-                    }
-                }
-        }
-        if (RestingHeartRateRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(RestingHeartRateRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                out += ObservationMapper.restingHeartRate(
-                    r.metadata.id, r.beatsPerMinute, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
-                )
-            }
-        }
-        if (OxygenSaturationRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                out += ObservationMapper.spo2(
-                    r.metadata.id, r.percentage.value, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
-                )
-            }
-        }
-        if (BloodPressureRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(BloodPressureRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                out += ObservationMapper.bloodPressure(
-                    r.metadata.id,
-                    r.systolic.inMillimetersOfMercury,
-                    r.diastolic.inMillimetersOfMercury,
-                    r.time,
-                    r.metadata.dataOrigin.packageName,
-                    r.zoneOffset
-                )
-            }
-        }
-        if (StepsRecord::class in allowed) {
-            client.readRecords(ReadRecordsRequest(StepsRecord::class, timeRangeFilter = filter))
-                .records.forEach { r ->
-                    out += ObservationMapper.steps(
-                        r.metadata.id, r.count, r.startTime, r.metadata.dataOrigin.packageName, r.startZoneOffset
-                    )
-                }
-        }
-        if (WeightRecord::class in allowed) {
-            client.readRecords(ReadRecordsRequest(WeightRecord::class, timeRangeFilter = filter))
-                .records.forEach { r ->
-                    out += ObservationMapper.weightKg(
-                        r.metadata.id, r.weight.inKilograms, r.time, r.metadata.dataOrigin.packageName, r.zoneOffset
-                    )
-                }
-        }
-        if (BloodGlucoseRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(BloodGlucoseRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                out += mapGlucose(r)
-            }
-        }
-        if (SleepSessionRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                out += mapSleepSession(r)
-            }
-        }
-        if (ExerciseSessionRecord::class in allowed) {
-            client.readRecords(
-                ReadRecordsRequest(ExerciseSessionRecord::class, timeRangeFilter = filter)
-            ).records.forEach { r ->
-                val minutes = java.time.Duration.between(r.startTime, r.endTime).toMinutes().toDouble()
-                out += CompanionObservation(
-                    observationId = java.util.UUID.nameUUIDFromBytes(("ex:" + r.metadata.id).toByteArray()).toString(),
-                    sourceRecordId = r.metadata.id,
-                    metricType = "exercise_minutes",
-                    value = minutes,
-                    unit = "min",
-                    measuredAt = ObservationMapper.instantToIso(r.startTime, r.startZoneOffset),
-                    receivedAt = ObservationMapper.instantToIso(Instant.now()),
-                    device = mapOf("data_origin" to r.metadata.dataOrigin.packageName)
-                )
+        val types: List<KClass<out Record>> = listOf(
+            HeartRateRecord::class,
+            RestingHeartRateRecord::class,
+            OxygenSaturationRecord::class,
+            BloodPressureRecord::class,
+            StepsRecord::class,
+            WeightRecord::class,
+            BloodGlucoseRecord::class,
+            SleepSessionRecord::class,
+            ExerciseSessionRecord::class,
+        )
+        for (type in types) {
+            if (type !in allowed) continue
+            readAllRecords(client, type, filter).forEach { record ->
+                out += mapRecord(record)
             }
         }
         return out

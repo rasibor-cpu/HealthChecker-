@@ -1,0 +1,150 @@
+TASK=HC324_LIVE_DEPLOY_DEVICE_UAT_SYNC_ROOT_CAUSE
+RESULT_FILE=HC324_LIVE_DEPLOY_DEVICE_UAT_SYNC_RESULT.txt
+GENERATED_UTC=2026-08-24T19:55:00Z
+
+PREFLIGHT
+REPO=github.com/rasibor-cpu/HealthChecker-
+START_BRANCH=css-agent/hc323-consumer-records-freshness-9f1a
+START_SHA=b43093ba12e2028631a9b8138016a81ed379a436
+IMPLEMENTATION_COMMIT=cfd7e29f5fb8b612df2fb614956887d0099d7e4c
+FINAL_SHA=bc860efce8ce7197ed300a451a6f455e46bb608e
+PR=https://github.com/rasibor-cpu/HealthChecker-/pull/14
+PR13_HEAD_CONFIRMED=b43093ba12e2028631a9b8138016a81ed379a436
+IMPLEMENTATION_COMMIT_HC323=86bb2891270a7210a1e86d7cb62a959703d97d78
+FINAL_BRANCH_HEAD_HC323=b43093ba12e2028631a9b8138016a81ed379a436
+GIT_STATUS_ON_START=clean except untracked HC321_UAT12J_FINANCE_DEPLOY_RESULT.txt (left uncommitted; not discarded)
+FETCH_ORIGIN=YES (hc323 + uat12j)
+HOST=NOT_FINANCE (Linux cloud agent hostname=cursor; COMPUTERNAME unset; no C:\ProgramData\HealthChecker)
+UNRELATED_FINANCE_DIRTY_WORKSPACE=N/A (this is not the Finance workspace)
+CSS_8765_LOCAL=127.0.0.1:8765 connect_ex=111 (connection refused); no PID observable; no stop/start attempted
+HEALTHCHECKER_8766_LOCAL=127.0.0.1:8766 connect_ex=111 (connection refused); OLD_PID=NOT_OBSERVABLE
+ANDROID_HOME=
+ANDROID_SDK_ROOT=
+JAVA=openjdk 21.0.10
+GRADLEW=present android/gradlew (mode 644; execute failed Permission denied; SDK absent)
+ADB=not found
+CONNECTED_DEVICES=NONE
+
+PUBLIC_ORIGIN_PROBE
+URL=https://health.capitalstratasystems.com/
+HTTP=200 last-modified Mon, 24 Aug 2026 16:29:42 GMT
+SERVICE_WORKER=CACHE_REVISION=hc321uat12j
+CACHE_BUST_SW?v=hc323a still returned hc321uat12j (origin content, not Cloudflare-only)
+INDEX_SCRIPTS=health_snapshot.js?v=hc321uat12j records.js?v=hc321uat12j
+HC323_NOT_SERVED=YES
+PREVIOUS_HC323_PROBE_WAS_hc321uat12h; origin has since moved to UAT12J, still not HC323/HC324.
+
+HC323_EVIDENCE_METADATA_CORRECTION
+IMPLEMENTATION_COMMIT=86bb2891270a7210a1e86d7cb62a959703d97d78
+FINAL_BRANCH_HEAD=b43093ba12e2028631a9b8138016a81ed379a436
+Functional history not rewritten; keys added to HC323_CONSUMER_RECORDS_FRESHNESS_RESULT.txt on this HC324 branch.
+
+BOUNDED_CODE_FIX
+Hypothesis that can be tested without the device: successful incremental getChanges can be empty while Health Connect still holds newer records; companion status then overwrote latest_by_metric with the empty delta; UI showed last_success_at (page/sync) vs vault latest 18 Aug.
+Fix (does not invent clinical values):
+1. Independent Health Connect inventory (pageSize=1, newest record per granted type) on every successful fetch.
+2. If inventory is newer than the change-token payload, bounded newest-first catch-up (14-day window, cap 720 observations).
+3. Paginate initial TimeRangeFilter reads so the newest page is not dropped.
+4. Server merges ISO latest maps; empty batches must not erase prior latest timestamps.
+5. Freshness path classifies inventory>vault as health_connect_has_newer_than_change_feed vs inventory==vault+later sync as source_app_not_writing_newer_samples.
+6. Consumer legend adds "Latest in Health Connect" when companion reports inventory.
+7. Debug versionCode 324 / versionName 0.324.0 so a later SDK build can upgrade over 0.321.0 without uninstall.
+
+DEPLOYMENT
+start_healthchecker_production.ps1 NOT INVOKED
+NEW_8766_PID=NOT_STARTED
+ROLLBACK=NOT_APPLICABLE (no process was stopped)
+CSS_8765_UNTOUCHED=YES
+PRODUCTION_VAULT_MUTATED=NO
+SERVED_REVISION_AFTER_DEPLOY=NOT_DEPLOYED (public origin remains hc321uat12j)
+
+ANDROID_APK
+COMMAND=./gradlew :app:assembleDebug (not executed: SDK missing)
+ARTIFACT=NOT_BUILT_SDK_MISSING
+APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk (expected, not produced)
+APK_SIZE=N/A
+PACKAGE_ID=com.healthchecker.companion
+VERSION_CODE_IN_SOURCE=324
+VERSION_NAME_IN_SOURCE=0.324.0
+SIGNING=debug build would use debug keystore; production-release fallback still refused by Gradle
+SHA256=N/A
+
+DEVICE
+SERIAL=NOT_OBSERVABLE
+MODEL=NOT_OBSERVABLE
+ANDROID_VERSION=NOT_OBSERVABLE
+INSTALLED_PACKAGE=NOT_OBSERVABLE
+INSTALL_RESULT=NOT_PERFORMED
+
+SCREENSHOT_UAT=NOT_PERFORMED_ON_DEVICE
+CODE_CONTRACT=HC322A ScreenshotPolicy still clearFlags only; no FLAG_SECURE added
+
+HEALTH_RECORDS_LIVE_UAT=NOT_PERFORMED (origin still UAT12J, not hc324a)
+FRESHNESS_UI_TIMESTAMPS_LIVE=NOT_PERFORMED
+
+DATA_PATH_MATRIX (live device)
+Metric | Health Connect | Companion read | Companion sent | Vault | API | UI | Break
+heart_rate | NOT_INSPECTABLE | NOT_INSPECTABLE | NOT_INSPECTABLE | public origin unauth 401 | unauth 401 | origin uat12j | UNPROVEN_ON_DEVICE
+steps | same
+oxygen_saturation | same
+sleep_duration | same
+blood_pressure | same
+blood_glucose | same
+
+PERMISSIONS_MATRIX_LIVE=NOT_INSPECTABLE
+CODE_SUPPORT=HR/steps/SpO2/sleep/BP/glucose(HC BloodGlucoseRecord)/sleep stages; ECG/sleep score/energy/Libre trend still unsupported
+
+ROOT_CAUSE
+LIVE_DEVICE_PROOF=NOT_AVAILABLE_FROM_THIS_HOST
+STRONGEST_CODE_LEVEL_FINDING=B_OR_A_UNRESOLVED
+  Incremental Health Connect getChanges can succeed with zero upserts while last_success_at moves to "now".
+  That matches HC323 evidence (vault latest 18 Aug, sync 24 Aug) and is consistent with:
+  A) source apps not writing newer samples into Health Connect, OR
+  B) change-token feed missing records that a direct newest-record read would see.
+  HC324 adds the inventory/catch-up instrumentation required to distinguish A vs B on the next Finance/device run.
+  C/D/E are not proven. Empty-delta status clobber (latest_by_metric overwritten) is a real companion-status defect and is fixed.
+
+FRESH_OBSERVATION_PROPAGATION=NOT_PERFORMED (no Samsung device on this host; glucose not generated)
+
+TESTS
+FOCUSED=tests/test_hc324_live_sync_freshness.py + HC323 + UAT12I + UAT12J + HC322A + HC310E + snapshot + 317C
+FOCUSED_RESULT=99 passed, 2 failed (pre-existing pydantic 2.13 multipart UploadFile on 317C; not an HC324 regression)
+COMPANION=tests/test_hc303a_android_companion.py tests/test_hc306i_r11_absent_cursor_contract.py RESULT=45 passed
+KOTLIN_UNIT=FreshnessCatchUpTest.kt added; not executed (no Android SDK/Gradle runtime)
+
+REMAINING_EXTERNAL_BLOCKERS
+HOST_NOT_FINANCE: cannot recycle :8766 or capture HealthChecker/CSS PIDs
+ANDROID_SDK_MISSING / ADB_MISSING: cannot build or install APK or query Health Connect
+LIVE_ORIGIN=hc321uat12j until governed deploy of this HEAD
+Libre/Samsung Monitor private metrics remain unavailable unless they appear in Health Connect inventory after deploy
+
+PR_STRATEGY
+NEW_BRANCH=css-agent/hc324-live-uat-sync-9f1a from HC323 FINAL_BRANCH_HEAD
+BASE=css-agent/hc323-consumer-records-freshness-9f1a
+PR13 remains draft; not merged (live UAT not done)
+
+ACCEPTANCE
+Finance :8766 running intended revision: FAIL (host precheck)
+CSS :8765 untouched: PASS (never contacted as a process; local port refused)
+Android APK built: FAIL (SDK missing)
+APK installed on Samsung: FAIL (no adb/device)
+Ordinary screenshots work: PASS in code/tests; FAIL live device UAT
+Health Records no UUID wall: PASS in tests; FAIL live (origin still uat12j)
+HC aggregate/drill-down: PASS in tests; FAIL live
+Provenance retained: PASS in tests
+Freshness labels semantically correct: PASS in tests/code; FAIL live timestamps
+Latest timestamp at each boundary known: FAIL live; PASS inspectable-layer model + inventory hook
+Post-Aug-18 break proven not guessed: FAIL live proof; PASS code-level A vs B discriminator
+Bounded defect fixed and regression-tested: PASS (empty-delta clobber + catch-up + tests)
+Unsupported vendor data not fabricated: PASS
+Fresh measurement propagation: FAIL (no device)
+No security/auth/Vault regression: PASS (companion 45 + HC323 scoping tests)
+Branch pushed: YES (this increment)
+PR created/updated: YES
+Evidence file committed: YES
+
+SERVICE_WORKER_VERSION=hc324a
+PRODUCTION_DATA_MUTATED=NO
+LIVE_DEPLOY_PERFORMED=NO
+CSS_8765_UNTOUCHED=YES
+FINAL_STATUS=BLOCKED_HOST_PRECHECK_FAILED_NOT_FINANCE_WITH_BOUNDED_SYNC_FIX_READY
