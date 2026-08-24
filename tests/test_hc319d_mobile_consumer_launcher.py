@@ -36,12 +36,15 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
         "allowFileAccess = false", "allowContentAccess = false",
         "allowFileAccessFromFileURLs = false", "allowUniversalAccessFromFileURLs = false",
         "MIXED_CONTENT_NEVER_ALLOW", "LOAD_NO_CACHE", "setAcceptThirdPartyCookies(webView, false)",
-        "handler?.cancel()", "FLAG_SECURE", "ConsumerOriginPolicy", "clearUserScopedState",
-        "SecureWindowPolicy", "applySecureWindow", "refreshSecureWindowFromDom",
+        "handler?.cancel()", "ConsumerOriginPolicy", "clearUserScopedState",
+        "ScreenshotPolicy.applyConsumerScreenshotPolicy",
     )
     assert all(term in source for term in required)
-    assert "window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in source.split("fun onCreate", 1)[1].split("setContentView", 1)[0]
+    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in source
+    assert "applySecureWindow" not in source
+    assert "refreshSecureWindowFromDom" not in source
     assert "shouldSecureWindow" in policy
+    assert "return false" in policy
     assert "addJavascriptInterface" not in source
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source

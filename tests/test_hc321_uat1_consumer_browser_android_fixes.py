@@ -17,14 +17,16 @@ ANDROID_UI = ROOT / "android/app/src/main/java/com/healthchecker/companion/ui"
 
 def test_consumer_launcher_does_not_blanket_flag_secure():
     source = (ANDROID_UI / "ConsumerLauncherActivity.kt").read_text(encoding="utf-8")
-    on_create = source.split("fun onCreate", 1)[1].split("fun onResume", 1)[0]
-    assert "window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in on_create
-    assert "applySecureWindow(false)" in on_create
-    assert "SecureWindowPolicy" in source
-    assert "refreshSecureWindowFromDom" in source
+    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in source
+    assert "applySecureWindow(true)" not in source
+    assert "refreshSecureWindowFromDom" not in source
+    assert "ScreenshotPolicy.applyConsumerScreenshotPolicy(window)" in source
     policy = (ANDROID_UI / "SecureWindowPolicy.kt").read_text(encoding="utf-8")
     assert "shouldSecureWindow" in policy
-    assert "loginSurfaceVisible" in policy
+    assert "return false" in policy
+    screenshot = (ANDROID_UI / "ScreenshotPolicy.kt").read_text(encoding="utf-8")
+    assert "clearFlags(WindowManager.LayoutParams.FLAG_SECURE)" in screenshot
+    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in screenshot
 
 
 def test_dashboard_js_greeting_avoids_raw_patient_id(tmp_path: Path):
