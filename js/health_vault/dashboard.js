@@ -216,6 +216,7 @@
       if (this.token) fetch("/api/auth/logout", { method: "POST", headers: this.getAuthorizationHeaders() }).catch(() => {});
       this.clearSession();
       this.updateUIVisibility();
+      if (global.HCConsumerNav) HCConsumerNav.reset();
     }
 
     showPasswordChange() {
@@ -378,12 +379,19 @@
     toggleCustomizationPanel() {
       const panel = document.getElementById("dashboard_config_panel");
       if (!panel) return;
-      
+
       if (panel.style.display === "none") {
         this.renderCustomizationPanel();
         panel.style.display = "block";
+        if (global.HCConsumerNav) {
+          const self = this;
+          HCConsumerNav.pushOverlay("customize", function () {
+            if (panel.style.display !== "none") self.toggleCustomizationPanel();
+          });
+        }
       } else {
         panel.style.display = "none";
+        if (global.HCConsumerNav) HCConsumerNav.dismissOverlay("customize");
       }
     }
 

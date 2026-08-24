@@ -78,6 +78,8 @@
       }
       showAuthenticated(true);
       await loadDashboard();
+      const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
+      if (deep) await showView(deep);
     } catch (err) { error.textContent = err.message; }
   }
 
@@ -100,6 +102,8 @@
       byId("mobile_password_change").hidden = true;
       showAuthenticated(true);
       await loadDashboard();
+      const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
+      if (deep) await showView(deep);
     } catch (err) { error.textContent = err.message; }
   }
 
@@ -109,6 +113,7 @@
     summary = null;
     records = [];
     preferences = null;
+    if (window.HCConsumerNav) HCConsumerNav.reset();
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
     const snap = byId("hc_health_snapshot");
     if (snap) snap.replaceChildren();
@@ -178,11 +183,23 @@
     const detail = document.createElement("section");
     detail.dataset.recordDetail = "true";
     detail.setAttribute("aria-live", "polite");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "secondary";
+    close.setAttribute("data-hc-back", "overlay");
+    close.setAttribute("data-hc-back-overlay", "true");
+    close.textContent = "← Back";
+    detail.appendChild(close);
     text(detail, "Loading record details…", "muted");
     card.appendChild(detail);
+    const closeDetail = () => {
+      detail.remove();
+      if (window.HCConsumerNav) HCConsumerNav.dismissOverlay("mobile-record-detail");
+    };
+    if (window.HCConsumerNav) HCConsumerNav.pushOverlay("mobile-record-detail", closeDetail);
     try {
       const record = await request(`/api/records/${encodeURIComponent(documentId)}`);
-      detail.replaceChildren();
+      detail.querySelectorAll("p").forEach(node => node.remove());
       text(detail, `Source: ${(record.source_provenance || {}).source_system || "Not available"}`);
       text(detail, `${(record.extracted_measurements || []).length} extracted measurements`);
       text(detail, `${(record.trend_references || []).length} related trends`);
@@ -191,12 +208,14 @@
       text(detail, `${(record.evidence_references || []).length} evidence references`);
       (record.extracted_measurements || []).forEach(item => text(detail, `${label(item.metric)}: ${item.value == null ? "Not available" : item.value} ${item.units || ""}`));
     } catch (error) {
-      detail.replaceChildren();
+      detail.querySelectorAll("p").forEach(node => node.remove());
       text(detail, error.message, "bad");
     }
   }
 
-  async function showView(name) {
+  async function showView(name, options) {
+    options = options || {};
+    if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
     byId("mobile_status").textContent = "Loading…";
@@ -283,6 +302,8 @@
       session.userId = current.user_id; session.name = current.name;
       showAuthenticated(true);
       await showView("dashboard");
+      const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
+      if (deep) await showView(deep, { fromNav: false });
     } catch (_) { await logout(false); }
   }
 
@@ -295,5 +316,10 @@
     button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", () => showView(button.dataset.mobileView));
   });
+  window.HCConsumerNavAdapter = {
+    activate: function (route, options) {
+      return showView(route, { fromNav: true, fromBack: !!(options && options.fromBack) });
+    }
+  };
   restore();
 }());

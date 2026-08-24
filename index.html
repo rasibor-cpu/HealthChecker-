@@ -266,6 +266,7 @@ textarea{
 
     <!-- Customization Config Panel -->
     <div id="dashboard_config_panel" class="card" style="display: none; padding: 15px; border: 1px solid var(--line);">
+      <button type="button" class="secondary" data-hc-back data-hc-back-overlay>← Back</button>
       <h4 class="section-title" style="font-size: 14px; color: var(--accent);">Personalize Layout</h4>
       <div style="margin-bottom: 12px;">
         <strong class="small">Widget Ordering & Visibility:</strong>
@@ -331,6 +332,7 @@ textarea{
 </div>
 
 <div id="consumer_trends_screen" class="screen consumer-api-screen" aria-labelledby="consumer_trends_title">
+  <button type="button" class="secondary" data-hc-back>← Back</button>
   <h3 id="consumer_trends_title" class="section-title">Trends</h3>
   <p class="muted small">Longitudinal trends use authenticated Health Vault evidence. Clinical/lab series stay separate from Health Connect observational wearable data.</p>
   <button id="consumer_trends_refresh" type="button" class="secondary">Refresh trends</button>
@@ -339,6 +341,7 @@ textarea{
 </div>
 
 <div id="consumer_observations_screen" class="screen consumer-api-screen" aria-labelledby="consumer_observations_title">
+  <button type="button" class="secondary" data-hc-back>← Back</button>
   <h3 id="consumer_observations_title" class="section-title">Observations</h3>
   <p class="muted small">Observational information only — not a diagnosis or treatment recommendation.</p>
   <div data-consumer-state role="status" aria-live="polite"></div>
@@ -346,6 +349,7 @@ textarea{
 </div>
 
 <div id="consumer_timeline_screen" class="screen consumer-api-screen" aria-labelledby="consumer_timeline_title">
+  <button type="button" class="secondary" data-hc-back>← Back</button>
   <h3 id="consumer_timeline_title" class="section-title">Timeline</h3>
   <p class="muted small">Events are scoped to the signed-in user and retain their source provenance.</p>
   <div data-consumer-state role="status" aria-live="polite"></div>
@@ -353,6 +357,7 @@ textarea{
 </div>
 
 <div id="consumer_reports_screen" class="screen consumer-api-screen" aria-labelledby="consumer_reports_title">
+  <button type="button" class="secondary" data-hc-back>← Back</button>
   <h3 id="consumer_reports_title" class="section-title">Reports</h3>
   <p class="muted small">Prepare an authenticated summary for a clinician visit. Review it with a qualified professional.</p>
   <button id="consumer_report_refresh" type="button">Refresh report</button>
@@ -362,6 +367,7 @@ textarea{
 </div>
 
 <div id="consumer_settings_screen" class="screen consumer-api-screen" aria-labelledby="consumer_settings_title">
+  <button type="button" class="secondary" data-hc-back>← Back</button>
   <h3 id="consumer_settings_title" class="section-title">Settings</h3>
   <div class="card">
     <p id="consumer_settings_identity" class="small"></p>
@@ -380,6 +386,7 @@ textarea{
       <p class="muted small records-privacy-note">Your reports are retrieved through the authenticated, encrypted Health Vault boundary. Page refresh time is not a measurement time.</p>
     </div>
     <div class="records-header-actions">
+      <button type="button" class="secondary" data-hc-back>← Back</button>
       <button id="records_refresh_btn" type="button" class="secondary">Refresh</button>
       <button id="records_add_btn" type="button">Add records</button>
     </div>
@@ -439,6 +446,7 @@ textarea{
   <section id="records_upload_panel" class="card records-upload-panel" hidden aria-labelledby="records_upload_title">
     <div class="records-panel-heading">
       <h4 id="records_upload_title" class="section-title">Upload a medical record</h4>
+      <button type="button" class="secondary" data-hc-back data-hc-back-overlay>← Back</button>
       <button id="records_upload_close_btn" type="button" class="secondary records-icon-button" aria-label="Close upload panel">×</button>
     </div>
     <div id="records_drop_zone" class="vault-drop-zone records-drop-zone" tabindex="0">
@@ -465,6 +473,7 @@ textarea{
   <dialog id="record_detail_dialog" class="records-detail-dialog" aria-labelledby="record_detail_title">
     <div class="records-panel-heading">
       <h3 id="record_detail_title" class="section-title">Record details</h3>
+      <button type="button" class="secondary" data-hc-back data-hc-back-overlay>← Back</button>
       <button id="record_detail_close_btn" type="button" class="secondary records-icon-button" aria-label="Close record details">×</button>
     </div>
     <div id="record_detail_loading" class="records-state" hidden>Loading record details…</div>
@@ -736,6 +745,7 @@ textarea{
 <script src="js/health_vault/ui.js"></script>
 <script src="js/health_vault/dashboard.js?v=hc324a"></script>
 <script src="js/health_vault/records.js?v=hc324a"></script>
+<script src="js/health_vault/consumer_nav.js?v=hc325r4"></script>
 <script src="js/health_vault/trends.js?v=hc321uat12e"></script>
 <script>
 const KEY = 'HC_V6';
@@ -1082,6 +1092,8 @@ let fpSymptoms = document.getElementById('fp_symptoms');
 
 let tabs = document.querySelectorAll('.tab');
 tabs.forEach(t => t.onclick = () => {
+  const screenId = t.getAttribute('data');
+  if (window.HCConsumerNav) HCConsumerNav.note(screenId);
   tabs.forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));

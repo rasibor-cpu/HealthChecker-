@@ -469,9 +469,16 @@
       if (!show) {
         this.selectFile(null);
         this.text("records_upload_status", "");
+        if (global.HCConsumerNav) HCConsumerNav.dismissOverlay("records-upload");
       } else {
         const input = document.getElementById("records_file_input");
         if (input) input.focus();
+        if (global.HCConsumerNav) {
+          const self = this;
+          HCConsumerNav.pushOverlay("records-upload", function () {
+            self.toggleUpload(false);
+          });
+        }
       }
     }
 
@@ -524,6 +531,12 @@
       const dialog = document.getElementById("record_detail_dialog");
       if (!dialog) return;
       if (!dialog.open) dialog.showModal();
+      if (global.HCConsumerNav) {
+        const self = this;
+        HCConsumerNav.pushOverlay("record-detail", function () {
+          self.closeDetail();
+        });
+      }
       this.state("record_detail_loading", true);
       this.state("record_detail_error", false);
       this.html("record_detail_content", "");
@@ -653,6 +666,7 @@
       if (dialog && dialog.open) dialog.close();
       this.html("record_detail_content", "");
       this.text("record_detail_title", "Record details");
+      if (global.HCConsumerNav) HCConsumerNav.dismissOverlay("record-detail");
     }
 
     dateLabel(record) {

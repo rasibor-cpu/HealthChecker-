@@ -25,6 +25,7 @@ class ConsumerOriginPolicy private constructor(val origin: String) {
             path == "/style.css" ||
             path == "/js/health_vault/mobile_consumer.js" ||
             path == "/js/health_vault/health_snapshot.js" ||
+            path == "/js/health_vault/consumer_nav.js" ||
             path.startsWith("/api/")
     }
 

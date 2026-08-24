@@ -1354,6 +1354,9 @@
         closeDrillDown();
       });
     }
+    if (global.HCConsumerNav) {
+      global.HCConsumerNav.pushOverlay("snapshot-drill", closeDrillDown);
+    }
     root.querySelectorAll("[data-open-filtered]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         openFilteredSurface(
@@ -1366,6 +1369,7 @@
   }
 
   function closeDrillDown() {
+    if (global.HCConsumerNav) global.HCConsumerNav.dismissOverlay("snapshot-drill");
     _activeDrillMetric = null;
     const root = document.getElementById("hc_health_snapshot");
     if (!root) return;
