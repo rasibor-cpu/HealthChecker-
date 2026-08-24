@@ -1,6 +1,7 @@
 package com.healthchecker.companion.healthconnect
 
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -16,7 +17,7 @@ import kotlin.reflect.KClass
  * HC-306I-R3 — maps supported Health Connect read permissions to record classes
  * and privacy-safe token-scope fingerprints (sorted scope ids only).
  *
- * ECG intentionally unsupported.
+ * ECG intentionally unsupported. Glucose is Health Connect BloodGlucoseRecord only.
  */
 object GrantedRecordCatalog {
 
@@ -28,7 +29,8 @@ object GrantedRecordCatalog {
         SLEEP("sleep"),
         STEPS("steps"),
         EXERCISE("exercise"),
-        WEIGHT("weight")
+        WEIGHT("weight"),
+        GLUCOSE("glucose")
     }
 
     data class Binding(
@@ -47,7 +49,8 @@ object GrantedRecordCatalog {
         Binding(Metric.SLEEP, SleepSessionRecord::class),
         Binding(Metric.STEPS, StepsRecord::class),
         Binding(Metric.EXERCISE, ExerciseSessionRecord::class),
-        Binding(Metric.WEIGHT, WeightRecord::class)
+        Binding(Metric.WEIGHT, WeightRecord::class),
+        Binding(Metric.GLUCOSE, BloodGlucoseRecord::class)
     )
 
     private val byPermission: Map<String, Binding> =

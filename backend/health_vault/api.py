@@ -1186,6 +1186,8 @@ def create_health_vault_app(
         metrics: str | None = None,
         q: str | None = None,
         surface: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> JSONResponse:
         try:
             pid = _get_authenticated_patient(request)
@@ -1199,6 +1201,8 @@ def create_health_vault_app(
             metrics=metrics,
             q=q,
             surface=surface,
+            limit=limit,
+            offset=offset,
         )
         return JSONResponse(payload)
 

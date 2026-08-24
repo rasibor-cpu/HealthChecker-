@@ -34,8 +34,14 @@ class ObservationMapperTest {
     }
 
     @Test
-    fun ecgUnsupportedReturnsEmpty() {
-        assertTrue(ObservationMapper.ecgUnsupported().isEmpty())
+    fun glucoseMapsCapillaryVsInterstitialWithoutInventingTrend() {
+        val t = Instant.parse("2026-08-24T12:00:00Z")
+        val capillary = ObservationMapper.glucose("g1", 6.2, t, "com.freestyle.libre3", false)
+        val interstitial = ObservationMapper.glucose("g2", 15.8, t, "com.freestyle.libre3", true)
+        assertEquals("glucose_capillary", capillary.metricType)
+        assertEquals("glucose_cgm_interstitial", interstitial.metricType)
+        assertEquals("mmol/L", capillary.unit)
+        assertEquals(null, capillary.trendDirection)
     }
 
     @Test

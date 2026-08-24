@@ -269,16 +269,31 @@ class IngestionCoordinator:
                 obs.fingerprint or "",
                 patient_id=obs.patient_id,
             )
+            if not existing:
+                existing = self.store.get_observation_by_source_identity(
+                    patient_id=obs.patient_id,
+                    metric=obs.metric_type,
+                    source_record_id=obs.source_record_id,
+                    observation_id=obs.observation_id,
+                )
         else:
             existing = self.store.batch_get_observation_by_fingerprint(
                 batch,
                 obs.fingerprint or "",
                 patient_id=obs.patient_id,
             )
+            if not existing:
+                existing = self.store.batch_get_observation_by_source_identity(
+                    batch,
+                    patient_id=obs.patient_id,
+                    metric=obs.metric_type,
+                    source_record_id=obs.source_record_id,
+                    observation_id=obs.observation_id,
+                )
         if existing:
             return {
                 "skipped": True,
-                "reason": "duplicate_fingerprint",
+                "reason": "duplicate_source_identity" if existing.get("source_record_id") else "duplicate_fingerprint",
                 "observation_id": existing.get("observation_id"),
                 "fingerprint": obs.fingerprint,
             }

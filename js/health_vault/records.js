@@ -6,8 +6,12 @@
     constructor() {
       this.records = [];
       this.deviceSummaries = [];
+      this.sourceCard = null;
+      this.freshnessPath = {};
       this.surfaceCounts = {};
+      this.counts = {};
       this.vaultRecordCount = 0;
+      this.page = { limit: 50, offset: 0, total: 0, has_more: false };
       this.surface = "clinical_document";
       this.searchTerm = "";
       this.searchTimer = null;
@@ -128,6 +132,16 @@
 
       const list = document.getElementById("records_list");
       if (list) list.addEventListener("click", event => {
+        const more = event.target.closest("[data-records-more]");
+        if (more) {
+          this.loadMore();
+          return;
+        }
+        const sourceButton = event.target.closest("[data-open-device-data]");
+        if (sourceButton) {
+          this.setSurface("device_data");
+          return;
+        }
         const metricButton = event.target.closest("[data-device-metric]");
         if (metricButton) {
           this.setMetricFilter(metricButton.getAttribute("data-device-metric"));
@@ -165,8 +179,12 @@
       if (this.detailRequest) this.detailRequest.abort();
       this.records = [];
       this.deviceSummaries = [];
+      this.sourceCard = null;
+      this.freshnessPath = {};
       this.surfaceCounts = {};
+      this.counts = {};
       this.vaultRecordCount = 0;
+      this.page = { limit: 50, offset: 0, total: 0, has_more: false };
       this.surface = "clinical_document";
       this.searchTerm = "";
       this.metricFilter = null;
@@ -182,11 +200,12 @@
       this.text("records_count", "0 records");
     }
 
-    async refreshRecords() {
+    async refreshRecords(options) {
       if (!this.isAuthenticated()) return;
+      const append = !!(options && options.append);
       if (this.listRequest) this.listRequest.abort();
       this.listRequest = new AbortController();
-      this.state("records_loading", true);
+      this.state("records_loading", !append);
       this.state("records_error", false);
       try {
         const params = new URLSearchParams();
@@ -198,18 +217,28 @@
         if (this.metricAliases && this.metricAliases.length) params.set("metrics", this.metricAliases.join(","));
         if (this.searchTerm) params.set("q", this.searchTerm);
         else if (!this.metricFilter) params.set("surface", this.surface || "clinical_document");
+        const offset = append ? Number((this.page && this.page.offset) || 0) + Number((this.page && this.page.limit) || 50) : 0;
+        if (this.metricFilter || this.searchTerm || this.surface === "clinical_document" || this.surface === "imported_reports") {
+          params.set("limit", "50");
+          params.set("offset", String(offset));
+        }
         const response = await this.request(`/api/records${params.toString() ? `?${params}` : ""}`, {
           signal: this.listRequest.signal,
         });
         if (!response.ok) throw new Error("records_load_failed");
         const body = await this.readJson(response);
-        this.records = Array.isArray(body.records) ? body.records : [];
+        const nextRecords = Array.isArray(body.records) ? body.records : [];
+        this.records = append ? this.records.concat(nextRecords) : nextRecords;
         this.deviceSummaries = (((body.device_data || {}).summaries) || []);
+        this.sourceCard = body.health_connect_source || ((body.device_data || {}).source) || null;
+        this.freshnessPath = body.freshness_path || {};
         this.surfaceCounts = body.surface_counts || {};
+        this.counts = body.counts || {};
         this.vaultRecordCount = Number(body.vault_record_count || this.records.length);
+        this.page = body.page || { limit: 50, offset: offset, total: this.records.length, has_more: false };
         this.renderRecords();
         this.text("records_count", this.countLabel());
-        this.text("records_last_refreshed", `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+        this.renderFreshnessLegend();
       } catch (error) {
         if (error.name !== "AbortError" && error.message !== "authentication_required") {
           this.showError("records_error", "We could not load your records. Check your connection and try again.");
@@ -217,6 +246,10 @@
       } finally {
         this.state("records_loading", false);
       }
+    }
+
+    loadMore() {
+      if (this.page && this.page.has_more) this.refreshRecords({ append: true });
     }
 
     setMetricFilter(metric, aliases, category) {
@@ -255,21 +288,36 @@
     }
 
     countLabel() {
-      const vault = this.vaultRecordCount || this.records.length;
+      const docs = Number((this.counts || {}).documents != null ? this.counts.documents : ((this.surfaceCounts || {}).clinical_documents || 0) + ((this.surfaceCounts || {}).imported_reports || 0));
+      const hc = Number((this.counts || {}).health_connect_observations != null ? this.counts.health_connect_observations : (this.surfaceCounts || {}).device_data || 0);
       if (this.searchTerm) {
-        return `${this.records.length} matches · ${vault} in vault`;
+        return `${this.records.length} matches · ${docs} documents · ${hc.toLocaleString()} Health Connect observations`;
       }
       if (this.metricFilter) {
-        return `${this.records.length} ${this.label(this.metricFilter)} records · ${vault} in vault`;
+        return `${this.records.length} ${this.label(this.metricFilter)} observations · ${hc.toLocaleString()} Health Connect observations preserved`;
       }
       if (this.showingDeviceSummaries()) {
-        const device = Number((this.surfaceCounts || {}).device_data || 0);
-        return `${this.deviceSummaries.length} device groups · ${device} telemetry records preserved · ${vault} in vault`;
+        return `${docs} documents · ${hc.toLocaleString()} Health Connect observations`;
       }
       if (this.surface === "imported_reports") {
-        return `${this.records.length} imported reports · ${vault} in vault`;
+        return `${this.records.length} imported reports · ${hc.toLocaleString()} Health Connect observations`;
       }
-      return `${this.records.length} clinical documents · ${vault} in vault`;
+      return `${docs} documents · ${hc.toLocaleString()} Health Connect observations`;
+    }
+
+    renderFreshnessLegend() {
+      const path = this.freshnessPath || {};
+      const refreshed = `Last refreshed ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      const syncAt = path.last_health_connect_sync_at || path.last_sync_attempt_at;
+      const latest = path.latest_measurement_at;
+      const syncLine = syncAt ? `Last Health Connect sync ${this.formatDate(syncAt)}` : "Last Health Connect sync: not available";
+      const latestLine = latest ? `Latest measurement ${this.formatDate(latest)}` : "Latest measurement: not available";
+      let stale = "";
+      if (latest) {
+        const ageMs = Date.now() - Date.parse(latest);
+        if (Number.isFinite(ageMs) && ageMs > 36 * 3600000) stale = " · Data may be stale";
+      }
+      this.text("records_last_refreshed", `${refreshed}. ${syncLine}. ${latestLine}${stale}`);
     }
 
     emptyCopy() {
@@ -300,25 +348,28 @@
     renderRecords() {
       const target = document.getElementById("records_list");
       if (!target) return;
+      const sourceHtml = this.sourceCardHtml();
       if (this.showingDeviceSummaries()) {
         const summaries = this.deviceSummaries || [];
-        this.state("records_empty", summaries.length === 0);
+        this.state("records_empty", summaries.length === 0 && !this.sourceCard);
         this.applyEmptyCopy();
-        target.innerHTML = summaries.map(row => {
+        const cards = summaries.map(row => {
           const latest = row.latest_value == null
             ? "No latest value"
             : `${row.latest_value}${row.latest_units ? ` ${row.latest_units}` : ""}`;
           const when = row.latest_at ? this.formatDate(row.latest_at) : "Not available";
+          const category = row.consumer_category_label || this.label(row.consumer_category) || this.label(row.metric);
           return `
           <article class="card record-card records-device-card">
             <div class="record-card-heading">
               <div>
                 <h4>${this.escape(row.label || this.label(row.metric))}</h4>
-                <div class="muted small">Latest ${this.escape(when)}</div>
+                <div class="muted small">Latest measurement ${this.escape(when)}</div>
               </div>
-              <span class="badge">${this.escape(Number(row.record_count || 0))} records</span>
+              <span class="badge">${this.escape(Number(row.record_count || 0))} observations</span>
             </div>
             <div class="record-card-meta small">
+              <span class="badge">${this.escape(category)}</span>
               <span>Latest: ${this.escape(latest)}</span>
               <span>Source: ${this.escape(row.source || "health_connect_companion")}</span>
               <span>Telemetry preserved in vault</span>
@@ -326,37 +377,69 @@
             <button type="button" class="secondary records-inline-action" data-device-metric="${this.escapeAttr(row.metric)}">View observations</button>
           </article>`;
         }).join("");
+        target.innerHTML = sourceHtml + cards;
         return;
       }
       const records = this.filteredRecords();
-      this.state("records_empty", records.length === 0);
+      this.state("records_empty", records.length === 0 && !(this.surface === "clinical_document" && this.sourceCard && this.sourceCard.observation_count));
       this.applyEmptyCopy();
       const drilldown = this.metricFilter
-        ? `<p class="muted small">Showing underlying ${this.escape(this.label(this.metricFilter))} telemetry. Source JSON remains in the vault.</p>`
+        ? `<p class="muted small">Showing underlying ${this.escape(this.label(this.metricFilter))} telemetry. Source JSON remains in the vault under technical details.</p>`
         : "";
-      target.innerHTML = drilldown + records.map(record => {
+      const more = (this.page && this.page.has_more)
+        ? `<button type="button" class="secondary records-inline-action" data-records-more="1">Load more observations</button>`
+        : "";
+      target.innerHTML = (this.surface === "clinical_document" && !this.metricFilter && !this.searchTerm ? sourceHtml : "") + drilldown + records.map(record => {
         const intelligence = this.intelligenceByDocument.get(record.document_id);
         const intelligenceText = intelligence == null
           ? "Intelligence: check details"
           : (intelligence ? "Linked intelligence available" : "No linked intelligence");
+        const title = record.display_title || this.label(record.consumer_metric) || "Untitled record";
+        const category = record.consumer_category_label || this.label(record.consumer_category) || this.label(record.primary_category);
         return `
           <article class="card record-card">
             <div class="record-card-heading">
               <div>
-                <h4>${this.escape(record.original_filename || "Untitled record")}</h4>
+                <h4>${this.escape(title)}</h4>
                 <div class="muted small">${this.escape(this.dateLabel(record))}</div>
               </div>
               <span class="badge record-status record-status-${this.statusClass(record.status)}">${this.escape(this.label(record.status))}</span>
             </div>
             <div class="record-card-meta small">
-              <span class="badge">${this.escape(this.label(record.primary_category))}</span>
+              <span class="badge">${this.escape(category)}</span>
               <span>${Number(record.metrics_count || 0)} extracted metrics</span>
               <span>Source: ${this.escape(record.source_system || "Not available")}</span>
               <span>${this.escape(intelligenceText)}</span>
             </div>
             <button type="button" class="secondary records-inline-action" data-record-detail="${this.escapeAttr(record.document_id)}">View details</button>
           </article>`;
-      }).join("");
+      }).join("") + more;
+    }
+
+    sourceCardHtml() {
+      const card = this.sourceCard;
+      if (!card || !Number(card.observation_count || 0)) return "";
+      const latest = card.last_observation_at ? this.formatDate(card.last_observation_at) : "Not available";
+      const sync = card.last_sync_at ? this.formatDate(card.last_sync_at) : (card.last_sync_attempt_at ? this.formatDate(card.last_sync_attempt_at) : "Not available");
+      const types = (card.metric_labels || []).join(", ") || "Health Connect metrics";
+      const stale = card.currentness === "stale" ? "Data may be stale" : (card.status_text || "Unknown");
+      return `
+        <article class="card record-card records-device-card" aria-label="${this.escapeAttr(card.label || "Health Connect")}">
+          <div class="record-card-heading">
+            <div>
+              <h4>${this.escape(card.label || "Health Connect")}</h4>
+              <div class="muted small">${this.escape(Number(card.observation_count || 0).toLocaleString())} Health Connect observations</div>
+            </div>
+            <span class="badge">${this.escape(stale)}</span>
+          </div>
+          <div class="record-card-meta small">
+            <span>Latest measurement: ${this.escape(latest)}</span>
+            <span>Last Health Connect sync: ${this.escape(sync)}</span>
+            <span>Available: ${this.escape(types)}</span>
+            <span>Source: ${this.escape(card.source || "health_connect_companion")}</span>
+          </div>
+          <button type="button" class="secondary records-inline-action" data-open-device-data="1">View observations</button>
+        </article>`;
     }
 
     applyEmptyCopy() {
@@ -470,12 +553,13 @@
       const metadata = record.metadata || {};
       const provenance = record.source_provenance || {};
       const gmail = provenance.gmail || null;
-      this.text("record_detail_title", record.original_filename || "Record details");
+      this.text("record_detail_title", record.display_title || metadata.display_title || "Record details");
       this.html("record_detail_content", `
         <section class="records-detail-section">
           <div class="record-card-heading"><h4>Record summary</h4><span class="badge record-status-${this.statusClass(record.status)}">${this.escape(this.label(record.status))}</span></div>
           ${this.definitionList([
-            ["Category", this.label(record.primary_category)], ["Measured", this.formatDate(record.measured_at)],
+            ["Category", record.consumer_category_label || this.label(record.primary_category)],
+            ["Measured", this.formatDate(record.measured_at)],
             ["Imported", this.formatDate(record.imported_at)], ["Size", this.formatBytes(record.size_bytes)],
             ["Document type", metadata.document_type], ["Interpretation", metadata.interpretation],
           ])}
@@ -485,10 +569,12 @@
         ${this.trendsSection(record.trend_references || [])}
         ${this.observationsSection(record.ai_observations || [])}
         ${this.timelineSection(record.timeline_events || [])}
-        <section class="records-detail-section"><h4>Provenance and evidence</h4>
+        <section class="records-detail-section"><h4>Technical details / provenance</h4>
           ${this.definitionList([
             ["Source system", provenance.source_system], ["Acquisition method", provenance.acquisition_method],
-            ["Provenance", provenance.provenance], ["Original filename", provenance.original_filename],
+            ["Provenance", provenance.provenance],
+            ["Technical filename", record.technical_filename || metadata.technical_filename || provenance.original_filename],
+            ["Document id", record.document_id],
             ["Gmail message", gmail && gmail.message_id], ["Gmail attachment", gmail && gmail.attachment_id],
             ["Batch", provenance.batch_id], ["Group", provenance.group_id],
           ])}

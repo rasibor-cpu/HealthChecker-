@@ -31,6 +31,19 @@ COMPANION_BATCH_ACCEPTED = "CompanionBatchAccepted"
 COMPANION_BATCH_REJECTED = "CompanionBatchRejected"
 
 
+def _latest_measured_by_metric(rows: list[dict[str, Any]]) -> dict[str, str]:
+    latest: dict[str, str] = {}
+    for row in rows:
+        metric = str(row.get("metric_type") or row.get("metric") or "")
+        measured = str(row.get("measured_at") or "")
+        if not metric or not measured:
+            continue
+        previous = latest.get(metric)
+        if previous is None or measured > previous:
+            latest[metric] = measured
+    return latest
+
+
 def _parse_ts(value: str) -> datetime:
     text = value[:-1] + "+00:00" if value.endswith("Z") else value
     return datetime.fromisoformat(text).astimezone(timezone.utc)
@@ -453,6 +466,11 @@ class CompanionDeliveryService:
                     "deletion_tombstones": merged_tombs,
                     "clinical_history_deleted": False,
                     "delivery_error": None if durable else (ingest.get("errors") or ["ingest_failed"]),
+                    "latest_received_by_metric": _latest_measured_by_metric(validated),
+                    "companion_batch_latest_at": max(
+                        (str(row.get("measured_at") or "") for row in validated),
+                        default="",
+                    ) or None,
                 }
             )
         except Exception:

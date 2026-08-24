@@ -77,7 +77,16 @@ class CompanionSyncRunner(
                     deletedRecordIdsJson = seed.deletedRecordIdsJson,
                     tokenScope = seed.tokenScope,
                     partialPermissionWarning = seed.partialPermissionWarning,
-                    healthConnectStatusJson = JSONObject().put("availability", capability.availability.name).toString(),
+                    healthConnectStatusJson = JSONObject()
+                        .put("availability", capability.availability.name)
+                        .put("fetched_observation_count", fetch.observations.size)
+                        .put(
+                            "latest_by_metric",
+                            JSONObject().also { json ->
+                                fetch.latestByMetric.forEach { (metric, at) -> json.put(metric, at) }
+                            }
+                        )
+                        .toString(),
                     permissionsJson = JSONObject()
                         .put("granted_count", capability.permissionsGranted.size)
                         .put("missing_count", capability.permissionsMissing.size)

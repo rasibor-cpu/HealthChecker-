@@ -328,7 +328,7 @@ def test_accessibility_spoken_bp():
             "display_value": "124/78",
             "unit": "mmHg",
             "status_text": "Normal",
-            "freshness_label": "Updated 18 minutes ago",
+            "freshness_label": "Last measured 18 minutes ago",
         }
     )
     assert "124 over 78" in label
@@ -591,14 +591,14 @@ const html = HS.renderHealthMetricCard({
   status: 'NORMAL',
   status_text: 'Normal',
   status_color: 'GREEN',
-  freshness_label: 'Updated 18 minutes ago',
+  freshness_label: 'Last measured 18 minutes ago',
   trend_label: 'Improving',
   trend_indicator: '\\u2193',
   provenance: 'wearable_screenshot',
   source: 'home_monitor',
   detail_category: 'blood_pressure',
   detail_metric: 'systolic_bp',
-  accessibility_label: 'Blood pressure, 118 over 76 millimetres of mercury, status Normal, Updated 18 minutes ago.',
+  accessibility_label: 'Blood pressure, 118 over 76 millimetres of mercury, status Normal, Last measured 18 minutes ago.',
 });
 const missingTrend = HS.renderHealthMetricCard({
   metric_id: 'steps',
@@ -623,7 +623,7 @@ console.log(JSON.stringify({html, missingTrend}));
     assert "mmHg" in html
     assert "Normal" in html
     assert 'data-status="NORMAL"' in html
-    assert "Updated 18 minutes ago" in html
+    assert "Last measured 18 minutes ago" in html
     assert "Improving" in html
     assert "home_monitor" in html
     assert 'data-metric="blood_pressure"' in html
@@ -657,9 +657,9 @@ def test_uat10_snapshot_mount_near_top_of_authenticated_dashboard():
     assert 'id="hc_health_snapshot"' in consumer.split('id="dashboard_widgets_target"', 1)[0]
     assert html.index('id="hc_health_snapshot"') < html.index('id="dashboard_widgets_target"')
     assert html.index('id="hc_health_snapshot"') < html.index('id="exec_health_dashboard"')
-    assert "health_snapshot.js?v=hc321uat12" in html
+    assert "health_snapshot.js?v=hc323a" in html
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12j"' in sw
+    assert 'CACHE_REVISION = "hc323a"' in sw
 
 
 def test_uat10_authenticated_dashboard_snapshot_render_path():
@@ -783,7 +783,7 @@ def test_uat10_js_refresh_renders_health_metric_cards():
             "status": "NORMAL",
             "status_text": "Normal",
             "status_color": "GREEN",
-            "freshness_label": "Updated 5 minutes ago",
+            "freshness_label": "Last measured 5 minutes ago",
             "detail_category": "ecg_cardiology",
             "detail_metric": "heart_rate",
             "accessibility_label": "Heart Rate, 72 bpm, status Normal.",
@@ -796,7 +796,7 @@ def test_uat10_js_refresh_renders_health_metric_cards():
             "status": "UNKNOWN",
             "status_text": "Unknown",
             "status_color": "GREY",
-            "freshness_label": "Updated today",
+            "freshness_label": "Last measured today",
             "detail_category": "other",
             "detail_metric": "steps",
             "accessibility_label": "Steps, 5400, status Unknown.",
@@ -941,7 +941,7 @@ console.log(JSON.stringify({
     assert payload["color"] == "GREY"
     assert payload["currentness"] == "stale"
     assert "not current" in payload["label"]
-    assert payload["label"].startswith("Last recorded")
+    assert payload["label"].startswith("Last measured")
     assert payload["historical"] == "ATTENTION"
 
 
@@ -961,7 +961,7 @@ def test_uat12_dashboard_trends_and_timeline_consumer_polish():
     assert "normalizeSnapshotCard" in snap
     assert "keydown" in snap
     assert "hc-drill-back" in snap
-    assert 'CACHE_REVISION = "hc321uat12j"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
+    assert 'CACHE_REVISION = "hc323a"' in (ROOT / "service-worker.js").read_text(encoding="utf-8")
 
 
 def _assert_json_not_html(response):
@@ -1246,9 +1246,9 @@ def test_uat12f_s24_filtered_timeline_fetch_contract_matches_snapshot_auth():
     assert api_return >= 0
     assert first_respond > api_return
     assert lastNav_before_click_prevents_double_fetch(surfaces)
-    assert 'CACHE_REVISION = "hc321uat12j"' in sw
-    assert "consumer_surfaces.js?v=hc321uat12j" in html
-    assert "service-worker.js?v=hc321uat12j" in html
+    assert 'CACHE_REVISION = "hc323a"' in sw
+    assert "consumer_surfaces.js?v=hc323a" in html
+    assert "service-worker.js?v=hc323a" in html
 
 
 def lastNav_before_click_prevents_double_fetch(surfaces: str) -> bool:
@@ -1644,12 +1644,12 @@ def test_uat12g_uat12f_batched_list_measurements_still_present():
     assert "store.list_measurements(document_id=doc['id'])" not in source
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12j"' in sw
+    assert 'CACHE_REVISION = "hc323a"' in sw
     assert "if (isForbiddenCacheUrl(req.url)) return;" in sw
     fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
-    assert "consumer_surfaces.js?v=hc321uat12j" in html
-    assert "service-worker.js?v=hc321uat12j" in html
+    assert "consumer_surfaces.js?v=hc323a" in html
+    assert "service-worker.js?v=hc323a" in html
 
 
 def test_uat12g_authenticated_filtered_heart_rate_json_and_compaction_inputs():
@@ -1990,9 +1990,9 @@ def test_uat12h_compaction_and_batching_still_present():
     assert "Category: Not available" not in surfaces
     sw = (ROOT / "service-worker.js").read_text(encoding="utf-8")
     html = (ROOT / "index.html").read_text(encoding="utf-8")
-    assert 'CACHE_REVISION = "hc321uat12j"' in sw
+    assert 'CACHE_REVISION = "hc323a"' in sw
     fetch_handler = sw.split('self.addEventListener("fetch"', 1)[1]
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
-    assert "consumer_surfaces.js?v=hc321uat12j" in html
-    assert "health_snapshot.js?v=hc321uat12j" in html
+    assert "consumer_surfaces.js?v=hc323a" in html
+    assert "health_snapshot.js?v=hc323a" in html
 

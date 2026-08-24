@@ -42,7 +42,7 @@ class GrantedRecordCatalogTest {
         val bindings = GrantedRecordCatalog.grantedBindings(granted)
         assertEquals(1, bindings.size)
         assertEquals(GrantedRecordCatalog.Metric.STEPS, bindings.single().metric)
-        assertEquals(7, GrantedRecordCatalog.missingPermissions(granted).size)
+        assertEquals(8, GrantedRecordCatalog.missingPermissions(granted).size)
     }
 
     @Test

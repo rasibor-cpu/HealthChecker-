@@ -339,7 +339,7 @@
       this._summaryFetchedAt = Date.now();
 
       this.renderDashboard();
-      this.setRefreshState(force ? "Updated just now." : "");
+      this.setRefreshState(force ? "Last refreshed just now (page/API). This is not a measurement time." : "");
       if (global.HCExecutiveDashboard && global.HCExecutiveDashboard.refresh) {
         try {
           await global.HCExecutiveDashboard.refresh();
@@ -559,6 +559,7 @@
         let dataFreshness = "Unknown";
         let dataFreshnessClass = "muted";
         const lastObs = sync.last_observation_at || null;
+        const freshnessPath = payload.freshness_path || {};
         if (lastObs) {
           const ageMs = Date.now() - Date.parse(lastObs);
           if (Number.isFinite(ageMs)) {
@@ -584,8 +585,9 @@
           (sync.observation_count != null ? sync.observation_count : hcCount) != null
             ? `HC observations: ${sync.observation_count != null ? sync.observation_count : hcCount}`
             : null,
-          lastObs ? `Last observation: ${String(lastObs).slice(0, 19)}` : null,
-          sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null,
+          lastObs ? `Latest measurement: ${String(lastObs).slice(0, 19)}` : null,
+          freshnessPath.last_health_connect_sync_at ? `Last Health Connect sync: ${String(freshnessPath.last_health_connect_sync_at).slice(0, 19)}` : (sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null),
+          this._summaryFetchedAt ? `Last refreshed: ${new Date(this._summaryFetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : null,
         ].filter(Boolean).map(line => `<div class="small muted">${this.escape(String(line))}</div>`).join("");
         return `
           <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">

@@ -36,10 +36,15 @@ SUPPORTED_COMPANION_METRICS = frozenset(
         "sleep_duration",
         "deep_sleep_duration",
         "rem_sleep_duration",
+        "light_sleep_duration",
+        "sleep_awake_duration",
+        "sleep_latency",
         "steps",
         "activity_minutes",
         "exercise_minutes",
         "weight",
+        "glucose_capillary",
+        "glucose_cgm_interstitial",
     }
 )
 UNSUPPORTED_METRICS = frozenset({"ecg_result", "heart_rhythm"})
