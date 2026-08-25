@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
@@ -26,6 +25,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
+import com.healthchecker.companion.consumer.ConsumerOriginLock
 import com.healthchecker.companion.consumer.ConsumerOriginPolicy
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.util.SafeLog
@@ -33,9 +33,11 @@ import com.healthchecker.companion.util.SafeLog
 /**
  * HC-319D supported consumer launcher.
  *
- * Loads only the HC-319C API-only document from the exact paired origin. Native
- * Health Connect and WorkManager remain in [CompanionStatusActivity]. No
- * JavaScript interface is installed and no clinical data is persisted natively.
+ * HC325-R6: ordinary production launch is fail-closed to the governed public
+ * origin. Paired companion host, stale prefs, restored WebView history, and
+ * debug localhost defaults must not become the consumer WebView URL.
+ * Native Health Connect and WorkManager remain in [CompanionStatusActivity].
+ * No JavaScript interface is installed and no clinical data is persisted natively.
  */
 class ConsumerLauncherActivity : AppCompatActivity() {
     private lateinit var prefs: SecurePrefs
@@ -44,6 +46,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private lateinit var connectionMessage: TextView
     private var originPolicy: ConsumerOriginPolicy? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var originRecoveryInFlight = false
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -72,8 +75,8 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         configureWebView()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // Same-document in-app stack only. Do not use WebView.goBack():
-                // WebView history can leave the approved /mobile origin/path.
+                // Same-document in-app stack only. Do not walk WebView history:
+                // history can leave the approved /mobile origin/path.
                 if (!::webView.isInitialized ||
                     connectionPanel.visibility == View.VISIBLE ||
                     webView.visibility != View.VISIBLE
@@ -83,6 +86,10 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                 }
                 webView.evaluateJavascript(ConsumerInAppBackPolicy.HANDLE_SCRIPT) { raw ->
                     if (isDestroyed || isFinishing) return@evaluateJavascript
+                    if (ConsumerOriginLock.mustRecover(webView.url, originPolicy?.origin)) {
+                        recoverToGovernedOrigin()
+                        return@evaluateJavascript
+                    }
                     if (!ConsumerInAppBackPolicy.didHandleInApp(raw)) {
                         finish()
                     } else {
@@ -94,11 +101,27 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         loadConsumer()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        loadConsumer()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // HC325-R6: do not persist WebView history; restored history can be loopback.
+    }
+
     override fun onResume() {
         super.onResume()
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
-        if (::webView.isInitialized && connectionPanel.visibility == View.VISIBLE) {
+        if (!::webView.isInitialized) return
+        if (connectionPanel.visibility == View.VISIBLE) {
             loadConsumer()
+            return
+        }
+        if (ConsumerOriginLock.mustRecover(webView.url, originPolicy?.origin)) {
+            recoverToGovernedOrigin()
         }
     }
 
@@ -165,6 +188,10 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                if (ConsumerOriginLock.mustRecover(url, originPolicy?.origin)) {
+                    recoverToGovernedOrigin()
+                    return
+                }
                 if (originPolicy?.isAllowed(url) == true) showWebView()
                 ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
             }
@@ -179,35 +206,61 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                 view: WebView?, request: WebResourceRequest?, error: WebResourceError?,
             ) {
                 super.onReceivedError(view, request, error)
-                if (request?.isForMainFrame == true) {
-                    showConnectionError(getString(R.string.consumer_host_unreachable))
+                if (request?.isForMainFrame != true) return
+                val failed = request.url?.toString()
+                if (ConsumerOriginLock.mustRecover(failed, originPolicy?.origin)) {
+                    recoverToGovernedOrigin()
+                    return
                 }
+                showConnectionError(getString(R.string.consumer_host_unreachable))
             }
         }
     }
 
     private fun handleNavigation(url: String?): Boolean {
         val policy = originPolicy ?: return true
-        if (policy.isLogoutCompletion(url)) {
-            webView.stopLoading()
-            WebStorage.getInstance().deleteAllData()
-            webView.clearCache(true)
-            prefs.clearUserScopedState()
-            SafeLog.i("consumer_logout_local_state_cleared")
-            loadConsumer()
-            return true
+        return when (ConsumerOriginLock.decideNavigation(url, policy)) {
+            ConsumerOriginLock.NavigationDecision.LOGOUT -> {
+                webView.stopLoading()
+                WebStorage.getInstance().deleteAllData()
+                webView.clearCache(true)
+                prefs.clearUserScopedState()
+                SafeLog.i("consumer_logout_local_state_cleared")
+                loadConsumer()
+                true
+            }
+            ConsumerOriginLock.NavigationDecision.ALLOW -> false
+            ConsumerOriginLock.NavigationDecision.REJECT_AND_RECOVER -> {
+                SafeLog.w("consumer_navigation_blocked")
+                if (!ConsumerOriginLock.isForbiddenLoopbackUrl(url)) {
+                    Toast.makeText(this, R.string.consumer_navigation_blocked, Toast.LENGTH_SHORT).show()
+                }
+                recoverToGovernedOrigin()
+                true
+            }
         }
-        val allowed = policy.isAllowed(url)
-        if (!allowed) {
-            SafeLog.w("consumer_navigation_blocked")
-            Toast.makeText(this, R.string.consumer_navigation_blocked, Toast.LENGTH_SHORT).show()
-        }
-        return !allowed
     }
 
     private fun loadConsumer() {
+        if (::webView.isInitialized) {
+            webView.stopLoading()
+        }
+        val resolution = ConsumerOriginLock.resolve(
+            ConsumerOriginLock.LaunchInputs(
+                storedConsumerOrigin = prefs.getConsumerOrigin(),
+                intentData = intent?.dataString,
+                restoredWebViewUrl = if (::webView.isInitialized) webView.url else null,
+                savedStateUrl = null,
+                explicitLocalDevRequested = intent?.getBooleanExtra(
+                    ConsumerOriginLock.EXTRA_EXPLICIT_LOCAL_DEV,
+                    false,
+                ) == true,
+                isDebugBuild = BuildConfig.DEBUG,
+                allowCleartextLocalDev = BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV,
+            )
+        )
         val policy = ConsumerOriginPolicy.create(
-            prefs.getConsumerOrigin() ?: debugConsumerOrigin(),
+            resolution.origin,
             isDebugBuild = BuildConfig.DEBUG,
             allowCleartextLocalDev = BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV,
         )
@@ -219,11 +272,18 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         originPolicy = policy
         connectionPanel.visibility = View.GONE
         webView.visibility = View.VISIBLE
-        webView.loadUrl(policy.mobileUrl())
+        webView.loadUrl(resolution.mobileUrl)
     }
 
-    private fun debugConsumerOrigin(): String? =
-        if (BuildConfig.DEBUG && BuildConfig.ALLOW_CLEARTEXT_LOCAL_DEV) DEBUG_CONSUMER_ORIGIN else null
+    private fun recoverToGovernedOrigin() {
+        if (originRecoveryInFlight || isDestroyed || isFinishing) return
+        originRecoveryInFlight = true
+        try {
+            loadConsumer()
+        } finally {
+            originRecoveryInFlight = false
+        }
+    }
 
     private fun showWebView() {
         connectionPanel.visibility = View.GONE
@@ -251,7 +311,4 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    companion object {
-        private const val DEBUG_CONSUMER_ORIGIN = "http://localhost:8766"
-    }
 }
