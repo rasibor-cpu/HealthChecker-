@@ -48,9 +48,20 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
     assert "addJavascriptInterface" not in source
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source
-    assert "prefs.getConsumerOrigin() ?: debugConsumerOrigin()" in source
-    assert 'DEBUG_CONSUMER_ORIGIN = "http://localhost:8766"' in source
+    assert "prefs.getConsumerOrigin() ?: debugConsumerOrigin()" not in source
+    assert 'DEBUG_CONSUMER_ORIGIN = "http://localhost:8766"' not in source
+    assert "webView.restoreState" not in source
+    assert "webView.saveState" not in source
+    assert "webView.goBack()" not in source
+    assert "ConsumerOriginLock.resolve" in source
     assert "prefs.getConsumerOrigin() ?: prefs.getHostUrl()" not in source
+    lock = (ANDROID / "java/com/healthchecker/companion/consumer/ConsumerOriginLock.kt").read_text(
+        encoding="utf-8"
+    )
+    assert 'PRODUCTION_ORIGIN = "https://health.capitalstratasystems.com"' in lock
+    assert "http://localhost:8766" not in lock
+    assert 'EXPLICIT_LOCAL_DEV_ORIGIN = "http://127.0.0.1:8766"' in lock
+    assert "EXTRA_EXPLICIT_LOCAL_DEV" in lock
 
 
 def test_origin_policy_is_explicit_and_excludes_legacy_and_sensitive_paths():
