@@ -21,13 +21,19 @@
       <p id="mobile_login_error" class="bad" role="alert"></p>
       <form id="mobile_password_change" hidden>
         <h2>Change password</h2>
-        <p class="muted small">Replace the temporary sign-in password and choose three recovery questions before HealthChecker can be used.</p>
+        <p class="muted small">Replace the temporary sign-in password before HealthChecker can be used.</p>
         <input id="mobile_current_password" type="password" autocomplete="current-password" placeholder="Current password" />
         <input id="mobile_new_password" type="password" autocomplete="new-password" placeholder="New password" minlength="8" />
         <input id="mobile_confirm_password" type="password" autocomplete="new-password" placeholder="Confirm new password" minlength="8" />
-        <div id="mobile_password_questions"></div>
-        <button type="submit">Change password</button>
+        <button type="submit">Continue</button>
         <p id="mobile_password_error" class="bad" role="alert"></p>
+      </form>
+      <form id="mobile_recovery_enroll" hidden>
+        <h2>Choose recovery questions</h2>
+        <p class="muted small">Select three different questions and answer each one. HealthChecker can then open your Dashboard.</p>
+        <div id="mobile_enroll_questions"></div>
+        <button id="mobile_enroll_submit" type="submit">Save questions and continue</button>
+        <p id="mobile_enroll_error" class="bad" role="alert"></p>
       </form>
       <div id="mobile_recovery_flow" hidden>
         <h2>Forgot password</h2>

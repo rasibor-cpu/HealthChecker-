@@ -424,10 +424,11 @@ def test_consumer_surfaces_do_not_expose_bootstrap_password():
     mobile = (ROOT / "mobile.html").read_text(encoding="utf-8")
     assert "Forgot password" in index
     assert "Forgot password" in mobile
-    assert "password_change_questions" in index
+    assert "password_enroll_questions" in index
     assert "password_recovery_flow" in index
     assert "settings_password_form" in index
     assert "mobile_recovery_flow" in mobile
+    assert "mobile_recovery_enroll" in mobile
     assert "mobile_settings_password_form" in mobile
     dash = (ROOT / "js/health_vault/dashboard.js").read_text(encoding="utf-8")
     assert "setSecurityGate(true)" in dash

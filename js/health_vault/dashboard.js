@@ -6,6 +6,21 @@
 
   const STORAGE_KEY = "hc_auth_session";
 
+  function userFacingAuthError(code, fallback) {
+    const map = {
+      recovery_enrollment_required: "Choose three recovery questions before continuing.",
+      password_change_required: "A new password is required before HealthChecker can be used.",
+      password_policy_violation: "Choose a password with at least 8 characters that is not the temporary sign-in password.",
+      password_confirmation_mismatch: "New passwords must match.",
+      invalid_credentials: "That current password was not accepted. Check it and try again.",
+      invalid_recovery: "Recovery could not be completed.",
+    };
+    const key = String(code || "");
+    if (map[key]) return map[key];
+    if (/^[a-z0-9_]+$/.test(key)) return fallback || "That request could not be completed.";
+    return key || fallback || "That request could not be completed.";
+  }
+
   class ConsumerDashboard {
     constructor() {
       this.patientId = null;
@@ -18,11 +33,13 @@
       this._summaryFetchedAt = 0;
       this._loginInFlight = false;
       this.securityGate = false;
+      this.authState = "login";
       this.passwordExpiresAt = null;
       this.recoveryEnrolled = false;
       this._catalog = null;
       this._recoveryId = null;
       this._recoveryToken = null;
+      this._pendingPasswordChange = null;
       // Soft throttle for repeated auto-refresh / rapid navigation (ms).
       this.REFRESH_COOLDOWN_MS = 4000;
       this.SUMMARY_TTL_MS = 15000;
@@ -45,9 +62,10 @@
         if (!response.ok) throw new Error("expired");
         this.applySessionMeta(data);
         if (data.must_change_password || data.scope !== "full") {
-          await this.enterSecurityGate();
+          this.enterSecurityGate();
           return;
         }
+        this.setAuthState("authenticated");
         this.updateUIVisibility();
         await this.refresh();
       } catch (_err) {
@@ -64,6 +82,13 @@
     setSecurityGate(active) {
       this.securityGate = !!active;
       if (global.HCConsumerNav) HCConsumerNav.setSecurityGate(!!active);
+    }
+
+    setAuthState(state) {
+      this.authState = state;
+      try { document.body.dataset.hcAuthState = state; } catch (_err) {}
+      const gated = state === "password_change_required" || state === "recovery_enrollment_required";
+      this.setSecurityGate(gated);
     }
 
     loadSession() {
@@ -161,6 +186,11 @@
         event.preventDefault();
         this.handlePasswordChange();
       };
+      const enrollForm = document.getElementById("password_enroll_form");
+      if (enrollForm) enrollForm.onsubmit = event => {
+        event.preventDefault();
+        this.handleEnrollmentSubmit();
+      };
       const forgotBtn = document.getElementById("forgot_password_btn");
       if (forgotBtn) forgotBtn.onclick = () => this.showRecoveryFlow();
       const recoveryStart = document.getElementById("recovery_start_btn");
@@ -235,7 +265,7 @@
           if (errEl) {
             errEl.textContent = errData.error === "invalid_credentials"
               ? "Sign-in failed. Check your Patient ID and password, or wait if the account is temporarily locked."
-              : (errData.error || "Login failed.");
+              : userFacingAuthError(errData.code || errData.error, "Login failed.");
           }
           return;
         }
@@ -249,10 +279,10 @@
         if (pwdEl) pwdEl.value = "";
 
         if (data.must_change_password) {
-          await this.enterSecurityGate();
+          this.enterSecurityGate();
           return;
         }
-        this.setSecurityGate(false);
+        this.setAuthState("authenticated");
         this.updateUIVisibility();
         
         // Switch active tab to dashboard
@@ -273,7 +303,8 @@
     handleLogout() {
       if (this.token) fetch("/api/auth/logout", { method: "POST", headers: this.getAuthorizationHeaders() }).catch(() => {});
       this.clearSession();
-      this.setSecurityGate(false);
+      this._pendingPasswordChange = null;
+      this.setAuthState("login");
       this.updateUIVisibility();
       if (global.HCConsumerNav) HCConsumerNav.reset();
     }
@@ -282,6 +313,7 @@
       if (this._catalog && this._catalog.length) return this._catalog;
       const response = await fetch("/api/auth/recovery/catalog");
       const data = await response.json();
+      if (!response.ok || !(data.questions || []).length) throw new Error("catalog_unavailable");
       this._catalog = data.questions || [];
       return this._catalog;
     }
@@ -322,9 +354,24 @@
       for (let i = 1; i <= 3; i++) {
         const question = document.getElementById(prefix + "_q" + i);
         const answer = document.getElementById(prefix + "_a" + i);
-        rows.push({ question_id: question ? question.value : "", answer: answer ? answer.value : "" });
+        rows.push({
+          question_id: question ? String(question.value || "").trim() : "",
+          answer: answer ? String(answer.value || "").trim() : "",
+        });
       }
       return rows;
+    }
+
+    validateEnrollment(rows) {
+      const ids = (rows || []).map(row => String(row.question_id || "").trim());
+      const answers = (rows || []).map(row => String(row.answer || "").trim());
+      if (ids.length !== 3 || ids.some(id => !id) || new Set(ids).size !== 3) {
+        return "Choose three different recovery questions.";
+      }
+      if (answers.some(answer => !answer)) {
+        return "Enter an answer for each recovery question.";
+      }
+      return "";
     }
 
     renderRecoveryPrompts(containerId, questions) {
@@ -353,25 +400,91 @@
       }));
     }
 
-    async enterSecurityGate() {
-      this.setSecurityGate(true);
-      await this.showPasswordChange();
+    enterSecurityGate() {
+      this.setAuthState("password_change_required");
+      this.showPasswordChange();
       this.updateUIVisibility();
     }
 
-    async showPasswordChange() {
+    showPasswordChange() {
       const loginScreen = document.getElementById("login_screen");
       const form = document.getElementById("password_change_form");
+      const enroll = document.getElementById("password_enroll_form");
       const credentials = document.getElementById("login_credentials");
       const recovery = document.getElementById("password_recovery_flow");
       if (loginScreen) loginScreen.style.display = "block";
       if (credentials) credentials.hidden = true;
       if (recovery) recovery.hidden = true;
+      if (enroll) enroll.hidden = true;
       if (form) form.hidden = false;
       const loginButton = document.getElementById("login_btn");
       if (loginButton) loginButton.hidden = true;
-      await this.loadRecoveryCatalog();
-      this.renderQuestionPickers("password_change_questions", "enroll");
+    }
+
+    async showEnrollment() {
+      this.setAuthState("recovery_enrollment_required");
+      const form = document.getElementById("password_change_form");
+      const enroll = document.getElementById("password_enroll_form");
+      const credentials = document.getElementById("login_credentials");
+      const recovery = document.getElementById("password_recovery_flow");
+      if (credentials) credentials.hidden = true;
+      if (recovery) recovery.hidden = true;
+      if (form) form.hidden = true;
+      if (enroll) enroll.hidden = false;
+      const error = document.getElementById("password_enroll_error");
+      if (error) error.textContent = "";
+      this.updateUIVisibility();
+      try {
+        await this.loadRecoveryCatalog();
+        this.renderQuestionPickers("password_enroll_questions", "first_enroll");
+      } catch (_err) {
+        if (error) error.textContent = "Recovery questions could not be loaded. Try again.";
+      }
+    }
+
+    async submitPendingPasswordChange(extra) {
+      const pending = this._pendingPasswordChange || {};
+      const response = await fetch("/api/auth/password/change", {
+        method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
+        body: JSON.stringify(Object.assign({
+          current_password: pending.current_password || "",
+          new_password: pending.new_password || "",
+          confirm_password: pending.confirm_password || "",
+        }, extra || {})),
+      });
+      const data = await response.json().catch(() => ({}));
+      const code = data.code || data.error;
+      if (!response.ok && code === "recovery_enrollment_required") {
+        await this.showEnrollment();
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(userFacingAuthError(code, "Password change failed."));
+      }
+      return data;
+    }
+
+    async finishAuthenticated(data) {
+      this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
+      this.applySessionMeta(data);
+      this._pendingPasswordChange = null;
+      this.setAuthState("authenticated");
+      const form = document.getElementById("password_change_form");
+      if (form) form.hidden = true;
+      const enroll = document.getElementById("password_enroll_form");
+      if (enroll) enroll.hidden = true;
+      const credentials = document.getElementById("login_credentials");
+      if (credentials) credentials.hidden = false;
+      const loginButton = document.getElementById("login_btn");
+      if (loginButton) loginButton.hidden = false;
+      ["current_password", "new_password", "confirm_password"].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = "";
+      });
+      this.updateUIVisibility();
+      const dashTab = document.querySelector('[data="dash"]');
+      if (dashTab) dashTab.click();
+      await this.refresh();
     }
 
     async handlePasswordChange() {
@@ -384,44 +497,54 @@
         if (error) error.textContent = "New passwords must match and contain at least 8 characters.";
         return;
       }
-      const response = await fetch("/api/auth/password/change", {
-        method: "POST", headers: { "Content-Type": "application/json", ...this.getAuthorizationHeaders() },
-        body: JSON.stringify({
-          current_password: current ? current.value : "",
-          new_password: next.value,
-          confirm_password: confirm ? confirm.value : "",
-          recovery_answers: this.collectAnswers("enroll"),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (error) error.textContent = data.error || "Password change failed.";
+      this._pendingPasswordChange = {
+        current_password: current ? current.value : "",
+        new_password: next.value,
+        confirm_password: confirm ? confirm.value : "",
+      };
+      if (!this.recoveryEnrolled) {
+        await this.showEnrollment();
         return;
       }
-      this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
-      this.applySessionMeta(data);
-      this.setSecurityGate(false);
-      const form = document.getElementById("password_change_form");
-      if (form) form.hidden = true;
-      const credentials = document.getElementById("login_credentials");
-      if (credentials) credentials.hidden = false;
-      const loginButton = document.getElementById("login_btn");
-      if (loginButton) loginButton.hidden = false;
-      [current, next, confirm].forEach(input => { if (input) input.value = ""; });
-      this.updateUIVisibility();
-      const dashTab = document.querySelector('[data="dash"]');
-      if (dashTab) dashTab.click();
-      await this.refresh();
+      try {
+        const data = await this.submitPendingPasswordChange();
+        if (data) await this.finishAuthenticated(data);
+      } catch (err) {
+        if (error) error.textContent = err.message;
+      }
+    }
+
+    async handleEnrollmentSubmit() {
+      const error = document.getElementById("password_enroll_error");
+      if (error) error.textContent = "";
+      const answers = this.collectAnswers("first_enroll");
+      const invalid = this.validateEnrollment(answers);
+      if (invalid) {
+        if (error) error.textContent = invalid;
+        return;
+      }
+      if (!this._pendingPasswordChange) {
+        this.enterSecurityGate();
+        return;
+      }
+      try {
+        const data = await this.submitPendingPasswordChange({ recovery_answers: answers });
+        if (data) await this.finishAuthenticated(data);
+      } catch (err) {
+        if (error) error.textContent = err.message;
+      }
     }
 
     showRecoveryFlow() {
       this.setSecurityGate(true);
       const credentials = document.getElementById("login_credentials");
       const change = document.getElementById("password_change_form");
+      const enroll = document.getElementById("password_enroll_form");
       const recovery = document.getElementById("password_recovery_flow");
       const error = document.getElementById("recovery_error");
       if (credentials) credentials.hidden = true;
       if (change) change.hidden = true;
+      if (enroll) enroll.hidden = true;
       if (recovery) recovery.hidden = false;
       if (error) error.textContent = "";
       document.getElementById("recovery_start_step").hidden = false;
@@ -438,12 +561,14 @@
       const recovery = document.getElementById("password_recovery_flow");
       const credentials = document.getElementById("login_credentials");
       const change = document.getElementById("password_change_form");
+      const enroll = document.getElementById("password_enroll_form");
       if (recovery) recovery.hidden = true;
       if (change) change.hidden = true;
+      if (enroll) enroll.hidden = true;
       if (credentials) credentials.hidden = false;
       const loginButton = document.getElementById("login_btn");
       if (loginButton) loginButton.hidden = false;
-      this.setSecurityGate(false);
+      this.setAuthState("login");
       this.updateUIVisibility();
     }
 
@@ -498,7 +623,7 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        if (error) error.textContent = data.error || "Recovery could not be completed.";
+        if (error) error.textContent = userFacingAuthError(data.code || data.error, "Recovery could not be completed.");
         return;
       }
       this.clearSession();
@@ -527,7 +652,7 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        if (error) error.textContent = data.error || "Password change failed.";
+        if (error) error.textContent = userFacingAuthError(data.code || data.error, "Password change failed.");
         return;
       }
       this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
@@ -551,7 +676,7 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        if (error) error.textContent = data.error || "Could not update recovery questions.";
+        if (error) error.textContent = userFacingAuthError(data.code || data.error, "Could not update recovery questions.");
         return;
       }
       this.recoveryEnrolled = true;

@@ -229,16 +229,22 @@ textarea{
   </div>
   <form id="password_change_form" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
     <h4 class="section-title">Change your temporary password</h4>
-    <p class="small muted">Replace the temporary sign-in password and choose three recovery questions before health information can be accessed.</p>
+    <p class="small muted">Replace the temporary sign-in password before health information can be accessed.</p>
     <label class="small muted" for="current_password">Temporary/current password</label>
     <input id="current_password" type="password" autocomplete="current-password" />
     <label class="small muted" for="new_password">New password (8+ characters)</label>
     <input id="new_password" type="password" autocomplete="new-password" minlength="8" />
     <label class="small muted" for="confirm_password">Confirm new password</label>
     <input id="confirm_password" type="password" autocomplete="new-password" minlength="8" />
-    <div id="password_change_questions" class="small"></div>
-    <button id="password_change_btn" type="submit">Change password and continue</button>
+    <button id="password_change_btn" type="submit">Continue</button>
     <div id="password_change_error" class="bad small" role="alert"></div>
+  </form>
+  <form id="password_enroll_form" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
+    <h4 class="section-title">Choose recovery questions</h4>
+    <p class="small muted">Select three different questions and answer each one. HealthChecker can then open your Dashboard.</p>
+    <div id="password_enroll_questions" class="small"></div>
+    <button id="password_enroll_btn" type="submit">Save questions and continue</button>
+    <div id="password_enroll_error" class="bad small" role="alert"></div>
   </form>
   <div id="password_recovery_flow" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
     <h4 class="section-title">Forgot password</h4>
