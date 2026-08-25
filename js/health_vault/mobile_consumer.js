@@ -10,9 +10,33 @@
   let catalog = null;
   let recoveryId = null;
   let recoveryToken = null;
+  let pendingPasswordChange = null;
+  let authState = "login";
 
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
+
+  function userFacingAuthError(code, fallback) {
+    const map = {
+      recovery_enrollment_required: "Choose three recovery questions before continuing.",
+      password_change_required: "A new password is required before HealthChecker can be used.",
+      password_policy_violation: "Choose a password with at least 8 characters that is not the temporary sign-in password.",
+      password_confirmation_mismatch: "New passwords must match.",
+      invalid_credentials: "That current password was not accepted. Check it and try again.",
+      invalid_recovery: "Recovery could not be completed.",
+    };
+    const key = String(code || "");
+    if (map[key]) return map[key];
+    if (/^[a-z0-9_]+$/.test(key)) return fallback || "That request could not be completed.";
+    return key || fallback || "That request could not be completed.";
+  }
+
+  function setAuthState(state) {
+    authState = state;
+    try { document.body.dataset.hcAuthState = state; } catch (_) {}
+    const gated = state === "password_change_required" || state === "recovery_enrollment_required";
+    setSecurityGate(gated);
+  }
 
   function setSecurityGate(active) {
     if (window.HCConsumerNav) HCConsumerNav.setSecurityGate(!!active);
@@ -61,7 +85,7 @@
       throw new Error(response.status === 403 ? "Password change required" : "Session expired");
     }
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || (body.errors || []).join(", ") || "Request failed");
+    if (!response.ok) throw new Error(userFacingAuthError(body.code || body.error, "Request failed"));
     return body;
   }
 
@@ -72,7 +96,9 @@
 
   async function loadCatalog() {
     if (catalog && catalog.length) return catalog;
-    const body = await fetch("/api/auth/recovery/catalog").then(res => res.json());
+    const response = await fetch("/api/auth/recovery/catalog");
+    const body = await response.json();
+    if (!response.ok || !(body.questions || []).length) throw new Error("catalog_unavailable");
     catalog = body.questions || [];
     return catalog;
   }
@@ -111,9 +137,24 @@
     for (let i = 1; i <= 3; i++) {
       const question = byId(prefix + "_q" + i);
       const answer = byId(prefix + "_a" + i);
-      rows.push({ question_id: question ? question.value : "", answer: answer ? answer.value : "" });
+      rows.push({
+        question_id: question ? String(question.value || "").trim() : "",
+        answer: answer ? String(answer.value || "").trim() : "",
+      });
     }
     return rows;
+  }
+
+  function validateEnrollment(rows) {
+    const ids = (rows || []).map(row => String(row.question_id || "").trim());
+    const answers = (rows || []).map(row => String(row.answer || "").trim());
+    if (ids.length !== 3 || ids.some(id => !id) || new Set(ids).size !== 3) {
+      return "Choose three different recovery questions.";
+    }
+    if (answers.some(answer => !answer)) {
+      return "Enter an answer for each recovery question.";
+    }
+    return "";
   }
 
   function renderRecoveryPrompts(containerId, questions) {
@@ -141,30 +182,53 @@
     }));
   }
 
-  function hideLoginExtras() {
+  function hideSignInControls() {
     const loginBtn = byId("mobile_login_button");
     const forgot = byId("mobile_forgot_password_btn");
     if (loginBtn) loginBtn.hidden = true;
     if (forgot) forgot.hidden = true;
   }
 
+  function hideLifecycleForms() {
+    byId("mobile_password_change").hidden = true;
+    const enroll = byId("mobile_recovery_enroll");
+    if (enroll) enroll.hidden = true;
+    byId("mobile_recovery_flow").hidden = true;
+  }
+
   function showLoginExtras() {
+    pendingPasswordChange = null;
+    setAuthState("login");
     const loginBtn = byId("mobile_login_button");
     const forgot = byId("mobile_forgot_password_btn");
     if (loginBtn) loginBtn.hidden = false;
     if (forgot) forgot.hidden = false;
-    byId("mobile_password_change").hidden = true;
-    byId("mobile_recovery_flow").hidden = true;
+    hideLifecycleForms();
   }
 
-  async function enterPasswordGate() {
-    setSecurityGate(true);
+  function enterPasswordGate() {
+    setAuthState("password_change_required");
     showAuthenticated(false);
-    hideLoginExtras();
-    byId("mobile_recovery_flow").hidden = true;
+    hideSignInControls();
+    hideLifecycleForms();
     byId("mobile_password_change").hidden = false;
-    await loadCatalog();
-    renderQuestionPickers("mobile_password_questions", "mobile_enroll");
+  }
+
+  async function enterEnrollmentGate() {
+    setAuthState("recovery_enrollment_required");
+    showAuthenticated(false);
+    hideSignInControls();
+    hideLifecycleForms();
+    const enroll = byId("mobile_recovery_enroll");
+    if (enroll) enroll.hidden = false;
+    const error = byId("mobile_enroll_error");
+    if (error) error.textContent = "";
+    try {
+      await loadCatalog();
+      renderQuestionPickers("mobile_enroll_questions", "mobile_enroll");
+    } catch (_err) {
+      if (error) error.textContent = "Recovery questions could not be loaded. Try again.";
+    }
   }
 
   async function login() {
@@ -175,18 +239,66 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: byId("mobile_user_id").value.trim(), password: byId("mobile_password").value })
       });
-      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
+      saveSession({
+        token: body.token,
+        userId: body.user_id,
+        name: body.name,
+        expiresAt: body.password_expires_at,
+        recoveryEnrolled: !!body.recovery_enrolled,
+      });
       byId("mobile_password").value = "";
       if (body.must_change_password) {
-        await enterPasswordGate();
+        enterPasswordGate();
         return;
       }
-      setSecurityGate(false);
+      setAuthState("authenticated");
       showAuthenticated(true);
       await loadDashboard();
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
       if (deep) await showView(deep);
     } catch (err) { error.textContent = err.message; }
+  }
+
+  async function submitPasswordChange(payload) {
+    const response = await fetch("/api/auth/password/change", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    const code = body.code || body.error;
+    if (!response.ok && code === "recovery_enrollment_required") {
+      await enterEnrollmentGate();
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(userFacingAuthError(code, "Password change failed."));
+    }
+    return body;
+  }
+
+  async function finishAuthenticated(body) {
+    saveSession({
+      token: body.token,
+      userId: body.user_id,
+      name: body.name,
+      expiresAt: body.password_expires_at,
+      recoveryEnrolled: !!body.recovery_enrolled,
+    });
+    pendingPasswordChange = null;
+    ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => {
+      if (byId(id)) byId(id).value = "";
+    });
+    hideLifecycleForms();
+    const loginBtn = byId("mobile_login_button");
+    const forgot = byId("mobile_forgot_password_btn");
+    if (loginBtn) loginBtn.hidden = false;
+    if (forgot) forgot.hidden = false;
+    setAuthState("authenticated");
+    showAuthenticated(true);
+    await loadDashboard();
+    const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
+    if (deep) await showView(deep);
   }
 
   async function changePassword(event) {
@@ -198,25 +310,41 @@
       error.textContent = "New passwords must match and contain at least 8 characters.";
       return;
     }
+    pendingPasswordChange = {
+      current_password: byId("mobile_current_password").value,
+      new_password: next,
+      confirm_password: byId("mobile_confirm_password").value,
+    };
+    if (!(session && session.recoveryEnrolled)) {
+      await enterEnrollmentGate();
+      return;
+    }
     try {
-      const body = await request("/api/auth/password/change", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          current_password: byId("mobile_current_password").value,
-          new_password: next,
-          confirm_password: byId("mobile_confirm_password").value,
-          recovery_answers: collectAnswers("mobile_enroll"),
-        })
+      const body = await submitPasswordChange(pendingPasswordChange);
+      if (body) await finishAuthenticated(body);
+    } catch (err) { error.textContent = err.message; }
+  }
+
+  async function submitEnrollment(event) {
+    event.preventDefault();
+    const error = byId("mobile_enroll_error");
+    error.textContent = "";
+    const answers = collectAnswers("mobile_enroll");
+    const invalid = validateEnrollment(answers);
+    if (invalid) {
+      error.textContent = invalid;
+      return;
+    }
+    if (!pendingPasswordChange) {
+      enterPasswordGate();
+      return;
+    }
+    try {
+      const body = await submitPasswordChange({
+        ...pendingPasswordChange,
+        recovery_answers: answers,
       });
-      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
-      ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => { byId(id).value = ""; });
-      byId("mobile_password_change").hidden = true;
-      showLoginExtras();
-      setSecurityGate(false);
-      showAuthenticated(true);
-      await loadDashboard();
-      const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
-      if (deep) await showView(deep);
+      if (body) await finishAuthenticated(body);
     } catch (err) { error.textContent = err.message; }
   }
 
@@ -227,7 +355,7 @@
     records = [];
     preferences = null;
     if (window.HCConsumerNav) {
-      HCConsumerNav.setSecurityGate(false);
+      setAuthState("login");
       HCConsumerNav.reset();
     }
     document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
@@ -431,10 +559,12 @@
       session.userId = current.user_id;
       session.name = current.name;
       session.expiresAt = current.password_expires_at || current.password_expiry_date;
+      session.recoveryEnrolled = !!current.recovery_enrolled;
       if (current.must_change_password || current.scope !== "full") {
-        await enterPasswordGate();
+        enterPasswordGate();
         return;
       }
+      setAuthState("authenticated");
       showAuthenticated(true);
       await showView("dashboard");
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
@@ -445,8 +575,8 @@
   function showRecoveryFlow() {
     setSecurityGate(true);
     showAuthenticated(false);
-    hideLoginExtras();
-    byId("mobile_password_change").hidden = true;
+    hideSignInControls();
+    hideLifecycleForms();
     byId("mobile_recovery_flow").hidden = false;
     byId("mobile_recovery_start_step").hidden = false;
     byId("mobile_recovery_verify_step").hidden = true;
@@ -513,7 +643,7 @@
     });
     const body = await response.json();
     if (!response.ok) {
-      error.textContent = body.error || "Recovery could not be completed.";
+      error.textContent = userFacingAuthError(body.code || body.error, "Recovery could not be completed.");
       return;
     }
     saveSession(null);
@@ -562,6 +692,7 @@
 
   byId("mobile_login_button").addEventListener("click", login);
   byId("mobile_password_change").addEventListener("submit", changePassword);
+  byId("mobile_recovery_enroll").addEventListener("submit", submitEnrollment);
   byId("mobile_forgot_password_btn").addEventListener("click", showRecoveryFlow);
   byId("mobile_recovery_start_btn").addEventListener("click", () => handleRecoveryStart().catch(err => {
     byId("mobile_recovery_error").textContent = err.message;
