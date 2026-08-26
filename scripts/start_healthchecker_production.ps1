@@ -9,6 +9,118 @@ function Stop-WithCode([string]$Code) {
     throw "HealthChecker production startup failed: $Code"
 }
 
+function Write-HcHeartbeat {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$State,
+        [int]$Attempt = 0,
+        [int]$ChildPid = 0,
+        [string]$Reason = ""
+    )
+    $payload = [ordered]@{
+        service = "healthchecker.consumer.api"
+        state   = $State
+        at_utc  = [DateTime]::UtcNow.ToString("o")
+    }
+    if ($Attempt -gt 0) { $payload.attempt = $Attempt }
+    if ($ChildPid -gt 0) { $payload.child_pid = $ChildPid }
+    if ($Reason) { $payload.reason = $Reason }
+    $json = $payload | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText($Path, $json)
+}
+
+function Test-HcProcessAlive([int]$ProcessId) {
+    if ($ProcessId -le 0) { return $false }
+    return [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+}
+
+function Test-HcLoopbackService {
+    param(
+        [Parameter(Mandatory = $true)][string]$BindAddress,
+        [Parameter(Mandatory = $true)][int]$Port
+    )
+    $client = $null
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $async = $client.BeginConnect($BindAddress, $Port, $null, $null)
+        $opened = $async.AsyncWaitHandle.WaitOne(500, $false)
+        if (-not $opened) { return $false }
+        $client.EndConnect($async)
+    } catch {
+        return $false
+    } finally {
+        if ($client) { $client.Close() }
+    }
+    try {
+        $request = [System.Net.HttpWebRequest]::Create("http://${BindAddress}:${Port}/")
+        $request.Method = "GET"
+        $request.Timeout = 2000
+        $request.ReadWriteTimeout = 2000
+        $request.Proxy = New-Object System.Net.WebProxy
+        $response = $request.GetResponse()
+        try {
+            $code = [int]$response.StatusCode
+            return ($code -ge 200 -and $code -lt 500)
+        } finally {
+            $response.Close()
+        }
+    } catch {
+        return $false
+    }
+}
+
+function Stop-HcOwnedChild {
+    param(
+        [System.Diagnostics.Process]$Child,
+        [string]$BindAddress,
+        [int]$Port
+    )
+    if ($Child) {
+        $rootId = 0
+        try { $rootId = [int]$Child.Id } catch { $rootId = 0 }
+        if ($rootId -gt 0) {
+            Get-CimInstance Win32_Process -Filter "ParentProcessId=$rootId" -ErrorAction SilentlyContinue | ForEach-Object {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+            if (-not $Child.HasExited) {
+                Stop-Process -Id $rootId -Force -ErrorAction SilentlyContinue
+            }
+            try { $null = $Child.WaitForExit(15000) } catch { }
+        }
+    }
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $stillListening = Get-NetTCPConnection -State Listen -LocalAddress $BindAddress -LocalPort $Port -ErrorAction SilentlyContinue
+        if (-not $stillListening) { return }
+        $ownerIds = @($stillListening | Select-Object -ExpandProperty OwningProcess -Unique)
+        foreach ($ownerId in $ownerIds) {
+            if ($Child -and ($ownerId -eq $Child.Id)) {
+                Stop-Process -Id $ownerId -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+}
+
+function Start-HcUvicornChild {
+    param(
+        [Parameter(Mandatory = $true)][string]$Python,
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][string]$BindAddress,
+        [Parameter(Mandatory = $true)][int]$Port
+    )
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Python
+    $psi.Arguments = "-m uvicorn backend.health_vault.api:create_health_vault_app --factory --host $BindAddress --port $Port --no-access-log"
+    $psi.WorkingDirectory = $InstallRoot
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    if (-not $proc.Start()) { return $null }
+    return $proc
+}
+
 $assertRuntime = Join-Path $PSScriptRoot "Assert-HealthCheckerManagedRuntime.ps1"
 if (-not (Test-Path -LiteralPath $assertRuntime -PathType Leaf)) { Stop-WithCode "managed_runtime_assert_missing" }
 try {
@@ -65,24 +177,81 @@ if (Get-NetTCPConnection -State Listen -LocalAddress $bindAddress -LocalPort $po
 
 $PID | Set-Content -LiteralPath $pidPath -Encoding ascii -NoNewline
 $attempt = 0
+$child = $null
+$exitState = "stopped"
+$healthPollSeconds = 1
+$readyTimeoutSeconds = 30
 try {
+    Set-Location -LiteralPath $installRoot
     while ($true) {
+        if ($child -and -not $child.HasExited) {
+            Add-Content -LiteralPath $logPath -Value "event=runtime_duplicate_child_prevented"
+            Stop-HcOwnedChild -Child $child -BindAddress $bindAddress -Port $port
+            $child = $null
+        }
         $attempt++
-        @{ service = "healthchecker.consumer.api"; state = "starting"; attempt = $attempt; at_utc = [DateTime]::UtcNow.ToString("o") } |
-            ConvertTo-Json -Compress | Set-Content -LiteralPath $heartbeatPath -Encoding utf8
+        Write-HcHeartbeat -Path $heartbeatPath -State "starting" -Attempt $attempt
         Add-Content -LiteralPath $logPath -Value "event=runtime_start attempt=$attempt"
-        Set-Location -LiteralPath $installRoot
-        & $python -m uvicorn backend.health_vault.api:create_health_vault_app `
-            --factory --host $bindAddress --port $port `
-            --no-access-log
-        $exitCode = $LASTEXITCODE
+        $child = Start-HcUvicornChild -Python $python -InstallRoot $installRoot -BindAddress $bindAddress -Port $port
+        if (-not $child) {
+            Add-Content -LiteralPath $logPath -Value "event=runtime_exit code=start_failed attempt=$attempt"
+            if ($attempt -gt $restartLimit) {
+                $exitState = "failed"
+                Write-HcHeartbeat -Path $heartbeatPath -State "failed" -Attempt $attempt -Reason "restart_limit_exceeded"
+                Stop-WithCode "restart_limit_exceeded"
+            }
+            Start-Sleep -Seconds ([Math]::Min(60, $backoff * $attempt))
+            continue
+        }
+        $childPid = [int]$child.Id
+        $readyDeadline = [DateTime]::UtcNow.AddSeconds($readyTimeoutSeconds)
+        $becameHealthy = $false
+        while ([DateTime]::UtcNow -lt $readyDeadline) {
+            if (-not (Test-HcProcessAlive -ProcessId $childPid)) { break }
+            if (Test-HcLoopbackService -BindAddress $bindAddress -Port $port) {
+                $becameHealthy = $true
+                break
+            }
+            Start-Sleep -Milliseconds 200
+        }
+        if ($becameHealthy) {
+            Write-HcHeartbeat -Path $heartbeatPath -State "running" -Attempt $attempt -ChildPid $childPid
+            Add-Content -LiteralPath $logPath -Value "event=runtime_healthy attempt=$attempt"
+            while ((Test-HcProcessAlive -ProcessId $childPid) -and (Test-HcLoopbackService -BindAddress $bindAddress -Port $port)) {
+                Write-HcHeartbeat -Path $heartbeatPath -State "running" -Attempt $attempt -ChildPid $childPid
+                Start-Sleep -Seconds $healthPollSeconds
+            }
+        }
+        $childAlive = Test-HcProcessAlive -ProcessId $childPid
+        $serving = Test-HcLoopbackService -BindAddress $bindAddress -Port $port
+        $reason = "child_exit"
+        $exitCode = "unknown"
+        if ($childAlive -and -not $serving) { $reason = "service_unavailable" }
+        elseif (-not $becameHealthy) { $reason = "ready_timeout" }
+        try {
+            $child.Refresh()
+            if ($child.HasExited) { $exitCode = [string]$child.ExitCode }
+        } catch { }
+        Add-Content -LiteralPath $logPath -Value "event=runtime_unhealthy reason=$reason attempt=$attempt"
         Add-Content -LiteralPath $logPath -Value "event=runtime_exit code=$exitCode attempt=$attempt"
-        if ($exitCode -eq 0) { break }
-        if ($attempt -gt $restartLimit) { Stop-WithCode "restart_limit_exceeded" }
-        Start-Sleep -Seconds ([Math]::Min(60, $backoff * $attempt))
+        Write-HcHeartbeat -Path $heartbeatPath -State "restarting" -Attempt $attempt -ChildPid $childPid -Reason $reason
+        Stop-HcOwnedChild -Child $child -BindAddress $bindAddress -Port $port
+        $child = $null
+        if ($attempt -gt $restartLimit) {
+            $exitState = "failed"
+            Write-HcHeartbeat -Path $heartbeatPath -State "failed" -Attempt $attempt -Reason "restart_limit_exceeded"
+            Stop-WithCode "restart_limit_exceeded"
+        }
+        $delay = [Math]::Min(60, $backoff * $attempt)
+        Add-Content -LiteralPath $logPath -Value "event=runtime_backoff seconds=$delay attempt=$attempt"
+        Start-Sleep -Seconds $delay
     }
 } finally {
+    Stop-HcOwnedChild -Child $child -BindAddress $bindAddress -Port $port
     Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
-    @{ service = "healthchecker.consumer.api"; state = "stopped"; at_utc = [DateTime]::UtcNow.ToString("o") } |
-        ConvertTo-Json -Compress | Set-Content -LiteralPath $heartbeatPath -Encoding utf8
+    if ($exitState -eq "failed") {
+        Write-HcHeartbeat -Path $heartbeatPath -State "failed" -Reason "restart_limit_exceeded"
+    } else {
+        Write-HcHeartbeat -Path $heartbeatPath -State "stopped"
+    }
 }
