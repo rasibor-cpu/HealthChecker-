@@ -40,6 +40,47 @@ CONTROL.mkdir(parents=True, exist_ok=True)
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        with (CONTROL / "probes.log").open("a", encoding="ascii") as handle:
+            handle.write("%s %s\n" % (path, time.time()))
+        if path == "/healthz":
+            sticky = CONTROL / "fail_healthz"
+            remaining = CONTROL / "fail_healthz_remaining"
+            stall = CONTROL / "stall_healthz_ms"
+            if sticky.exists():
+                self.send_response(500)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"unhealthy")
+                return
+            if remaining.exists():
+                try:
+                    n = int((remaining.read_text(encoding="ascii") or "0").strip() or "0")
+                except ValueError:
+                    n = 0
+                if n > 0:
+                    remaining.write_text(str(n - 1), encoding="ascii")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(b"unhealthy")
+                    return
+            if stall.exists():
+                try:
+                    ms = int((stall.read_text(encoding="ascii") or "0").strip() or "0")
+                except ValueError:
+                    ms = 0
+                try:
+                    stall.unlink()
+                except OSError:
+                    pass
+                if ms > 0:
+                    time.sleep(ms / 1000.0)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+            return
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
@@ -319,6 +360,12 @@ def test_supervisor_remains_singleton_owner_and_keeps_safety_gates():
     assert "healthchecker-consumer-api.heartbeat.json" in text
     assert "Start-HcUvicornChild" in text
     assert "Test-HcLoopbackService" in text
+    assert 'Path = "/healthz"' in text
+    assert "$probeFailureThreshold = 3" in text
+    assert 'State "degraded"' in text
+    assert "event=runtime_probe_recovered" in text
+    assert 'http://${BindAddress}:${Port}/"' not in text
+    assert "event=runtime_duplicate_child_prevented" in text
     assert 'state   = "failed"' in text or 'State "failed"' in text
     assert "& $python -m uvicorn" not in text
     assert "--ssl-certfile" not in text
@@ -542,5 +589,103 @@ def test_heartbeat_state_transitions_on_child_exit(tmp_path: Path):
         assert "event=runtime_unhealthy reason=child_exit" in log
         assert "event=runtime_start attempt=2" in log
         assert "event=runtime_healthy attempt=2" in log
+    finally:
+        _kill_tree(proc.pid)
+
+
+def test_single_probe_timeout_does_not_kill_child(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    proc, config, control = _start_supervisor(config_path, tmp_path)
+    try:
+        _wait_state(config, "running")
+        first = _wait_child_count(control, 1)[0]
+        (control / "stall_healthz_ms").write_text("3000", encoding="ascii")
+        time.sleep(5.5)
+        assert len(_starts(control)) == 1
+        assert _alive(first)
+        recovered = _wait_until(
+            lambda: (_read_json(_heartbeat_path(config)) or {}).get("state") == "running",
+            10,
+        )
+        assert recovered
+        log = _read_text_retry(_log_path(config)) or ""
+        assert "reason=service_unavailable" not in log
+        assert proc.poll() is None
+    finally:
+        _kill_tree(proc.pid)
+
+
+def test_two_probe_failures_below_threshold_do_not_kill_child(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    proc, config, control = _start_supervisor(config_path, tmp_path)
+    try:
+        _wait_state(config, "running")
+        first = _wait_child_count(control, 1)[0]
+        (control / "fail_healthz_remaining").write_text("2", encoding="ascii")
+        degraded = _wait_until(
+            lambda: (_read_json(_heartbeat_path(config)) or {}).get("state") == "degraded",
+            8,
+        )
+        assert degraded
+        recovered = _wait_state(config, "running", timeout=10)
+        assert recovered["state"] == "running"
+        assert len(_starts(control)) == 1
+        assert _alive(first)
+        log = _read_text_retry(_log_path(config)) or ""
+        assert "event=runtime_probe_recovered" in log
+        assert "reason=service_unavailable" not in log
+    finally:
+        _kill_tree(proc.pid)
+
+
+def test_threshold_consecutive_probe_failures_trigger_restart(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    proc, config, control = _start_supervisor(config_path, tmp_path)
+    try:
+        _wait_state(config, "running")
+        first = _wait_child_count(control, 1)[0]
+        (control / "fail_healthz_remaining").write_text("3", encoding="ascii")
+        restarted = _wait_until(lambda: len(_starts(control)) >= 2, 20)
+        assert restarted, (
+            "child was not restarted after 3 consecutive probe failures; "
+            f"starts={_starts(control)} heartbeat={_read_json(_heartbeat_path(config))} "
+            f"log={_read_text_retry(_log_path(config)) or ''}"
+        )
+        second = _starts(control)[1]
+        _wait_state(config, "running", timeout=15)
+        assert second != first
+        assert not _alive(first)
+        assert _alive(second)
+        log = _read_text_retry(_log_path(config)) or ""
+        assert "reason=service_unavailable" in log
+        assert len(_child_pids(proc.pid)) == 1
+    finally:
+        _kill_tree(proc.pid)
+
+
+def test_probe_success_resets_consecutive_failure_counter(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    proc, config, control = _start_supervisor(config_path, tmp_path)
+    try:
+        _wait_state(config, "running")
+        first = _wait_child_count(control, 1)[0]
+        (control / "fail_healthz_remaining").write_text("2", encoding="ascii")
+        _wait_until(
+            lambda: "event=runtime_probe_recovered" in (_read_text_retry(_log_path(config)) or ""),
+            12,
+        )
+        (control / "fail_healthz_remaining").write_text("2", encoding="ascii")
+        time.sleep(5)
+        assert len(_starts(control)) == 1
+        assert _alive(first)
+        still = _read_json(_heartbeat_path(config))
+        assert still["state"] == "running"
+        log = _read_text_retry(_log_path(config)) or ""
+        assert log.count("event=runtime_probe_recovered") >= 2
+        assert "reason=service_unavailable" not in log
     finally:
         _kill_tree(proc.pid)

@@ -15,7 +15,8 @@ function Write-HcHeartbeat {
         [Parameter(Mandatory = $true)][string]$State,
         [int]$Attempt = 0,
         [int]$ChildPid = 0,
-        [string]$Reason = ""
+        [string]$Reason = "",
+        [int]$ConsecutiveFailures = 0
     )
     $payload = [ordered]@{
         service = "healthchecker.consumer.api"
@@ -25,6 +26,7 @@ function Write-HcHeartbeat {
     if ($Attempt -gt 0) { $payload.attempt = $Attempt }
     if ($ChildPid -gt 0) { $payload.child_pid = $ChildPid }
     if ($Reason) { $payload.reason = $Reason }
+    if ($ConsecutiveFailures -gt 0) { $payload.consecutive_failures = $ConsecutiveFailures }
     $json = $payload | ConvertTo-Json -Compress
     [System.IO.File]::WriteAllText($Path, $json)
 }
@@ -37,7 +39,9 @@ function Test-HcProcessAlive([int]$ProcessId) {
 function Test-HcLoopbackService {
     param(
         [Parameter(Mandatory = $true)][string]$BindAddress,
-        [Parameter(Mandatory = $true)][int]$Port
+        [Parameter(Mandatory = $true)][int]$Port,
+        [string]$Path = "/healthz",
+        [int]$TimeoutMs = 2000
     )
     $client = $null
     try {
@@ -51,16 +55,18 @@ function Test-HcLoopbackService {
     } finally {
         if ($client) { $client.Close() }
     }
+    if (-not $Path) { $Path = "/healthz" }
+    if (-not $Path.StartsWith("/")) { $Path = "/" + $Path }
     try {
-        $request = [System.Net.HttpWebRequest]::Create("http://${BindAddress}:${Port}/")
+        $request = [System.Net.HttpWebRequest]::Create("http://${BindAddress}:${Port}${Path}")
         $request.Method = "GET"
-        $request.Timeout = 2000
-        $request.ReadWriteTimeout = 2000
+        $request.Timeout = $TimeoutMs
+        $request.ReadWriteTimeout = $TimeoutMs
         $request.Proxy = New-Object System.Net.WebProxy
         $response = $request.GetResponse()
         try {
             $code = [int]$response.StatusCode
-            return ($code -ge 200 -and $code -lt 500)
+            return ($code -eq 200)
         } finally {
             $response.Close()
         }
@@ -180,6 +186,7 @@ $attempt = 0
 $child = $null
 $exitState = "stopped"
 $healthPollSeconds = 1
+$probeFailureThreshold = 3
 $readyTimeoutSeconds = 30
 try {
     Set-Location -LiteralPath $installRoot
@@ -214,19 +221,39 @@ try {
             }
             Start-Sleep -Milliseconds 200
         }
+        $probeExhausted = $false
         if ($becameHealthy) {
             Write-HcHeartbeat -Path $heartbeatPath -State "running" -Attempt $attempt -ChildPid $childPid
             Add-Content -LiteralPath $logPath -Value "event=runtime_healthy attempt=$attempt"
-            while ((Test-HcProcessAlive -ProcessId $childPid) -and (Test-HcLoopbackService -BindAddress $bindAddress -Port $port)) {
-                Write-HcHeartbeat -Path $heartbeatPath -State "running" -Attempt $attempt -ChildPid $childPid
+            $consecutiveProbeFailures = 0
+            while (Test-HcProcessAlive -ProcessId $childPid) {
+                if (Test-HcLoopbackService -BindAddress $bindAddress -Port $port) {
+                    if ($consecutiveProbeFailures -gt 0) {
+                        Add-Content -LiteralPath $logPath -Value "event=runtime_probe_recovered attempt=$attempt"
+                    }
+                    $consecutiveProbeFailures = 0
+                    Write-HcHeartbeat -Path $heartbeatPath -State "running" -Attempt $attempt -ChildPid $childPid
+                } else {
+                    $consecutiveProbeFailures++
+                    Add-Content -LiteralPath $logPath -Value "event=runtime_degraded consecutive=$consecutiveProbeFailures attempt=$attempt"
+                    if ($consecutiveProbeFailures -ge $probeFailureThreshold) {
+                        $probeExhausted = $true
+                        break
+                    }
+                    Write-HcHeartbeat -Path $heartbeatPath -State "degraded" -Attempt $attempt -ChildPid $childPid -Reason "probe_failure" -ConsecutiveFailures $consecutiveProbeFailures
+                }
                 Start-Sleep -Seconds $healthPollSeconds
             }
         }
         $childAlive = Test-HcProcessAlive -ProcessId $childPid
-        $serving = Test-HcLoopbackService -BindAddress $bindAddress -Port $port
+        $serving = $false
+        if (-not $probeExhausted) {
+            $serving = Test-HcLoopbackService -BindAddress $bindAddress -Port $port
+        }
         $reason = "child_exit"
         $exitCode = "unknown"
-        if ($childAlive -and -not $serving) { $reason = "service_unavailable" }
+        if ($childAlive -and $probeExhausted) { $reason = "service_unavailable" }
+        elseif ($childAlive -and -not $serving) { $reason = "service_unavailable" }
         elseif (-not $becameHealthy) { $reason = "ready_timeout" }
         try {
             $child.Refresh()
