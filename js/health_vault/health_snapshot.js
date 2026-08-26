@@ -1429,12 +1429,17 @@
     root.innerHTML =
       '<section class="hc-health-snapshot hc-snapshot-drilldown"><p class="muted">Loading metric detail…</p></section>';
     fetch("/api/health-vault/health-snapshot?metric=" + encodeURIComponent(metricId), {
-      headers: headers,
+      headers: Object.assign({ Accept: "application/json" }, headers),
       cache: "no-store",
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("metric_detail_" + res.status);
-        return res.json();
+        if (
+          (res.status === 401 || res.status === 403) &&
+          isJsonContentType(res.headers && res.headers.get ? res.headers.get("content-type") : "")
+        ) {
+          throw new Error("metric_detail_" + res.status);
+        }
+        return parseJsonResponse(res, "/api/health-vault/health-snapshot");
       })
       .then(function (body) {
         if (!body || body.found === false || !body.card) {
@@ -1443,7 +1448,11 @@
         }
         renderDrillDown(root, body);
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (isJsonContractError(err)) {
+          showSnapshotContractError(root, err);
+          return;
+        }
         paintLocal();
       });
   }
@@ -1665,6 +1674,80 @@
     return null;
   }
 
+  function isJsonContentType(value) {
+    const base = String(value || "").split(";")[0].trim().toLowerCase();
+    return base === "application/json";
+  }
+
+  function safeApiPath(path) {
+    const raw = String(path || "");
+    try {
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+        return new URL(raw).pathname || "/";
+      }
+    } catch (_) {}
+    return raw.split("#")[0].split("?")[0] || "/";
+  }
+
+  function safeFinalUrl(response) {
+    try {
+      const parsed = new URL(String((response && response.url) || ""), "https://health.capitalstratasystems.com");
+      return parsed.origin + parsed.pathname;
+    } catch (_) {
+      return "unknown";
+    }
+  }
+
+  function jsonContractError(code, path, response) {
+    const status = response && response.status != null ? String(response.status) : "unknown";
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    return new Error(
+      code +
+        " path=" + safeApiPath(path) +
+        " status=" + status +
+        " content_type=" + contentType +
+        " final_url=" + safeFinalUrl(response)
+    );
+  }
+
+  function isJsonContractError(err) {
+    const msg = String((err && err.message) || "");
+    return msg.indexOf("API_RESPONSE_NOT_JSON ") === 0 || msg.indexOf("JSON_PARSE_FAILED ") === 0;
+  }
+
+  function parseJsonResponse(response, path) {
+    const redirected = !!(response && response.redirected);
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    if (redirected && !isJsonContentType(contentType)) {
+      return Promise.reject(jsonContractError("API_RESPONSE_NOT_JSON", path, response));
+    }
+    if (!isJsonContentType(contentType)) {
+      return Promise.reject(jsonContractError("API_RESPONSE_NOT_JSON", path, response));
+    }
+    return Promise.resolve()
+      .then(function () {
+        return response.text();
+      })
+      .then(function (text) {
+        try {
+          return JSON.parse(text);
+        } catch (_err) {
+          throw jsonContractError("JSON_PARSE_FAILED", path, response);
+        }
+      });
+  }
+
+  function showSnapshotContractError(root, err) {
+    if (!root) return;
+    const msg = String((err && err.message) || "API_RESPONSE_NOT_JSON");
+    root.innerHTML =
+      '<section class="hc-health-snapshot" aria-label="Health Snapshot"><p class="bad" data-hc-json-contract-error="true"></p></section>';
+    const node = root.querySelector("[data-hc-json-contract-error]");
+    if (node) node.textContent = msg;
+  }
+
   function renderLocal() {
     const root = document.getElementById("hc_health_snapshot");
     if (!root) return;
@@ -1689,18 +1772,32 @@
       renderLocal();
       return Promise.resolve();
     }
-    return fetch("/api/health-vault/health-snapshot", { headers: headers, cache: "no-store" })
+    return fetch("/api/health-vault/health-snapshot", {
+      headers: Object.assign({ Accept: "application/json" }, headers),
+      cache: "no-store",
+    })
       .then(function (res) {
-        if (!res.ok) throw new Error("health_snapshot_http_" + res.status);
-        return res.json();
+        if (
+          (res.status === 401 || res.status === 403) &&
+          isJsonContentType(res.headers && res.headers.get ? res.headers.get("content-type") : "")
+        ) {
+          throw new Error("health_snapshot_http_" + res.status);
+        }
+        return parseJsonResponse(res, "/api/health-vault/health-snapshot").then(function (body) {
+          if (!res.ok) throw new Error("health_snapshot_http_" + res.status);
+          return body;
+        });
       })
       .then(function (body) {
         const cards = normalizeSnapshotCards(body && body.cards ? body.cards : []);
         renderInto(root, cards);
         return cards;
       })
-      .catch(function () {
-        // Authenticated sessions prefer server cards; fall back locally only when API unavailable.
+      .catch(function (err) {
+        if (isJsonContractError(err)) {
+          showSnapshotContractError(root, err);
+          return;
+        }
         renderLocal();
       });
   }
@@ -1779,6 +1876,12 @@
     renderHealthMetricCard: renderHealthMetricCard,
     renderInto: renderInto,
     refresh: refresh,
+    parseJsonResponse: parseJsonResponse,
+    isJsonContentType: isJsonContentType,
+    safeApiPath: safeApiPath,
+    safeFinalUrl: safeFinalUrl,
+    isJsonContractError: isJsonContractError,
+    showSnapshotContractError: showSnapshotContractError,
     openMetricDetail: openMetricDetail,
     closeDrillDown: closeDrillDown,
     metricAliasesFor: metricAliasesFor,

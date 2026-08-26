@@ -16,6 +16,76 @@
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
 
+  function isJsonContentType(value) {
+    const base = String(value || "").split(";")[0].trim().toLowerCase();
+    return base === "application/json";
+  }
+
+  function safeApiPath(path) {
+    const raw = String(path || "");
+    try {
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+        return new URL(raw).pathname || "/";
+      }
+    } catch (_) {}
+    return raw.split("#")[0].split("?")[0] || "/";
+  }
+
+  function safeFinalUrl(response) {
+    try {
+      const parsed = new URL(String((response && response.url) || ""), "https://health.capitalstratasystems.com");
+      return parsed.origin + parsed.pathname;
+    } catch (_) {
+      return "unknown";
+    }
+  }
+
+  function jsonContractError(code, path, response) {
+    const status = response && response.status != null ? String(response.status) : "unknown";
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    return new Error(
+      code +
+        " path=" + safeApiPath(path) +
+        " status=" + status +
+        " content_type=" + contentType +
+        " final_url=" + safeFinalUrl(response)
+    );
+  }
+
+  async function parseJsonResponse(response, path) {
+    const redirected = !!(response && response.redirected);
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    if (redirected && !isJsonContentType(contentType)) {
+      throw jsonContractError("API_RESPONSE_NOT_JSON", path, response);
+    }
+    if (!isJsonContentType(contentType)) {
+      throw jsonContractError("API_RESPONSE_NOT_JSON", path, response);
+    }
+    let text;
+    try {
+      text = await response.text();
+    } catch (_) {
+      throw jsonContractError("JSON_PARSE_FAILED", path, response);
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw jsonContractError("JSON_PARSE_FAILED", path, response);
+    }
+  }
+
+  try {
+    globalThis.HCMobileJsonContract = {
+      isJsonContentType,
+      safeApiPath,
+      safeFinalUrl,
+      parseJsonResponse,
+      jsonContractError,
+    };
+  } catch (_) {}
+
   function userFacingAuthError(code, fallback) {
     const map = {
       recovery_enrollment_required: "Choose three recovery questions before continuing.",
@@ -78,16 +148,23 @@
   }
 
   async function request(path, options) {
-    const response = await fetch(path, { ...(options || {}), headers: { ...authHeaders(), ...((options || {}).headers || {}) } });
+    const response = await fetch(path, {
+      ...(options || {}),
+      headers: { Accept: "application/json", ...authHeaders(), ...((options || {}).headers || {}) },
+    });
     const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
     if (session && (response.status === 401 || response.status === 403) && !gated) {
       await logout(false);
       throw new Error(response.status === 403 ? "Password change required" : "Session expired");
     }
-    const body = await response.json();
+    const body = await parseJsonResponse(response, path);
     if (!response.ok) throw new Error(userFacingAuthError(body.code || body.error, "Request failed"));
     return body;
   }
+
+  try {
+    if (globalThis.HCMobileJsonContract) globalThis.HCMobileJsonContract.request = request;
+  } catch (_) {}
 
   function showAuthenticated(active) {
     byId("mobile_login").hidden = active;
