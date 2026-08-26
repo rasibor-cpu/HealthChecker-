@@ -1,7 +1,6 @@
 package com.healthchecker.companion.ui
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.net.http.SslError
@@ -27,6 +26,7 @@ import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
 import com.healthchecker.companion.consumer.ConsumerOriginLock
 import com.healthchecker.companion.consumer.ConsumerOriginPolicy
+import com.healthchecker.companion.consumer.ConsumerSafFileChooserPolicy
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.util.SafeLog
 
@@ -36,6 +36,8 @@ import com.healthchecker.companion.util.SafeLog
  * HC325-R6: ordinary production launch is fail-closed to the governed public
  * origin. Paired companion host, stale prefs, restored WebView history, and
  * debug localhost defaults must not become the consumer WebView URL.
+ * HC325-R6B: SAF content:// documents selected via the file chooser are
+ * readable for FormData upload; file:// access stays disabled.
  * Native Health Connect and WorkManager remain in [CompanionStatusActivity].
  * No JavaScript interface is installed and no clinical data is persisted natively.
  */
@@ -47,14 +49,16 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private var originPolicy: ConsumerOriginPolicy? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var originRecoveryInFlight = false
+    private val grantedSafUris = mutableListOf<Uri>()
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val callback = fileCallback ?: return@registerForActivityResult
         fileCallback = null
-        val uri = if (result.resultCode == Activity.RESULT_OK) result.data?.data else null
-        callback.onReceiveValue(uri?.let { arrayOf(it) })
+        val uris = ConsumerSafFileChooserPolicy.urisFromActivityResult(result.resultCode, result.data)
+        uris?.forEach { takeSafReadGrant(it) }
+        callback.onReceiveValue(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,11 +138,11 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true // HC-318 sessionStorage only; no clinical stores.
             databaseEnabled = false
-            allowFileAccess = false
-            allowContentAccess = false
-            allowFileAccessFromFileURLs = false
-            allowUniversalAccessFromFileURLs = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            allowFileAccess = ConsumerSafFileChooserPolicy.ALLOW_FILE_ACCESS
+            allowContentAccess = ConsumerSafFileChooserPolicy.ALLOW_CONTENT_ACCESS
+            allowFileAccessFromFileURLs = ConsumerSafFileChooserPolicy.ALLOW_FILE_ACCESS_FROM_FILE_URLS
+            allowUniversalAccessFromFileURLs = ConsumerSafFileChooserPolicy.ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS
+            mixedContentMode = ConsumerSafFileChooserPolicy.MIXED_CONTENT_NEVER_ALLOW
             cacheMode = WebSettings.LOAD_NO_CACHE
             setGeolocationEnabled(false)
             mediaPlaybackRequiresUserGesture = true
@@ -157,16 +161,13 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?,
             ): Boolean {
-                fileCallback?.onReceiveValue(null)
-                fileCallback = filePathCallback
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
-                        "application/pdf", "application/json", "image/png", "image/jpeg"
-                    ))
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+                if (ConsumerSafFileChooserPolicy.shouldCancelPreviousCallback()) {
+                    fileCallback?.onReceiveValue(null)
                 }
+                fileCallback = filePathCallback
+                val intent = ConsumerSafFileChooserPolicy.createOpenDocumentIntent(
+                    fileChooserParams?.acceptTypes
+                )
                 return try {
                     filePicker.launch(intent)
                     true
@@ -297,6 +298,30 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
     }
 
+    private fun takeSafReadGrant(uri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                ConsumerSafFileChooserPolicy.persistableReadPermissionFlags(),
+            )
+            grantedSafUris.add(uri)
+        } catch (_: SecurityException) {
+            SafeLog.i("saf_persistable_grant_unavailable")
+        }
+    }
+
+    private fun releaseSafReadGrants() {
+        val flags = ConsumerSafFileChooserPolicy.persistableReadPermissionFlags()
+        grantedSafUris.forEach { uri ->
+            try {
+                contentResolver.releasePersistableUriPermission(uri, flags)
+            } catch (_: SecurityException) {
+                SafeLog.i("saf_persistable_release_unavailable")
+            }
+        }
+        grantedSafUris.clear()
+    }
+
     private fun openNativeSettings() {
         startActivity(Intent(this, CompanionStatusActivity::class.java))
     }
@@ -304,6 +329,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        releaseSafReadGrants()
         webView.stopLoading()
         webView.webChromeClient = null
         webView.webViewClient = WebViewClient()
