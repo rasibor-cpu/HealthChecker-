@@ -110,6 +110,7 @@ ctx.fetch = async () => fakeResponse({{ status: 200, contentType: 'application/j
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/clinical_rules.js")!r}, 'utf8'), ctx);
 vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/trend_engine.js")!r}, 'utf8'), ctx);
+vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/json_contract.js")!r}, 'utf8'), ctx);
 vm.runInContext(fs.readFileSync({str(ROOT / "js/health_vault/health_snapshot.js")!r}, 'utf8'), ctx);
 {mobile_load}
 const HS = ctx.HCHealthSnapshot;

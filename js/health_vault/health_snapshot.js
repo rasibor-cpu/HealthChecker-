@@ -1691,8 +1691,13 @@
 
   function safeFinalUrl(response) {
     try {
-      const parsed = new URL(String((response && response.url) || ""), "https://health.capitalstratasystems.com");
-      return parsed.origin + parsed.pathname;
+      const raw = String((response && response.url) || "");
+      if (!raw) return "unknown";
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+        const parsed = new URL(raw);
+        return parsed.origin + parsed.pathname;
+      }
+      return raw.split("#")[0].split("?")[0] || "unknown";
     } catch (_) {
       return "unknown";
     }
@@ -1717,6 +1722,10 @@
   }
 
   function parseJsonResponse(response, path) {
+    const contract = global.HCMobileJsonContract;
+    if (contract && typeof contract.parseJsonResponse === "function") {
+      return Promise.resolve(contract.parseJsonResponse(response, path));
+    }
     const redirected = !!(response && response.redirected);
     const headerGet = response && response.headers && response.headers.get;
     const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
