@@ -268,6 +268,25 @@ def create_health_vault_app(
                 return _auth_error(exc)
             request.state.patient_id = account.user_id
         return await call_next(request)
+
+    def _api_json_error(code: str, status_code: int, path: str) -> JSONResponse:
+        return JSONResponse(
+            {"ok": False, "error": code, "code": code, "path": path},
+            status_code=status_code,
+        )
+
+    @app.middleware("http")
+    async def api_never_html_shell(request: Request, call_next):
+        """API invariant: paths under /api/ must never return the HTML app shell."""
+        response = await call_next(request)
+        path = request.url.path or ""
+        if not path.startswith("/api/"):
+            return response
+        ctype = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
+        if ctype in {"text/html", "application/xhtml+xml"} or ctype.endswith("+html"):
+            return _api_json_error("api_html_forbidden", 502, path)
+        return response
+
     for test_user_id, test_password in (test_users or {}).items():
         if auth_service.get_account(test_user_id) is None:
             auth_service.create_user(
@@ -1339,6 +1358,39 @@ def create_health_vault_app(
                 "Content-Disposition": f'attachment; filename="{filename}"'
             }
         )
+
+    @app.api_route(
+        "/api/{rest:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    )
+    async def api_unknown_route(rest: str, request: Request) -> JSONResponse:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "not_found",
+                "code": "not_found",
+                "path": request.url.path,
+            },
+            status_code=404,
+        )
+
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    @app.exception_handler(StarletteHTTPException)
+    async def api_http_exception(request: Request, exc: StarletteHTTPException):
+        path = request.url.path or ""
+        if path.startswith("/api/") and int(exc.status_code) == 404:
+            return JSONResponse(
+                {"ok": False, "error": "not_found", "code": "not_found", "path": path},
+                status_code=404,
+            )
+        if path.startswith("/api/") and int(exc.status_code) in {401, 403}:
+            code = "unauthorized" if int(exc.status_code) == 401 else "forbidden"
+            return JSONResponse(
+                {"ok": False, "error": code, "code": code, "path": path},
+                status_code=int(exc.status_code),
+            )
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
     return app
 

@@ -16,6 +16,85 @@
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
 
+  function isJsonContentType(value) {
+    const base = String(value || "").split(";")[0].trim().toLowerCase();
+    return base === "application/json";
+  }
+
+  function safeApiPath(path) {
+    const raw = String(path || "");
+    try {
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+        return new URL(raw).pathname || "/";
+      }
+    } catch (_) {}
+    return raw.split("#")[0].split("?")[0] || "/";
+  }
+
+  function safeFinalUrl(response) {
+    try {
+      const raw = String((response && response.url) || "");
+      if (!raw) return "unknown";
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+        const parsed = new URL(raw);
+        return parsed.origin + parsed.pathname;
+      }
+      return raw.split("#")[0].split("?")[0] || "unknown";
+    } catch (_) {
+      return "unknown";
+    }
+  }
+
+  function jsonContractError(code, path, response) {
+    const status = response && response.status != null ? String(response.status) : "unknown";
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    return new Error(
+      code +
+        " path=" + safeApiPath(path) +
+        " status=" + status +
+        " content_type=" + contentType +
+        " final_url=" + safeFinalUrl(response)
+    );
+  }
+
+  async function parseJsonResponse(response, path) {
+    const contract = globalThis.HCMobileJsonContract;
+    if (contract && typeof contract.parseJsonResponse === "function" && contract.parseJsonResponse !== parseJsonResponse) {
+      return contract.parseJsonResponse(response, path);
+    }
+    const redirected = !!(response && response.redirected);
+    const headerGet = response && response.headers && response.headers.get;
+    const contentType = headerGet ? String(response.headers.get("content-type") || "") : "";
+    if (redirected && !isJsonContentType(contentType)) {
+      throw jsonContractError("API_RESPONSE_NOT_JSON", path, response);
+    }
+    if (!isJsonContentType(contentType)) {
+      throw jsonContractError("API_RESPONSE_NOT_JSON", path, response);
+    }
+    let text;
+    try {
+      text = await response.text();
+    } catch (_) {
+      throw jsonContractError("JSON_PARSE_FAILED", path, response);
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw jsonContractError("JSON_PARSE_FAILED", path, response);
+    }
+  }
+
+  try {
+    globalThis.HCMobileJsonContract = Object.assign({}, globalThis.HCMobileJsonContract || {}, {
+      isJsonContentType,
+      safeApiPath,
+      safeFinalUrl,
+      parseJsonResponse,
+      jsonContractError,
+    });
+  } catch (_) {}
+
   function userFacingAuthError(code, fallback) {
     const map = {
       recovery_enrollment_required: "Choose three recovery questions before continuing.",
@@ -78,16 +157,24 @@
   }
 
   async function request(path, options) {
-    const response = await fetch(path, { ...(options || {}), headers: { ...authHeaders(), ...((options || {}).headers || {}) } });
+    const response = await fetch(path, {
+      ...(options || {}),
+      headers: { Accept: "application/json", ...authHeaders(), ...((options || {}).headers || {}) },
+    });
     const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
     if (session && (response.status === 401 || response.status === 403) && !gated) {
       await logout(false);
       throw new Error(response.status === 403 ? "Password change required" : "Session expired");
     }
-    const body = await response.json();
+    const body = await parseJsonResponse(response, path);
     if (!response.ok) throw new Error(userFacingAuthError(body.code || body.error, "Request failed"));
     return body;
   }
+
+  try {
+    if (globalThis.HCMobileJsonContract) globalThis.HCMobileJsonContract.request = request;
+    if (globalThis.HCMobileJsonContract) globalThis.HCMobileJsonContract.inspectSettingsSelects = inspectSettingsSelects;
+  } catch (_) {}
 
   function showAuthenticated(active) {
     byId("mobile_login").hidden = active;
@@ -96,8 +183,10 @@
 
   async function loadCatalog() {
     if (catalog && catalog.length) return catalog;
-    const response = await fetch("/api/auth/recovery/catalog");
-    const body = await response.json();
+    const response = await fetch("/api/auth/recovery/catalog", {
+      headers: { Accept: "application/json" },
+    });
+    const body = await parseJsonResponse(response, "/api/auth/recovery/catalog");
     if (!response.ok || !(body.questions || []).length) throw new Error("catalog_unavailable");
     catalog = body.questions || [];
     return catalog;
@@ -262,10 +351,10 @@
   async function submitPasswordChange(payload) {
     const response = await fetch("/api/auth/password/change", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeaders() },
       body: JSON.stringify(payload),
     });
-    const body = await response.json().catch(() => ({}));
+    const body = await parseJsonResponse(response, "/api/auth/password/change");
     const code = body.code || body.error;
     if (!response.ok && code === "recovery_enrollment_required") {
       await enterEnrollmentGate();
@@ -463,6 +552,78 @@
     }
   }
 
+  function setMobileStatus(message) {
+    const node = byId("mobile_status");
+    if (node) node.textContent = message || "";
+  }
+
+  const SURFACE_UNAVAILABLE = {
+    dashboard: "Dashboard data unavailable.",
+    records: "Records data unavailable.",
+    trends: "Trends data unavailable.",
+    observations: "Observations data unavailable.",
+    timeline: "Timeline data unavailable.",
+    reports: "Reports data unavailable.",
+    settings: "Settings data unavailable.",
+    import: "Import is ready.",
+  };
+
+  function surfaceUnavailable(name, error) {
+    const base = SURFACE_UNAVAILABLE[name] || "This screen is unavailable.";
+    const msg = String((error && error.message) || "");
+    if (msg.indexOf("API_RESPONSE_NOT_JSON ") === 0 || msg.indexOf("JSON_PARSE_FAILED ") === 0) {
+      return base;
+    }
+    if (/Unexpected token|DOCTYPE|is not valid JSON/i.test(msg)) {
+      return base;
+    }
+    return base;
+  }
+
+  function ensureSelectInteractive(el) {
+    if (!el) return;
+    el.disabled = false;
+    el.removeAttribute("disabled");
+    el.removeAttribute("aria-disabled");
+    el.removeAttribute("inert");
+    try {
+      el.style.pointerEvents = "auto";
+      el.style.touchAction = "manipulation";
+      el.style.position = "relative";
+      el.style.zIndex = "6";
+    } catch (_) {}
+  }
+
+  function inspectSettingsSelects() {
+    const ids = ["mobile_theme", "mobile_priority_metric"];
+    const results = {};
+    ids.forEach(function (id) {
+      const el = byId(id);
+      ensureSelectInteractive(el);
+      let rect = { left: 0, top: 0, width: 0, height: 0 };
+      try {
+        if (el && el.getBoundingClientRect) rect = el.getBoundingClientRect();
+      } catch (_) {}
+      const x = rect.left + (rect.width / 2);
+      const y = rect.top + (rect.height / 2);
+      let hit = null;
+      try {
+        if (typeof document.elementFromPoint === "function") {
+          hit = document.elementFromPoint(x, y);
+        }
+      } catch (_) {}
+      const contained = !!(el && hit && (hit === el || (el.contains && el.contains(hit))));
+      results[id] = {
+        enabled: !!(el && !el.disabled),
+        pointerEvents: !el || String((el.style && el.style.pointerEvents) || "") !== "none",
+        hitOk: !el || !hit || contained,
+        blocking: (hit && !contained) ? String(hit.id || hit.className || hit.tagName || "unknown") : "",
+      };
+    });
+    try { globalThis.HCMobileSettingsHitTest = results; } catch (_) {}
+    return results;
+  }
+
   async function showView(name, options) {
     options = options || {};
     if (window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate()) {
@@ -471,36 +632,86 @@
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
-    byId("mobile_status").textContent = "Loading…";
-    try {
-      if (!summary) await loadDashboard();
-      if (name === "dashboard") await loadDashboard();
-      if (name === "records") await loadRecords();
-      if (name === "trends") {
+    if (name !== "dashboard" && window.HCHealthSnapshot && typeof HCHealthSnapshot.closeDrillDown === "function") {
+      try { HCHealthSnapshot.closeDrillDown(); } catch (_) {}
+    }
+    setMobileStatus("Loading…");
+    let statusCleared = false;
+    const fail = (surface, error, emptyTarget, emptyMessage) => {
+      if (emptyTarget) text(emptyTarget, emptyMessage || SURFACE_UNAVAILABLE[surface], "muted");
+      setMobileStatus(surfaceUnavailable(surface, error));
+      statusCleared = false;
+    };
+    const ok = () => {
+      if (!statusCleared) {
+        setMobileStatus("");
+        statusCleared = true;
+      }
+    };
+    if (name === "dashboard") {
+      try {
+        await loadDashboard();
+        ok();
+      } catch (error) {
+        fail("dashboard", error, clearContent("mobile_dashboard"), "Dashboard data unavailable.");
+      }
+      return;
+    }
+    if (name === "records") {
+      try {
+        await loadRecords();
+        ok();
+      } catch (error) {
+        fail("records", error, clearContent("mobile_records"), "Records data unavailable.");
+      }
+      return;
+    }
+    if (name === "trends") {
+      try {
+        if (!summary) await loadDashboard();
         const trends = widget("trends_widget").payload.trends || {};
         renderList(clearContent("mobile_trends"), Object.entries(trends), "No trends available.", (card, row) => {
           const trend = row[1] || {};
           text(card, label(row[0]));
           text(card, `${trend.label || trend.direction || "Not enough data"} · Latest ${trend.latest == null ? "not available" : trend.latest} · ${trend.sample_count || 0} samples`, "muted");
         });
+        ok();
+      } catch (error) {
+        fail("trends", error, clearContent("mobile_trends"), "Trends data unavailable.");
       }
-      if (name === "observations") {
+      return;
+    }
+    if (name === "observations") {
+      try {
+        if (!summary) await loadDashboard();
         const observations = widget("key_observations").payload.observations || [];
         renderList(clearContent("mobile_observations"), observations, "No observations available.", (card, row) => {
           text(card, row.fact || row.interpretation || "Observation");
           text(card, row.interpretation || row.explanation || "", "muted");
           text(card, row.safety_boundary_disclaimer || "Observational information only — not a diagnosis.", "muted");
         });
+        ok();
+      } catch (error) {
+        fail("observations", error, clearContent("mobile_observations"), "Observations data unavailable.");
       }
-      if (name === "timeline") {
+      return;
+    }
+    if (name === "timeline") {
+      try {
         const body = await request("/api/health-vault/timeline?unified=true");
         renderList(clearContent("mobile_timeline"), body.entries || [], "Your timeline is empty.", (card, row) => {
           text(card, row.date ? String(row.date).slice(0, 10) : "Timeline event");
           text(card, row.summary || row.trend_impact || row.event_type || "Health event", "muted");
           text(card, `Source: ${row.provenance || row.source || "Not available"}`, "muted");
         });
+        ok();
+      } catch (error) {
+        fail("timeline", error, clearContent("mobile_timeline"), "Timeline data unavailable.");
       }
-      if (name === "reports") {
+      return;
+    }
+    if (name === "reports") {
+      try {
         const report = await request("/api/health-vault/doctor-visit");
         const target = clearContent("mobile_reports");
         const keys = Object.keys(report || {});
@@ -513,13 +724,29 @@
           text(card, typeof value === "object" ? `${Array.isArray(value) ? value.length : Object.keys(value || {}).length} linked items` : value, "muted");
           target.appendChild(card);
         });
+        ok();
+      } catch (error) {
+        fail("reports", error, clearContent("mobile_reports"), "Reports data unavailable.");
       }
-      if (name === "settings") {
+      return;
+    }
+    if (name === "settings") {
+      ensureSelectInteractive(byId("mobile_theme"));
+      ensureSelectInteractive(byId("mobile_priority_metric"));
+      inspectSettingsSelects();
+      try {
         await loadCatalog();
         renderQuestionPickers("mobile_settings_recovery_questions", "mobile_settings_enroll");
+        ok();
+      } catch (error) {
+        fail("settings", error);
       }
-      byId("mobile_status").textContent = "";
-    } catch (error) { byId("mobile_status").textContent = error.message; }
+      inspectSettingsSelects();
+      return;
+    }
+    if (name === "import") {
+      ok();
+    }
   }
 
   async function upload() {
@@ -597,10 +824,11 @@
   async function handleRecoveryStart() {
     const error = byId("mobile_recovery_error");
     error.textContent = "";
-    const body = await fetch("/api/auth/recovery/start", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+    const response = await fetch("/api/auth/recovery/start", {
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ user_id: byId("mobile_recovery_user_id").value.trim() }),
-    }).then(res => res.json());
+    });
+    const body = await parseJsonResponse(response, "/api/auth/recovery/start");
     recoveryId = body.recovery_id;
     renderRecoveryPrompts("mobile_recovery_question_fields", body.questions || []);
     byId("mobile_recovery_start_step").hidden = true;
@@ -611,13 +839,13 @@
     const error = byId("mobile_recovery_error");
     error.textContent = "";
     const response = await fetch("/api/auth/recovery/verify", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         recovery_id: recoveryId,
         answers: collectPromptAnswers("mobile_recovery_question_fields"),
       }),
     });
-    const body = await response.json();
+    const body = await parseJsonResponse(response, "/api/auth/recovery/verify");
     if (!response.ok) {
       error.textContent = "Recovery could not be completed.";
       return;
@@ -638,10 +866,10 @@
     }
     const response = await fetch("/api/auth/recovery/complete", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + (recoveryToken || "") },
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: "Bearer " + (recoveryToken || "") },
       body: JSON.stringify({ new_password: next, confirm_password: confirm }),
     });
-    const body = await response.json();
+    const body = await parseJsonResponse(response, "/api/auth/recovery/complete");
     if (!response.ok) {
       error.textContent = userFacingAuthError(body.code || body.error, "Recovery could not be completed.");
       return;

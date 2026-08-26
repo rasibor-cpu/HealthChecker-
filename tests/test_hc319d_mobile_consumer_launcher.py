@@ -71,7 +71,7 @@ def test_origin_policy_is_explicit_and_excludes_legacy_and_sensitive_paths():
     source = (ANDROID / "java/com/healthchecker/companion/consumer/ConsumerOriginPolicy.kt").read_text(
         encoding="utf-8"
     )
-    for allowed in ("/mobile", "/style.css", "/js/health_vault/mobile_consumer.js", "/js/health_vault/health_snapshot.js", "/js/health_vault/consumer_nav.js", "/api/"):
+    for allowed in ("/mobile", "/style.css", "/js/health_vault/mobile_consumer.js", "/js/health_vault/health_snapshot.js", "/js/health_vault/consumer_nav.js", "/js/health_vault/json_contract.js", "/api/"):
         assert allowed in source
     for forbidden in ("vault_storage", "hc_intake", "evidence", "scratch", "file://"):
         assert forbidden not in source

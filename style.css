@@ -949,3 +949,46 @@ body.mobile-consumer .hc-drill-actions button {
 body.mobile-consumer .hc-snapshot-customize {
     display: none;
 }
+
+/* HC325-R7D - keep native Settings selects tappable on Android WebView.
+   Hidden panels must not paint over later screens. Styled selects with
+   border-radius can swallow the OS picker; restore platform appearance. */
+body.mobile-consumer [hidden],
+body.mobile-consumer [data-mobile-panel][hidden],
+body.mobile-consumer #mobile_login[hidden],
+body.mobile-consumer #mobile_consumer[hidden] {
+    display: none !important;
+    pointer-events: none !important;
+}
+body.mobile-consumer #mobile_settings {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+}
+body.mobile-consumer .mobile-select-field {
+    position: relative;
+    z-index: 6;
+    isolation: isolate;
+    pointer-events: auto;
+    margin: 8px 0;
+}
+body.mobile-consumer select {
+    position: relative;
+    z-index: 6;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-user-select: auto;
+    user-select: auto;
+    -webkit-appearance: menulist;
+    appearance: menulist;
+    min-height: 44px;
+    background-color: var(--card);
+    color: var(--text);
+    border-radius: 0;
+}
+body.mobile-consumer #mobile_theme,
+body.mobile-consumer #mobile_priority_metric {
+    pointer-events: auto;
+    touch-action: manipulation;
+}
+

@@ -149,7 +149,10 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             userAgentString = "$userAgentString HealthCheckerAndroid/${BuildConfig.VERSION_NAME}"
+            setSupportZoom(false)
         }
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
         webView.clearCache(true)
         webView.setDownloadListener { _, _, _, _, _ ->
             Toast.makeText(this, R.string.consumer_download_blocked, Toast.LENGTH_LONG).show()

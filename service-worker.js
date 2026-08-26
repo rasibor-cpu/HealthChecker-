@@ -16,7 +16,7 @@ const CACHE_REVISION = "hc324a";
 const ACTIVE_CACHE_NAME = `${CACHE_NAME}-${CACHE_REVISION}`;
 
 /** HC-325 R3 / HC-321-C1: network-first for dashboard scripts (Ctrl+F5 does not bypass an active SW). */
-const NETWORK_FIRST_JS = /\/js\/health_vault\/(executive_dashboard|health_snapshot|dashboard|health_guardian|consumer_surfaces|consumer_nav|trends|records)\.js(?:\?|$)/;
+const NETWORK_FIRST_JS = /\/js\/health_vault\/(executive_dashboard|health_snapshot|dashboard|health_guardian|consumer_surfaces|consumer_nav|trends|records|mobile_consumer|json_contract)\.js(?:\?|$)/;
 
 /** App-shell URLs safe to precache (relative to SW scope). */
 const APP_SHELL = [

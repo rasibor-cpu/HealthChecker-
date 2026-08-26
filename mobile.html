@@ -121,11 +121,14 @@
           <button type="submit">Save recovery questions</button>
           <p id="mobile_settings_recovery_error" class="bad" role="alert"></p>
         </form>
+        <div class="mobile-select-field">
         <label for="mobile_theme">Theme</label>
         <select id="mobile_theme">
           <option value="light">Light</option>
           <option value="dark">Dark</option>
         </select>
+        </div>
+        <div class="mobile-select-field">
         <label for="mobile_priority_metric">Priority metric</label>
         <select id="mobile_priority_metric">
           <option value="">None</option>
@@ -144,12 +147,14 @@
           <option value="systolic_bp">Systolic Blood Pressure</option>
           <option value="weight">Weight</option>
         </select>
+        </div>
         <button id="mobile_save_preferences" type="button">Save preferences</button>
         <button id="mobile_logout_button" type="button">Logout</button>
         <div data-mobile-content></div>
       </section>
     </section>
   </main>
+  <script src="/js/health_vault/json_contract.js"></script>
   <script src="/js/health_vault/consumer_nav.js"></script>
   <script src="/js/health_vault/health_snapshot.js"></script>
   <script src="/js/health_vault/mobile_consumer.js"></script>
