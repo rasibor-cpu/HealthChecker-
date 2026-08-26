@@ -33,11 +33,14 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
         encoding="utf-8"
     )
     required = (
-        "allowFileAccess = false", "allowContentAccess = false",
-        "allowFileAccessFromFileURLs = false", "allowUniversalAccessFromFileURLs = false",
+        "allowFileAccess = ConsumerSafFileChooserPolicy.ALLOW_FILE_ACCESS",
+        "allowContentAccess = ConsumerSafFileChooserPolicy.ALLOW_CONTENT_ACCESS",
+        "allowFileAccessFromFileURLs = ConsumerSafFileChooserPolicy.ALLOW_FILE_ACCESS_FROM_FILE_URLS",
+        "allowUniversalAccessFromFileURLs = ConsumerSafFileChooserPolicy.ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS",
         "MIXED_CONTENT_NEVER_ALLOW", "LOAD_NO_CACHE", "setAcceptThirdPartyCookies(webView, false)",
         "handler?.cancel()", "ConsumerOriginPolicy", "clearUserScopedState",
         "ScreenshotPolicy.applyConsumerScreenshotPolicy",
+        "ConsumerSafFileChooserPolicy",
     )
     assert all(term in source for term in required)
     assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in source
