@@ -139,6 +139,7 @@ def create_health_vault_app(
     """Create a minimal FastAPI app if fastapi is installed; else return None."""
     try:
         from fastapi import FastAPI, File, Form, UploadFile
+        from fastapi.concurrency import run_in_threadpool
         from fastapi.responses import FileResponse, JSONResponse
         from fastapi.staticfiles import StaticFiles
     except Exception:
@@ -172,6 +173,12 @@ def create_health_vault_app(
         "/mobile", partial(serve_frontend_file, "mobile.html"), methods=["GET"],
         include_in_schema=False,
     )
+
+    @app.get("/healthz")
+    async def healthz() -> JSONResponse:
+        """Event-loop liveness only. No auth, vault, patient, or filesystem work."""
+        return JSONResponse({"status": "ok"})
+
     for public_asset in (
         "index.html",
         "mobile.html",
@@ -1228,7 +1235,7 @@ def create_health_vault_app(
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        summary = dashboard_service.get_summary(pid)
+        summary = await run_in_threadpool(dashboard_service.get_summary, pid)
         return JSONResponse(_sanitize_value(summary.to_dict()))
 
     @app.get("/api/dashboard/preferences")
@@ -1237,7 +1244,7 @@ def create_health_vault_app(
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        prefs = dashboard_service.get_preferences(pid)
+        prefs = await run_in_threadpool(dashboard_service.get_preferences, pid)
         return JSONResponse(prefs.to_dict())
 
     @app.post("/api/dashboard/preferences")
@@ -1248,8 +1255,8 @@ def create_health_vault_app(
             return _auth_error(exc)
         from backend.health_vault.models import UserDashboardPreferences
         prefs = UserDashboardPreferences.from_dict(body)
-        dashboard_service.save_preferences(pid, prefs)
-        return JSONResponse(prefs.to_dict())
+        saved = await run_in_threadpool(dashboard_service.save_preferences, pid, prefs)
+        return JSONResponse(saved.to_dict())
 
     @app.get("/api/records")
     async def list_health_records(
@@ -1267,7 +1274,8 @@ def create_health_vault_app(
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        payload = records_service.consumer_records_payload(
+        payload = await run_in_threadpool(
+            records_service.consumer_records_payload,
             pid,
             category=category,
             status=status,
