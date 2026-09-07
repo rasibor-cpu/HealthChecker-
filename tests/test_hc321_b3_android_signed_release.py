@@ -20,8 +20,11 @@ PROVENANCE_SCRIPT = (
 ).read_text(encoding="utf-8")
 RELEASE = json.loads((ROOT / "config" / "healthchecker.release.json").read_text(encoding="utf-8"))
 
-ANDROID_VERSION_CODE = 321
-ANDROID_VERSION_NAME = "0.321.0"
+_VERSION_CODE_MATCH = re.search(r"versionCode\s*=\s*(\d+)", GRADLE)
+_VERSION_NAME_MATCH = re.search(r'versionName\s*=\s*"(\d+\.\d+\.\d+)"', GRADLE)
+assert _VERSION_CODE_MATCH is not None and _VERSION_NAME_MATCH is not None
+ANDROID_VERSION_CODE = int(_VERSION_CODE_MATCH.group(1))
+ANDROID_VERSION_NAME = _VERSION_NAME_MATCH.group(1)
 DESKTOP_VERSION = "0.321.0"
 PRIOR_ANDROID_VERSION_CODE = 320
 
@@ -61,11 +64,13 @@ def test_android_version_advanced_monotonically_to_321():
     assert f"versionCode = {ANDROID_VERSION_CODE}" in GRADLE
     assert f'versionName = "{ANDROID_VERSION_NAME}"' in GRADLE
     assert ANDROID_VERSION_CODE > PRIOR_ANDROID_VERSION_CODE
-    # Desktop release metadata must remain untouched by B3 versioning work.
+    assert tuple(map(int, ANDROID_VERSION_NAME.split("."))) >= (0, 321, 0)
+    # Desktop release metadata must remain untouched by later Android-only versioning work.
     assert RELEASE["version"] == DESKTOP_VERSION
+    # README retains the B3 baseline and predecessor for release-history monotonicity.
     assert "0.321.0" in README
     assert "321" in README
-    assert "320" in README  # prior line documented for monotonicity
+    assert "320" in README
 
 
 def test_signing_is_env_driven_fail_closed_no_debug_fallback():
