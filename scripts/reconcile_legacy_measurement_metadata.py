@@ -68,11 +68,15 @@ def reconcile(*, apply: bool, backup: Path | None, recovery_key_file: Path | Non
     if backup.exists():
         raise ReconciliationBlocked("backup_target_exists")
 
+    vault_key = getattr(vault, "_encryption_key", None)
+    if not isinstance(vault_key, bytes) or len(vault_key) != 32:
+        raise ReconciliationBlocked("production_vault_key_unavailable")
+
     recovery_key = read_protected_key(recovery_key_file)
     create_encrypted_backup(vault, backup, recovery_key)
     restore_target = backup.with_name(f".{backup.name}.verify.{uuid4().hex}")
     try:
-        restored = restore_encrypted_backup(backup, restore_target, recovery_key, vault.encryption_key)
+        restored = restore_encrypted_backup(backup, restore_target, recovery_key, vault_key)
         if restored._read_index() != index:
             raise ReconciliationBlocked("backup_restore_reconciliation_failed")
         new_index = dict(index)
@@ -94,7 +98,6 @@ def reconcile(*, apply: bool, backup: Path | None, recovery_key_file: Path | Non
         report["result"] = "reconciled"
         return report
     except Exception:
-        # Fail closed: restore the authenticated pre-change index if a write occurred.
         try:
             current = vault._read_index()
             if current != index:
