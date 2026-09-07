@@ -140,7 +140,13 @@ def test_new_users_are_empty_and_robert_data_never_leaks(auth_app):
     headers = {"Authorization": f"Bearer {token}"}
     records = client.get("/api/records", headers=headers)
     assert records.status_code == 200
-    assert records.json() == {"records": []}
+    records_body = records.json()
+    assert records_body["records"] == []
+    assert all(int(value or 0) == 0 for value in (records_body.get("counts") or {}).values())
+    records_json = json.dumps(records_body)
+    assert "robert-private.pdf" not in records_json
+    assert "Robert private" not in records_json
+    assert "synthetic.pdf" not in records_json
     assert client.get("/api/records/robert-doc", headers=headers).status_code == 404
     dashboard_body = client.get("/api/dashboard/summary", headers=headers).json()
     dashboard = json.dumps(dashboard_body)
