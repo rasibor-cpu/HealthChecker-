@@ -55,10 +55,10 @@ def test_desktop_release_version_advanced_to_0_321_0():
     assert RELEASE["version"] == DESKTOP_VERSION
     assert "0.321.0" in PACKAGE_SCRIPT or "$version" in PACKAGE_SCRIPT
     assert "healthchecker.release.json" in PACKAGE_SCRIPT
-    # Desktop metadata is authoritative for B2; Android line is closed by B3 at 321.
+    # Desktop metadata remains 0.321.0; Android has subsequently advanced to vc324.
     gradle = (ROOT / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionName = "0.321.0"' in gradle
-    assert "versionCode = 321" in gradle
+    assert 'versionName = "0.324.0"' in gradle
+    assert "versionCode = 324" in gradle
     assert RELEASE["version"] == DESKTOP_VERSION
 
 

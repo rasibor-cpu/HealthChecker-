@@ -129,8 +129,8 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     assert "storePassword = System.getenv" not in gradle
     assert 'storePassword = "' not in gradle
     assert 'keyPassword = "' not in gradle
-    assert "versionCode = 321" in gradle
-    assert 'versionName = "0.321.0"' in gradle
+    assert "versionCode = 324" in gradle
+    assert 'versionName = "0.324.0"' in gradle
     assert '$trees = @("backend", "js", "css", "assets", "icons")' in package_script
     assert "vault_storage|hc_intake" in package_script
     assert "PreserveUserData" in install_script
