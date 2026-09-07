@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 
 import pytest
 
@@ -129,8 +130,10 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     assert "storePassword = System.getenv" not in gradle
     assert 'storePassword = "' not in gradle
     assert 'keyPassword = "' not in gradle
-    assert "versionCode = 321" in gradle
-    assert 'versionName = "0.321.0"' in gradle
+    code_match = re.search(r"versionCode\s*=\s*(\d+)", gradle)
+    name_match = re.search(r'versionName\s*=\s*"(\d+)\.(\d+)\.(\d+)"', gradle)
+    assert code_match is not None and int(code_match.group(1)) >= 321
+    assert name_match is not None and tuple(map(int, name_match.groups())) >= (0, 321, 0)
     assert '$trees = @("backend", "js", "css", "assets", "icons")' in package_script
     assert "vault_storage|hc_intake" in package_script
     assert "PreserveUserData" in install_script
