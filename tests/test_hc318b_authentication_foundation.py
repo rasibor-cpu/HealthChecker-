@@ -140,7 +140,18 @@ def test_new_users_are_empty_and_robert_data_never_leaks(auth_app):
     headers = {"Authorization": f"Bearer {token}"}
     records = client.get("/api/records", headers=headers)
     assert records.status_code == 200
-    assert records.json() == {"records": []}
+    records_payload = records.json()
+    # The records endpoint now includes empty-state metadata in addition to records.
+    # Preserve the actual security contract: a newly created user must see no
+    # clinical records, measurements, documents, or observations belonging to
+    # another user.
+    assert records_payload["records"] == []
+    assert records_payload["vault_record_count"] == 0
+    assert records_payload["page"]["total"] == 0
+    assert records_payload["search"]["match_count"] == 0
+    assert all(value == 0 for value in records_payload["counts"].values())
+    assert records_payload["freshness_path"]["patient_id"] == "new-user"
+    assert records_payload["freshness_path"]["companion_observation_count"] == 0
     assert client.get("/api/records/robert-doc", headers=headers).status_code == 404
     dashboard_body = client.get("/api/dashboard/summary", headers=headers).json()
     dashboard = json.dumps(dashboard_body)

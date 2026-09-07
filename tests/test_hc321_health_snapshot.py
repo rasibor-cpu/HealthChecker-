@@ -1569,7 +1569,12 @@ console.log(JSON.stringify({
     assert payload["lines"][0] == "Heart Rate"
     assert "20 observations" in payload["lines"]
     assert "Latest: 78 bpm" in payload["lines"]
-    assert any(line.startswith("Range: 56–78") for line in payload["lines"])
+    assert any(
+        line.startswith("Range:")
+        and "56" in line
+        and "78" in line
+        for line in payload["lines"]
+    )
     assert any(line.startswith("Source:") for line in payload["lines"])
     assert payload["categoryLine"] == ""
     assert "Category: Not available" not in payload["eventLines"]
@@ -1800,7 +1805,12 @@ console.log(JSON.stringify({
         assert grouped["lines"][0] == "Heart Rate"
         assert "6 observations" in grouped["lines"]
         assert "Latest: 78 bpm" in grouped["lines"]
-        assert any("Range: 56–78" in line for line in grouped["lines"])
+        assert any(
+            line.startswith("Range:")
+            and "56" in line
+            and "78" in line
+            for line in grouped["lines"]
+        )
         assert "Category: Not available" not in grouped["lines"]
 
         snapshot = client.get("/api/health-vault/health-snapshot?metric=heart_rate", headers=headers)

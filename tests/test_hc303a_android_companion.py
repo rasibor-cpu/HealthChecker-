@@ -626,7 +626,19 @@ def test_android_static_gradle_and_manifest_contracts():
     assert "ProductionConfigGate" in sources
     assert "SIMULATED" not in sources or "never SIMULATED" in sources.lower() or "SIMULATED_TEST_ONLY" not in sources
     assert "ecgSupported = false" in sources or "ecgUnsupported" in sources
-    assert re.search(r"https?://\d+\.\d+\.\d+\.\d+", sources) is None
+    # HC325-R6 permits one governed loopback literal for explicit debug-local
+    # development only. Production remains fail-closed to PRODUCTION_ORIGIN.
+    governed_local_dev = 'http://127.0.0.1:8766'
+    assert governed_local_dev in sources
+    sources_without_governed_local_dev = sources.replace(governed_local_dev, "")
+    assert re.search(
+        r"https?://\d+\.\d+\.\d+\.\d+",
+        sources_without_governed_local_dev,
+    ) is None
+    assert 'PRODUCTION_ORIGIN = "https://health.capitalstratasystems.com"' in sources
+    assert "inputs.isDebugBuild" in sources
+    assert "inputs.allowCleartextLocalDev" in sources
+    assert "inputs.explicitLocalDevRequested" in sources
     assert "device_token" in sources  # key name ok
     # No obvious health-value logging of numeric BPM etc.
     assert "Log.d" not in sources or "SafeLog" in sources

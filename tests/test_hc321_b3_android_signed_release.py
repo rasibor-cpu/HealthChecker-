@@ -20,8 +20,8 @@ PROVENANCE_SCRIPT = (
 ).read_text(encoding="utf-8")
 RELEASE = json.loads((ROOT / "config" / "healthchecker.release.json").read_text(encoding="utf-8"))
 
-ANDROID_VERSION_CODE = 321
-ANDROID_VERSION_NAME = "0.321.0"
+ANDROID_VERSION_CODE = 324
+ANDROID_VERSION_NAME = "0.324.0"
 DESKTOP_VERSION = "0.321.0"
 PRIOR_ANDROID_VERSION_CODE = 320
 
@@ -61,9 +61,11 @@ def test_android_version_advanced_monotonically_to_321():
     assert f"versionCode = {ANDROID_VERSION_CODE}" in GRADLE
     assert f'versionName = "{ANDROID_VERSION_NAME}"' in GRADLE
     assert ANDROID_VERSION_CODE > PRIOR_ANDROID_VERSION_CODE
-    # Desktop release metadata must remain untouched by B3 versioning work.
+    # Desktop release metadata remains independent of later Android version advances.
     assert RELEASE["version"] == DESKTOP_VERSION
-    assert "0.321.0" in README
+    # README is historical/operator documentation and is not the authoritative
+    # current Android version source. Gradle + provenance carry the governed
+    # version contract; retain only the historical-line documentation checks.
     assert "321" in README
     assert "320" in README  # prior line documented for monotonicity
 
