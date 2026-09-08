@@ -246,7 +246,20 @@ class VaultStore:
             for m in measurements:
                 if not m.document_id:
                     m.document_id = document.id
-                data["measurements"].append(m.to_dict())
+
+                # HC327: a measurement is clinically owned by the same patient
+                # as its source document. Never allow the dataclass default to
+                # detach new measurements from an authenticated patient's record.
+                if hasattr(m, "patient_id"):
+                    m.patient_id = str(document.patient_id or "default-patient")
+
+                measurement_row = (
+                    m.to_dict() if hasattr(m, "to_dict") else dict(m)
+                )
+                measurement_row["patient_id"] = str(
+                    document.patient_id or "default-patient"
+                )
+                data["measurements"].append(measurement_row)
 
             import_record = {
                 "import_id": str(uuid4()),

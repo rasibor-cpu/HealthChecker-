@@ -66,6 +66,8 @@ class Measurement:
 
     measurement_id: str = field(default_factory=lambda: str(uuid4()))
     document_id: str | None = None
+    # HC327: measurements inherit the owning document/patient scope.
+    patient_id: str = "default-patient"
     category: str = "Uncategorized"
     metric: str = "unknown"
     value: Any = None
