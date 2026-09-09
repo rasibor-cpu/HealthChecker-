@@ -153,19 +153,40 @@ class CompanionSyncRunner(
             prefs.setQueuedCount(pending.remainingObservationCount())
             prefs.setLastQueryPerformed(true)
             prefs.setPartialPermissionWarning(pending.partialPermissionWarning)
-            val ack = host.deliver(
-                batchId = chunk.batchId,
-                nonce = chunk.nonce,
-                observationsJson = chunk.observationsJson,
-                nextChangesToken = chunk.nextChangesToken,
-                healthConnectStatusJson = pending.healthConnectStatusJson ?: JSONObject().toString(),
-                permissionsJson = pending.permissionsJson ?: JSONObject().toString(),
-                workmanagerJson = pending.workmanagerJson ?: JSONObject().toString(),
-                queued = chunk.queuedObservations,
-                deletedRecordIdsJson = chunk.deletedRecordIdsJson,
-            )
 
-            when (val action = ChunkAckDecision.decide(pending, ack)) {
+            var attempt = 0
+            var action: ChunkAckDecision.Action
+
+            while (true) {
+                attempt += 1
+
+                val ack = host.deliver(
+                    batchId = chunk.batchId,
+                    nonce = chunk.nonce,
+                    observationsJson = chunk.observationsJson,
+                    nextChangesToken = chunk.nextChangesToken,
+                    healthConnectStatusJson = pending.healthConnectStatusJson ?: JSONObject().toString(),
+                    permissionsJson = pending.permissionsJson ?: JSONObject().toString(),
+                    workmanagerJson = pending.workmanagerJson ?: JSONObject().toString(),
+                    queued = chunk.queuedObservations,
+                    deletedRecordIdsJson = chunk.deletedRecordIdsJson,
+                )
+
+                action = ChunkAckDecision.decide(pending, ack)
+
+                if (
+                    action !is ChunkAckDecision.Action.RetrySameChunk ||
+                    attempt >= MAX_SAME_CHUNK_ATTEMPTS
+                ) {
+                    break
+                }
+
+                kotlinx.coroutines.delay(
+                    SAME_CHUNK_RETRY_BASE_DELAY_MS * (1L shl (attempt - 1))
+                )
+            }
+
+            when (action) {
                 is ChunkAckDecision.Action.ClearAndFail -> {
                     prefs.setPendingBatch(null)
                     prefs.setLastError(action.reason)
@@ -201,5 +222,10 @@ class CompanionSyncRunner(
 
         prefs.setLastError("pending_plan_unavailable")
         return Outcome.RETRY
+    }
+
+    companion object {
+        internal const val MAX_SAME_CHUNK_ATTEMPTS = 3
+        internal const val SAME_CHUNK_RETRY_BASE_DELAY_MS = 1000L
     }
 }
