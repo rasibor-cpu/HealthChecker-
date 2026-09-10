@@ -11,8 +11,8 @@ android {
         applicationId = "com.healthchecker.companion"
         minSdk = 28
         targetSdk = 35
-        versionCode = 325
-        versionName = "0.325.0"
+        versionCode = 326
+        versionName = "0.326.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_CLEARTEXT_LOCAL_DEV", "false")
     }
