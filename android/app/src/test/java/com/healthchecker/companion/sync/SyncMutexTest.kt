@@ -1,6 +1,9 @@
 package com.healthchecker.companion.sync
 
 import android.content.SharedPreferences
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -126,5 +129,109 @@ class SyncMutexTest {
         assertFalse(denied.acquired)
         assertEquals("sync_already_running", denied.reason)
         holder.release("manual")
+    }
+
+    @Test
+    fun simultaneousSeparateInstancesAllowExactlyOneWinner() {
+        val prefs: SharedPreferences =
+            RuntimeEnvironment.getApplication()
+                .getSharedPreferences("mutex_simultaneous_race", 0)
+
+        prefs.edit().clear().commit()
+
+        val clockMs = 200_000L
+
+        val manual = SyncMutex(prefs) { clockMs }
+        val worker = SyncMutex(prefs) { clockMs }
+
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+
+        val executor = Executors.newFixedThreadPool(2)
+
+        try {
+            val manualFuture = executor.submit<SyncMutex.AcquireResult> {
+                ready.countDown()
+
+                check(start.await(5, TimeUnit.SECONDS)) {
+                    "manual timed out waiting for simultaneous start"
+                }
+
+                manual.tryAcquire("manual")
+            }
+
+            val workerFuture = executor.submit<SyncMutex.AcquireResult> {
+                ready.countDown()
+
+                check(start.await(5, TimeUnit.SECONDS)) {
+                    "worker timed out waiting for simultaneous start"
+                }
+
+                worker.tryAcquire("workmanager")
+            }
+
+            assertTrue(
+                "both contenders must reach the start barrier",
+                ready.await(5, TimeUnit.SECONDS)
+            )
+
+            start.countDown()
+
+            val manualResult =
+                manualFuture.get(5, TimeUnit.SECONDS)
+
+            val workerResult =
+                workerFuture.get(5, TimeUnit.SECONDS)
+
+            val winnerCount =
+                listOf(manualResult, workerResult)
+                    .count { it.acquired }
+
+            assertEquals(
+                "exactly one simultaneous SyncMutex instance may acquire",
+                1,
+                winnerCount
+            )
+
+            val loser =
+                if(manualResult.acquired) workerResult else manualResult
+
+            assertFalse(loser.acquired)
+
+            assertEquals(
+                "sync_already_running",
+                loser.reason
+            )
+
+            if(manualResult.acquired) {
+                manual.release("manual")
+            }
+
+            if(workerResult.acquired) {
+                worker.release("workmanager")
+            }
+
+            assertFalse(
+                "mutex must be free after the winning owner releases",
+                manual.isHeld()
+            )
+        } finally {
+            start.countDown()
+
+            executor.shutdownNow()
+
+            executor.awaitTermination(
+                5,
+                TimeUnit.SECONDS
+            )
+
+            /*
+             * Best-effort cleanup in case an assertion interrupts the test
+             * after acquisition but before the normal release path.
+             */
+            manual.release("manual")
+            worker.release("workmanager")
+            prefs.edit().clear().commit()
+        }
     }
 }
