@@ -225,7 +225,7 @@ class CompanionSyncRunner(
     }
 
     companion object {
-        internal const val MAX_SAME_CHUNK_ATTEMPTS = 3
+        internal const val MAX_SAME_CHUNK_ATTEMPTS = 6
         internal const val SAME_CHUNK_RETRY_BASE_DELAY_MS = 1000L
     }
 }

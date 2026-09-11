@@ -7,7 +7,7 @@ class CompanionSyncRunnerRetryPolicyTest {
 
     @Test
     fun sameChunkRetryPolicyIsBounded() {
-        assertEquals(3, CompanionSyncRunner.MAX_SAME_CHUNK_ATTEMPTS)
+        assertEquals(6, CompanionSyncRunner.MAX_SAME_CHUNK_ATTEMPTS)
     }
 
     @Test
