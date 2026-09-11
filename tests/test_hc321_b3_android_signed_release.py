@@ -20,8 +20,8 @@ PROVENANCE_SCRIPT = (
 ).read_text(encoding="utf-8")
 RELEASE = json.loads((ROOT / "config" / "healthchecker.release.json").read_text(encoding="utf-8"))
 
-ANDROID_VERSION_CODE = 324
-ANDROID_VERSION_NAME = "0.324.0"
+ANDROID_VERSION_CODE = 327
+ANDROID_VERSION_NAME = "0.327.0"
 DESKTOP_VERSION = "0.321.0"
 PRIOR_ANDROID_VERSION_CODE = 320
 

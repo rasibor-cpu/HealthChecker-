@@ -112,6 +112,7 @@ def test_catch_up_contract_in_companion_and_ui_sources():
     assert "inventoryLatest" in reader
     assert "catchUpNewest" in reader
     assert "CATCH_UP_MAX_OBSERVATIONS" in catch_up
-    assert "versionCode = 324" in gradle
+    # HC329: Android has since advanced to vc327; track the current release.
+    assert "versionCode = 327" in gradle
     assert "Latest in Health Connect" in js
     assert 'CACHE_REVISION = "hc324a"' in sw
