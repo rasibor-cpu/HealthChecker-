@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 
 import pytest
 
@@ -129,10 +130,14 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     assert "storePassword = System.getenv" not in gradle
     assert 'storePassword = "' not in gradle
     assert 'keyPassword = "' not in gradle
-    # HC329: Android has since advanced to vc327; this check tracks the current
-    # release, not a frozen historical literal, and will need bumping again.
-    assert "versionCode = 327" in gradle
-    assert 'versionName = "0.327.0"' in gradle
+    # HC329: this test is about packaging/signing hygiene, not Android version
+    # tracking — assert the governed versionName/versionCode relationship
+    # holds instead of a frozen release number, so it doesn't go stale again
+    # on the next legitimate version bump (vc328, vc329, ...).
+    version_code = re.search(r"versionCode\s*=\s*(\d+)", gradle)
+    version_name = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
+    assert version_code and version_name, "could not parse Android version from build.gradle.kts"
+    assert version_name.group(1) == f"0.{version_code.group(1)}.0"
     assert '$trees = @("backend", "js", "css", "assets", "icons")' in package_script
     assert "vault_storage|hc_intake" in package_script
     assert "PreserveUserData" in install_script
@@ -142,4 +147,7 @@ def test_packaging_and_signing_configuration_contains_no_secrets():
     assert "User data preserved" in uninstall_script
     assert "Remove-Item -LiteralPath $dataRoot" not in uninstall_script
     assert "Remove-Item -LiteralPath $DataRoot" not in uninstall_script
+    # Intentionally historical: the desktop release track is a separate,
+    # independently versioned lineage frozen at 0.321.0 since HC321-B2 closed;
+    # unlike Android's versionCode it is not expected to advance again here.
     assert "0.321.0" in (root / "config/healthchecker.release.json").read_text(encoding="utf-8")

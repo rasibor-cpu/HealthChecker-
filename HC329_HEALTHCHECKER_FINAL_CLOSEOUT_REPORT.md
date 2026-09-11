@@ -1,10 +1,10 @@
 # HC329 — HealthChecker Final Production Closeout Report
 
-STATUS: COMPLETE
+STATUS: ENGINEERING CLOSEOUT COMPLETE — FINAL DEVICE ACCEPTANCE PENDING
 
 ## 1. Executive Status
 
-**HEALTHCHECKER_COMPLETE_READY_FOR_FINAL_PRODUCTION_NORMALIZATION.** (See Section 30 for the full gate checklist.)
+**HEALTHCHECKER_FINAL_GATE = NOT_YET_FINAL.** `ENGINEERING_SOURCE_CLOSEOUT = PASS`. `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR` (SAF import retry-after-failure only — see Section 17). Every other required gate passes. (See Section 30 for the full gate checklist.)
 
 This closeout reviewed the entire live-vs-main code drift, all 19 historical open/draft PRs, and every required feature area (Android origin lock, SAF import, navigation, screenshot policy, auth/password/recovery lifecycle, patient isolation, vault security, Health Connect sync, Snapshot/Timeline/Trends), performed a source-level security audit, ran the full backend regression suite and the full Android unit-test suite, and attempted an Android release build.
 
@@ -12,7 +12,11 @@ This closeout reviewed the entire live-vs-main code drift, all 19 historical ope
 
 **Two real, if narrow, gaps were found during the feature/security review and fixed in this branch:** (1) a standalone admin device-management surface (`companion_host`) that could list/revoke any patient's paired device with only a shared admin token, now fixed to require the caller's own authenticated session and enforce ownership; (2) a duplicated-but-currently-consistent clinical-threshold table between the backend and the browser JS, now guarded by a parity test so future drift becomes a hard test failure instead of a silent inconsistency. Both fixes ship with new regression tests, and neither required weakening any existing protection.
 
-**Test suite:** 0 failures at closeout (5 pre-existing failures — all stale hardcoded Android version literals from past releases — were fixed; see Section 24). Android `assembleRelease` and both unit-test variants build clean (324 total Android unit tests, 0 failures). Production APK signing remains `BLOCKED_PENDING_OPERATOR` in this environment (2 of 4 required credentials present) — this is an access-control fact about this review process, not evidence of any compromised or lost signing material, and production signer continuity from HC328 is independently proven.
+**Test suite:** 0 failures at closeout (5 pre-existing failures — all stale hardcoded Android version literals from past releases — were fixed **durably**, not just re-pinned to the current number; see Section 24). Android `assembleRelease` and both unit-test variants build clean (324 total Android unit tests, 0 failures). Production APK signing remains `BLOCKED_PENDING_OPERATOR` in this environment (2 of 4 required credentials present) — this is an access-control fact about this review process, not evidence of any compromised or lost signing material, and production signer continuity from HC328 is independently proven.
+
+**One item withheld from the top-level COMPLETE declaration:** SAF (Storage Access Framework) record import is fully proven at the source/unit-test level, but the specific behavior "a failed import does not block a subsequent valid retry" is a physical-device claim that cannot be proven from source alone. Per the explicit HC329 acceptance criterion, this was not removed from scope, so the gate reads `NOT_YET_FINAL` rather than a plain PASS until an operator runs the small, tightly bounded device UAT specified in Section 17 (no install/uninstall, no data clear, no re-pair, no Sync Now).
+
+**Production normalization design corrected in this revision:** Sections 27-28 now specify a side-by-side governed production-candidate directory (e.g. `C:\rasib\source\HealthChecker-Production-HC329`), validated offline/on a non-production port before any cutover, with the existing `HealthChecker-HC310E` runtime preserved untouched as the immediate rollback target — rather than copying the merged tree into HC310E in place.
 
 No CRITICAL or unresolved HIGH security findings. Two MEDIUM findings, both fixed with tests. Production was never touched — HC310E, the scheduled task, the vault, the paired device, and CSS port 8765 were all left exactly as found.
 
@@ -110,7 +114,7 @@ No application logic found that exists only in HC310E and is missing from main (
 | A. Android production origin lock | **PASS** | See Section 16. No gaps. |
 | B. Consumer authentication lifecycle | **PASS** | See Section 12. No gaps. |
 | C. Universal consumer navigation | **PASS** | `ConsumerLauncherActivity`'s `OnBackPressedCallback` delegates to JS (`HCConsumerNav.handleSystemBack()`), never calls `webView.goBack()` (deliberately, to avoid crossing the origin boundary via WebView history) — proven by `ConsumerInAppBackPolicyTest.kt`. Single-level back-stack (`consumer_nav.js`) handles drill-down, no Dashboard loop (empty-stack back returns `handled:false` -> Activity finishes cleanly), deep-link entries collapse cleanly to Dashboard on first Back. Mandatory-screen auth gate enforced via a `securityGate` flag (`consumer_nav.js` `setSecurityGate`/`isSecurityGate`) that swallows Back while `password_change_required`/`recovery_enrollment_required` is active — **main has this gate mechanism even though the originating draft PR #16 does not**, i.e. main is ahead of the PR that proposed this feature. Session persists in `sessionStorage`, untouched by navigation. No test gaps identified for this area. |
-| D. Android SAF record import | **PASS**, 1 item NOT_YET_PROVEN | See Section 17. "Retry after a failed import" requires a device test to fully prove. |
+| D. Android SAF record import | `ENGINEERING_SOURCE_CLOSEOUT = PASS`, `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR` | See Section 17. Source/unit-test evidence is complete; "retry after a failed import" is a device-only behavioral claim that requires the operator UAT in Section 17 before this area can be called fully closed. Not removed from scope. |
 | E. Screenshot policy | **PASS** | See Section 18. No gaps. |
 | F. Health Snapshot | **PASS**, 1 gap found+fixed | See Section 19. Duplicate clinical-threshold engine (JS mirror) had no parity guardrail — added `test_hc329_clinical_rules_parity.py`, confirms no live drift today. |
 | G. Timeline / Trends / filtered surfaces | **PASS** | See Sections 20-21. No gaps. |
@@ -257,8 +261,12 @@ Source-level review across authentication, authorization, session handling, pass
 No gaps found. No test additions required — existing `ConsumerOriginLockTest.kt` coverage is adequate.
 
 ## 17. Android SAF Import Validation
-**PASS**, with one item **NOT_YET_PROVEN** (device-only).
 
+**ENGINEERING_SOURCE_CLOSEOUT = PASS.** **FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR.** **SAF_IMPORT_DEVICE_UAT = WAITING_FOR_OPERATOR.**
+
+**Corrected gate logic (per HC329 final-review instruction):** the assignment's acceptance criterion is "SAF import passes OR is explicitly and legitimately removed from release scope." This feature was **not** removed from scope, so a bare "PASS" is not valid while retry-after-failure remains unproven on a physical device — the report previously stated both at once, which was internally inconsistent. It is corrected here to two separate, explicit statuses: the *source engineering* work is complete and proven (`ENGINEERING_SOURCE_CLOSEOUT = PASS`), and the *final device acceptance* of one specific behavior is pending operator-run physical-device evidence (`FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR`). The overall HC329 final gate (Section 30) reflects this distinction rather than rounding up to a plain PASS.
+
+### Source-level evidence (ENGINEERING_SOURCE_CLOSEOUT = PASS)
 - `ConsumerSafFileChooserPolicy.kt` uses `ACTION_OPEN_DOCUMENT` + `CATEGORY_OPENABLE` (single document, not tree-wide); `persistableReadPermissionFlags()` grants only `FLAG_GRANT_READ_URI_PERMISSION` (read-only, no write).
 - `takeSafReadGrant()` wraps `takePersistableUriPermission` in try/catch(`SecurityException`) — degrades gracefully when the provider doesn't support persistable grants; grants are released symmetrically in `onDestroy()`.
 - `ConsumerSafFileChooserPolicy.ALLOW_FILE_ACCESS = false`, applied in `ConsumerLauncherActivity.kt:141`.
@@ -266,8 +274,29 @@ No gaps found. No test additions required — existing `ConsumerOriginLockTest.k
 - `AndroidManifest.xml` carries only `INTERNET` + Health Connect `health.READ_*` permissions — no `READ_EXTERNAL_STORAGE`/`MANAGE_EXTERNAL_STORAGE`.
 - Picked file reaches the existing secure upload path: `mobile_consumer.js:752-763` `upload()` posts `FormData` to `/api/records/upload`, inside the WebView's allowlisted `/api/` path prefix.
 - Cancel flow resets cleanly: `onShowFileChooser` always cancels any stale prior callback first; the result handler nulls `fileCallback` immediately after use — next import attempt starts from clean state. Covered by `ConsumerSafFileChooserPolicyTest.cancelClearsCallbackWithoutUri`.
-- **NOT_YET_PROVEN:** "retry works after a *failed* import" is only inferable from the absence of blocking state (the JS catch block just writes an error message; no Kotlin-side state is left dirty) — no automated test exercises a failed-upload-then-retry sequence end to end, and this requires a device/emulator to prove conclusively. Not classified as a FAIL since no code defect was found; flagged as a residual risk requiring a manual device check before this can be called fully proven (see Section 29).
 - Cross-check: PR #20 (HC325-R6B) shows OPEN/DRAFT on GitHub, but its commit (`6fd3b03`) is an ancestor of `main`, and `git diff main <PR#20 branch tip> -- ConsumerSafFileChooserPolicy.kt` is empty (identical). Feature is in main; the PR itself was never merged through GitHub's merge button.
+
+### What remains unproven and why it isn't closed by source alone
+"Retry works after a *failed* import" is only inferable from the absence of blocking state (the JS catch block just writes an error message; no Kotlin-side state is left dirty) — no automated test exercises a failed-upload-then-retry sequence end to end. This is a real behavioral claim about the running app, not just its source, so it requires the physical-device evidence below rather than another source read.
+
+### Required final device UAT (operator-run, on the existing vc327 S24 installation)
+
+This is a small, tightly bounded acceptance check — not a new install, not a re-pair, not a data reset. **Do not** install/uninstall the APK, clear app data, re-pair the device, or trigger Health Connect "Sync Now" as part of this UAT; none of those actions are required to prove SAF import.
+
+| Step | Action | Proves |
+|---|---|---|
+| A | Open the existing HealthChecker app normally (no fresh install). | App still launches on the currently-installed vc327 build. |
+| B | Sign in normally with the existing account. | Auth path unaffected. |
+| C | Open Records / Import. | Existing navigation to the import surface works. |
+| D | Select a benign PDF, JSON, or image through the Android system file picker (SAF). | `ACTION_OPEN_DOCUMENT` / `content://` picker launches and returns a selection. |
+| E | Confirm the selected `content://` document uploads through the existing secure record-upload path. | End-to-end SAF → `/api/records/upload` path works on-device, not just in source. |
+| F | Confirm the resulting record appears in Records. | Upload actually persisted and is visible, not just accepted. |
+| G | Exercise Cancel once, then confirm a later selection still works. | Cancel doesn't leave stale picker/callback state (matches source-level `ConsumerSafFileChooserPolicyTest.cancelClearsCallbackWithoutUri`, now confirmed on-device). |
+| H | If a harmless failed-import condition can be safely reproduced (e.g. selecting an unsupported/corrupt file), retry with a valid selection afterward and confirm the retry succeeds. | **This is the specific behavior this section could not prove from source alone** — that a failed import does not block a subsequent valid one. |
+
+**Constraints restated:** no clinical records may be deleted; no app data may be cleared; no APK install may occur; no pairing change may occur; no Sync Now may occur.
+
+Until this device evidence is supplied and recorded here, `SAF_IMPORT_DEVICE_UAT` and `FINAL_DEVICE_ACCEPTANCE` remain `WAITING_FOR_OPERATOR`, and the overall HC329 final gate is `NOT_YET_FINAL` rather than `HEALTHCHECKER_COMPLETE_READY_FOR_FINAL_PRODUCTION_NORMALIZATION` (see Section 30). Once the device evidence is supplied, this section and Section 30 should be updated to `PASS` (or, if the UAT surfaces a real defect, to `FAIL` with the specific broken step) — not silently assumed.
 
 ## 18. Screenshot Policy Validation
 **PASS** — proven by source + Robolectric-style unit tests, matches deployed production behavior.
@@ -309,7 +338,7 @@ No gaps found. No test additions required.
 - `source_record_id` idempotency: `vault_store.py:343-352` dedupe index keyed `(patient_id, canonical_metric, source_record_id)`; consulted in `ingestion.py:_persist_one` before any write, short-circuiting duplicates.
 - Empty sync batches cannot erase prior measurement state: no delete/clear code path exists for empty input in `ingest_observations`; `companion/delivery.py:merge_iso_latest_maps()` is explicitly documented and tested ("Empty maps must not erase prior values") — covered by `tests/test_hc324_live_sync_freshness.py::test_empty_batch_does_not_erase_prior_latest_timestamps` (ran, PASSED).
 - Failures surfaced, not swallowed: no bare `except: pass` found in `monitoring/`/`companion/`; ingestion loop appends structured errors to the returned summary and publishes `MONITORING_SYNC_FAILED`.
-- One unrelated test-debt item found and fixed: `test_hc324_live_sync_freshness.py::test_catch_up_contract_in_companion_and_ui_sources` (plus 4 sibling tests in other files) asserted a stale literal `"versionCode = 324"`/`"0.324.0"` against `android/app/build.gradle.kts`, which correctly advanced to 327 through legitimate HC325-HC328 releases. Not a functional/security regression — fixed by updating the literals to the current release values (see Section 24).
+- One unrelated test-debt item found and fixed: `test_hc324_live_sync_freshness.py::test_catch_up_contract_in_companion_and_ui_sources` (plus 4 sibling tests in other files) asserted a stale literal `"versionCode = 324"`/`"0.324.0"` against `android/app/build.gradle.kts`, which correctly advanced to 327 through legitimate HC325-HC328 releases. Not a functional/security regression — fixed durably (parsed version + floor/relationship checks, not a re-pinned "327" literal) so a future legitimate vc328+ bump won't recreate the same failure; see Section 24.
 - No gaps found beyond the test-debt item above, which is now fixed.
 
 ## 23. Device Pairing Validation
@@ -337,13 +366,22 @@ No gaps found. No test additions required.
 - `tests/test_hc321_b3_android_signed_release.py::test_provenance_script_parser_ok_and_emits_files`
 - `tests/test_hc324_live_sync_freshness.py::test_catch_up_contract_in_companion_and_ui_sources`
 
-**Final run (after HC329 fixes — the 5 above fixed, 3 new tests added):**
+**Interim run (after first HC329 fix pass — the 5 failures fixed by re-pinning to "327", 3 new tests added):**
 
 | TOTAL | PASSED | FAILED | SKIPPED | XFAILED | ERRORS | ENVIRONMENT_BLOCKED |
 |---|---|---|---|---|---|---|
 | 1495 | 1492 | **0** | 3 | 0 | 0 | 0 |
 
-Reconciliation: 1484 originally-passing + 5 now-fixed + 3 new (2 from `test_hc329_clinical_rules_parity.py`, 1 from `test_hc304b_private_host_foundation.py::test_devices_and_revoke_are_patient_scoped`) = 1492 passed. 3 skipped, unchanged, all environment-conditional (not hidden failures) — confirmed via static source inspection of the `pytest.skip(...)` call sites, cross-checked against this environment:
+**This interim fix was itself flagged on final review as a maintenance trap:** re-pinning the 5 failing assertions to the literal `327` makes them pass today but would recreate the identical failure the moment Android legitimately advances to vc328. Corrected in a follow-up pass (this revision) — see "Durable version-contract fix" below. The final PASSED/FAILED counts are unchanged (24 tests across the 4 affected files still pass, now durably), only the *implementation* of the fix changed.
+
+**Durable version-contract fix (this revision):** replaced every hardcoded current-version literal in the 4 affected files with one of:
+- a parsed-from-`build.gradle.kts` relationship check (`versionName == f"0.{versionCode}.0"`), which holds for every past and future release and needs no update ever;
+- a fixed, intentionally-historical floor check (`versionCode > 320`, or `>= 321`/`>= 324` depending on which release each test's *actual* purpose is tied to) that never needs to move forward, since `versionCode` only increases;
+- intentionally-historical literals left untouched and now explicitly documented as such in-code (`DESKTOP_VERSION = "0.321.0"` — the desktop release track is a separate, frozen lineage; `PRIOR_ANDROID_VERSION_CODE = 320` — a fixed governed monotonicity floor from HC321-B3; the README's own historical "321"/"320" documentation-line checks, which the code's own pre-existing comment already explained were intentional).
+
+**Durability proof:** `android/app/build.gradle.kts` was temporarily edited to `versionCode = 328` / `versionName = "0.328.0"` (simulating the next legitimate release) and all 24 tests across the 4 affected files were re-run — all still passed, with zero edits to the tests themselves. The simulated edit was then reverted (`git diff` on the gradle file is empty, confirmed clean).
+
+3 skipped, unchanged throughout, all environment-conditional (not hidden failures) — confirmed via static source inspection of the `pytest.skip(...)` call sites, cross-checked against this environment:
 - `tests/test_hc304br1_proxy_topology.py` — certified Caddy v2.11.4 binary not installed on this host (`pytest.skip("certified Caddy v2.11.4 not installed")` / hash-mismatch variant).
 - `tests/test_hc309r4d_synthetic_collector.py` — requires either an unsigned-script exception under this host's PowerShell Restricted execution policy, or actual elevated (admin) test identity — both explicitly gated, not available in this non-elevated dev shell.
 - `tests/test_hc321_b2_desktop_installer_closure.py` — requires a governed managed Python installation not present on this host.
@@ -395,68 +433,96 @@ Using the existing approved Gradle build process (`android/app/build.gradle.kts`
 
 **Status: WAITING_FOR_OPERATOR_AUTHORIZATION.** Nothing in this section has been executed. This is a plan for a human operator to run later, on the FINANCE host, using governed credentials this task never had or sought.
 
-### PRECHECK
-1. Confirm live branch/HEAD: `git -C C:\rasib\source\HealthChecker-HC310E status` and `git -C C:\rasib\source\HealthChecker-HC310E rev-parse HEAD` — expect detached HEAD at `41bfc29` plus the 7 known worktree modifications enumerated in Section 6 (all now confirmed reconciled into `main`).
-2. Confirm target SHA: the merged HC329 PR's merge commit on `main` (recorded once merged; this task's branch tip is recorded in Section 4 above).
-3. Dirty-file inventory: `git -C C:\rasib\source\HealthChecker-HC310E status --porcelain` — expect exactly the 7 files already reconciled (Section 6), nothing else. Any additional dirty file is a STOP condition — investigate before proceeding.
-4. Scheduled task state: `Get-ScheduledTask -TaskName HealthCheckerConsumerRuntime | Get-ScheduledTaskInfo` (or equivalent) — record `LastRunTime`/`LastTaskResult`/current state (Running/Ready).
-5. 8766 listener state: confirm `127.0.0.1:8766` is bound and responding (`(Invoke-WebRequest http://127.0.0.1:8766/healthz).StatusCode` or equivalent) before touching anything.
-6. Public endpoint state: confirm `https://health.capitalstratasystems.com/mobile` is currently reachable and returning 200.
-7. Vault integrity state: confirm `backend.health_vault.production_runtime.create_production_vault()` currently opens cleanly against `C:\ProgramData\HealthChecker\data\vault` with `C:\ProgramData\HealthChecker\secrets\vault.key` (read-only check — do not write).
-8. Active device identity: confirm current active companion identity is still `hc3a_24692f58ff02fec8`.
-9. Paired-device count: confirm still `1`.
+**Design correction from the prior revision of this report:** the previous plan proposed copying the merged `main` tree directly into `C:\rasib\source\HealthChecker-HC310E`, in place. That was rejected on final review — `HealthChecker-HC310E` is the known-good, proven runtime and the natural rollback target; overwriting it in place removes the one thing that made rollback trivial. This revision instead builds a **side-by-side governed production candidate** at a separate path (suggested: `C:\rasib\source\HealthChecker-Production-HC329`), validates it offline/on a non-production port, and only then cuts the scheduled task over to it — with `HealthChecker-HC310E` left completely untouched throughout, so rollback is "point the task back," not "reconstruct from backup."
 
-### BACKUP
-1. Back up the entire live source tree: `C:\rasib\source\HealthChecker-HC310E` → `C:\rasib\source\HealthChecker-HC310E.bak-<UTC-timestamp>` (directory copy, not a move).
-2. Back up config: `C:\ProgramData\HealthChecker\config\production.json` → `...\production.json.bak-<timestamp>` (config preservation; do not regenerate).
-3. Back up the vault: `C:\ProgramData\HealthChecker\data\vault` → a versioned backup location outside the live path (read-only copy; never edit the live vault in place). Verify the backup opens read-only via `create_production_vault()` against the copy before trusting it.
-4. Preserve any UI/live patch notes: this report (Section 6) already documents every live-only difference found; no further live-patch preservation is needed since none of the 7 files carried unique behavior.
-5. Preserve a rollback artifact: retain the current running APK (`versionCode=327`, SHA256 `1645E3C868E1CEEFEFB27A40A2ADA83A5B8A330BB59C0FEB36FDBA40AA4A8BDC`) and the current git HEAD (`41bfc29`) as the named rollback point.
+### PHASE A — PRECHECK
+1. Current HC310E HEAD/worktree state: `git -C C:\rasib\source\HealthChecker-HC310E status` and `rev-parse HEAD` — expect detached HEAD at `41bfc29` plus the 7 known worktree modifications enumerated in Section 6 (all now confirmed reconciled into `main`, none unique). Record verbatim; do not modify.
+2. Current scheduled-task command: `Get-ScheduledTask -TaskName HealthCheckerConsumerRuntime | Get-ScheduledTaskInfo`, plus the task's Action/Arguments (must currently read `...\HealthChecker-HC310E\scripts\start_healthchecker_production.ps1 -ConfigPath ...\production.json`). Record verbatim as the rollback target string.
+3. Current 8766 PID/listener: identify the process bound to `127.0.0.1:8766` (e.g. `Get-NetTCPConnection -LocalPort 8766 | Select OwningProcess`) and record its PID and start time.
+4. Current local/public health: `http://127.0.0.1:8766/healthz` and `https://health.capitalstratasystems.com/healthz` (or equivalent) both return 200 before any change.
+5. Current active companion identity: confirm still `hc3a_24692f58ff02fec8`.
+6. Paired-device count: confirm still `1`.
+7. Current vault integrity: confirm `backend.health_vault.production_runtime.create_production_vault()` currently opens cleanly against `C:\ProgramData\HealthChecker\data\vault` with `C:\ProgramData\HealthChecker\secrets\vault.key` — **read-only check, do not write**.
+8. Current production config hash: compute and record a SHA256 of `C:\ProgramData\HealthChecker\config\production.json` as it stands today (untouched baseline for later comparison).
+9. Current source hashes for critical live files: SHA256 of the 7 files enumerated in Section 6 as they currently stand in `HealthChecker-HC310E`'s worktree, so any later drift is independently detectable.
 
-### DEPLOY
-1. Exact source path: copy the merged `main` tree (post-HC329 merge commit) into `C:\rasib\source\HealthChecker-HC310E`, replacing the working tree contents (not the `.git` metadata unless intentionally re-pointing the checkout).
-2. Exact target commit: the HC329 merge commit on `main` (record its SHA at merge time).
-3. Scheduled task change: **none required** — `HealthCheckerConsumerRuntime`'s command already points at `C:\rasib\source\HealthChecker-HC310E\scripts\start_healthchecker_production.ps1`, which will pick up the new source on next invocation. Do not repoint the task path itself.
-4. Restart method: stop and restart the `HealthCheckerConsumerRuntime` scheduled task only (`Stop-ScheduledTask` / `Start-ScheduledTask`, or the task's own governed restart script if one exists) — do not touch any other process.
-5. **No CSS/port 8765 action of any kind.**
-6. **No vault mutation** — the vault is opened read/write only by the application itself on restart via `create_production_vault()`; this deploy step never writes to `C:\ProgramData\HealthChecker\data\vault` directly.
+### PHASE B — CREATE CANDIDATE
+1. Create a clean checkout or git worktree at the exact merged HC329 `main` commit, at a new, clearly-named governed path — e.g. `C:\rasib\source\HealthChecker-Production-HC329` (or `git worktree add C:\rasib\source\HealthChecker-Production-HC329 <merge-commit-sha>` from a bare/managed clone). **Do not** derive this from a copy of `HealthChecker-HC310E`'s (dirty) working tree — check out the actual merged commit fresh.
+2. **Do not modify `HealthChecker-HC310E`** — no files copied into it, no branch switch, no checkout, no clean, in either direction.
+3. Production configuration (`C:\ProgramData\HealthChecker\config\production.json`) and the vault (`C:\ProgramData\HealthChecker\data\vault`, `C:\ProgramData\HealthChecker\secrets\vault.key`) remain external, under `ProgramData`, exactly as today — the candidate checkout references them by the same config path convention as HC310E does; nothing about this phase moves or duplicates production config/vault state into the source tree.
 
-### SMOKE
-1. Local endpoint: `http://127.0.0.1:8766/healthz` (or equivalent) returns 200.
-2. Public endpoint: `https://health.capitalstratasystems.com/healthz` (or equivalent) returns 200 through Cloudflare.
-3. `/mobile`: loads, authenticated WebView reachable.
-4. Snapshot: authenticated fetch of the Health Snapshot surface returns expected NORMAL/CAUTION/ATTENTION/UNKNOWN data for the known active patient.
-5. Auth: login with a known test/operator credential succeeds; an invalid credential is rejected.
-6. Timeline: authenticated Timeline fetch returns JSON (never HTML shell).
-7. Trends: authenticated Trends fetch returns JSON with expected aggregation.
-8. Device status: `/api/companion/status` (or equivalent) reflects the current device.
-9. Pairing count: confirm still `1` paired device, unchanged by the deploy.
-10. Current device identity: confirm still `hc3a_24692f58ff02fec8`, unchanged by the deploy.
+### PHASE C — OFFLINE/CANARY VALIDATION (before any cutover, without touching live production)
+1. Make a **copy** of the production vault (`C:\ProgramData\HealthChecker\data\vault` → a separate validation-only path) — the candidate must never open the live vault directly during this phase. Validate the copy opens read-only via `create_production_vault()` pointed at the copy before using it for anything else.
+2. Use a copied/temporary configuration file (a duplicate of `production.json` with `HC_VAULT_ROOT` repointed at the copied vault) — never the live `production.json` in this phase.
+3. Bind the candidate to a **non-production port**, e.g. `8776` — **do not bind to or touch 8765** (CSS) or rebind the live `8766` listener.
+4. With the candidate running against the copied vault/config on port 8776:
+   - Confirm the process starts cleanly (no fail-closed exceptions from vault/config validation).
+   - Confirm `http://127.0.0.1:8776/healthz` (or equivalent) returns 200.
+   - Confirm `/mobile` and other static/mobile asset routes load.
+   - Confirm the auth route behaves correctly (login succeeds with a known-good credential against the copied vault; invalid credentials are rejected).
+   - Confirm Snapshot/Timeline/Trends routes return authenticated JSON as expected against the copied vault's data.
+   - Confirm patient scoping: a second patient (if the copied vault has one, or one created in the copy for this purpose) cannot see the first patient's data through these routes.
+   - Confirm the candidate can authenticate against and open the copied encrypted vault using the governed read/test configuration, without printing, logging, or otherwise exposing the vault key or any secret material during validation.
+5. **Do not proceed to Phase D unless every check in this phase passes.** If any candidate validation step cannot be safely performed with the tools/access available at execution time (e.g., no safe way to copy the vault without an operator-supervised step), state that precisely as a blocker in this report rather than skipping or improvising around it.
+
+### PHASE D — CUTOVER (only after Phase C passes AND an operator explicitly authorizes production normalization)
+1. Stop only the `HealthCheckerConsumerRuntime` scheduled task (`Stop-ScheduledTask -TaskName HealthCheckerConsumerRuntime`). No other process, service, or task is touched.
+2. `HealthChecker-HC310E` is left exactly as it was at PRECHECK — untouched, not deleted, not modified.
+3. Change the `HealthCheckerConsumerRuntime` scheduled task's Action/Arguments to point at the governed HC329 production-candidate path (e.g. `...\HealthChecker-Production-HC329\scripts\start_healthchecker_production.ps1 -ConfigPath ...\production.json`, the same live config path as before — config itself is not duplicated, only the source-tree pointer changes) — or use an equally atomic, reversible source-selection mechanism if the task supports one (e.g. an environment-variable-driven source root the launch script resolves, so cutover is a one-line, instantly-revertible change). **Never point the scheduled task at a mutable developer working tree** (i.e., never at `HealthChecker-Main` itself) — always at a dedicated, governed, checked-out production path.
+4. Start `HealthCheckerConsumerRuntime` (`Start-ScheduledTask`).
+5. Verify `127.0.0.1:8766` is healthy again (new PID, 200 on `/healthz`).
+
+### PHASE E — POST-CUTOVER SMOKE
+1. Local `http://127.0.0.1:8766/healthz` → 200.
+2. Public `https://health.capitalstratasystems.com/healthz` (or equivalent) → 200 through Cloudflare.
+3. `/mobile` loads.
+4. Authenticated login succeeds with a known-good credential.
+5. Snapshot returns expected NORMAL/CAUTION/ATTENTION/UNKNOWN data for the known active patient.
+6. Snapshot drill-down/history loads.
+7. Timeline returns authenticated JSON (never an HTML shell).
+8. Trends returns authenticated JSON with expected aggregation.
+9. Patient isolation: no cross-patient data visible through any of the above.
+10. Live paired-device count remains `1`.
+11. Active device remains `hc3a_24692f58ff02fec8`.
+12. No unexpected clinical record/measurement count change versus the PRECHECK baseline.
+13. CSS/port 8765 untouched (still the same PID/process as PRECHECK).
+14. Cloudflare configuration unchanged (no config action taken by this plan at all).
+15. No Android action of any kind (no install/uninstall, no data clear, no re-pair).
+16. No Health Connect "Sync Now" action of any kind.
+
+### PHASE F — ROLLBACK (fast and deterministic — see Section 28 for full detail)
+1. Stop only `HealthCheckerConsumerRuntime`.
+2. Restore the scheduled task's Action/Arguments to the exact PRECHECK string recorded in Phase A step 2 — pointing back at the untouched `HealthChecker-HC310E` runtime.
+3. Start `HealthCheckerConsumerRuntime`.
+4. Verify local/public endpoints, pairing identity/count, and vault integrity all match PRECHECK.
+
+Because `HealthChecker-HC310E` was never modified during Phase B-E, rollback does **not** require reconstructing it from any backup — restoring the scheduled-task pointer is sufficient, unless the untouched runtime itself is independently found to be damaged (which this plan gives no reason to expect, since it was never written to).
 
 ## 28. Rollback Plan
 
-1. Exact rollback source: restore `C:\rasib\source\HealthChecker-HC310E` from the `C:\rasib\source\HealthChecker-HC310E.bak-<timestamp>` copy taken in the BACKUP step (full directory restore, not a git revert, since the live tree is not purely git-tracked state).
-2. Exact scheduled-task restore: no task-definition change was made in DEPLOY, so no scheduled-task restore is needed beyond ensuring `HealthCheckerConsumerRuntime` is stopped before the file restore and started again after.
-3. Exact restart procedure: `Stop-ScheduledTask -TaskName HealthCheckerConsumerRuntime`, restore files, `Start-ScheduledTask -TaskName HealthCheckerConsumerRuntime`.
-4. Expected recovery checks: re-run the full SMOKE list above against the restored (rolled-back) tree; additionally confirm the running APK SHA256 and active device identity are unchanged throughout (rollback must never touch the phone/pairing state, since the rollback is source-only).
-5. If vault integrity is ever in doubt after a failed deploy attempt, restore the vault backup from BACKUP step 3 to a side location and validate it opens cleanly via `create_production_vault()` before considering any vault-level recovery action — never attempt vault recovery live against the production path without that validation first.
+1. **Exact rollback source:** the untouched `C:\rasib\source\HealthChecker-HC310E` runtime — the same one that was serving production immediately before cutover, left byte-for-byte as-is throughout Phases B-E. No backup restore is needed for the source tree itself.
+2. **Exact scheduled-task restore:** reset `HealthCheckerConsumerRuntime`'s Action/Arguments to the exact command string recorded in Phase A precheck step 2 (`...\HealthChecker-HC310E\scripts\start_healthchecker_production.ps1 -ConfigPath ...\production.json`).
+3. **Exact restart procedure:** `Stop-ScheduledTask -TaskName HealthCheckerConsumerRuntime` → restore the task Action/Arguments → `Start-ScheduledTask -TaskName HealthCheckerConsumerRuntime`.
+4. **Expected recovery checks:** re-run the full Phase E smoke list against the rolled-back (HC310E) runtime; additionally confirm the running APK SHA256 and active device identity are unchanged throughout (rollback must never touch the phone/pairing state — it is a source-selection change only).
+5. If vault integrity is ever in doubt after a failed cutover attempt, validate a **copy** of the vault (never the live path) via `create_production_vault()` before considering any vault-level recovery action — never attempt vault recovery live against the production path without that validation first. Since Phase B-E never wrote to the live vault (only a copy was used for Phase C, and the live vault is opened read/write only by whichever runtime is actually serving requests), a cutover failure should not, by construction, ever put the live vault in a suspect state — this step exists for defense in depth, not because the plan expects to need it.
 
-### ABORT CONDITIONS (deploy must not proceed, or must be immediately rolled back, if any of these occur)
-- Vault integrity failure (`create_production_vault()` raises, or schema/auth check fails).
-- Auth failure (a known-good credential is rejected post-deploy).
-- Public endpoint failure (Cloudflare/public origin unreachable or non-200 post-deploy).
+### ABORT CONDITIONS (cutover in Phase D must not proceed, or must be immediately rolled back per Phase F, if any of these occur)
+- Vault integrity failure (`create_production_vault()` raises, or schema/auth check fails, against the live vault post-cutover).
+- Auth failure (a known-good credential is rejected post-cutover).
+- Public endpoint failure (Cloudflare/public origin unreachable or non-200 post-cutover).
 - Patient-scope failure (any smoke check shows data crossing patients).
 - Device identity mismatch (active identity changes from `hc3a_24692f58ff02fec8` without operator action).
 - Pairing count unexpected (count changes from `1` without operator action).
-- APK signer mismatch (if a new APK is ever installed as part of this normalization — this plan does not install one; if it ever does, the signer SHA256 must still be `0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588`).
+- APK signer mismatch (this plan takes no Android action at all; if any future plan ever installs an APK, the signer SHA256 must still be `0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588`).
 - CSS/port 8765 impacted in any way.
-- Unexpected clinical-data mutation (any smoke check shows different measurement/document counts than PRECHECK recorded, beyond what the deploy itself is expected to change — which for a source-only deploy is zero).
+- Cloudflare configuration altered in any way.
+- Unexpected clinical-data mutation (any smoke check shows different measurement/document counts than PRECHECK recorded).
 
-**This plan is not executed as part of HC329. Deployment status: WAITING_FOR_OPERATOR_AUTHORIZATION.**
+**This plan is not executed as part of HC329. Deployment status: WAITING_FOR_OPERATOR_AUTHORIZATION. HC310E remains the untouched, proven rollback runtime throughout.**
 
 ## 29. Residual Risks
 
-1. **SAF import retry-after-failure is NOT_YET_PROVEN by a device test** (Section 17). Source review shows no state that would block a retry after a failed import, but this has not been exercised on a physical device/emulator. Recommend a manual device check before treating this as fully closed; not a blocker for this closeout since no code defect was found.
+1. **SAF import retry-after-failure is NOT_YET_PROVEN by a device test — this is the sole remaining blocker on the final gate** (Section 17, Section 30). Source review shows no state that would block a retry after a failed import, and no code defect was found, but per the explicit HC329 acceptance criterion this cannot be rounded up to PASS without the operator-run physical-device UAT specified in Section 17. `SAF_IMPORT_DEVICE_UAT = WAITING_FOR_OPERATOR`.
 2. **Recovery timing-symmetry nit** (Section 13, Section 11 finding #3): the timing-equalizer in `recovery_start()` only runs on the "fake account" branch. Response bodies are identical either way (no information disclosed), so this is accepted as a low-severity theoretical residual, not fixed in this closeout.
 3. **Dead recovery-code modules** (Section 11 finding #4): an unreachable, superseded HC311 recovery design remains in the tree (`recovery_enrollment.py` and siblings). No attack surface (unreachable), but a candidate for a future cleanup pass outside HC329 scope.
 4. **Operational note on live HC310E CSS theming** (Section 6): if the live production stylesheet is missing the `body.mobile-consumer` base rule that its own "backport" block depends on via CSS custom properties, that's a plausible live-only Snapshot theming defect. This is a runtime/production concern, not a main-branch source gap (main already has the correct, complete version) — recommend an operator visually check the live `/mobile` Snapshot page before/after any future normalization, since this task could not modify or fully verify the read-only HC310E runtime.
@@ -485,14 +551,20 @@ Using the existing approved Gradle build process (`android/app/build.gradle.kts`
 | Timeline passes | **PASS** | Section 20 |
 | Trends passes | **PASS** | Section 21 |
 | Screenshot policy passes | **PASS** | Section 18 |
-| SAF import passes OR is explicitly/legitimately removed from scope | **PASS**, 1 item NOT_YET_PROVEN by device test | Section 17 — no code defect found; residual risk documented (Section 29), not a scope removal |
+| SAF import passes OR is explicitly/legitimately removed from scope | **NOT YET FINAL** — `ENGINEERING_SOURCE_CLOSEOUT = PASS`, `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR` | Section 17 — not removed from scope; retry-after-failure requires the operator-run physical-device UAT specified in Section 17 before this gate can read PASS |
 | Android release build succeeds, or only production signing is operator-blocked | **PASS** (build succeeds; signing execution is BLOCKED_PENDING_OPERATOR, not the build itself) | Section 25 |
-| Final HC329 worktree is clean after commits | **PASS** | `git status` clean after the commits in Section 16 (verify below) |
-| Final PR is prepared and mergeable | **PASS** | Section 17 (not merged, per instructions) |
-| Production normalization plan complete | **PASS** | Section 27 |
+| Final HC329 worktree is clean after commits | **PASS** | `git status` clean after the commits in Section 16 |
+| Final PR is prepared and mergeable | **PASS**, held as DRAFT pending this gate | PR #29, `mergeable: MERGEABLE`, `isDraft: true`; not merged |
+| Production normalization plan complete | **PASS** | Sections 27-28 |
 | Rollback plan complete | **PASS** | Section 28 |
 | Legacy PR disposition complete | **PASS** | Section 10 |
 
-**No blockers.** The only BLOCKED item in the entire closeout is `HC329_PRODUCTION_SIGNING_EXECUTION`, which the assignment's own gate language explicitly allows ("Android release build succeeds or only production signing is operator-blocked") — the build itself succeeds; only the final production-signing *execution* awaits an operator with the governed keystore passwords, which this task correctly never sought.
+**One outstanding item, not a defect:** every source-provable requirement passes. The single remaining gate — SAF import retry-after-a-failed-attempt — is a physical-device behavioral claim that cannot be proven or disproven from source review alone, and per the explicit HC329 acceptance criterion ("SAF import passes OR is explicitly and legitimately removed from release scope") it is not being removed from scope, so it cannot be rounded up to PASS on inference. This is the only thing separating this closeout from the full COMPLETE gate.
 
-# HEALTHCHECKER_COMPLETE_READY_FOR_FINAL_PRODUCTION_NORMALIZATION
+`ENGINEERING_SOURCE_CLOSEOUT = PASS`
+`SAF_IMPORT_DEVICE_UAT = WAITING_FOR_OPERATOR`
+`FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR`
+
+# HEALTHCHECKER_FINAL_GATE = NOT_YET_FINAL
+
+Once the Section 17 device UAT is performed and its result recorded in this report (PASS with evidence, or FAIL with the specific broken step), this line should be updated: if PASS, to `HEALTHCHECKER_COMPLETE_READY_FOR_FINAL_PRODUCTION_NORMALIZATION`; if FAIL, to `HEALTHCHECKER_NOT_COMPLETE` with the specific defect as the blocker. This is not `HEALTHCHECKER_NOT_COMPLETE` today — the engineering/source closeout itself is complete — it is withheld from the top-level COMPLETE declaration solely pending the one physical-device acceptance step above.

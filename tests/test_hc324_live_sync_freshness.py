@@ -97,6 +97,7 @@ def test_freshness_path_source_app_boundary_when_inventory_matches_vault(tmp_pat
 
 
 def test_catch_up_contract_in_companion_and_ui_sources():
+    import re
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
@@ -112,7 +113,12 @@ def test_catch_up_contract_in_companion_and_ui_sources():
     assert "inventoryLatest" in reader
     assert "catchUpNewest" in reader
     assert "CATCH_UP_MAX_OBSERVATIONS" in catch_up
-    # HC329: Android has since advanced to vc327; track the current release.
-    assert "versionCode = 327" in gradle
+    # HC329: this test is about the catch-up contract surviving into whatever
+    # currently ships, not about Android version tracking — assert a floor at
+    # the version this fix landed in (324) rather than a frozen release
+    # number, so it doesn't go stale again on the next legitimate version bump.
+    version_code = re.search(r"versionCode\s*=\s*(\d+)", gradle)
+    assert version_code, "could not parse versionCode from build.gradle.kts"
+    assert int(version_code.group(1)) >= 324
     assert "Latest in Health Connect" in js
     assert 'CACHE_REVISION = "hc324a"' in sw
