@@ -137,6 +137,22 @@ def create_companion_only_app(
         request.state.hc_trust = trust
         return None
 
+    async def _resolve_authenticated_patient(request: Request) -> tuple[Any, JSONResponse | None]:
+        authorization, duplicate_auth = _single_header(request, "authorization")
+        if duplicate_auth or not authorization or not authorization.startswith("Bearer "):
+            return None, _json(
+                {"ok": False, "status": "unauthorized", "errors": ["authenticated_user_required"]},
+                401,
+            )
+        try:
+            account, _ = auth_service.resolve(authorization[7:].strip(), require_full=True)
+        except AuthenticationError as exc:
+            return None, _json(
+                {"ok": False, "status": "unauthorized", "errors": [exc.code]},
+                exc.status_code,
+            )
+        return account, None
+
     async def _read_json_object(request: Request) -> tuple[dict[str, Any] | None, JSONResponse | None]:
         import json
 
@@ -236,19 +252,9 @@ def create_companion_only_app(
                 {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]},
                 403,
             )
-        authorization, duplicate_auth = _single_header(request, "authorization")
-        if duplicate_auth or not authorization or not authorization.startswith("Bearer "):
-            return _json(
-                {"ok": False, "status": "unauthorized", "errors": ["authenticated_user_required"]},
-                401,
-            )
-        try:
-            account, _ = auth_service.resolve(authorization[7:].strip(), require_full=True)
-        except AuthenticationError as exc:
-            return _json(
-                {"ok": False, "status": "unauthorized", "errors": [exc.code]},
-                exc.status_code,
-            )
+        account, denied_auth = await _resolve_authenticated_patient(request)
+        if denied_auth:
+            return denied_auth
         rl = PAIR_START_LIMITER.check("pair_start")
         if not rl.allowed:
             return _json({"ok": False, "status": "rate_limited", "errors": ["rate_limited"]}, 429)
@@ -299,10 +305,16 @@ def create_companion_only_app(
                 },
                 403,
             )
+        # HC329: admin token alone is not patient scope. Require the caller's own
+        # authenticated session too, and scope the listing to that patient only.
+        account, denied_auth = await _resolve_authenticated_patient(request)
+        if denied_auth:
+            return denied_auth
         result = companion_devices_handler(
             include_revoked=include_revoked,
             store=store,
             admin_header=request.headers.get("X-HC-Companion-Admin"),
+            patient_id=account.user_id,
         )
         code = 200 if result.get("ok", True) and result.get("status") != "admin_required" else 403
         return _json(result, code)
@@ -319,10 +331,18 @@ def create_companion_only_app(
                 {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]},
                 403,
             )
+        # HC329: admin token alone is not patient scope. Require the caller's own
+        # authenticated session too, and only allow revoking that patient's own device.
+        account, denied_auth = await _resolve_authenticated_patient(request)
+        if denied_auth:
+            return denied_auth
         result = companion_revoke_handler(
-            device_id, store=store, admin_header=request.headers.get("X-HC-Companion-Admin")
+            device_id,
+            store=store,
+            admin_header=request.headers.get("X-HC-Companion-Admin"),
+            patient_id=account.user_id,
         )
-        code = 200 if result.get("ok") else (403 if result.get("status") == "admin_required" else 400)
+        code = 200 if result.get("ok") else (403 if result.get("status") in {"admin_required", "forbidden"} else 400)
         log_event("device_revoke", ok=bool(result.get("ok")), status=result.get("status"))
         return _json(result, code)
 
