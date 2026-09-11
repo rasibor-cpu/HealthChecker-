@@ -351,6 +351,7 @@ class IngestionCoordinator:
             measured_at=obs.measured_at,
             confidence=obs.confidence,
             document_id=doc.id,
+            patient_id=obs.patient_id,
         )
         store_kwargs = {
             "document": doc,

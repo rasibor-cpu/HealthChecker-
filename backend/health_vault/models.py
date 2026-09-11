@@ -169,6 +169,7 @@ def create_measurement(**kwargs: Any) -> Measurement:
     return Measurement(
         measurement_id=kwargs.get("measurement_id") or str(uuid4()),
         document_id=kwargs.get("document_id"),
+        patient_id=str(kwargs.get("patient_id") or "default-patient"),
         category=kwargs.get("category") or meta.get("category") or "Uncategorized",
         metric=metric,
         value=kwargs.get("value"),
