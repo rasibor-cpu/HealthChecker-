@@ -48,7 +48,15 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
     assert "refreshSecureWindowFromDom" not in source
     assert "shouldSecureWindow" in policy
     assert "return false" in policy
-    assert "addJavascriptInterface" not in source
+    # HC329: ConsumerRecordImportBridge is the one intentional, narrowly
+    # scoped JavaScript interface installed here (see its class doc and
+    # tests/test_hc325_r6b_android_saf_record_import.py) — it exposes a
+    # single parameterless read of whatever URI the native file-chooser
+    # callback most recently recorded, with no JS-supplied URI/path, so it
+    # cannot be used to read anything beyond what the user just picked.
+    # Assert exactly that bridge, not a blanket absence of any bridge.
+    assert source.count("addJavascriptInterface(") == 1
+    assert '"HCNativeImport"' in source
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source
     assert "prefs.getConsumerOrigin() ?: debugConsumerOrigin()" not in source

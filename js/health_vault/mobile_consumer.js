@@ -749,17 +749,79 @@
     }
   }
 
+  function base64ToBlob(base64, mimeType) {
+    const binary = atob(base64 || "");
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType || "application/octet-stream" });
+  }
+
+  // HC329: Chromium's WebView can fail (or hang, then reject fetch() with a
+  // generic "Failed to fetch") when asked to stream a content:// blob
+  // directly into a multipart body. When the native bridge is present, read
+  // the selected document's bytes natively instead and hand fetch() a plain
+  // in-memory Blob, which does not depend on the WebView re-resolving the
+  // content:// URI at upload time. Falls back to the <input> File object when
+  // no bridge is installed (e.g. desktop/browser development).
+  async function readSelectedFileViaNativeBridge() {
+    const bridge = window.HCNativeImport;
+    if (!bridge || typeof bridge.readSelectedRecordBase64 !== "function") return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(bridge.readSelectedRecordBase64());
+    } catch (_) {
+      const err = new Error("Could not read the selected file.");
+      err.uploadErrorCode = "native_import_bridge_invalid_response";
+      throw err;
+    }
+    if (!parsed || parsed.ok !== true) {
+      const code = (parsed && parsed.error) || "native_import_failed";
+      const err = new Error(code);
+      err.uploadErrorCode = code;
+      throw err;
+    }
+    return { blob: base64ToBlob(parsed.base64, parsed.mime_type), name: parsed.name || "upload" };
+  }
+
+  function describeUploadError(error) {
+    const code = error && error.uploadErrorCode;
+    if (code === "no_file_selected") return "Choose a report first.";
+    if (code === "file_too_large") return "That file is too large to upload.";
+    if (code === "file_unreadable" || code === "read_failed" || code === "native_import_bridge_invalid_response") {
+      return "Could not read the selected file. Try selecting it again.";
+    }
+    const message = String((error && error.message) || "");
+    if (/^(API_RESPONSE_NOT_JSON|JSON_PARSE_FAILED)\b/.test(message)) {
+      try { console.warn("mobile_upload_invalid_response", message); } catch (_) {}
+      return "Unexpected response from the server. Please try again.";
+    }
+    if (error instanceof TypeError) {
+      try { console.warn("mobile_upload_network_error", message); } catch (_) {}
+      return "Upload could not reach the server. Check your connection and try again.";
+    }
+    return message || "Upload failed.";
+  }
+
   async function upload() {
-    const file = byId("mobile_record_file").files[0];
     const target = clearContent("mobile_import");
-    if (!file) return text(target, "Choose a report first.", "bad");
+    let payload;
+    try {
+      payload = await readSelectedFileViaNativeBridge();
+    } catch (error) {
+      return text(target, describeUploadError(error), "bad");
+    }
+    if (!payload) {
+      const file = byId("mobile_record_file").files[0];
+      if (!file) return text(target, "Choose a report first.", "bad");
+      payload = { blob: file, name: file.name };
+    }
     const form = new FormData();
-    form.append("file", file, file.name);
+    form.append("file", payload.blob, payload.name);
     try {
       const result = await request("/api/records/upload", { method: "POST", body: form });
       text(target, `Upload ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`);
       summary = null; records = [];
-    } catch (error) { text(target, error.message, "bad"); }
+    } catch (error) { text(target, describeUploadError(error), "bad"); }
   }
 
   async function savePreferences() {

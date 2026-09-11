@@ -66,4 +66,29 @@ object ConsumerSafFileChooserPolicy {
     fun persistableReadPermissionFlags(): Int = Intent.FLAG_GRANT_READ_URI_PERMISSION
 
     fun shouldCancelPreviousCallback(): Boolean = true
+
+    /**
+     * HC329 — bound on native-side reads of a SAF-selected document. Chromium's
+     * WebView can fail (or hang, then reject fetch() with a generic "Failed to
+     * fetch") when asked to stream a content:// blob directly into a multipart
+     * upload body, so the native layer reads the bytes itself and hands them to
+     * JS through [ConsumerRecordImportBridge] instead. Bound the read so a huge
+     * or hostile document can't be pulled fully into process memory.
+     */
+    const val MAX_IMPORT_BYTES: Int = 15 * 1024 * 1024
+
+    /** Pure outcome classification for a native SAF read — testable without Android framework classes. */
+    sealed class ImportReadOutcome {
+        object NoSelection : ImportReadOutcome()
+        object Unreadable : ImportReadOutcome()
+        data class TooLarge(val byteCount: Int) : ImportReadOutcome()
+        data class Success(val byteCount: Int) : ImportReadOutcome()
+    }
+
+    fun classifyImportRead(hasSelection: Boolean, byteCount: Int?): ImportReadOutcome {
+        if (!hasSelection) return ImportReadOutcome.NoSelection
+        if (byteCount == null) return ImportReadOutcome.Unreadable
+        if (byteCount > MAX_IMPORT_BYTES) return ImportReadOutcome.TooLarge(byteCount)
+        return ImportReadOutcome.Success(byteCount)
+    }
 }
