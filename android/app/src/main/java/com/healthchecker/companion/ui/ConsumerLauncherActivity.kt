@@ -166,8 +166,16 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         webView.clearCache(true)
         // HC329: exposes exactly one parameterless read of the most recently
         // SAF-picked document — see class doc and ConsumerRecordImportBridge.
+        // The selection is one-shot on success only: onConsumed clears it so a
+        // second read without a fresh picker selection reports no_file_selected,
+        // but a failed read leaves it in place so a transient failure remains
+        // retryable without forcing the user back through the system picker.
         webView.addJavascriptInterface(
-            ConsumerRecordImportBridge(contentResolver) { pendingImportUri },
+            ConsumerRecordImportBridge(
+                contentResolver,
+                pendingUriProvider = { pendingImportUri },
+                onConsumed = { pendingImportUri = null },
+            ),
             "HCNativeImport",
         )
         webView.setDownloadListener { _, _, _, _, _ ->

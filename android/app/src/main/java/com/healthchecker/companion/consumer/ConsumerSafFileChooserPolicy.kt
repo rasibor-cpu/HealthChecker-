@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.webkit.WebSettings
+import java.io.InputStream
 
 /**
  * HC325-R6B — narrowly scoped Storage Access Framework import for the
@@ -77,18 +78,47 @@ object ConsumerSafFileChooserPolicy {
      */
     const val MAX_IMPORT_BYTES: Int = 15 * 1024 * 1024
 
+    /**
+     * Reads at most [limit] + 1 bytes from [input] — never more, regardless of
+     * what the stream or any content-provider-reported size claims. This is
+     * the *authoritative* bound on native memory consumption: a document
+     * whose full size hugely exceeds [limit] is never fully allocated, since
+     * reading stops the instant the (limit + 1)th byte arrives.
+     *
+     * Returns the exact bytes read when the stream ends at or before [limit]
+     * bytes (i.e. the whole document fit). Returns null when the stream still
+     * had data beyond [limit] bytes — the document exceeds the limit — again
+     * without ever having buffered more than [limit] + 1 bytes to determine
+     * that.
+     */
+    fun readBounded(input: InputStream, limit: Int): ByteArray? {
+        val buffer = ByteArray(limit + 1)
+        var total = 0
+        while (total < buffer.size) {
+            val read = input.read(buffer, total, buffer.size - total)
+            if (read < 0) break
+            total += read
+        }
+        return if (total > limit) null else buffer.copyOf(total)
+    }
+
     /** Pure outcome classification for a native SAF read — testable without Android framework classes. */
     sealed class ImportReadOutcome {
         object NoSelection : ImportReadOutcome()
         object Unreadable : ImportReadOutcome()
-        data class TooLarge(val byteCount: Int) : ImportReadOutcome()
+        object TooLarge : ImportReadOutcome()
         data class Success(val byteCount: Int) : ImportReadOutcome()
     }
 
-    fun classifyImportRead(hasSelection: Boolean, byteCount: Int?): ImportReadOutcome {
+    /**
+     * [boundedRead] must be the result of [readBounded] (or null if the
+     * stream itself could not be opened — distinguished by [streamOpened]).
+     * Never derives its verdict from a content provider's declared size —
+     * only from what was actually, boundedly read.
+     */
+    fun classifyImportRead(hasSelection: Boolean, streamOpened: Boolean, boundedRead: ByteArray?): ImportReadOutcome {
         if (!hasSelection) return ImportReadOutcome.NoSelection
-        if (byteCount == null) return ImportReadOutcome.Unreadable
-        if (byteCount > MAX_IMPORT_BYTES) return ImportReadOutcome.TooLarge(byteCount)
-        return ImportReadOutcome.Success(byteCount)
+        if (!streamOpened) return ImportReadOutcome.Unreadable
+        return if (boundedRead == null) ImportReadOutcome.TooLarge else ImportReadOutcome.Success(boundedRead.size)
     }
 }
