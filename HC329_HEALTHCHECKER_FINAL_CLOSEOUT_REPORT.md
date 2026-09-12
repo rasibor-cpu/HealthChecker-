@@ -1,10 +1,10 @@
 # HC329 — HealthChecker Final Production Closeout Report
 
-STATUS: SAF IMPORT DEFECT FOUND VIA DEVICE UAT AND FIXED — DEVICE RETEST PENDING
+STATUS: SAF FIX HARDENED, VC328 VALIDATION BUILD PREPARED — SIGNED BUILD AND DEVICE RETEST PENDING OPERATOR
 
 ## 1. Executive Status
 
-**HEALTHCHECKER_FINAL_GATE = NOT_YET_FINAL.** `ENGINEERING_SOURCE_CLOSEOUT = PASS` (after fixing a real defect this revision — see below). `SAF_IMPORT_DEVICE_UAT`: prior physical-device attempt was `FAIL`; a fresh retest against the fix has not yet been run. `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR`. Every other required gate passes. (See Section 30 for the full gate checklist.)
+**HEALTHCHECKER_FINAL_GATE = NOT_YET_FINAL.** `ENGINEERING_SOURCE_CLOSEOUT = PASS`. `VC328_BUILD_PREPARED = YES` (unsigned validation only — see Section 26). `PRODUCTION_SIGNING_EXECUTION = BLOCKED_PENDING_OPERATOR` (attempted this revision with real evidence, not inferred — see Section 25). `SAF_IMPORT_DEVICE_UAT`: prior physical-device attempt was `FAIL`; a fresh retest against the fix has not yet been run, and cannot be until a signed vc328 artifact exists. `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR`. Every other required gate passes. (See Section 30 for the full gate checklist.)
 
 **Device UAT update:** the operator ran the Section 17 device UAT this revision, and it **failed** — SAF file upload on the physical S24 (vc327) showed "Failed to fetch." Most likely/proximate cause, established by the device symptom and elimination of every other candidate via source inspection (no WebView trace/logcat was captured): Android WebView's unreliable handling of `content://`-backed file uploads via `fetch()`/`FormData` — not an auth, permission, origin-lock, or server-side defect, all of which were independently re-verified intact. Fixed by reading the selected document's bytes natively and handing them to JavaScript through a new, narrowly scoped bridge (`ConsumerRecordImportBridge`) instead of relying on the WebView to stream the `content://` blob itself — a fix that removes the suspect code path regardless of the exact internal mechanism. Full analysis, the 15-hypothesis rule-in/out table, the fix, and the required device retest are in Section 17.
 
@@ -14,9 +14,9 @@ This closeout reviewed the entire live-vs-main code drift, all 19 historical ope
 
 **Two real, if narrow, gaps were found during the feature/security review and fixed in this branch:** (1) a standalone admin device-management surface (`companion_host`) that could list/revoke any patient's paired device with only a shared admin token, now fixed to require the caller's own authenticated session and enforce ownership; (2) a duplicated-but-currently-consistent clinical-threshold table between the backend and the browser JS, now guarded by a parity test so future drift becomes a hard test failure instead of a silent inconsistency. Both fixes ship with new regression tests, and neither required weakening any existing protection.
 
-**Test suite:** 0 failures at closeout (1498 total, 1495 passed, 3 skipped/environment-conditional). 5 pre-existing failures from stale hardcoded Android version literals were fixed durably; the SAF fix added 3 Python + 5 Android test cases and required updating 2 more pre-existing tests whose blanket "no JS bridge" assumption predated this fix (see Section 24). Android `assembleRelease`, `testDebugUnitTest` (173/173), and `testReleaseUnitTest` (161/161) all build clean. Production APK signing remains `BLOCKED_PENDING_OPERATOR` in this environment (2 of 4 required credentials present) — this is an access-control fact about this review process, not evidence of any compromised or lost signing material, and production signer continuity from HC328 is independently proven.
+**Test suite:** 0 failures throughout (1498 total, 1495 passed, 3 skipped/environment-conditional — reconfirmed identical after the SAF fix, its hardening pass, and the real vc328 version bump). Android `assembleRelease`, `testDebugUnitTest` (180/180), and `testReleaseUnitTest` (168/168) all build clean at vc328. Production APK signing was **actually attempted** this revision (not just checked for) and failed closed with `hc_android_signing_env_incomplete: provided_nonblank=2 expected=4` — direct evidence of `BLOCKED_PENDING_OPERATOR`, not evidence of any compromised or lost signing material, and production signer continuity from HC328 remains independently proven.
 
-**One item withholding the top-level COMPLETE declaration:** SAF (Storage Access Framework) record import failed its physical-device UAT this revision with a real, now-fixed defect (see above and Section 17). The fix is complete and tested at the source/unit-test level, but per the explicit HC329 acceptance criterion a device-level claim cannot be proven from source alone — an operator must retest on the physical device after an in-place update to the fixed build (Section 26 gives the exact artifact/version-bump requirement) before this gate can read PASS.
+**One item withholding the top-level COMPLETE declaration:** SAF (Storage Access Framework) record import failed its physical-device UAT with a real defect, now fixed and hardened in source (Section 17). An unsigned vc328 validation build exists and passes all tests, but per explicit instruction it is not, and cannot be, the installable retest artifact — Android will not `install -r` an unsigned APK over the currently-installed signed vc327 build. An operator must run the governed signing process on this same source to produce `HealthChecker-vc328-saf-retest.apk`, verify its signer against `0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588`, and only then perform the bounded device retest (Section 17) before this gate can read PASS.
 
 **Production normalization design corrected in this revision:** Sections 27-28 now specify a side-by-side governed production-candidate directory (e.g. `C:\rasib\source\HealthChecker-Production-HC329`), validated offline/on a non-production port before any cutover, with the existing `HealthChecker-HC310E` runtime preserved untouched as the immediate rollback target — rather than copying the merged tree into HC310E in place.
 
@@ -449,6 +449,8 @@ Two pre-existing tests initially failed after `ConsumerRecordImportBridge` was w
 
 Reconciliation: 1492 (prior final) + 3 new SAF tests = 1495 passed; 3 skipped unchanged; total 1498.
 
+**Reconfirmed identical after the bridge hardening pass and again after the vc328 version bump:** 1498 total, 1495 passed, 0 failed, 3 skipped, both times — no Python test needed any change for either the hardening pass or the real version bump.
+
 ### Android suite (Gradle/JUnit, `./gradlew testDebugUnitTest testReleaseUnitTest`)
 
 **Before the SAF fix:**
@@ -467,7 +469,7 @@ Reconciliation: 1492 (prior final) + 3 new SAF tests = 1495 passed; 3 skipped un
 | Debug | 173 | 0 | 0 | 0 |
 | Release | 161 | 0 | 0 | 0 |
 
-**After the SAF bridge hardening pass (current — bounded streaming read, one-shot URI consumption, SafeLog privacy review):**
+**After the SAF bridge hardening pass (bounded streaming read, one-shot URI consumption, SafeLog privacy review):**
 
 | Variant | Tests | Failures | Errors | Skipped |
 |---|---|---|---|---|
@@ -476,7 +478,14 @@ Reconciliation: 1492 (prior final) + 3 new SAF tests = 1495 passed; 3 skipped un
 
 (+7 in both variants over the interim count: `ConsumerRecordImportBridgeTest` grew from 5 to 12 cases — the bounded-read proofs A-E, the declared-size fast-path test, and the four one-shot-consumption tests.)
 
-(+5 in both variants: the new `ConsumerRecordImportBridgeTest.kt`, which lives in the shared `src/test/` source set — 5 cases: no-selection, successful read, unreadable URI, oversized document, and the pure `classifyImportRead()` classifier across every branch. The debug/release gap stays at 12, unrelated to this fix.)
+**After the vc328 version bump (current):**
+
+| Variant | Tests | Failures | Errors | Skipped |
+|---|---|---|---|---|
+| Debug | 180 | 0 | 0 | 0 |
+| Release | 168 | 0 | 0 | 0 |
+
+Identical counts to the pre-bump run — confirms the durable version-contract tests (Section 24 Python results below, and the `test_hc321_b3_android_signed_release.py` relationship checks) required zero changes for this real vc328 bump, exactly as the durability hardening was designed to guarantee. (First attempt at this specific run produced spurious failures from stale/corrupted build state left by an interrupted prior invocation — resolved via `./gradlew --stop` + a manual clean; see Section 26 for detail. Not a real regression.)
 
 ### Coverage against the assignment's required regression areas
 Health Connect sync/retry (Section 22) ✓, SyncMutex (Section 22) ✓, patient-scope (Section 14, negative tests ran+passed) ✓, ingestion (Section 6/22) ✓, companion pairing/device tests (Section 23, new regression test added) ✓, device revoke tests (Section 14/23, new regression test added) ✓, authentication lifecycle (Section 12) ✓, password lifecycle (Section 12, 14/14 ran+passed) ✓, recovery (Section 13) ✓, navigation (Section 7 tracker, `ConsumerInAppBackPolicyTest.kt`) ✓, screenshot-policy (Section 18, `ScreenshotPolicyTest.kt`) ✓, Health Snapshot (Section 19, new parity test added) ✓, Timeline (Section 20) ✓, Trends (Section 21) ✓, record upload/import (Section 17 — real defect found and fixed, new bridge tests added) ✓ engineering-side, device retest pending, production-origin (Section 16, `ConsumerOriginLockTest.kt`) ✓, vault integrity/security (Section 15) ✓, public/mobile API contract (`test_hc325_r7a_authenticated_json_contract.py`, part of the passing suite) ✓.
@@ -485,39 +494,50 @@ Health Connect sync/retry (Section 22) ✓, SyncMutex (Section 22) ✓, patient-
 
 Using the existing approved Gradle build process (`android/app/build.gradle.kts`), no invented/replacement signing material, no debug-keystore fallback.
 
+`android/app/build.gradle.kts` bumped this revision: `versionCode = 327 → 328`, `versionName = "0.327.0" → "0.328.0"` (Android only — desktop release metadata at `config/healthchecker.release.json` remains `"0.321.0"` unchanged, per the established independent-lineage precedent; the current architecture does not require it to move). No durable test needed any change for this bump — confirmed by the full suite passing unmodified (Section 24), the exact outcome the HC329 durability hardening was designed to produce.
+
 | Status | Value |
 |---|---|
-| `HC329_RELEASE_BUILD_COMPILE` | **PASS** — `./gradlew assembleRelease testReleaseUnitTest testDebugUnitTest` → `BUILD SUCCESSFUL in 1m 24s`, 85 actionable tasks. |
-| `HC329_PRODUCTION_SIGNING_EXECUTION` | **BLOCKED_PENDING_OPERATOR** — this build environment has only 2 of the 4 required signing env vars set (`HC_ANDROID_KEYSTORE_FILE`, `HC_ANDROID_KEY_ALIAS`; `HC_ANDROID_KEYSTORE_PASSWORD` and `HC_ANDROID_KEY_PASSWORD` are absent). The build script itself fails closed on a partial signing environment (`hc_android_signing_env_incomplete`) rather than silently falling back to debug signing — this is by design. Per governance, no attempt was made to search for, print, expose, reconstruct, or guess the missing credentials, and no replacement key was created. |
+| `HC329_RELEASE_BUILD_COMPILE` | **PASS** — `./gradlew assembleRelease testReleaseUnitTest testDebugUnitTest` at vc328 → `BUILD SUCCESSFUL in 2m 46s`, 85 actionable tasks. |
+| `HC329_PRODUCTION_SIGNING_EXECUTION` | **BLOCKED_PENDING_OPERATOR — attempted and directly evidenced, not inferred.** The governed production signing path was actually invoked this revision (`./gradlew assembleRelease` with the environment exactly as provided, `HC_ANDROID_REQUIRE_PRODUCTION_SIGNING=true`, no vars unset). It failed with the build script's own fail-closed exception: `hc_android_signing_env_incomplete: set all four of HC_ANDROID_KEYSTORE_FILE, HC_ANDROID_KEYSTORE_PASSWORD, HC_ANDROID_KEY_ALIAS, HC_ANDROID_KEY_PASSWORD (or unset all). provided_nonblank=2 expected=4.` Only a count (2 of 4) is disclosed — no variable value, no password, no keystore path was printed or inspected. No replacement key was created, no debug signing was substituted, and no password/secret was searched for, guessed, or exposed. |
 | `PRODUCTION_SIGNING_LINEAGE` | **PROVEN** — established HC328 evidence: production signer SHA256 `0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588`; vc327 production APK SHA256 `1645E3C868E1CEEFEFB27A40A2ADA83A5B8A330BB59C0FEB36FDBA40AA4A8BDC`, production-v2 signed and successfully installed in-place. |
 | `PRODUCTION_SIGNER_CONTINUITY` | **PROVEN_FROM_HC328** — no evidence of lost or compromised signing material was found anywhere in this review; absence of two passwords in this dev/review shell is an access-control fact about this process, not a finding about the signer itself. |
 
-**One pre-existing, unrelated Android build defect found and fixed during this attempt:** `compileReleaseUnitTestKotlin` failed on the first build attempt with `Unresolved reference: ToolbarHarnessActivity` in `ScreenshotPolicyTest.kt`, `StatusScreenNavigationUiTest.kt`, `WindowInsetApplierTest.kt` — these three unit tests live under the shared `src/test/` source set but reference `ToolbarHarnessActivity`, which is defined only under the debug-only `src/debug/` source set (confirmed via `grep -rl "class ToolbarHarnessActivity" app/src/`), so they never compiled against the `release` variant. Pre-existing on `main` (confirmed via `git status` showing no prior local changes to these files before this task touched them). Fixed by moving all three files to a new `src/testDebug/` source set (the standard Android Gradle convention for debug-variant-only unit tests) — zero change to any shipped/`main`-sourceSet code, only test compilation scoping. First build attempt: `FAILURE` on `compileReleaseUnitTestKotlin`. Second build attempt (after the fix): `BUILD SUCCESSFUL`.
+Because governed signing is blocked, the vc328 build below is an **unsigned validation build only** — per instruction, it is explicitly not named or presented as the installable `HealthChecker-vc328-saf-retest.apk` artifact (see Section 26), since an unsigned APK cannot be installed over the currently-installed production-signed vc327 build in any case.
+
+**One pre-existing, unrelated Android build defect found and fixed earlier in this closeout (unchanged this revision):** `compileReleaseUnitTestKotlin` originally failed with `Unresolved reference: ToolbarHarnessActivity` in three debug-only-harness test files; fixed by moving them to a `src/testDebug/` source set. See prior revisions of this report for detail; not touched again this pass.
 
 ## 26. Release Artifact Details
 
-**This is an UNSIGNED RELEASE BUILD FOR SOURCE/BUILD VALIDATION ONLY. It is not a production release artifact, has not been installed anywhere, and its signer state (absent) is not a regression against the signed production APK — it is the expected shape of an unsigned validation build.**
+**This is an UNSIGNED RELEASE BUILD FOR SOURCE/BUILD VALIDATION ONLY. It is not a production release artifact, has not been installed anywhere, its signer state (absent) is not a regression against the signed production APK, and — per explicit instruction — it must not be presented as the installable device-retest artifact.** The named artifact `HealthChecker-vc328-saf-retest.apk` does not exist as of this report, because that name is reserved for a production-signed build and production signing is currently `BLOCKED_PENDING_OPERATOR` (Section 25).
 
-### Post-SAF-fix validation build (current)
+### vc328 unsigned validation build (current — contains the SAF fix + hardening pass)
 
 | Field | Value |
 |---|---|
-| versionCode | **327 (unchanged in this build — see version-bump recommendation below).** |
-| versionName | "0.327.0" |
-| APK path | `android/app/build/outputs/apk/release/app-release-unsigned.apk` (local build output only, not distributed) |
-| APK size | 3,984,155 bytes |
-| APK SHA256 (this unsigned validation build, includes the SAF fix) | `a61a83d85a9af783149226cc2f912a34a8a2bd868edd0f447bfcf140253c9abc` |
+| versionCode | **328** |
+| versionName | **"0.328.0"** (confirmed baked into the built APK via `app/build/outputs/apk/release/output-metadata.json`) |
+| APK path | `android/app/build/outputs/apk/release/app-release-unsigned.apk` (local build output only, not distributed, not renamed to the reserved retest name) |
+| APK size | 3,984,507 bytes |
+| APK SHA256 (unsigned) | `45e57fe312e471466129139eb4391d8f1c9a9a0b37d8124a2afd10563c732b67` |
 | Signer identity | **None — unsigned.** Not comparable to, and not a regression against, the production signer (`0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588`) or the running production APK SHA256 (`1645E3C868E1CEEFEFB27A40A2ADA83A5B8A330BB59C0FEB36FDBA40AA4A8BDC`) — those remain the authoritative, currently-installed production artifact, untouched by this task. |
-| Signing verification result | N/A (unsigned by design for this validation build) |
-| Build test result | `testDebugUnitTest`: **173 tests, 0 failures, 0 errors, 0 skipped** (168 + 5 new `ConsumerRecordImportBridgeTest` cases). `testReleaseUnitTest`: **161 tests, 0 failures, 0 errors, 0 skipped** (156 + the same 5 new cases; the release/debug gap stays at 12, unrelated debug-only-harness tests). |
-| Installed anywhere? | **No.** Not installed on any device, emulator, or production host. |
+| v2/v3 signature | N/A — not applicable to an unsigned APK; `apksigner verify` was not run since there is nothing to verify. |
+| Build test result | `testDebugUnitTest`: **180/180, 0 failures.** `testReleaseUnitTest`: **168/168, 0 failures.** |
+| Installed anywhere? | **No.** No `adb install` was run; the phone was not connected to or touched in any way. |
 
-### Version-bump recommendation for the device retest (not applied to source — operator decision)
+**Note on build reliability during this pass:** a first attempt (with a `--tests` filter, later abandoned) was interrupted mid-run; its Gradle daemon was not fully torn down before a second invocation reused the same output directory and log path, producing corrupted/stale test-result XML and one truncated log file. This was caught (7 apparent "failures" in files that had passed cleanly in every prior round, with a test name in the failure log that didn't even exist in the corresponding stale XML — a clear sign of mixed state, not a real regression), resolved by `./gradlew --stop` (one daemon was in fact still running) plus a manual `rm -rf app/build`, and re-run cleanly to the results recorded above. Recorded here for transparency, not because it reflects an actual code defect.
 
-The device already has vc327 (`versionCode=327`) installed. This validation build was produced *without* bumping the version, since bumping a production version number is a release-governance action this task should recommend, not silently take. **For the in-place update needed to actually retest on the S24 (Section 17), the next governed release should be `versionCode = 328`, `versionName = "0.328.0"`** — following the same `versionName == "0.<versionCode>.0"` contract now durably enforced by `tests/test_hc321_b3_android_signed_release.py` (Section 24). This recommendation is not applied to `android/app/build.gradle.kts` in this branch; the operator's governed release process should apply it (alongside the signed build, since an unsigned APK cannot `install -r` over the currently-installed signed vc327 build — see `PRODUCTION_SIGNING_EXECUTION` above).
+### Why an operator-produced signed artifact is the required next step
+An unsigned APK cannot `adb install -r` over the currently-installed, production-signed vc327 app — Android rejects a signature mismatch on update. Producing `HealthChecker-vc328-saf-retest.apk` as an actually installable artifact requires an operator to run the same `./gradlew assembleRelease` command with the governed `HC_ANDROID_KEYSTORE_FILE`/`HC_ANDROID_KEYSTORE_PASSWORD`/`HC_ANDROID_KEY_ALIAS`/`HC_ANDROID_KEY_PASSWORD` fully populated. Once produced, verify and record before any install:
+- `apksigner verify --print-certs <apk>` → confirm the signer SHA256 matches `0ee183dcb1e88349d6352110e8d12cae9eb712d559925bbaf05030178f9b9588` exactly.
+- Confirm v2 and/or v3 signature blocks are present (`apksigner verify -v`).
+- Compute and record the signed APK's own SHA256 (will necessarily differ from the unsigned build's hash above, since signing changes the file bytes).
+- Only after that verification should the file be named/copied to `HealthChecker-vc328-saf-retest.apk` and considered for the bounded device UAT in Section 17 — installation itself requires separate, explicit operator authorization even after signing succeeds.
 
-### Prior validation build (pre-SAF-fix, superseded)
-For continuity: the build produced earlier in this closeout (before the SAF defect was found) had APK SHA256 `4022f75f170955dd20c103826584a7459379c0c99c99c6cd7c24f60aa1b8c929`, `testDebugUnitTest` 168/168, `testReleaseUnitTest` 156/156. That artifact does **not** contain the SAF fix and must not be used for the device retest.
+### Prior validation builds (superseded, kept for continuity)
+- Pre-SAF-fix (vc327): APK SHA256 `4022f75f170955dd20c103826584a7459379c0c99c99c6cd7c24f60aa1b8c929`, 168/156 debug/release.
+- Post-SAF-fix, pre-hardening (vc327): APK SHA256 `a61a83d85a9af783149226cc2f912a34a8a2bd868edd0f447bfcf140253c9abc`, 173/161 debug/release.
+- None of the vc327-versioned builds above should be used for the device retest — only the vc328 build in this section contains both the SAF fix and its hardening pass.
 
 ## 27. Production Normalization Plan
 
@@ -620,6 +640,8 @@ Because `HealthChecker-HC310E` was never modified during Phase B-E, rollback doe
 6. **Companion device revocation metadata inconsistency** (Section 23, carried from HC328): the old `vc324` identity (`hc3a_77d134db3200fc8c`) shows `revoked=True`/`revoked_at=None` in production. Current `main` code always sets both fields together on revoke, so this stale row predates or bypassed that path; it is a data artifact in the live vault, not a code defect, and this task did not (and could not, per Section 3/4 rules) mutate the production vault to backfill it.
 7. **Android debug-keystore/lint-vital and deprecation warnings**: `assembleRelease` build emits Kotlin deprecation warnings (`databaseEnabled`, `allowFileAccessFromFileURLs`, `allowUniversalAccessFromFileURLs` setters) — informational, not build-blocking, tracked as ordinary tech debt.
 8. **New JavaScript bridge is a (narrow, deliberate) increase in WebView attack surface** (Section 17): `ConsumerRecordImportBridge` is the first `@JavascriptInterface` this app has ever installed. Risk is judged low because (a) the WebView is already fail-closed to the governed production origin only (Section 16 — untrusted content can never load here to begin with), (b) the bridge takes zero parameters from JS and can only read the one URI the native picker already recorded, (c) it performs no writes and persists nothing, (d) the read is now genuinely memory-bounded (never more than `MAX_IMPORT_BYTES` + 1 byte, regardless of document size or declared metadata), and (e) the selected URI is one-shot on success — a completed read cannot be replayed through the bridge without a fresh picker selection. Flagged here for visibility, not because a specific exploitation path was found.
+9. **Signed vc328 artifact does not yet exist** (Section 25-26): governed production signing was attempted and is `BLOCKED_PENDING_OPERATOR` with real error evidence (`hc_android_signing_env_incomplete: provided_nonblank=2 expected=4`). The unsigned vc328 validation build (SHA256 `45e57fe312e471466129139eb4391d8f1c9a9a0b37d8124a2afd10563c732b67`) is not installable over the currently-running signed vc327 build. An operator must run the same build with full governed credentials, verify the signer via `apksigner`, and only then produce the artifact named `HealthChecker-vc328-saf-retest.apk` before the Section 17 device retest can happen. Installation itself requires a further, separate operator authorization even after that.
+10. **Transient build-state corruption during vc328 preparation** (Section 26): an interrupted first attempt at this build (stopped mid-run) left a Gradle daemon running and stale/mixed test-result files behind, producing 7 spurious test "failures" in files that had passed cleanly in every prior round of this closeout. Diagnosed from the mismatch between the failure log's test name and the corresponding (stale) XML report, resolved with `./gradlew --stop` plus a manual `rm -rf app/build`, and the clean rebuild that followed passed 180/180 and 168/168 with no further issues. Recorded for transparency; not a code defect, and the final vc328 numbers in Section 25-26 are from the clean rebuild.
 
 ## 30. Final Gate
 
@@ -643,7 +665,7 @@ Because `HealthChecker-HC310E` was never modified during Phase B-E, rollback doe
 | Trends passes | **PASS** | Section 21 |
 | Screenshot policy passes | **PASS** | Section 18 |
 | SAF import passes OR is explicitly/legitimately removed from scope | **NOT YET FINAL** — `ENGINEERING_SOURCE_CLOSEOUT = PASS` (defect found via device UAT, fixed this revision), `SAF_IMPORT_DEVICE_UAT` prior attempt `FAIL`, retest pending, `FINAL_DEVICE_ACCEPTANCE = WAITING_FOR_OPERATOR` | Section 17 — not removed from scope; the physical-device UAT found and this revision fixed a real defect (Chromium WebView content:// upload failure); a fresh device retest against the fix is required before this gate can read PASS |
-| Android release build succeeds, or only production signing is operator-blocked | **PASS** (build succeeds; signing execution is BLOCKED_PENDING_OPERATOR, not the build itself) | Section 25 |
+| Android release build succeeds, or only production signing is operator-blocked | **PASS** (vc328 build succeeds with 0 test failures; signing execution is BLOCKED_PENDING_OPERATOR — attempted directly this revision with real error evidence, not the build itself) | Section 25 |
 | Final HC329 worktree is clean after commits | **PASS** | `git status` clean after the commits in Section 16 |
 | Final PR is prepared and mergeable | **PASS**, held as DRAFT pending this gate | PR #29, `mergeable: MERGEABLE`, `isDraft: true`; not merged |
 | Production normalization plan complete | **PASS** | Sections 27-28 |
