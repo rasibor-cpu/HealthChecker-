@@ -26,6 +26,7 @@ import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
 import com.healthchecker.companion.consumer.ConsumerOriginLock
 import com.healthchecker.companion.consumer.ConsumerOriginPolicy
+import com.healthchecker.companion.consumer.ConsumerRecordImportBridge
 import com.healthchecker.companion.consumer.ConsumerSafFileChooserPolicy
 import com.healthchecker.companion.secure.SecurePrefs
 import com.healthchecker.companion.util.SafeLog
@@ -38,8 +39,15 @@ import com.healthchecker.companion.util.SafeLog
  * debug localhost defaults must not become the consumer WebView URL.
  * HC325-R6B: SAF content:// documents selected via the file chooser are
  * readable for FormData upload; file:// access stays disabled.
+ * HC329: [ConsumerRecordImportBridge] is the one JavaScript interface
+ * installed on this WebView. It exposes a single, parameterless method that
+ * reads the bytes of whatever URI the native file-chooser callback most
+ * recently recorded — JS supplies no URI/path of its own, so the bridge
+ * cannot be used to read anything beyond what the user just picked via the
+ * system SAF picker. No clinical data is persisted natively; the bytes only
+ * ever live transiently in memory en route to the existing authenticated
+ * upload endpoint.
  * Native Health Connect and WorkManager remain in [CompanionStatusActivity].
- * No JavaScript interface is installed and no clinical data is persisted natively.
  */
 class ConsumerLauncherActivity : AppCompatActivity() {
     private lateinit var prefs: SecurePrefs
@@ -50,6 +58,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var originRecoveryInFlight = false
     private val grantedSafUris = mutableListOf<Uri>()
+    private var pendingImportUri: Uri? = null
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -58,6 +67,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         fileCallback = null
         val uris = ConsumerSafFileChooserPolicy.urisFromActivityResult(result.resultCode, result.data)
         uris?.forEach { takeSafReadGrant(it) }
+        pendingImportUri = uris?.firstOrNull()
         callback.onReceiveValue(uris)
     }
 
@@ -154,6 +164,20 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
         webView.clearCache(true)
+        // HC329: exposes exactly one parameterless read of the most recently
+        // SAF-picked document — see class doc and ConsumerRecordImportBridge.
+        // The selection is one-shot on success only: onConsumed clears it so a
+        // second read without a fresh picker selection reports no_file_selected,
+        // but a failed read leaves it in place so a transient failure remains
+        // retryable without forcing the user back through the system picker.
+        webView.addJavascriptInterface(
+            ConsumerRecordImportBridge(
+                contentResolver,
+                pendingUriProvider = { pendingImportUri },
+                onConsumed = { pendingImportUri = null },
+            ),
+            "HCNativeImport",
+        )
         webView.setDownloadListener { _, _, _, _, _ ->
             Toast.makeText(this, R.string.consumer_download_blocked, Toast.LENGTH_LONG).show()
             SafeLog.w("consumer_download_blocked")
@@ -332,6 +356,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        pendingImportUri = null
         releaseSafReadGrants()
         webView.stopLoading()
         webView.webChromeClient = null

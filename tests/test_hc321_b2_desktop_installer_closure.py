@@ -51,14 +51,23 @@ def _pwsh(*args: str, check: bool = True, env: dict | None = None) -> subprocess
 
 
 def test_desktop_release_version_advanced_to_0_321_0():
+    # Intentionally historical: this test's whole purpose is to freeze the
+    # desktop release track at 0.321.0 as of HC321-B2 closure — DESKTOP_VERSION
+    # is not expected to change here even as Android advances independently.
     assert RELEASE["release_format"] == "hc.release.v1"
     assert RELEASE["version"] == DESKTOP_VERSION
     assert "0.321.0" in PACKAGE_SCRIPT or "$version" in PACKAGE_SCRIPT
     assert "healthchecker.release.json" in PACKAGE_SCRIPT
-    # Desktop metadata remains 0.321.0; Android has subsequently advanced to vc324.
+    # Desktop metadata remains 0.321.0; Android advances independently and is
+    # only checked here for the governed versionName/versionCode relationship
+    # plus a floor proving it has moved past this test's era — not a frozen
+    # release number, so a later legitimate Android bump won't break this.
     gradle = (ROOT / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionName = "0.324.0"' in gradle
-    assert "versionCode = 324" in gradle
+    version_code = re.search(r"versionCode\s*=\s*(\d+)", gradle)
+    version_name = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
+    assert version_code and version_name, "could not parse Android version from build.gradle.kts"
+    assert version_name.group(1) == f"0.{version_code.group(1)}.0"
+    assert int(version_code.group(1)) >= 321
     assert RELEASE["version"] == DESKTOP_VERSION
 
 
