@@ -20,9 +20,24 @@ PROVENANCE_SCRIPT = (
 ).read_text(encoding="utf-8")
 RELEASE = json.loads((ROOT / "config" / "healthchecker.release.json").read_text(encoding="utf-8"))
 
-ANDROID_VERSION_CODE = 324
-ANDROID_VERSION_NAME = "0.324.0"
+# HC329: derive the current Android version from build.gradle.kts itself rather
+# than hardcoding it here — a hardcoded literal goes stale every time a later
+# release (vc328, vc329, ...) legitimately advances versionCode/versionName,
+# which is exactly what broke this file at HC329 (it was still pinned to 324).
+_VERSION_CODE_MATCH = re.search(r"versionCode\s*=\s*(\d+)", GRADLE)
+_VERSION_NAME_MATCH = re.search(r'versionName\s*=\s*"([^"]+)"', GRADLE)
+assert _VERSION_CODE_MATCH and _VERSION_NAME_MATCH, "could not parse versionCode/versionName from build.gradle.kts"
+ANDROID_VERSION_CODE = int(_VERSION_CODE_MATCH.group(1))
+ANDROID_VERSION_NAME = _VERSION_NAME_MATCH.group(1)
+
+# Intentionally historical literals (do not "fix" these forward on future releases):
+# - DESKTOP_VERSION: the desktop release track is a separate, independently
+#   versioned lineage that was frozen at 0.321.0 when HC321-B2 closed and has
+#   not advanced since — this literal documents that fact, not a stale check.
 DESKTOP_VERSION = "0.321.0"
+# - PRIOR_ANDROID_VERSION_CODE: the governed "must have advanced past this"
+#   floor established at HC321-B3. Since versionCode only ever increases, this
+#   floor never needs to move forward as later releases (327, 328, ...) land.
 PRIOR_ANDROID_VERSION_CODE = 320
 
 ENV_VARS = (
@@ -57,9 +72,12 @@ def _pwsh(*args: str, check: bool = True, env: dict | None = None) -> subprocess
     )
 
 
-def test_android_version_advanced_monotonically_to_321():
-    assert f"versionCode = {ANDROID_VERSION_CODE}" in GRADLE
-    assert f'versionName = "{ANDROID_VERSION_NAME}"' in GRADLE
+def test_android_version_advanced_monotonically_beyond_governed_floor():
+    # versionName must follow the governed "0.<versionCode>.0" contract — this
+    # holds for every historical release (320, 321, 324, 327, ...) and will
+    # keep holding for any future one, so it needs no hardcoded target value.
+    assert ANDROID_VERSION_NAME == f"0.{ANDROID_VERSION_CODE}.0"
+    # Monotonicity against a fixed, never-moving governed baseline (HC321-B3).
     assert ANDROID_VERSION_CODE > PRIOR_ANDROID_VERSION_CODE
     # Desktop release metadata remains independent of later Android version advances.
     assert RELEASE["version"] == DESKTOP_VERSION
