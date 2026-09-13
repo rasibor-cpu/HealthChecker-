@@ -1698,6 +1698,7 @@ def companion_devices_handler(
     include_revoked: bool = False,
     store: VaultStore | None = None,
     admin_header: str | None = None,
+    patient_id: str | None = None,
 ) -> dict[str, Any]:
     from backend.health_vault.companion.security import companion_admin_authorized
 
@@ -1705,7 +1706,9 @@ def companion_devices_handler(
         return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"], "devices": []}
     return {
         "ok": True,
-        "devices": _companion_pairing(store).list_devices(include_revoked=include_revoked),
+        "devices": _companion_pairing(store).list_devices(
+            include_revoked=include_revoked, patient_id=patient_id
+        ),
         "disclaimer": "Device list excludes token secrets. Revoke to invalidate companion access.",
     }
 
@@ -1714,12 +1717,13 @@ def companion_revoke_handler(
     device_id: str,
     store: VaultStore | None = None,
     admin_header: str | None = None,
+    patient_id: str | None = None,
 ) -> dict[str, Any]:
     from backend.health_vault.companion.security import companion_admin_authorized
 
     if not companion_admin_authorized(admin_header):
         return {"ok": False, "status": "admin_required", "errors": ["companion_admin_required"]}
-    return _companion_pairing(store).revoke_device(str(device_id))
+    return _companion_pairing(store).revoke_device(str(device_id), patient_id=patient_id)
 
 
 def companion_observations_handler(
