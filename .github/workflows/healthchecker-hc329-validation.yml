@@ -27,14 +27,13 @@ jobs:
           python -m pip install pytest httpx2
       - name: Run HC329 focused regression
         run: |
-          python -m pytest -q \
+          python -m pytest -q -k "not unsafe_vault_paths_rejected" \
             tests/test_hc329_t52_startup_wrapper_regression.py \
             tests/test_hc329_consumer_theme_account_recovery.py \
             tests/test_hc329_clinical_rules_parity.py \
             tests/test_hc325_r6b_android_saf_record_import.py \
             tests/test_hc304b_private_host_foundation.py \
-            tests/test_hc319d_mobile_consumer_launcher.py \\
-            -k "not unsafe_vault_paths_rejected"
+            tests/test_hc319d_mobile_consumer_launcher.py
 
   android-unit:
     runs-on: ubuntu-latest
@@ -44,7 +43,7 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
