@@ -1,0 +1,38 @@
+name: HC329 Production Signing Readiness
+
+on:
+  push:
+    branches:
+      - hc329-t57-signing-readiness
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signing-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KEYSTORE_B64: ${{ secrets.HC_ANDROID_KEYSTORE_B64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.HC_ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.HC_ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.HC_ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check governed signing material presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          [ -n "${KEYSTORE_B64}" ] && count=$((count+1))
+          [ -n "${KEYSTORE_PASSWORD}" ] && count=$((count+1))
+          [ -n "${KEY_ALIAS}" ] && count=$((count+1))
+          [ -n "${KEY_PASSWORD}" ] && count=$((count+1))
+          echo "SIGNING_SECRET_COUNT=${count}"
+          if [ "${count}" -eq 4 ]; then
+            echo "HC329_SIGNING_READINESS=READY"
+          else
+            echo "HC329_SIGNING_READINESS=BLOCKED"
+            exit 2
+          fi
