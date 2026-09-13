@@ -28,7 +28,8 @@ def test_hc329_t52_launcher_preserves_known_good_startup_contract():
         'healthchecker-consumer-api.pid',
         'healthchecker-consumer-api.heartbeat.json',
         '-m uvicorn backend.health_vault.api:create_health_vault_app',
-        '--factory --host $bindAddress --port $port',
+        'Start-HcUvicornChild',
+        '$psi.Arguments = "-m uvicorn backend.health_vault.api:create_health_vault_app --factory --host $BindAddress --port $Port --no-access-log"',
     )
     for marker in required_markers:
         assert marker in LAUNCHER
