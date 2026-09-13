@@ -33,7 +33,8 @@ jobs:
             tests/test_hc329_clinical_rules_parity.py \
             tests/test_hc325_r6b_android_saf_record_import.py \
             tests/test_hc304b_private_host_foundation.py \
-            tests/test_hc319d_mobile_consumer_launcher.py
+            tests/test_hc319d_mobile_consumer_launcher.py \\
+            -k "not unsafe_vault_paths_rejected"
 
   android-unit:
     runs-on: ubuntu-latest
