@@ -992,3 +992,96 @@ body.mobile-consumer #mobile_priority_metric {
     touch-action: manipulation;
 }
 
+
+
+/* HC329 - clinical Hospital Blue consumer theme and account-security polish. */
+body.mobile-consumer.light-theme {
+    --bg: #eef7fb;
+    --card: #ffffff;
+    --text: #163447;
+    --muted: #5e7888;
+    --accent: #1976a3;
+    --line: #bfd7e4;
+    --status-green: #0b7a65;
+    --status-amber: #946200;
+    --status-red: #b42318;
+    --status-grey: #607786;
+    --status-green-bg: #e7f7f2;
+    --status-amber-bg: #fff7df;
+    --status-red-bg: #fdebea;
+    --status-grey-bg: #edf3f6;
+    background: var(--bg);
+    color: var(--text);
+}
+
+body.mobile-consumer.light-theme header,
+body.mobile-consumer.light-theme .mobile-app-header {
+    background: #0f5f86;
+    color: #ffffff;
+    border-bottom: 1px solid #0b4f70;
+}
+
+body.mobile-consumer.light-theme #mobile_nav {
+    background: #dceff7;
+    border-bottom: 1px solid #bdd9e6;
+}
+
+body.mobile-consumer.light-theme #mobile_nav button,
+body.mobile-consumer.light-theme button {
+    background: #ffffff;
+    color: #17445c;
+    border: 1px solid #94bfd2;
+    border-radius: 8px;
+}
+
+body.mobile-consumer.light-theme #mobile_nav button[aria-current="page"],
+body.mobile-consumer.light-theme #mobile_nav button[aria-selected="true"],
+body.mobile-consumer.light-theme button:not(.secondary):focus-visible {
+    background: #0f6f9e;
+    color: #ffffff;
+    border-color: #0f6f9e;
+}
+
+body.mobile-consumer.light-theme button.secondary {
+    background: #edf6fa;
+    color: #17445c;
+    border-color: #a8cbd9;
+}
+
+body.mobile-consumer.light-theme input,
+body.mobile-consumer.light-theme select,
+body.mobile-consumer.light-theme textarea {
+    background: #ffffff;
+    color: #163447;
+    border-color: #9fc4d4;
+}
+
+body.mobile-consumer.light-theme input:focus,
+body.mobile-consumer.light-theme select:focus,
+body.mobile-consumer.light-theme textarea:focus {
+    outline: 3px solid rgba(25, 118, 163, 0.28);
+    border-color: #1976a3;
+}
+
+body.mobile-consumer.light-theme .card {
+    box-shadow: 0 2px 10px rgba(17, 73, 101, 0.08);
+}
+
+body.mobile-consumer #mobile_settings h2,
+body.mobile-consumer #mobile_settings h3,
+body.mobile-consumer #mobile_recovery_flow h2 {
+    color: var(--text);
+}
+
+body.mobile-consumer #mobile_settings form {
+    margin: 12px 0 16px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+}
+
+body.mobile-consumer #mobile_settings .small,
+body.mobile-consumer #mobile_recovery_flow .small {
+    line-height: 1.45;
+}
