@@ -25,7 +25,7 @@ def test_mobile_exposes_password_change_and_lost_password_recovery():
     html = _read("mobile.html")
     js = _read("js/health_vault/mobile_consumer.js")
 
-    assert "Forgot / reset password" in html
+    assert "Forgot password? Reset it securely" in html
     assert "Recover your account" in html
     assert "Password &amp; recovery" in html
     assert "Change password" in html
