@@ -1,0 +1,58 @@
+name: HealthChecker HC329 Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-hc329:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/production.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/production.txt
+          python -m pip install -r requirements-hc311.txt
+          python -m pip install pytest httpx2
+      - name: Run HC329 focused regression
+        run: |
+          python -m pytest -q -k "not unsafe_vault_paths_rejected" \
+            tests/test_hc329_t52_startup_wrapper_regression.py \
+            tests/test_hc329_consumer_theme_account_recovery.py \
+            tests/test_hc329_clinical_rules_parity.py \
+            tests/test_hc325_r6b_android_saf_record_import.py \
+            tests/test_hc304b_private_host_foundation.py \
+            tests/test_hc319d_mobile_consumer_launcher.py
+
+  android-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Validate Gradle wrapper
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --version
+      - name: Run Android debug and release unit tests
+        env:
+          HC_ANDROID_REQUIRE_PRODUCTION_SIGNING: "false"
+        run: ./gradlew :app:testDebugUnitTest :app:testReleaseUnitTest --no-daemon

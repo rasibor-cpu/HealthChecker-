@@ -10,11 +10,11 @@ LAUNCHER = LAUNCHER_PATH.read_text(encoding="utf-8")
 
 def test_hc329_t52_launcher_preserves_known_good_startup_contract():
     """
-    Regression guard for HC329-T51.
+    Regression guard for HC329-T51 and the later supervised wrapper.
 
-    T51 isolated a startup regression to a modified local wrapper and proved that
-    restoring the repository HEAD wrapper re-established governed runtime startup
-    on 127.0.0.1:8766 without modifying HC329 application files.
+    The contract is behavioral: governed runtime resolution, loopback binding,
+    CSS-port protection, single-instance controls, heartbeat/PID lifecycle, and
+    the supervised Uvicorn child launch must remain present.
     """
     required_markers = (
         'Assert-HealthCheckerManagedRuntime.ps1',
@@ -27,16 +27,23 @@ def test_hc329_t52_launcher_preserves_known_good_startup_contract():
         'instance_already_running',
         'healthchecker-consumer-api.pid',
         'healthchecker-consumer-api.heartbeat.json',
-        '-m uvicorn backend.health_vault.api:create_health_vault_app',
-        '--factory --host $bindAddress --port $port',
+        'Start-HcUvicornChild',
+        '$psi.Arguments = "-m uvicorn backend.health_vault.api:create_health_vault_app --factory --host $BindAddress --port $Port --no-access-log"',
     )
     for marker in required_markers:
         assert marker in LAUNCHER
 
 
 def test_hc329_t52_launcher_does_not_gain_unsafe_process_or_network_actions():
+    # The supervised wrapper may terminate only the child process tree it owns.
+    # What remains forbidden is broad/name-based killing, CSS-port handling,
+    # system network reconfiguration, ACL mutation, or tunnel lifecycle changes.
+    assert 'function Stop-HcOwnedChild' in LAUNCHER
+    assert 'Stop-HcOwnedChild -Child $child' in LAUNCHER
+
     forbidden_patterns = (
-        r'Stop-Process\b',
+        r'Stop-Process\s+-Name\b',
+        r'Get-Process[^\n|]*\|[^\n]*Stop-Process',
         r'taskkill(?:\.exe)?\b',
         r'Get-NetTCPConnection[^\n]*8765',
         r'LocalPort\s+8765',
@@ -68,8 +75,8 @@ def test_hc329_t52_launcher_keeps_fail_closed_runtime_and_config_checks():
 
 def test_hc329_t52_baseline_wrapper_fingerprint_is_documented_not_enforced():
     """
-    Useful diagnostic only: this test deliberately does not pin a hard-coded hash,
-    because legitimate reviewed launcher changes must remain possible.
+    Useful diagnostic only: do not hard-pin the launcher hash because reviewed,
+    tested supervisor improvements are legitimate.
     """
     digest = hashlib.sha256(LAUNCHER_PATH.read_bytes()).hexdigest()
     assert len(digest) == 64
