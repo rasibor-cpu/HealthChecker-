@@ -370,6 +370,96 @@ def test_http_surface_cors_proxy_admin(monitoring_vault: Path):
     assert r.json().get("ok") is True
 
 
+def test_devices_and_revoke_are_patient_scoped(monitoring_vault: Path):
+    """HC329: admin token alone must not expose or revoke another patient's device."""
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    env = _base_env(monitoring_vault)
+    app, config, _store = build_activated_app(environ=env, repo_root=ROOT)
+    auth = app.state.hc_auth_service
+    auth.create_user(
+        user_id="patient-a", name="Patient A", email_identifier="a@test.invalid",
+        password="Patient-A-Password", must_change_password=False,
+    )
+    auth.create_user(
+        user_id="patient-b", name="Patient B", email_identifier="b@test.invalid",
+        password="Patient-B-Password", must_change_password=False,
+    )
+    token_a = auth.login("patient-a", "Patient-A-Password")["token"]
+    token_b = auth.login("patient-b", "Patient-B-Password")["token"]
+    os.environ["HC_HOST_ALLOW_TESTCLIENT_PEER"] = "1"
+    client = TestClient(app)
+
+    def _pair(token: str) -> str:
+        start = client.post(
+            "/api/companion/pair/start",
+            json={"display_name": "device"},
+            headers={
+                **_proxy_headers(config),
+                "X-HC-Companion-Admin": config.admin_token,
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        assert start.status_code == 200
+        confirm = client.post(
+            "/api/companion/pair/confirm",
+            json={"pair_code": start.json()["pair_code"], "device_label": "phone"},
+            headers=_proxy_headers(config),
+        )
+        assert confirm.status_code == 200
+        return confirm.json()["device_id"]
+
+    device_a = _pair(token_a)
+    device_b = _pair(token_b)
+
+    # Patient B's device listing must not include patient A's device.
+    listed_b = client.get(
+        "/api/companion/devices",
+        headers={
+            **_proxy_headers(config),
+            "X-HC-Companion-Admin": config.admin_token,
+            "Authorization": f"Bearer {token_b}",
+        },
+    )
+    assert listed_b.status_code == 200
+    ids_b = {d["device_id"] for d in listed_b.json()["devices"]}
+    assert ids_b == {device_b}
+    assert device_a not in ids_b
+
+    # Patient B must not be able to revoke patient A's device via admin token alone.
+    cross_revoke = client.delete(
+        f"/api/companion/devices/{device_a}",
+        headers={
+            **_proxy_headers(config),
+            "X-HC-Companion-Admin": config.admin_token,
+            "Authorization": f"Bearer {token_b}",
+        },
+    )
+    assert cross_revoke.status_code == 403
+    assert cross_revoke.json().get("status") == "forbidden"
+
+    # Patient A can revoke their own device.
+    own_revoke = client.delete(
+        f"/api/companion/devices/{device_a}",
+        headers={
+            **_proxy_headers(config),
+            "X-HC-Companion-Admin": config.admin_token,
+            "Authorization": f"Bearer {token_a}",
+        },
+    )
+    assert own_revoke.status_code == 200
+    assert own_revoke.json().get("revoked") is True
+
+    # devices/revoke without any authenticated session are rejected even with a
+    # valid admin token.
+    unauthenticated = client.get(
+        "/api/companion/devices",
+        headers={**_proxy_headers(config), "X-HC-Companion-Admin": config.admin_token},
+    )
+    assert unauthenticated.status_code == 401
+
+
 def test_oversized_body_without_content_length(monitoring_vault: Path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
