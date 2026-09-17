@@ -9,6 +9,11 @@ from backend.health_vault.event_bus import EventBus, get_event_bus
 from backend.health_vault.confidence_engine import ConfidenceEngine
 from backend.health_vault.validation_engine import ValidationEngine
 from backend.health_vault.clinical_rules import ClinicalRulesEngine
+from backend.health_vault.dashboard_freshness import install_dashboard_summary_serializer
+
+# HC330: enforce stale/missing-data fail-safe semantics at the common serialized
+# dashboard boundary so desktop and mobile consumers receive the same headline.
+install_dashboard_summary_serializer()
 
 __all__ = [
     "MedicalDocument",
