@@ -5,7 +5,7 @@ import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
 /**
- * HC324 — decide when an incremental Health Connect change-token fetch must be
+ * HC324/HC330 — decide when an incremental Health Connect change-token fetch must be
  * supplemented by a bounded newest-first catch-up read.
  *
  * Pure functions; no Health Connect client, no clinical fabrication.
@@ -38,10 +38,16 @@ object FreshnessCatchUp {
     }
 
     fun catchUpStart(now: Instant, fetchedLatestIso: String?): Instant {
-        val floor = now.minus(CATCH_UP_LOOKBACK_HOURS, ChronoUnit.HOURS)
-        val parsed = parseIsoInstant(fetchedLatestIso) ?: return floor
-        val overlap = parsed.minus(CATCH_UP_OVERLAP_HOURS, ChronoUnit.HOURS)
-        return if (overlap.isAfter(floor)) overlap else floor
+        // HC330: when inventory proves at least one metric is ahead of the incremental
+        // feed, the caller cannot safely use the newest timestamp from an unrelated
+        // metric as the lower bound. A fresh heart-rate sample, for example, must not
+        // collapse the catch-up window and hide last night's sleep record. Use the
+        // existing bounded 14-day floor for every inventory-ahead recovery pass.
+        // The fetched timestamp is deliberately retained in the signature for API
+        // compatibility with HC324 callers.
+        @Suppress("UNUSED_VARIABLE")
+        val ignoredFetchedLatest = fetchedLatestIso
+        return now.minus(CATCH_UP_LOOKBACK_HOURS, ChronoUnit.HOURS)
     }
 
     fun capNewest(
@@ -49,7 +55,36 @@ object FreshnessCatchUp {
         limit: Int = CATCH_UP_MAX_OBSERVATIONS
     ): List<CompanionObservation> {
         if (observations.size <= limit) return observations
-        return observations.sortedByDescending { it.measuredAt }.take(limit).sortedBy { it.measuredAt }
+        if (limit <= 0) return emptyList()
+
+        // Preserve the newest observation for every metric before filling the
+        // remaining budget with the newest observations globally. Without this,
+        // high-frequency heart-rate samples can crowd lower-frequency metrics such
+        // as sleep or oxygen saturation out of the bounded catch-up payload.
+        val newestPerMetric = observations
+            .groupBy { it.metricType }
+            .mapNotNull { (_, rows) -> rows.maxByOrNull { it.measuredAt } }
+            .sortedByDescending { it.measuredAt }
+
+        if (newestPerMetric.size >= limit) {
+            return newestPerMetric.take(limit).sortedBy { it.measuredAt }
+        }
+
+        val reserved = newestPerMetric.map {
+            Triple(it.metricType, it.sourceRecordId, it.measuredAt)
+        }.toHashSet()
+        val remainder = observations
+            .asSequence()
+            .filter {
+                Triple(it.metricType, it.sourceRecordId, it.measuredAt) !in reserved
+            }
+            .sortedByDescending { it.measuredAt }
+            .take(limit - newestPerMetric.size)
+            .toList()
+
+        return (newestPerMetric + remainder)
+            .distinctBy { Triple(it.metricType, it.sourceRecordId, it.measuredAt) }
+            .sortedBy { it.measuredAt }
     }
 
     fun parseIsoInstant(value: String?): Instant? {
