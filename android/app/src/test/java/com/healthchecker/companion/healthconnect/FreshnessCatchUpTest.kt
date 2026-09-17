@@ -33,10 +33,10 @@ class FreshnessCatchUpTest {
     }
 
     @Test
-    fun catchUpStartUsesFetchedLatestWithOverlapRatherThanFullHistory() {
+    fun catchUpStartUsesBoundedLookbackEvenWhenAnotherMetricFetchedRecently() {
         val now = Instant.parse("2026-08-24T18:00:00Z")
-        val start = FreshnessCatchUp.catchUpStart(now, "2026-08-18T10:00:00Z")
-        assertEquals(Instant.parse("2026-08-18T09:00:00Z"), start)
+        val start = FreshnessCatchUp.catchUpStart(now, "2026-08-24T17:55:00Z")
+        assertEquals(Instant.parse("2026-08-10T18:00:00Z"), start)
     }
 
     @Test
@@ -53,5 +53,30 @@ class FreshnessCatchUpTest {
         assertEquals(10, capped.size)
         assertEquals("2026-08-18T00:13:20Z", capped.last().measuredAt)
         assertTrue(capped.first().measuredAt < capped.last().measuredAt)
+    }
+
+    @Test
+    fun capNewestPreservesLatestLowFrequencyMetricAgainstHeartRateFlood() {
+        val base = Instant.parse("2026-08-18T00:00:00Z")
+        val heartRates = (1..800).map { index ->
+            ObservationMapper.heartRate(
+                "hr$index",
+                70,
+                base.plusSeconds(index.toLong()),
+                "com.sec.android.app.shealth"
+            )
+        }
+        val sleep = ObservationMapper.sleepDurationHours(
+            "sleep-1",
+            7.5,
+            base.minusSeconds(6 * 3600L),
+            "com.sec.android.app.shealth"
+        )
+
+        val capped = FreshnessCatchUp.capNewest(heartRates + sleep, 10)
+
+        assertEquals(10, capped.size)
+        assertTrue(capped.any { it.metricType == "sleep_duration" && it.sourceRecordId == "sleep-1" })
+        assertTrue(capped.any { it.metricType == "heart_rate" })
     }
 }
