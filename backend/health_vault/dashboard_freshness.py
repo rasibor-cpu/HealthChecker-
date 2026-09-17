@@ -109,3 +109,59 @@ def derive_fail_safe_overall_status(
 
     detail["reason"] = "sufficient_current_coverage_for_nominal_headline"
     return normalized, detail
+
+
+def apply_fail_safe_to_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply HC330 semantics to an already-serialized DashboardSummary payload.
+
+    The operation is in-place and idempotent. Both top-level ``overall_status``
+    and the ``status_summary`` widget are kept aligned so desktop and mobile
+    consumers cannot disagree about stale-data semantics.
+    """
+
+    widgets = payload.get("widgets") if isinstance(payload, dict) else None
+    if not isinstance(widgets, list):
+        return payload
+
+    status_widget = None
+    for widget in widgets:
+        if isinstance(widget, dict) and widget.get("widget_id") == "status_summary":
+            status_widget = widget
+            break
+    if not isinstance(status_widget, dict):
+        return payload
+
+    widget_payload = status_widget.get("payload")
+    if not isinstance(widget_payload, dict):
+        return payload
+
+    safe_status, detail = derive_fail_safe_overall_status(
+        str(payload.get("overall_status") or widget_payload.get("status") or ""),
+        widget_payload.get("freshness_path"),
+    )
+    payload["overall_status"] = safe_status
+    payload["data_quality"] = detail
+    widget_payload["status"] = safe_status
+    widget_payload["headline_data_quality"] = detail
+    return payload
+
+
+def install_dashboard_summary_serializer() -> None:
+    """Install the HC330 fail-safe at the DashboardSummary serialization boundary.
+
+    This keeps the pre-existing dashboard synthesis logic intact while enforcing
+    one cross-surface serialization rule. The installer is safe to call more
+    than once during test/application imports.
+    """
+
+    from backend.health_vault.models import DashboardSummary
+
+    current = DashboardSummary.to_dict
+    if getattr(current, "_hc330_failsafe", False):
+        return
+
+    def to_dict_with_freshness(self: Any) -> dict[str, Any]:
+        return apply_fail_safe_to_summary_payload(current(self))
+
+    setattr(to_dict_with_freshness, "_hc330_failsafe", True)
+    DashboardSummary.to_dict = to_dict_with_freshness  # type: ignore[method-assign]
