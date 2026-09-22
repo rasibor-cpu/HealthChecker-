@@ -676,7 +676,9 @@
     formatDate(value) {
       if (!value) return "Not available";
       const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString([], { year: "numeric", month: "short", day: "numeric" });
+      // Clinical dates are stored in UTC. Rendering them in the workstation's
+      // local zone can move a midnight UTC date to the previous calendar day.
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
     }
 
     formatBytes(value) {
