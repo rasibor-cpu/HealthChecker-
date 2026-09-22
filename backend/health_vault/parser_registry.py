@@ -65,6 +65,11 @@ class ParserRegistry:
             "measurements": result.get("measurements") or [],
             "confidence": float(result.get("confidence") or 0.0),
             "notes": result.get("notes") or [],
+            # Preserve parser-supplied document dating.  Dropping these fields
+            # caused longitudinal JSON packages to fall back to a date embedded
+            # in the filename or to the first historical measurement.
+            "measured_at": result.get("measured_at"),
+            "report_date": result.get("report_date"),
         }
 
 

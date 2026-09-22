@@ -233,7 +233,11 @@ class TrendEngine:
     def classify(metric: str, values: list[float]) -> dict[str, Any]:
         metric = canonicalize_metric(metric)
         if len(values) < 3:
-            return {"direction": "stable", "label": "Stable", "reason": "insufficient_points"}
+            return {
+                "direction": "insufficient_data",
+                "label": "Insufficient data",
+                "reason": "insufficient_points",
+            }
         a = values[-3:]
         rising = a[2] > a[1] > a[0]
         falling = a[2] < a[1] < a[0]

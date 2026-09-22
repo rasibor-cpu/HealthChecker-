@@ -41,11 +41,27 @@ def _from_mapping(obj: Any, document_id: str | None, confidence: float) -> list:
     if isinstance(obj, list):
         for item in obj:
             if isinstance(item, dict):
+                # Accept the compact, documented vault-import vocabulary as well
+                # as the internal Measurement field names.  Passing ``code``,
+                # ``unit`` and ``flag`` straight through used to silently create
+                # an ``unknown`` metric and discard its units/flag.
+                mapped = dict(item)
+                if not mapped.get("metric"):
+                    mapped["metric"] = mapped.get("code") or mapped.get("name")
+                if "units" not in mapped and "unit" in mapped:
+                    mapped["units"] = mapped.get("unit")
+                if "abnormal_flag" not in mapped and "flag" in mapped:
+                    mapped["abnormal_flag"] = mapped.get("flag")
+                mapped.setdefault("original_metric", mapped.get("code"))
                 out.append(
                     create_measurement(
                         document_id=document_id,
-                        confidence=item.get("confidence", confidence),
-                        **{k: v for k, v in item.items() if k != "confidence"},
+                        confidence=mapped.get("confidence", confidence),
+                        **{
+                            k: v
+                            for k, v in mapped.items()
+                            if k not in {"confidence", "code", "unit", "flag", "name"}
+                        },
                     )
                 )
         return out
@@ -311,11 +327,48 @@ class GenericJsonParser(_Base):
     def parse(self, ctx: dict[str, Any]) -> dict[str, Any]:
         data = ctx.get("json") or _json_from_text(ctx.get("text"))
         measurements = _from_mapping(data, ctx.get("document_id"), 0.7)
+        package_date = None
+        report_date = None
+        notes = ["Generic JSON measurement parser"]
+        if isinstance(data, dict) and data.get("schema") == "healthchecker.vault_import.v1":
+            # A vault package may contain many historical measurement dates.
+            # Date the package by its generation timestamp while preserving each
+            # measurement's own measured_at value for timeline/trend use.
+            package_date = data.get("generated_at")
+            report_date = package_date
+            dates = sorted(
+                {
+                    str(row.get("measured_at"))
+                    for row in (data.get("measurements") or [])
+                    if isinstance(row, dict) and row.get("measured_at")
+                }
+            )
+            if dates:
+                notes.append(f"measurement_coverage:{dates[0]}..{dates[-1]}")
         return {
             "measurements": measurements,
             "confidence": 0.7 if measurements else 0.2,
-            "notes": ["Generic JSON measurement parser"],
+            "notes": notes,
+            "measured_at": package_date,
+            "report_date": report_date,
         }
+
+
+class HealthCheckerVaultImportParser(GenericJsonParser):
+    """Parser for the versioned, multi-domain HealthChecker vault package."""
+
+    id = "healthchecker_vault_import_parser"
+    name = "HealthCheckerVaultImportParser"
+    version = "hc331.v1"
+    priority = 60
+
+    def can_parse(self, ctx: dict[str, Any]) -> bool:
+        data = ctx.get("json") or _json_from_text(ctx.get("text"))
+        return (
+            isinstance(data, dict)
+            and data.get("schema") == "healthchecker.vault_import.v1"
+            and isinstance(data.get("measurements"), list)
+        )
 
 
 def register_builtin_parsers(registry=None) -> None:
@@ -323,6 +376,7 @@ def register_builtin_parsers(registry=None) -> None:
 
     reg = registry or DEFAULT_REGISTRY
     for cls in (
+        HealthCheckerVaultImportParser,
         ClinicalLabPanelParser,
         SamsungHealthParser,
         GalaxyWatchParser,

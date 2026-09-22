@@ -199,10 +199,15 @@ class HealthIntelligenceEngine:
                     measurement_id=item.get("measurement_id") or item.get("id"),
                 ) for item in hba1c_items
             ]
-            direction = trend_map.get("hba1c", {}).get("direction", "stable")
-            fact = f"Latest HbA1c is {values[-1]:.1f}% (prior values: {', '.join(f'{v:.1f}%' for v in values[:-1])})."
-            interpretation = f"HbA1c levels show a {direction} pattern."
-            explanation = f"Evaluated chronological trend direction over {len(values)} points."
+            direction = trend_map.get("hba1c", {}).get("direction", "insufficient_data")
+            if len(values) == 1:
+                fact = f"Latest HbA1c is {values[-1]:.1f}%."
+                interpretation = "Only one eligible HbA1c reading is available; a trend cannot yet be determined."
+                explanation = "Reported the single eligible reading without inferring a trend."
+            else:
+                fact = f"Latest HbA1c is {values[-1]:.1f}% (prior values: {', '.join(f'{v:.1f}%' for v in values[:-1])})."
+                interpretation = f"HbA1c trend classification: {direction.replace('_', ' ')}."
+                explanation = f"Evaluated chronological trend direction over {len(values)} points."
             
             obs = HealthObservation(
                 patient_id=patient_id,
@@ -236,14 +241,18 @@ class HealthIntelligenceEngine:
                     measurement_id=item.get("measurement_id") or item.get("id"),
                 ) for item in egfr_items
             ]
-            direction = trend_map.get("egfr", {}).get("direction", "stable")
+            direction = trend_map.get("egfr", {}).get("direction", "insufficient_data")
             change = values[-1] - values[0]
-            fact = f"eGFR changed from {values[0]:.1f} to {values[-1]:.1f} mL/min/1.73m2."
-            interpretation = f"Kidney filtration rate is stable ({direction} trend)."
-            if direction == "worsening" or change < -5:
-                interpretation = f"Kidney filtration rate shows worsening trend ({direction})."
-
-            explanation = f"Calculated absolute change of {change:+.1f} mL/min/1.73m2 over {len(values)} readings."
+            if len(values) == 1:
+                fact = f"Latest eGFR is {values[-1]:.1f} mL/min/1.73m2."
+                interpretation = "Only one eligible eGFR reading is available; a trend cannot yet be determined."
+                explanation = "Reported the single eligible reading without calculating a change or trend."
+            else:
+                fact = f"eGFR changed from {values[0]:.1f} to {values[-1]:.1f} mL/min/1.73m2."
+                interpretation = f"Kidney filtration trend classification: {direction.replace('_', ' ')}."
+                if direction == "worsening" or change < -5:
+                    interpretation = f"Kidney filtration rate shows worsening trend ({direction})."
+                explanation = f"Calculated absolute change of {change:+.1f} mL/min/1.73m2 over {len(values)} readings."
 
             obs = HealthObservation(
                 patient_id=patient_id,
@@ -279,19 +288,27 @@ class HealthIntelligenceEngine:
                 processed_metrics.add(metric)
                 values = [float(item["value"]) for item in items]
                 evidence = [EvidenceReference("measurement", item.get("document_id"), item.get("measurement_id") or item.get("id")) for item in items]
-                direction = trend_map.get(metric, {}).get("direction", "stable")
+                direction = trend_map.get(metric, {}).get("direction", "insufficient_data")
+                if len(values) == 1:
+                    fact = f"Latest {metric} is {values[-1]}."
+                    interpretation = f"Only one eligible {metric} reading is available; a trend cannot yet be determined."
+                    explanation = "Reported the single eligible reading without inferring a trend."
+                else:
+                    fact = f"Latest {metric} is {values[-1]} (prior values: {', '.join(map(str, values[:-1]))})."
+                    interpretation = f"Trend classification: {direction.replace('_', ' ')}."
+                    explanation = f"Evaluated trend direction over {len(values)} points."
                 
                 obs = HealthObservation(
                     patient_id=patient_id,
                     observation_id=str(uuid4()),
                     category=category,
                     metric=metric,
-                    fact=f"Latest {metric} is {values[-1]} (prior values: {', '.join(map(str, values[:-1]))}).",
-                    interpretation=f"Trends show a {direction} pattern.",
+                    fact=fact,
+                    interpretation=interpretation,
                     measured_at=utc_now(),
                     confidence=ConfidenceScore(0.85 if len(values) >= 3 else 0.5, "rule_based", "1.2.0"),
                     evidence=evidence,
-                    explanation=f"Evaluated trend direction over {len(values)} points.",
+                    explanation=explanation,
                 )
                 _validate_safety_boundaries(obs)
                 observations.append(obs.to_dict())
