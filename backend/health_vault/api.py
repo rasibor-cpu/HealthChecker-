@@ -1336,7 +1336,12 @@ def create_health_vault_app(
             pid = _get_authenticated_patient(request)
         except AuthenticationError as exc:
             return _auth_error(exc)
-        record = records_service.get_record_details(pid, document_id)
+        # Record detail may refresh multi-year trend evidence across thousands
+        # of vault observations. Keep that CPU/disk work off the ASGI event
+        # loop so the supervisor's health probes remain responsive.
+        record = await run_in_threadpool(
+            records_service.get_record_details, pid, document_id
+        )
         if not record:
             return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
         return JSONResponse(_sanitize_value(record.to_detail_dict()))

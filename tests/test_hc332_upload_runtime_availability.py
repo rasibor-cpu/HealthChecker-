@@ -21,3 +21,11 @@ def test_consumer_upload_routes_offload_processing_from_event_loop():
         assert "records_service.upload_record" in body
         assert "result = records_service.upload_record(" not in body
 
+
+def test_record_detail_trend_refresh_is_offloaded_from_event_loop():
+    source = API.read_text(encoding="utf-8")
+    route = source.split('@app.get("/api/records/{document_id}")', 1)[1]
+    body = route.split("@app.", 1)[0]
+    assert "record = await run_in_threadpool(" in body
+    assert "records_service.get_record_details, pid, document_id" in body
+    assert "record = records_service.get_record_details(" not in body
