@@ -336,8 +336,8 @@ def test_ui_and_screenshot_contracts():
     assert "data-records-more" in js
     assert "Last refreshed just now" in dash
     assert "Last measured" in snap
-    assert 'CACHE_REVISION = "hc324a"' in sw
-    assert "service-worker.js?v=hc324a" in html
+    assert 'CACHE_REVISION = "hc334a"' in sw
+    assert "service-worker.js?v=hc334a" in html
     assert "FLAG_SECURE" in android
     assert "clearFlags" in android
     assert metric_from_health_connect_filename(
