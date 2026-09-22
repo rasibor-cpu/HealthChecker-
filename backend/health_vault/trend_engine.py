@@ -214,6 +214,37 @@ class TrendEngine:
             # Never merge incompatible clinical + wearable series into one direction.
             items = clinical if clinical else monitoring
 
+        # A corrected re-import can coexist with measurements written by an
+        # older parser. Treat an identical metric/value/unit/timestamp as one
+        # clinical observation, regardless of how many documents reference it.
+        # This prevents repair imports from inflating sample counts or biasing
+        # trend direction while retaining genuinely distinct readings.
+        unique_items: list[dict[str, Any]] = []
+        seen_observations: set[tuple[str, str, float, str]] = set()
+        for item in items:
+            document = docs.get(str(item.get("document_id") or ""), {}) or {}
+            observed_at = str(
+                item.get("measured_at")
+                or document.get("measured_at")
+                or document.get("report_date")
+                or ""
+            )
+            try:
+                numeric_value = float(item["value"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            observation_key = (
+                canonical,
+                observed_at,
+                numeric_value,
+                str(item.get("units") or item.get("unit") or "").strip().lower(),
+            )
+            if observation_key in seen_observations:
+                continue
+            seen_observations.add(observation_key)
+            unique_items.append(item)
+        items = unique_items
+
         items.sort(
             key=lambda x: str(
                 x.get("measured_at")
