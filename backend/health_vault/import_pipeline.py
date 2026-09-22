@@ -243,6 +243,11 @@ class ImportPipeline:
             normalized_meas = []
             for m in measurements:
                 raw = m.to_dict() if hasattr(m, "to_dict") else dict(m)
+                # The owning document is the authoritative patient boundary.
+                # Parser-created Measurement objects default to
+                # ``default-patient`` and must never escape into a different
+                # patient's import/trend plane.
+                raw["patient_id"] = document.patient_id
                 norm = normalize_measurement(
                     raw,
                     document_type=document.document_type,
@@ -258,6 +263,7 @@ class ImportPipeline:
                     for k in (
                         "measurement_id",
                         "document_id",
+                        "patient_id",
                         "category",
                         "metric",
                         "value",

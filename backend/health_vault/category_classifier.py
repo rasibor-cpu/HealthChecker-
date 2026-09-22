@@ -213,6 +213,15 @@ def classify_health_record(
     secondary = sorted(
         c for c in votes if c != primary and votes[c] >= 1.5
     )
+    # A structured JSON bundle spanning several clinical domains is a
+    # longitudinal laboratory/clinical package, not a single glucose or kidney
+    # report.  Use a neutral primary category and retain every domain as a
+    # secondary category for filtering.
+    if dtype == "json_measurements" and len(metric_cats) >= 3:
+        primary = "laboratory_report"
+        secondary = sorted(c for c in metric_cats if c != primary)
+        confidence = 0.9
+        methods.append("structured_multidomain")
     # Kidney labs also get laboratory_report secondary
     if primary == "kidney_renal" and "laboratory_report" not in secondary:
         secondary.append("laboratory_report")

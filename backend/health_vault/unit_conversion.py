@@ -99,7 +99,10 @@ def _norm_unit(unit: str | None) -> str:
 
 
 def _unit_key(unit: str | None) -> str:
-    return _norm_unit(unit).lower()
+    key = _norm_unit(unit).lower()
+    if key in {"percent", "percentage", "pct"}:
+        return "%"
+    return key
 
 
 def _is_glucose_class(klass: str) -> bool:

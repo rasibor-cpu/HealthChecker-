@@ -63,14 +63,17 @@ def extract_measured_date(
     """
     original_extracted_text: str | None = None
 
-    # Prefer earliest explicit measurement date when multiple present
+    # A document containing one measurement can inherit that measurement date.
+    # A multi-date bundle is a longitudinal package, so do not mislabel the
+    # whole document with whichever historical row happens to appear first.
     meas_dates = [_parse_candidate(d) for d in (measurement_dates or []) if d]
     meas_dates = [d for d in meas_dates if d]
+    unique_meas_dates = sorted(set(meas_dates))
 
     candidates: list[tuple[str, str, float]] = []
     for label, raw, conf in (
         ("explicit_measured_at", explicit_measured_at, 0.95),
-        ("measurement_value", meas_dates[0] if meas_dates else None, 0.92),
+        ("measurement_value", unique_meas_dates[0] if len(unique_meas_dates) == 1 else None, 0.92),
         ("report_date", report_date, 0.9),
         ("parser_date", parser_date, 0.85),
         ("source_metadata", source_metadata_date, 0.8),
