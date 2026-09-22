@@ -1303,7 +1303,12 @@ def create_health_vault_app(
             content = await file.read()
             filename = sanitize_filename(file.filename or "upload.bin")
             mime_type = file.content_type or "application/octet-stream"
-            result = records_service.upload_record(pid, content, filename, mime_type)
+            # Parsing/OCR/import work can take several seconds. Keep it off the
+            # ASGI event loop so /healthz remains responsive to the production
+            # supervisor while a consumer upload is processed.
+            result = await run_in_threadpool(
+                records_service.upload_record, pid, content, filename, mime_type
+            )
             code = 200 if result.get("ok") else 400
             return JSONResponse(_sanitize_value(result), status_code=code)
     else:
@@ -1319,7 +1324,9 @@ def create_health_vault_app(
                 )
             except ValueError as exc:
                 return JSONResponse({"ok": False, "errors": [str(exc)]}, status_code=400)
-            result = records_service.upload_record(pid, content, filename, mime_type)
+            result = await run_in_threadpool(
+                records_service.upload_record, pid, content, filename, mime_type
+            )
             code = 200 if result.get("ok") else 400
             return JSONResponse(_sanitize_value(result), status_code=code)
 
