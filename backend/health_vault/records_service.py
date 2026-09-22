@@ -10,6 +10,7 @@ from backend.health_vault.consumer_records import (
 )
 from backend.health_vault.freshness_path import build_freshness_path
 from backend.health_vault.metric_normalization import canonicalize_metric
+from backend.health_vault.trend_engine import TrendEngine
 from backend.health_vault.vault_store import VaultStore
 from backend.health_vault.models import (
     HealthRecord,
@@ -332,6 +333,12 @@ class RecordsService:
         if include_linkage:
             measurements = self.store.list_measurements(document_id=doc_id)
 
+            # Trend snapshots may pre-date parser/normalization corrections.
+            # Rebuild them from the immutable measurement history before a
+            # record detail response so displayed counts/directions reflect
+            # the evidence currently in the vault.
+            TrendEngine(self.store).recompute(patient_id=patient_id)
+
             from backend.health_vault.timeline import build_timeline
             t_events = build_timeline(self.store, patient_id=patient_id)
             linked_t_events = [
@@ -360,10 +367,12 @@ class RecordsService:
 
             trends_dict = self.store.get_trends(patient_id=patient_id)
             linked_trends = []
+            linked_metrics: set[str] = set()
             for m in measurements:
-                metric = m.get("metric")
-                if metric and metric in trends_dict:
+                metric = canonicalize_metric(m.get("metric"))
+                if metric and metric in trends_dict and metric not in linked_metrics:
                     linked_trends.append({"metric": metric, "trend": trends_dict[metric], "document_id": doc_id})
+                    linked_metrics.add(metric)
 
             linkage = RecordLinkage(
                 document_id=doc_id,

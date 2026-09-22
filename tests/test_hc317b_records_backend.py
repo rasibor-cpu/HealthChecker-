@@ -157,6 +157,46 @@ def test_provenance_linkage_to_clinical_systems(temp_vault_with_app):
     assert rec["trend_references"][0]["trend"]["latest"] == 65.0
     assert rec["evidence_references"][0]["document_id"] == "doc-trace"
 
+
+def test_record_detail_refreshes_and_deduplicates_multisample_trends(temp_vault_with_app):
+    store, client = temp_vault_with_app
+    token = client.post(
+        "/api/auth/login", json={"patient_id": "patient-A", "password": "correct"}
+    ).json()["token"]
+    data = store._read_index()
+    data["documents"].append({
+        "id": "multi-trend",
+        "patient_id": "patient-A",
+        "status": "imported",
+        "original_filename": "multi_trend.json",
+        "measured_at": "2026-09-18T00:00:00Z",
+        "date_confidence": 1.0,
+        "primary_category": "laboratory_report",
+    })
+    for index, value in enumerate((34.0, 27.0, 24.0), start=1):
+        data["measurements"].append(create_measurement(
+            document_id="multi-trend",
+            patient_id="patient-A",
+            metric="egfr",
+            value=value,
+            units="mL/min/1.73m2",
+            measured_at=f"202{index + 2}-01-01",
+        ).to_dict())
+    data["trends"]["patient-A"] = {
+        "egfr": {"metric": "egfr", "label": "Stable", "latest": 24.0, "sample_count": 1}
+    }
+    store._write_index(data)
+
+    response = client.get(
+        "/api/records/multi-trend", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    references = response.json()["trend_references"]
+    assert len(references) == 1
+    assert references[0]["metric"] == "egfr"
+    assert references[0]["trend"]["sample_count"] == 3
+    assert references[0]["trend"]["label"] == "Worsening"
+
 def test_records_dashboard_compatibility(temp_vault_with_app):
     store, client = temp_vault_with_app
     # Assert dashboard service remains functional alongside records service

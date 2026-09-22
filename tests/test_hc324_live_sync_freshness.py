@@ -121,4 +121,4 @@ def test_catch_up_contract_in_companion_and_ui_sources():
     assert version_code, "could not parse versionCode from build.gradle.kts"
     assert int(version_code.group(1)) >= 324
     assert "Latest in Health Connect" in js
-    assert 'CACHE_REVISION = "hc324a"' in sw
+    assert 'CACHE_REVISION = "hc334a"' in sw
