@@ -160,9 +160,15 @@ def classify_consumer_record(
         source_system=source_system,
         measurements=[{"metric": name} for name in (metrics or [])],
     )
-    category = consumer_category_for_metric(metric) or classified.get("primary_category") or stored_category or "other"
-    if str(stored_category or "").lower() in CONSUMER_CATEGORY_LABELS and category == "other":
-        category = str(stored_category).lower()
+    stored = str(stored_category or "").lower()
+    # The vault classification is evidence produced during ingestion.  Do not
+    # replace it with a presentation heuristic based on the first metric in a
+    # multi-domain report (for example, lab + kidney + glucose results).
+    category = (
+        stored
+        if stored in CONSUMER_CATEGORY_LABELS and stored != "other"
+        else consumer_category_for_metric(metric) or classified.get("primary_category") or stored or "other"
+    )
     title = display_title(
         filename=filename,
         document_type=document_type,
