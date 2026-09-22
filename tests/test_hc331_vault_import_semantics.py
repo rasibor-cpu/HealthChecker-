@@ -11,6 +11,7 @@ from backend.health_vault.parsers import register_builtin_parsers
 from backend.health_vault.trend_engine import TrendEngine
 from backend.health_vault.vault_store import VaultStore
 from backend.health_vault.consumer_records import classify_consumer_record
+from backend.health_vault.models import create_measurement
 
 
 def test_compact_vault_rows_keep_metric_units_flags_and_dates():
@@ -131,3 +132,52 @@ def test_pipeline_preserves_package_date_patient_scope_and_builds_real_trends(tm
     assert {row["patient_id"] for row in result["measurements"]} == {"robert"}
     assert result["trends"]["egfr"]["sample_count"] == 3
     assert result["trends"]["egfr"]["label"] == "Worsening"
+
+def test_corrected_reimport_does_not_double_count_same_clinical_observation(tmp_path):
+    store = VaultStore(root=tmp_path / "vault", encryption_key=b"D" * 32)
+    index = store._read_index()
+    index["documents"].extend(
+        [
+            {
+                "id": "legacy-import",
+                "patient_id": "robert",
+                "document_type": "json_measurements",
+                "source_system": "healthchecker_plus",
+                "status": "imported",
+                "measured_at": "2026-09-18T00:00:00Z",
+            },
+            {
+                "id": "corrected-import",
+                "patient_id": "robert",
+                "document_type": "json_measurements",
+                "source_system": "healthchecker_plus",
+                "status": "imported",
+                "measured_at": "2026-09-22T00:00:00Z",
+            },
+        ]
+    )
+    readings = [
+        ("2022-04-21", 34.0),
+        ("2023-03-30", 27.0),
+        ("2023-11-29", 24.0),
+    ]
+    for document_id in ("legacy-import", "corrected-import"):
+        index["measurements"].extend(
+            create_measurement(
+                document_id=document_id,
+                patient_id="robert",
+                metric="egfr",
+                value=value,
+                units="mL/min/1.73m2",
+                measured_at=measured_at,
+            ).to_dict()
+            for measured_at, value in readings
+        )
+    store._write_index(index)
+
+    trend = TrendEngine(store).recompute("robert")["egfr"]
+
+    assert trend["sample_count"] == 3
+    assert trend["latest"] == 24.0
+    assert trend["label"] == "Worsening"
+
