@@ -205,6 +205,15 @@ def _monitoring_observation_cards(
     latest = dict(status.get("latest_reading_by_metric") or {})
     cards: list[dict[str, Any]] = []
     for metric, row in sorted(latest.items()):
+        source_bits = " ".join(
+            str(row.get(key) or "")
+            for key in ("source", "provenance", "connector_id")
+        ).lower()
+        # MonitoringEngine also exposes imported clinical measurements in its
+        # general latest-reading map. The consumer Health Connect section must
+        # never relabel those clinical rows as continuous monitoring evidence.
+        if "health_connect" not in source_bits:
+            continue
         value = row.get("value")
         if value is None:
             continue
@@ -398,7 +407,11 @@ class DashboardService:
         measurements_count = sum(record.metrics_count for record in patient_records)
         
         # 1. Fetch patient intelligence outputs and Health Connect monitoring evidence
-        observations = list(self.intel_engine.get_patient_observations(patient_id))
+        intelligence = self.store.health_intelligence()
+        if intelligence.get("clinical_revision") != self.intel_engine.clinical_revision(patient_id):
+            observations = list(self.intel_engine.generate_observations(patient_id))
+        else:
+            observations = list(self.intel_engine.get_patient_observations(patient_id))
         monitoring_cards: list[dict[str, Any]] = []
         monitoring_latest: dict[str, Any] = {}
         if _patient_has_health_connect_observations(
@@ -461,6 +474,43 @@ class DashboardService:
             elif "worsening" in interpretation or "critical" in interpretation or "elevated" in interpretation:
                 status = "warning"
 
+        # Persisted abnormal flags are clinical attention evidence even when a
+        # narrative observation is stale or uses neutral wording. Count the
+        # latest eligible clinical result per canonical metric exactly once.
+        from backend.health_vault.metric_normalization import canonicalize_metric
+        from backend.health_vault.trend_engine import _is_health_connect_context
+
+        docs_by_id = {
+            str(doc.get("id")): doc
+            for doc in self.store.list_documents()
+            if doc.get("id")
+        }
+        latest_clinical: dict[str, dict[str, Any]] = {}
+        for measurement in all_measurements:
+            doc = docs_by_id.get(str(measurement.get("document_id") or "")) or {}
+            if str(doc.get("patient_id") or "default-patient") != patient_id:
+                continue
+            if _is_health_connect_context(measurement, doc):
+                continue
+            metric = canonicalize_metric(measurement.get("metric"))
+            if not metric or metric == "unknown":
+                continue
+            measured_at = str(measurement.get("measured_at") or doc.get("measured_at") or "")
+            previous = latest_clinical.get(metric)
+            previous_at = str((previous or {}).get("_measured_at") or "")
+            if previous is None or measured_at >= previous_at:
+                latest_clinical[metric] = {**measurement, "_measured_at": measured_at}
+
+        abnormal_metrics = {
+            metric
+            for metric, measurement in latest_clinical.items()
+            if str(measurement.get("abnormal_flag") or "").strip().lower()
+            not in {"", "normal", "none", "negative", "within_range"}
+        }
+        if abnormal_metrics:
+            status = "warning"
+            active_warnings += len(abnormal_metrics)
+
         # 3. Create widgets dynamically
         widgets_dict = {
             "status_summary": DashboardWidget(
@@ -471,6 +521,7 @@ class DashboardService:
                 payload={
                     "status": status,
                     "active_warnings": active_warnings,
+                    "clinical_attention_metrics": sorted(abnormal_metrics),
                     "measurements_count": measurements_count,
                     "monitoring_latest": monitoring_latest,
                     "health_connect_observation_count": health_connect_observation_count,
