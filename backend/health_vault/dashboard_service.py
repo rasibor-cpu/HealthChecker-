@@ -450,6 +450,8 @@ class DashboardService:
             patient_id,
             companion_status=self.store.get_companion_status() if hasattr(self.store, "get_companion_status") else None,
         )
+        from backend.health_vault.dashboard_freshness_guard import current_evidence_guard
+        freshness_guard = current_evidence_guard(freshness_path)
         trend_exclusions = _trend_exclusion_notes(
             observations=patient_observations,
             patient_id=patient_id,
@@ -511,6 +513,12 @@ class DashboardService:
             status = "warning"
             active_warnings += len(abnormal_metrics)
 
+        underlying_status = status
+        if freshness_guard.get("insufficient_current_evidence"):
+            # Historical clinical attention remains visible, but it cannot be
+            # presented as a statement about the patient's current condition.
+            status = str(freshness_guard.get("headline_status_override") or "unknown")
+
         # 3. Create widgets dynamically
         widgets_dict = {
             "status_summary": DashboardWidget(
@@ -520,6 +528,8 @@ class DashboardService:
                 priority=1,
                 payload={
                     "status": status,
+                    "underlying_status": underlying_status,
+                    "status_label_override": freshness_guard.get("headline_label_override"),
                     "active_warnings": active_warnings,
                     "clinical_attention_metrics": sorted(abnormal_metrics),
                     "measurements_count": measurements_count,
@@ -527,6 +537,7 @@ class DashboardService:
                     "health_connect_observation_count": health_connect_observation_count,
                     "health_connect_sync": health_connect_sync,
                     "freshness_path": freshness_path,
+                    "freshness_guard": freshness_guard,
                 }
             ),
             "key_observations": DashboardWidget(
