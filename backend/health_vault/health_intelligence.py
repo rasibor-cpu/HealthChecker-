@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import math
+import hashlib
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -102,9 +104,35 @@ class HealthIntelligenceEngine:
         for m in self.store.list_measurements():
             if canonicalize_metric(m.get("metric")) == canon and self.trends._eligible(m, docs):
                 doc = docs.get(str(m.get("document_id") or ""))
-                if doc and doc.get("patient_id", "default-patient") == patient_id:
+                from backend.health_vault.trend_engine import _is_health_connect_context
+
+                if (
+                    doc
+                    and doc.get("patient_id", "default-patient") == patient_id
+                    and not _is_health_connect_context(m, doc)
+                ):
                     items.append(m)
-        
+
+        unique_items: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, float, str]] = set()
+        for item in items:
+            doc = docs.get(str(item.get("document_id") or "")) or {}
+            try:
+                numeric_value = float(item["value"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            key = (
+                canon,
+                str(item.get("measured_at") or doc.get("measured_at") or ""),
+                numeric_value,
+                str(item.get("units") or item.get("unit") or "").strip().lower(),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_items.append(item)
+        items = unique_items
+
         # Sort chronologically based on measured_at
         items.sort(
             key=lambda x: str(
@@ -114,6 +142,30 @@ class HealthIntelligenceEngine:
             )
         )
         return items
+
+    def clinical_revision(self, patient_id: str) -> str:
+        """Stable fingerprint used to invalidate persisted clinical intelligence."""
+        docs = self.trends._docs_by_id()
+        from backend.health_vault.trend_engine import _is_health_connect_context
+
+        rows: list[tuple[str, str, str, str, str]] = []
+        for measurement in self.store.list_measurements():
+            doc = docs.get(str(measurement.get("document_id") or ""))
+            if not doc or doc.get("patient_id", "default-patient") != patient_id:
+                continue
+            if _is_health_connect_context(measurement, doc):
+                continue
+            rows.append(
+                (
+                    canonicalize_metric(measurement.get("metric")),
+                    str(measurement.get("measured_at") or doc.get("measured_at") or ""),
+                    str(measurement.get("value")),
+                    str(measurement.get("units") or measurement.get("unit") or ""),
+                    str(measurement.get("abnormal_flag") or ""),
+                )
+            )
+        payload = json.dumps(sorted(set(rows)), separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def generate_observations(self, patient_id: str = "default-patient") -> list[dict[str, Any]]:
         """Generate and persist patient-specific observations using clinical trend metrics."""
@@ -529,6 +581,7 @@ class HealthIntelligenceEngine:
         data["health_intelligence"] = {
             "observations": obs_list,
             "disclaimer": "Observational intelligence only — not a medical diagnosis.",
+            "clinical_revision": self.clinical_revision(patient_id),
         }
         self.store._audit(data, "health_intelligence_updated", {"patient_id": patient_id, "count": len(observations)})
         self.store._write_index(data)
