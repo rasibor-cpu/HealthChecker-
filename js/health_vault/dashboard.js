@@ -972,7 +972,7 @@
       const payload = widget.payload;
 
       if (type === "status") {
-        const colorClass = payload.status === "warning" ? "warn" : "ok";
+        const colorClass = payload.status === "warning" ? "warn" : (payload.status === "normal" ? "ok" : "muted");
         const latest = payload.monitoring_latest || {};
         const latestLines = Object.entries(latest).slice(0, 4).map(([metric, row]) => {
           const value = row && row.value != null ? row.value : "—";
@@ -1036,7 +1036,7 @@
           <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
             <div class="kpi" style="flex: 1; min-width: 120px;">
               <strong>Overall Status:</strong> 
-              <span class="${colorClass}" style="font-weight: bold;">${this.escape(payload.status.toUpperCase())}</span>
+              <span class="${colorClass}" style="font-weight: bold;">${this.escape(payload.status_label_override || payload.status.toUpperCase())}</span>
             </div>
             <div class="kpi" style="flex: 1; min-width: 120px;">
               <strong>Attention Items:</strong> 
