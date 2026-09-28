@@ -279,7 +279,7 @@ def test_ui_and_docs_mention_batch():
 
 
 def test_fastapi_batch_endpoint_if_available(store: VaultStore):
-    app = create_health_vault_app(store=store)
+    app = create_health_vault_app(store=store, production=False)
     if app is None:
         pytest.skip("fastapi not installed")
     try:
