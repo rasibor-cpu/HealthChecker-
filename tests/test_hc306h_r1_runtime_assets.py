@@ -229,13 +229,18 @@ def test_protected_status_from_temp_release_via_trusted_proxy_path(tmp_path: Pat
             "HC_COMPANION_PEPPER": "test-pepper-value-24chars-min!!",
             "HC_PROXY_SHARED_TOKEN": "test-proxy-shared-token-24min!!",
             "HC_MONITORING_VAULT_ROOT": str(vault),
+            "HC_MONITORING_VAULT_KEY_FILE": str(vault.parent / "monitoring_vault.key"),
             "HC_TRUSTED_PROXY_MODE": "tailscale_https",
             "HC_EXTERNAL_HTTPS_ORIGIN": origin,
             "HC_BIND_HOST": "127.0.0.1",
             "HC_BIND_PORT": "8743",
             "HC_HOST_ALLOW_TESTCLIENT_PEER": "1",
         }
-        app, config, _store = build_activated_app(environ=env, repo_root=release)
+        app, config, _store = build_activated_app(
+            environ=env,
+            repo_root=release,
+            vault_key_reader=lambda _path: b"K" * 32,
+        )
         os.environ["HC_HOST_ALLOW_TESTCLIENT_PEER"] = "1"
         client = TestClient(app)
 
