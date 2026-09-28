@@ -223,6 +223,8 @@ def test_build_activated_app_creates_isolated_vault(monitoring_vault: Path):
     assert (monitoring_vault / ".hc_monitoring_vault").exists()
     assert store.root.resolve() == monitoring_vault.resolve()
     assert store.root.resolve() != (ROOT / "vault_storage").resolve()
+    assert store.encrypted is True
+    assert store.index_path.read_bytes().startswith(b"HCVE")
     normalized = set()
     for route in app.router.routes:
         if not hasattr(route, "methods") or not hasattr(route, "path"):
