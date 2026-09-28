@@ -95,8 +95,13 @@ def build_freshness_path(
                 vault_value = row.get("value")
         if vault_at and (vault_latest is None or vault_at > vault_latest):
             vault_latest = vault_at
+        freshness_metric = (
+            "glucose"
+            if metric in {"glucose_capillary", "glucose_cgm_interstitial"}
+            else metric
+        )
         freshness = compute_freshness(
-            metric=metric,
+            metric=freshness_metric,
             measured_at=vault_at,
             now=as_of_dt,
             windows=freshness_windows,
