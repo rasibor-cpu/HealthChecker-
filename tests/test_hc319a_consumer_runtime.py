@@ -10,7 +10,7 @@ from backend.health_vault.vault_store import VaultStore
 
 def make_client(tmp_path) -> TestClient:
     store = VaultStore(root=tmp_path / "vault", encryption_key=b"R" * 32)
-    return TestClient(create_health_vault_app(store))
+    return TestClient(create_health_vault_app(store, production=False))
 
 
 def test_root_serves_consumer_index(tmp_path):
