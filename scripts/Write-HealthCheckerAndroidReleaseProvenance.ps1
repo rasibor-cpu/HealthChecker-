@@ -38,6 +38,13 @@ function Test-EnvEnabled([string]$Name) {
     return @("1", "true", "yes", "on") -contains $v.Trim().ToLowerInvariant()
 }
 
+function Normalize-CertFingerprint([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+    $normalized = [regex]::Replace($Value, "[^0-9A-Fa-f]", "").ToLowerInvariant()
+    if ($normalized -notmatch "^[0-9a-f]{64}$") { return $null }
+    return $normalized
+}
+
 function Get-RedactedSigningAvailability {
     $names = @(
         "HC_ANDROID_KEYSTORE_FILE",
@@ -150,12 +157,45 @@ if (Test-Path -LiteralPath $apkPath -PathType Leaf) {
     $apkVerification = Invoke-SafeApkVerify $apkPath
 }
 
+$expectedCertRaw = [Environment]::GetEnvironmentVariable("HC_ANDROID_EXPECTED_CERT_SHA256")
+$expectedCertConfigured = -not [string]::IsNullOrWhiteSpace($expectedCertRaw)
+$expectedCertFingerprint = Normalize-CertFingerprint $expectedCertRaw
+if ($expectedCertConfigured -and -not $expectedCertFingerprint) {
+    throw "android_expected_signer_fingerprint_invalid"
+}
+$apkCertFingerprint = Normalize-CertFingerprint $apkVerification.fingerprint
+$signerContinuity = "NOT_CONFIGURED"
+if ($expectedCertConfigured) {
+    if (-not $apkSha) {
+        $signerContinuity = "APK_NOT_PRODUCED"
+    } elseif ($apkVerification.status -ne "SIGNED_VERIFIED") {
+        $signerContinuity = "APK_NOT_VERIFIED"
+    } elseif (-not $apkCertFingerprint) {
+        $signerContinuity = "FINGERPRINT_UNAVAILABLE"
+    } elseif ($apkCertFingerprint -eq $expectedCertFingerprint) {
+        $signerContinuity = "MATCH"
+    } else {
+        $signerContinuity = "MISMATCH"
+    }
+}
+if ($signingAvail.require_production_signing) {
+    if (-not $expectedCertConfigured) {
+        throw "android_expected_signer_fingerprint_required"
+    }
+    if ($signerContinuity -ne "MATCH") {
+        throw "android_signer_continuity_failed:$signerContinuity"
+    }
+}
+
 $signingVerification = if ($apkSha) { $apkVerification.status } elseif ($aabSha) { $aabVerification.status } else { "NOT_RUN" }
 $certFingerprint = if ($apkSha) { $apkVerification.fingerprint } elseif ($aabSha) { $aabVerification.fingerprint } else { $null }
 $verifyTool = if ($apkSha) { $apkVerification.tool } elseif ($aabSha) { $aabVerification.tool } else { $null }
 
-if ($DeviceUpgradeProof -eq "PASS" -and (-not $apkSha -or $apkVerification.status -ne "SIGNED_VERIFIED")) {
-    throw "device_upgrade_proof_invalid: PASS requires a produced APK verified by apksigner in this provenance run"
+if (
+    $DeviceUpgradeProof -eq "PASS" -and
+    (-not $apkSha -or $apkVerification.status -ne "SIGNED_VERIFIED" -or $signerContinuity -ne "MATCH")
+) {
+    throw "device_upgrade_proof_invalid: PASS requires an apksigner-verified APK with approved signer continuity in this provenance run"
 }
 
 $gradleVersion = $null
@@ -176,7 +216,13 @@ if ($rootGradle -match 'com\.android\.application"\s+version\s+"([^"]+)"') {
 
 $utc = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
 $productionSigningStatus = if ($signingAvail.production_signing_ready) {
-    if ($signingVerification -eq "SIGNED_VERIFIED") { "AVAILABLE_AND_VERIFIED" } else { "ENV_PRESENT_VERIFY_INCOMPLETE" }
+    if ($signingVerification -eq "SIGNED_VERIFIED" -and $signerContinuity -eq "MATCH") {
+        "AVAILABLE_VERIFIED_SIGNER_MATCH"
+    } elseif ($signingVerification -eq "SIGNED_VERIFIED") {
+        "ENV_PRESENT_SIGNER_CONTINUITY_UNPROVEN"
+    } else {
+        "ENV_PRESENT_VERIFY_INCOMPLETE"
+    }
 } else {
     "BLOCKED_EXTERNAL_KEY_CUSTODY"
 }
@@ -219,6 +265,8 @@ $doc = [ordered]@{
     }
     signing_verification_status    = $signingVerification
     certificate_sha256_fingerprint = $certFingerprint
+    signer_continuity_status       = $signerContinuity
+    expected_cert_sha256_configured = [bool]$expectedCertConfigured
     verify_tool                    = $verifyTool
     gradle_version                 = $gradleVersion
     android_gradle_plugin_version  = $agpHint
@@ -245,6 +293,8 @@ $doc = [ordered]@{
     "apk_sha256=$apkSha"
     "signing_verification_status=$signingVerification"
     "certificate_sha256_fingerprint=$certFingerprint"
+    "signer_continuity_status=$signerContinuity"
+    "expected_cert_sha256_configured=$expectedCertConfigured"
     "gradle_version=$gradleVersion"
     "agp_version=$agpHint"
     "production_signing_status=$productionSigningStatus"
