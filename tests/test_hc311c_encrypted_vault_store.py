@@ -270,7 +270,8 @@ class Hc311CEncryptedVaultStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             store = VaultStore(
                 root=Path(temp) / "vault",
-            , allow_plaintext=True)
+                allow_plaintext=True,
+            )
 
             document = _document("plain-doc")
             content = b"legacy plaintext semantics"
