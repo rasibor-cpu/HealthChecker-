@@ -14,6 +14,8 @@ Owner role: `RELEASE/SIGNING OWNER — ASSIGN BEFORE EXTERNAL PRODUCTION HANDOFF
   - `HC_ANDROID_KEYSTORE_PASSWORD`
   - `HC_ANDROID_KEY_ALIAS`
   - `HC_ANDROID_KEY_PASSWORD`
+  - `HC_ANDROID_EXPECTED_CERT_SHA256` — approved SHA-256 certificate fingerprint
+    for the signer already installed on the authorized S24 (hex, separators optional)
 - Optional fail-closed gate for distribution builds:
   - `HC_ANDROID_REQUIRE_PRODUCTION_SIGNING=1` — Gradle refuses release when material is missing
   - Enabled values are `1`, `true`, `yes`, or `on` (case-insensitive); `0`, `false`,
@@ -31,6 +33,7 @@ From `android/` with governed env injected into the protected build shell:
 ```powershell
 $env:HC_ANDROID_REQUIRE_PRODUCTION_SIGNING = "1"
 # Also set HC_ANDROID_KEYSTORE_FILE / _PASSWORD / _KEY_ALIAS / _KEY_PASSWORD
+# and HC_ANDROID_EXPECTED_CERT_SHA256 from the approved external trust record.
 .\gradlew.bat :app:bundleRelease
 ```
 
@@ -46,7 +49,10 @@ jarsigner -verify -verbose -certs android\app\build\outputs\bundle\release\app-r
 ```
 
 Record only: verify status, certificate subject/fingerprint (SHA-256), artifact SHA-256.
-Never record passwords or private key bytes.
+Never record passwords or private key bytes. The provenance step normalizes the
+`apksigner` SHA-256 digest and compares it with
+`HC_ANDROID_EXPECTED_CERT_SHA256`. With production signing required, a missing,
+malformed, unavailable, or mismatched fingerprint fails closed.
 
 AAB verification and APK verification are separate evidence. Use `jarsigner` for the AAB.
 For the installable APK, `apksigner verify --verbose --print-certs` is mandatory so Android
@@ -94,9 +100,10 @@ Gradle/tool info, whether production signing was available, and whether device u
 proof completed.
 
 The provenance script refuses `DeviceUpgradeProof=PASS` unless the APK is present in the
-same run and independently reports `SIGNED_VERIFIED` from `apksigner`. This guard does
-not replace physical S24 evidence; it prevents an unsigned or AAB-only artifact from being
-recorded as the upgraded candidate.
+same run, independently reports `SIGNED_VERIFIED` from `apksigner`, and its certificate
+SHA-256 matches the approved fingerprint. This guard does not replace physical S24
+evidence; it prevents an unsigned, AAB-only, or wrong-signer artifact from being recorded
+as the upgraded candidate.
 
 Never include passwords, keystore bytes, or private material in provenance.
 
@@ -112,4 +119,5 @@ injects governed credentials and verification + device upgrade proof complete.
 - Debug-key production releases
 - Repo-local production keystores
 - Hard-coded passwords in Gradle, scripts, docs, or CI logs
+- Treating “validly signed” as proof of signer continuity without fingerprint matching
 - Committing `.jks` / `.keystore` / password files
