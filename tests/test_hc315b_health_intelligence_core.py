@@ -18,7 +18,7 @@ from backend.health_vault.trend_engine import TrendEngine
 def temp_vault():
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        store = VaultStore(root=tdp)
+        store = VaultStore(root=tdp, allow_plaintext=True)
         yield store
 
 def test_evidence_traceability():

@@ -116,7 +116,7 @@ def cfg(tmp_path: Path):
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 @pytest.fixture()
@@ -286,7 +286,7 @@ def test_3_concurrent_run_exclusion_via_threading(cfg, tmp_path):
     Note: the atomic Path.rename() claim (HC-312A test H) provides a
     second independent layer of protection even without a shared store.
     """
-    shared_store = VaultStore(root=tmp_path / "shared_vault")
+    shared_store = VaultStore(root=tmp_path / "shared_vault", allow_plaintext=True)
     call_log: list[str] = []
     lock = threading.Lock()
     barrier = threading.Barrier(2)
@@ -515,9 +515,9 @@ def test_9_no_live_vault_side_effects(cfg, tmp_path):
     real_vault_root = Path(__file__).resolve().parents[1] / "vault_storage"
     doc_count_before = 0
     if real_vault_root.exists() and (real_vault_root / "index.json").exists():
-        doc_count_before = len(VaultStore(root=real_vault_root).list_documents())
+        doc_count_before = len(VaultStore(root=real_vault_root, allow_plaintext=True).list_documents())
 
-    test_store = VaultStore(root=tmp_path / "test_vault")
+    test_store = VaultStore(root=tmp_path / "test_vault", allow_plaintext=True)
     reg = ParserRegistry()
     register_builtin_parsers(reg)
     pipe = ImportPipeline(store=test_store, registry=reg, bus=EventBus())
@@ -530,7 +530,7 @@ def test_9_no_live_vault_side_effects(cfg, tmp_path):
     w.run_if_due()
 
     if real_vault_root.exists() and (real_vault_root / "index.json").exists():
-        doc_count_after = len(VaultStore(root=real_vault_root).list_documents())
+        doc_count_after = len(VaultStore(root=real_vault_root, allow_plaintext=True).list_documents())
         assert doc_count_after == doc_count_before, (
             f"Live vault modified! before={doc_count_before} after={doc_count_after}"
         )

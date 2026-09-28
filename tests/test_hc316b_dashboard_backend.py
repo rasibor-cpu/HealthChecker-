@@ -13,7 +13,7 @@ from backend.health_vault.health_intelligence import HealthIntelligenceEngine
 def test_vault():
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        store = VaultStore(root=tdp)
+        store = VaultStore(root=tdp, allow_plaintext=True)
         yield store
 
 def test_dashboard_preferences_persistence(test_vault):

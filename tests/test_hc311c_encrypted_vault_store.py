@@ -9,6 +9,7 @@ from backend.health_vault.models import MedicalDocument
 from backend.health_vault.vault_crypto import (
     MAGIC,
     VaultCryptoAuthenticationError,
+    VaultCryptoKeyError,
 )
 from backend.health_vault.vault_store import VaultStore
 
@@ -28,10 +29,17 @@ def _document(document_id: str = "doc-hc311") -> MedicalDocument:
 
 
 class Hc311CEncryptedVaultStoreTests(unittest.TestCase):
-    def test_default_mode_remains_plaintext_compatible(self) -> None:
+    def test_plaintext_requires_explicit_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            store = VaultStore(root=Path(temp) / "vault")
+            root = Path(temp) / "vault"
+            with self.assertRaisesRegex(
+                VaultCryptoKeyError,
+                "plaintext_vault_requires_explicit_opt_in",
+            ):
+                VaultStore(root=root)
+            self.assertFalse(root.exists())
 
+            store = VaultStore(root=root, allow_plaintext=True)
             raw = store.index_path.read_bytes()
 
             self.assertTrue(raw.startswith(b"{"))
@@ -262,6 +270,7 @@ class Hc311CEncryptedVaultStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             store = VaultStore(
                 root=Path(temp) / "vault",
+                allow_plaintext=True,
             )
 
             document = _document("plain-doc")

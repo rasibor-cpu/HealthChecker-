@@ -45,7 +45,7 @@ from backend.health_vault.vault_store import VaultStore
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 @pytest.fixture()
@@ -195,7 +195,7 @@ def test_ai_assisted_ingestion_path(service: ImportService):
 
 
 def test_api_handler_matches_service(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "api-vault")
+    store = VaultStore(root=tmp_path / "api-vault", allow_plaintext=True)
     out = import_health_record_handler(
         {
             "content": b'{"systolic": 120, "diastolic": 70}',

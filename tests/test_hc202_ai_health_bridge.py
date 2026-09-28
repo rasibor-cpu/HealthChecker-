@@ -28,7 +28,7 @@ from backend.health_vault.vault_store import VaultStore
 
 
 def _store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 def _bridge(store: VaultStore) -> AIHealthBridge:

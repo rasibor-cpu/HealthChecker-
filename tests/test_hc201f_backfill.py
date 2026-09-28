@@ -130,7 +130,7 @@ def fixture_path(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 def test_validate_rejects_bad_provenance():

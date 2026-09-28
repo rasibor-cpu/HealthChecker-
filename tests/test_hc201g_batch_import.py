@@ -34,7 +34,7 @@ from backend.health_vault.vault_store import VaultStore
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 @pytest.fixture()

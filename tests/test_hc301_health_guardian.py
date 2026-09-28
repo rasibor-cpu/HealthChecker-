@@ -39,7 +39,7 @@ from backend.health_vault.vault_store import VaultStore
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 def _seed_glucose(
@@ -190,7 +190,7 @@ def test_rate_of_change_rolling_persistence_multi_metric(store: VaultStore):
     ids = {e["rule_id"] for e in rules.evaluate(now="2026-07-26T08:35:00Z") if e.get("triggered")}
     assert "glucose_rapid_fall" in ids
 
-    store2 = VaultStore(root=store.root.parent / "vault2")
+    store2 = VaultStore(root=store.root.parent / "vault2", allow_plaintext=True)
     for i, (sys_v, dia_v) in enumerate([(150, 95), (150, 95)]):
         doc = MedicalDocument(
             id=f"bp-{i}",
@@ -213,7 +213,7 @@ def test_rate_of_change_rolling_persistence_multi_metric(store: VaultStore):
     }
     assert "elevated_blood_pressure" in ids2
 
-    store3 = VaultStore(root=store.root.parent / "vault3")
+    store3 = VaultStore(root=store.root.parent / "vault3", allow_plaintext=True)
     _seed_glucose(
         store3,
         [
@@ -267,7 +267,7 @@ def test_baseline_calculation_insufficient_and_units(store: VaultStore):
     assert summary["baselines"]["glucose"]["insufficient_data"] is True
     assert summary["baselines"]["glucose"]["ready"] is False
 
-    store2 = VaultStore(root=store.root.parent / "base2")
+    store2 = VaultStore(root=store.root.parent / "base2", allow_plaintext=True)
     _seed_glucose(store2, [(f"2026-07-{i+1:02d}T08:00:00Z", 100 + i) for i in range(6)])
     doc = MedicalDocument(id="mmol", document_type="blood_glucose", measured_at="2026-07-10T08:00:00Z")
     store2.store(
@@ -620,7 +620,7 @@ def test_alert_audit_immutability_copy_history(store: VaultStore):
         returned.clear()
     refetch = eng.get_alert(a["alert_id"])
     # Re-read from disk via fresh list_alerts path
-    store_again = AlertEngine(VaultStore(root=store.root))
+    store_again = AlertEngine(VaultStore(root=store.root, allow_plaintext=True))
     persisted = store_again.get_alert(a["alert_id"])
     assert len(persisted.get("audit_history") or []) == original_len
 
@@ -1171,7 +1171,7 @@ def test_guardian_persistence_across_vaultstore_reinstantiation(store: VaultStor
     g1 = HealthGuardian(store=store)
     r1 = g1.evaluate(now="2026-07-26T08:05:00Z", trigger="persist")
     root = store.root
-    store2 = VaultStore(root=root)
+    store2 = VaultStore(root=root, allow_plaintext=True)
     g2 = HealthGuardian(store=store2)
     status = g2.get_status()
     assert status.get("overall_state") == r1["status"]["overall_state"]

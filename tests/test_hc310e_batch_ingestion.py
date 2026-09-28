@@ -29,7 +29,7 @@ def _obs(i: int) -> dict[str, object]:
 
 
 def test_health_connect_batch_180_uses_one_index_read_and_write(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     coord = IngestionCoordinator(store=store)
 
     counts = {"reads": 0, "writes": 0}
@@ -62,7 +62,7 @@ def test_health_connect_batch_180_uses_one_index_read_and_write(tmp_path: Path):
 
 
 def test_health_connect_batch_duplicate_fingerprint_is_idempotent(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     coord = IngestionCoordinator(store=store)
 
     row = _obs(1)
@@ -88,7 +88,7 @@ def test_health_connect_batch_duplicate_fingerprint_is_idempotent(tmp_path: Path
 def test_health_connect_batch_commit_failure_rolls_back_payloads_and_events(
     tmp_path: Path,
 ):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     bus = RecordingBus()
     coord = IngestionCoordinator(store=store, bus=bus)
 
@@ -125,7 +125,7 @@ def test_health_connect_batch_commit_failure_rolls_back_payloads_and_events(
 
 
 def test_health_connect_batch_opt_in_only(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     coord = IngestionCoordinator(store=store)
 
     calls = {"batch": 0}
@@ -157,7 +157,7 @@ def test_health_connect_batch_opt_in_only(tmp_path: Path):
     assert calls["batch"] == 1
 
 def test_health_connect_batch_fingerprint_position_is_patient_scoped(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
     with store.observation_batch() as batch:
         first = {

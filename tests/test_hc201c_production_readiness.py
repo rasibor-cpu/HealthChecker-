@@ -53,7 +53,7 @@ from backend.intelligence.foot_pain_engine import FootPainEngine
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 @pytest.fixture()
@@ -379,7 +379,7 @@ def test_rc1_docs_exist():
 def test_api_sanitizes_absolute_paths(tmp_path: Path):
     from backend.health_vault.api import import_health_record_handler
 
-    store = VaultStore(root=tmp_path / "api-vault")
+    store = VaultStore(root=tmp_path / "api-vault", allow_plaintext=True)
     out = import_health_record_handler(
         {
             "content": b'{"glucose": 105}',
@@ -398,7 +398,7 @@ def test_api_sanitizes_absolute_paths(tmp_path: Path):
 
 
 def test_failed_import_before_store_leaves_no_document(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "fail-vault")
+    store = VaultStore(root=tmp_path / "fail-vault", allow_plaintext=True)
     reg = ParserRegistry()
     register_builtin_parsers(reg)
     from backend.health_vault.ocr import OCRProvider, set_ocr_provider, PassthroughTextOCRProvider

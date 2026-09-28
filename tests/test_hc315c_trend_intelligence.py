@@ -12,7 +12,7 @@ from backend.health_vault.trend_engine import TrendEngine
 def test_vault():
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        store = VaultStore(root=tdp)
+        store = VaultStore(root=tdp, allow_plaintext=True)
         yield store
 
 def test_glucose_variability_calculation(test_vault):

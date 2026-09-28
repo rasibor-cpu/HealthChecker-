@@ -75,7 +75,10 @@ def prepare_monitoring_vault(root: Path) -> VaultStore:
     """
     root = Path(root).resolve()
     root.mkdir(parents=True, exist_ok=True)
-    store = VaultStore(root=root)
+    # HC-304B monitoring storage is an explicitly isolated pilot boundary.
+    # Keep its legacy plaintext mode visible until it receives a dedicated
+    # protected key; VaultStore defaults remain fail closed everywhere else.
+    store = VaultStore(root=root, allow_plaintext=True)
 
     marker = root / MARKER_NAME
     if not marker.exists():
