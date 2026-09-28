@@ -333,6 +333,7 @@ def test_runtime_still_fails_closed_without_runtime_prerequisites(tmp_path: Path
         "HC_COMPANION_PEPPER": "test-pepper-value-24chars-min!!",
         "HC_PROXY_SHARED_TOKEN": "test-proxy-shared-token-24min!!",
         "HC_MONITORING_VAULT_ROOT": str(tmp_path / "monitoring_vault"),
+        "HC_MONITORING_VAULT_KEY_FILE": str(tmp_path / "monitoring_vault.key"),
         "HC_TRUSTED_PROXY_MODE": "tailscale_https",
         "HC_EXTERNAL_HTTPS_ORIGIN": "https://healthchecker-host.tail76ad4e.ts.net",
         "HC_BIND_HOST": "127.0.0.1",
