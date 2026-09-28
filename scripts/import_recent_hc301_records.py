@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -162,7 +163,7 @@ def _dry_run_payload(request: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def build_records() -> list[tuple[str, dict[str, Any]]]:
+def build_records(patient_id: str = DEFAULT_PATIENT_ID) -> list[tuple[str, dict[str, Any]]]:
     # Jul 25 2026 23:48 America/New_York (EDT, UTC-4) → Z
     bp_at = to_iso_z("2026-07-25T23:48:00-04:00")
     # Jul 26 2026 05:08 America/New_York (EDT, UTC-4) → Z
@@ -199,7 +200,7 @@ def build_records() -> list[tuple[str, dict[str, Any]]]:
     record_bp = (
         "Record 1 (BP 127/84, pulse 65)",
         {
-            "patient_id": DEFAULT_PATIENT_ID,
+            "patient_id": patient_id,
             "content": json.dumps(bp_body).encode("utf-8"),
             "filename": "samsung_bp_2026-07-25.json",
             "mime_type": "application/json",
@@ -225,7 +226,7 @@ def build_records() -> list[tuple[str, dict[str, Any]]]:
     record_glucose = (
         "Record 2 (glucose 183 mg/dL, Contour Next GEN)",
         {
-            "patient_id": DEFAULT_PATIENT_ID,
+            "patient_id": patient_id,
             "content": json.dumps(glucose_body).encode("utf-8"),
             "filename": "contour_glucose_2026-07-26.json",
             "mime_type": "application/json",
@@ -272,7 +273,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    records = build_records()
+    patient_id = DEFAULT_PATIENT_ID
+    if not args.dry_run:
+        patient_id = str(os.environ.get("HC_RUNTIME_PATIENT_ID") or "").strip()
+        if not patient_id:
+            print("HC301_IMPORT_FAILED: runtime_patient_identity_required", file=sys.stderr)
+            return 2
+    records = build_records(patient_id=patient_id)
     mode = "DRY-RUN (no writes)" if args.dry_run else "LIVE import"
     print(f"HC-301 recent records import - {mode} (manual script - not startup)")
     print(f"BP measured_at (Z): {to_iso_z('2026-07-25T23:48:00-04:00')}")
@@ -292,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(f"Vault: {store.root}")
     # ImportService wraps ImportPipeline (canonical path); both share the encrypted store.
-    service = ImportService(store=store)
+    service = ImportService(store=store, patient_id=patient_id)
     assert isinstance(service.pipeline, ImportPipeline)
 
     results = []
