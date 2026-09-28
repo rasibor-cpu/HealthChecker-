@@ -457,6 +457,7 @@ class DashboardSummary:
     active_warnings_count: int
     widgets: list[DashboardWidget] = field(default_factory=list)
     display_name: str | None = None
+    overall_status_label: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -468,6 +469,8 @@ class DashboardSummary:
         # Consumer presentation only — never invent a name; omit when unset.
         if self.display_name:
             payload["display_name"] = self.display_name
+        if self.overall_status_label:
+            payload["overall_status_label"] = self.overall_status_label
         return payload
 
 

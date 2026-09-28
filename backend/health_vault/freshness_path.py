@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.health_vault.health_snapshot import compute_freshness
+from backend.health_vault.health_snapshot import (
+    compute_freshness,
+    load_health_snapshot_config,
+    parse_iso,
+)
 from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.models import utc_now
 
@@ -42,17 +46,15 @@ def build_freshness_path(
     companion_status: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     as_of = now or utc_now()
+    as_of_dt = parse_iso(as_of)
+    snapshot_config = load_health_snapshot_config()
+    freshness_windows = snapshot_config.get("freshness_windows_minutes") or {}
+    stale_multiplier = float(snapshot_config.get("stale_escalation_multiplier") or 3)
     observations = [
         row
         for row in (store.list_observations() or [])
         if _row_patient(row) == patient_id and _is_health_connect(row)
     ]
-    measurements = [
-        row
-        for row in (store.list_measurements() or [])
-        if _row_patient(row) == patient_id
-    ]
-
     companion = companion_status
     if companion is None:
         try:
@@ -91,18 +93,20 @@ def build_freshness_path(
             if measured and (vault_at is None or measured > vault_at):
                 vault_at = measured
                 vault_value = row.get("value")
-        if vault_at is None:
-            for row in measurements:
-                name = canonicalize_metric(row.get("metric") or row.get("metric_type") or "")
-                if name != metric:
-                    continue
-                measured = str(row.get("measured_at") or "")
-                if measured and (vault_at is None or measured > vault_at):
-                    vault_at = measured
-                    vault_value = row.get("value")
         if vault_at and (vault_latest is None or vault_at > vault_latest):
             vault_latest = vault_at
-        freshness = compute_freshness(metric=metric, measured_at=vault_at, now=None)
+        freshness_metric = (
+            "glucose"
+            if metric in {"glucose_capillary", "glucose_cgm_interstitial"}
+            else metric
+        )
+        freshness = compute_freshness(
+            metric=freshness_metric,
+            measured_at=vault_at,
+            now=as_of_dt,
+            windows=freshness_windows,
+            stale_multiplier=stale_multiplier,
+        )
         companion_at = companion_latest_by_metric.get(metric)
         hc_at = inventory_latest_by_metric.get(metric)
         by_metric[metric] = {

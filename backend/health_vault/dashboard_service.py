@@ -514,10 +514,12 @@ class DashboardService:
             active_warnings += len(abnormal_metrics)
 
         underlying_status = status
-        if freshness_guard.get("insufficient_current_evidence"):
-            # Historical clinical attention remains visible, but it cannot be
-            # presented as a statement about the patient's current condition.
+        status_label_override = None
+        if status == "normal" and freshness_guard.get("insufficient_current_evidence"):
+            # Stale monitoring must suppress only a reassuring Normal headline.
+            # Clinical warnings remain prominent and are never downgraded.
             status = str(freshness_guard.get("headline_status_override") or "unknown")
+            status_label_override = freshness_guard.get("headline_label_override")
 
         # 3. Create widgets dynamically
         widgets_dict = {
@@ -529,7 +531,7 @@ class DashboardService:
                 payload={
                     "status": status,
                     "underlying_status": underlying_status,
-                    "status_label_override": freshness_guard.get("headline_label_override"),
+                    "status_label_override": status_label_override,
                     "active_warnings": active_warnings,
                     "clinical_attention_metrics": sorted(abnormal_metrics),
                     "measurements_count": measurements_count,
@@ -610,6 +612,7 @@ class DashboardService:
             active_warnings_count=active_warnings,
             widgets=ordered_widgets,
             display_name=display_name,
+            overall_status_label=status_label_override,
         )
 
     def get_trends_payload(
