@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Write non-secret Android release provenance for HC321-B3.
+  Write non-secret HealthChecker Android release provenance.
 
 .DESCRIPTION
   Records HC release version, Android versionCode/versionName, Git SHA, build
@@ -32,6 +32,12 @@ function Test-EnvPresent([string]$Name) {
     return -not [string]::IsNullOrWhiteSpace($v)
 }
 
+function Test-EnvEnabled([string]$Name) {
+    $v = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($v)) { return $false }
+    return @("1", "true", "yes", "on") -contains $v.Trim().ToLowerInvariant()
+}
+
 function Get-RedactedSigningAvailability {
     $names = @(
         "HC_ANDROID_KEYSTORE_FILE",
@@ -48,7 +54,7 @@ function Get-RedactedSigningAvailability {
         present_env_names      = $present
         present_count          = $present.Count
         production_signing_ready = ($present.Count -eq 4)
-        require_production_signing = (Test-EnvPresent "HC_ANDROID_REQUIRE_PRODUCTION_SIGNING")
+        require_production_signing = (Test-EnvEnabled "HC_ANDROID_REQUIRE_PRODUCTION_SIGNING")
         # Never echo password values or keystore path contents into provenance beyond presence.
         keystore_file_env_set  = (Test-EnvPresent "HC_ANDROID_KEYSTORE_FILE")
     }
@@ -95,39 +101,61 @@ $signingVerification = "NOT_RUN"
 $certFingerprint = $null
 $verifyTool = $null
 
-function Invoke-SafeJarVerify([string]$ArtifactPath) {
+function Invoke-SafeAabVerify([string]$ArtifactPath) {
     $jarsigner = Get-Command jarsigner -ErrorAction SilentlyContinue
     if (-not $jarsigner) {
         return [pscustomobject]@{ status = "TOOL_UNAVAILABLE"; fingerprint = $null; tool = "jarsigner" }
     }
-    $out = & jarsigner -verify -verbose -certs $ArtifactPath 2>&1 | Out-String
-    # Redact unlikely secret-looking lines; provenance stores status only + fingerprint extract.
+    $out = & $jarsigner.Source -verify -verbose -certs $ArtifactPath 2>&1 | Out-String
+    $exitCode = $LASTEXITCODE
     $status = "UNSIGNED_OR_UNVERIFIED"
-    if ($out -match "jar verified") { $status = "SIGNED_VERIFIED" }
-    elseif ($out -match "jar is unsigned") { $status = "UNSIGNED" }
-    elseif ($out -match "is unsigned") { $status = "UNSIGNED" }
+    if ($exitCode -eq 0 -and $out -match "jar verified") { $status = "SIGNED_VERIFIED" }
+    elseif ($out -match "(?i)jar is unsigned|is unsigned") { $status = "UNSIGNED" }
+    elseif ($exitCode -ne 0) { $status = "VERIFY_FAILED" }
     $fp = $null
     if ($out -match "SHA256:([0-9A-F:]+)") {
         $fp = $Matches[1]
     } elseif ($out -match "SHA-256:\s*([0-9A-Fa-f:]+)") {
         $fp = $Matches[1]
     }
-    # Ensure we never persist password-like substrings from tool noise.
-    if ($out -match "(?i)password|private\s*key|keystore\s*password") {
-        # Tool output discarded; only status/fingerprint returned.
-    }
     return [pscustomobject]@{ status = $status; fingerprint = $fp; tool = "jarsigner" }
 }
 
-$artifactForVerify = $null
-if (Test-Path -LiteralPath $aabPath -PathType Leaf) { $artifactForVerify = $aabPath }
-elseif (Test-Path -LiteralPath $apkPath -PathType Leaf) { $artifactForVerify = $apkPath }
+function Invoke-SafeApkVerify([string]$ArtifactPath) {
+    $apksigner = Get-Command apksigner -ErrorAction SilentlyContinue
+    if (-not $apksigner) {
+        return [pscustomobject]@{ status = "TOOL_UNAVAILABLE"; fingerprint = $null; tool = "apksigner" }
+    }
+    $out = & $apksigner.Source verify --verbose --print-certs $ArtifactPath 2>&1 | Out-String
+    $exitCode = $LASTEXITCODE
+    $status = if ($exitCode -eq 0) { "SIGNED_VERIFIED" } else { "VERIFY_FAILED" }
+    if ($out -match "(?i)does not verify|not signed|no signers") {
+        $status = "UNSIGNED_OR_UNVERIFIED"
+    }
+    $fp = $null
+    if ($out -match "(?im)certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)") {
+        $fp = $Matches[1]
+    }
+    return [pscustomobject]@{ status = $status; fingerprint = $fp; tool = "apksigner" }
+}
 
-if ($artifactForVerify) {
-    $vr = Invoke-SafeJarVerify $artifactForVerify
-    $signingVerification = $vr.status
-    $certFingerprint = $vr.fingerprint
-    $verifyTool = $vr.tool
+$aabVerification = [pscustomobject]@{ status = "NOT_PRODUCED"; fingerprint = $null; tool = $null }
+$apkVerification = [pscustomobject]@{ status = "NOT_PRODUCED"; fingerprint = $null; tool = $null }
+if (Test-Path -LiteralPath $aabPath -PathType Leaf) {
+    $aabVerification = Invoke-SafeAabVerify $aabPath
+}
+if (Test-Path -LiteralPath $apkPath -PathType Leaf) {
+    # APK installation evidence requires Android signing-scheme verification.
+    # jarsigner-only AAB verification must never stand in for APK verification.
+    $apkVerification = Invoke-SafeApkVerify $apkPath
+}
+
+$signingVerification = if ($apkSha) { $apkVerification.status } elseif ($aabSha) { $aabVerification.status } else { "NOT_RUN" }
+$certFingerprint = if ($apkSha) { $apkVerification.fingerprint } elseif ($aabSha) { $aabVerification.fingerprint } else { $null }
+$verifyTool = if ($apkSha) { $apkVerification.tool } elseif ($aabSha) { $aabVerification.tool } else { $null }
+
+if ($DeviceUpgradeProof -eq "PASS" -and (-not $apkSha -or $apkVerification.status -ne "SIGNED_VERIFIED")) {
+    throw "device_upgrade_proof_invalid: PASS requires a produced APK verified by apksigner in this provenance run"
 }
 
 $gradleVersion = $null
@@ -159,13 +187,13 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
-$baseName = "HC321_B3_android_release_provenance_${versionName}_${stamp}"
+$baseName = "HC_android_release_provenance_${versionName}_${stamp}"
 $jsonPath = Join-Path $OutputDirectory "$baseName.json"
 $txtPath = Join-Path $OutputDirectory "$baseName.txt"
 
 $doc = [ordered]@{
     format                         = "hc.android.release.provenance.v1"
-    task                           = "HC321-B3_ANDROID_SIGNED_RELEASE"
+    task                           = "HEALTHCHECKER_ANDROID_SIGNED_RELEASE"
     generated_utc                  = $utc
     hc_release_version             = $hcReleaseVersion
     android_version_code           = $versionCode
@@ -176,12 +204,18 @@ $doc = [ordered]@{
         name                       = if ($aabSha) { "app-release.aab" } else { $null }
         path_relative              = if ($aabSha) { "android/app/build/outputs/bundle/release/app-release.aab" } else { $null }
         sha256                     = $aabSha
+        signing_verification_status = $aabVerification.status
+        certificate_sha256_fingerprint = $aabVerification.fingerprint
+        verify_tool                = $aabVerification.tool
     }
     apk = [ordered]@{
         produced                   = [bool]$apkSha
         name                       = if ($apkSha) { "app-release.apk" } else { $null }
         path_relative              = if ($apkSha) { "android/app/build/outputs/apk/release/app-release.apk" } else { $null }
         sha256                     = $apkSha
+        signing_verification_status = $apkVerification.status
+        certificate_sha256_fingerprint = $apkVerification.fingerprint
+        verify_tool                = $apkVerification.tool
     }
     signing_verification_status    = $signingVerification
     certificate_sha256_fingerprint = $certFingerprint
@@ -201,7 +235,7 @@ $doc = [ordered]@{
 ($doc | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $jsonPath -Encoding utf8
 
 @(
-    "HC321-B3 Android release provenance (non-secret)"
+    "HealthChecker Android release provenance (non-secret)"
     "generated_utc=$utc"
     "hc_release_version=$hcReleaseVersion"
     "android_version_code=$versionCode"
