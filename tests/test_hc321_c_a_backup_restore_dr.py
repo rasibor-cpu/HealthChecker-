@@ -163,3 +163,12 @@ def test_backup_artifact_contains_no_plaintext_health_markers(tmp_path):
     raw = backup.read_bytes()
     for needle in (b"Robert", b"Second", b"tls-private", b"temporary-owner", b"secondary-password"):
         assert needle not in raw
+
+
+def test_operator_recovery_cli_enforces_isolation_and_privacy_safe_failures():
+    source = (ROOT / "scripts/healthchecker_recovery.py").read_text(encoding="utf-8")
+    assert "require_empty_target=True" in source
+    assert "ProductionRuntimeError" in source
+    assert "RecoveryError" in source
+    assert "VaultKeyProtectionError" in source
+    assert 'print(f"recovery_failed:{args.command}", file=sys.stderr)' in source
