@@ -160,6 +160,11 @@ class CompanionSyncRunner(
             while (true) {
                 attempt += 1
 
+                if (!prefs.syncMutex.renew(workOwner)) {
+                    prefs.setLastError("sync_mutex_lease_lost")
+                    return Outcome.RETRY
+                }
+
                 val ack = host.deliver(
                     batchId = chunk.batchId,
                     nonce = chunk.nonce,
