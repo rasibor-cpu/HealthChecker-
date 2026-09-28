@@ -278,7 +278,7 @@ def test_device_data_and_api_compat_preserved(store: VaultStore):
         create_measurement(document_id="hc-hr", metric="heart_rate", value=72, units="bpm").to_dict()
     )
     store._write_index(data)
-    client = TestClient(create_health_vault_app(store, test_users={"patient-A": "correct"}))
+    client = TestClient(create_health_vault_app(store, production=False, test_users={"patient-A": "correct"}))
     token = client.post("/api/auth/login", json={"patient_id": "patient-A", "password": "correct"}).json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
     listing = client.get("/api/records", headers=headers).json()
