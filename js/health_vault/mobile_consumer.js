@@ -480,7 +480,7 @@
     const status = widget("status_summary").payload;
     const imported = widget("import_wizard").payload;
     const attentionCount = Number(summary.active_warnings_count || 0);
-    text(target, `Overall status: ${label(summary.overall_status)}`, "mobile-dash-meta");
+    text(target, `Overall status: ${status.status_label_override || label(summary.overall_status)}`, "mobile-dash-meta");
     text(target, `${attentionCount} attention item${attentionCount === 1 ? "" : "s"}`, "mobile-dash-meta");
     text(
       target,
