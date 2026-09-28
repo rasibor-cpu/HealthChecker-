@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.health_vault.api import create_health_vault_app
+from backend.health_vault.backfill import SCHEMA_VERSION, run_backfill
 from backend.health_vault.auth import AuthenticationStateError
 from backend.health_vault.production_runtime import ProductionRuntimeError, create_production_vault
 from backend.health_vault.import_service import ImportService
@@ -275,6 +277,43 @@ def test_scheduled_intake_and_gmail_use_encrypted_user_bound_runtime(tmp_path):
         assert "runtime_patient_identity_required" in source
 
 
+def test_live_backfill_cannot_redirect_writes_with_payload_identity(tmp_path):
+    store = VaultStore(root=tmp_path / "vault", encryption_key=KEY)
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "patient": {
+            "patient_id": "payload-selected-patient",
+            "display_name": "Must Not Select Identity",
+        },
+        "profile": {"diagnoses": ["test-only-diagnosis"]},
+        "records": [{
+            "record_id": "identity-bound-record",
+            "document_type": "blood_pressure_screenshot",
+            "provenance": "wearable_screenshot",
+            "source_system": "test-fixture",
+            "measurements": [{"metric": "systolic_bp", "value": 120, "units": "mmHg"}],
+        }],
+    }
+    source = tmp_path / "backfill.json"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = run_backfill(
+        source,
+        store=store,
+        patient_id="governed-runtime-patient",
+    )
+
+    assert report["ok"] is True
+    assert report["patient_id"] == "governed-runtime-patient"
+    assert store.list_documents()
+    assert {
+        row["patient_id"] for row in store.list_documents()
+    } == {"governed-runtime-patient"}
+    assert store.get_profile(patient_id="governed-runtime-patient")["patient_id"] == (
+        "governed-runtime-patient"
+    )
+
+
 def test_plaintext_opt_in_stays_inside_explicit_development_factory():
     root = Path(__file__).resolve().parents[1]
     offenders = []
@@ -294,7 +333,13 @@ def test_manual_import_clis_activate_protected_production_vaults():
     assert "create_production_vault(environ=env)" in backfill_main
     assert "VaultStore(" not in backfill_main
     assert "production_vault_activation_failed" in backfill_main
+    assert "HC_RUNTIME_PATIENT_ID" in backfill_main
+    assert "runtime_patient_identity_required" in backfill_main
+    assert "patient_id=runtime_patient_id" in backfill_main
 
     assert "create_production_vault()" in recent_import
     assert "VaultStore()" not in recent_import
     assert "production_vault_activation_failed" in recent_import
+    assert "HC_RUNTIME_PATIENT_ID" in recent_import
+    assert "runtime_patient_identity_required" in recent_import
+    assert "ImportService(store=store, patient_id=patient_id)" in recent_import
