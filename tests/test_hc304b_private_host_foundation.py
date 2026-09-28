@@ -59,7 +59,7 @@ _COMPANION_ENV_KEYS = (
 )
 
 
-TEST_VAULT_KEY = b"hc345-test-monitoring-key-32byt"[:32]
+TEST_VAULT_KEY = b"K" * 32
 
 
 def _test_key_reader(_path: Path) -> bytes:
