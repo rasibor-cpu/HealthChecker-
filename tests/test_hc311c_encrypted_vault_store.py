@@ -30,7 +30,7 @@ def _document(document_id: str = "doc-hc311") -> MedicalDocument:
 class Hc311CEncryptedVaultStoreTests(unittest.TestCase):
     def test_default_mode_remains_plaintext_compatible(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            store = VaultStore(root=Path(temp) / "vault")
+            store = VaultStore(root=Path(temp) / "vault", allow_plaintext=True)
 
             raw = store.index_path.read_bytes()
 
@@ -262,7 +262,7 @@ class Hc311CEncryptedVaultStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             store = VaultStore(
                 root=Path(temp) / "vault",
-            )
+            , allow_plaintext=True)
 
             document = _document("plain-doc")
             content = b"legacy plaintext semantics"

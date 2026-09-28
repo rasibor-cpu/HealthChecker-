@@ -66,7 +66,7 @@ def lc(cfg):
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 @pytest.fixture()
@@ -523,11 +523,11 @@ def test_n_no_production_key_or_live_vault_side_effects(cfg, lc, tmp_path):
     # Record document count before run (real vault may have existing data).
     doc_count_before = 0
     if real_vault_root.exists() and (real_vault_root / "index.json").exists():
-        real_store = VaultStore(root=real_vault_root)
+        real_store = VaultStore(root=real_vault_root, allow_plaintext=True)
         doc_count_before = len(real_store.list_documents())
 
     # Run with a test-scoped store (tmp_path).
-    test_store = VaultStore(root=tmp_path / "test_vault")
+    test_store = VaultStore(root=tmp_path / "test_vault", allow_plaintext=True)
     reg = ParserRegistry()
     register_builtin_parsers(reg)
     pipeline = ImportPipeline(store=test_store, registry=reg, bus=EventBus())
@@ -541,7 +541,7 @@ def test_n_no_production_key_or_live_vault_side_effects(cfg, lc, tmp_path):
 
     # Real vault must have the same document count as before.
     if real_vault_root.exists() and (real_vault_root / "index.json").exists():
-        real_store2 = VaultStore(root=real_vault_root)
+        real_store2 = VaultStore(root=real_vault_root, allow_plaintext=True)
         doc_count_after = len(real_store2.list_documents())
         assert doc_count_after == doc_count_before, (
             f"Live vault was modified! Before={doc_count_before} After={doc_count_after}"

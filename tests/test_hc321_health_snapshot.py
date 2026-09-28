@@ -338,7 +338,7 @@ def test_accessibility_spoken_bp():
 
 def test_snapshot_from_vault_store():
     with tempfile.TemporaryDirectory() as td:
-        store = VaultStore(root=Path(td))
+        store = VaultStore(root=Path(td), allow_plaintext=True)
         doc = MedicalDocument(
             patient_id="default-patient",
             document_type="bp_screenshot",
@@ -382,7 +382,7 @@ def test_api_health_snapshot_endpoint():
     from backend.health_vault.api import create_health_vault_app
 
     with tempfile.TemporaryDirectory() as td:
-        store = VaultStore(root=Path(td))
+        store = VaultStore(root=Path(td), allow_plaintext=True)
         app = create_health_vault_app(store=store)
         client = TestClient(app)
         res = client.get("/api/health-vault/health-snapshot")

@@ -20,7 +20,7 @@ def test_create_measurement_preserves_explicit_patient_id():
 
 
 def test_health_connect_batched_ingestion_preserves_patient_scope(tmp_path: Path):
-    store = VaultStore(root=tmp_path / "vault")
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     coordinator = IngestionCoordinator(store=store)
 
     patient_id = "hc328-patient"

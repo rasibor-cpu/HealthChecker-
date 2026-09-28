@@ -21,7 +21,7 @@ from backend.health_vault.vault_store import VaultStore
 
 
 def _store(tmp: Path) -> VaultStore:
-    return VaultStore(root=tmp)
+    return VaultStore(root=tmp, allow_plaintext=True)
 
 
 def _seed_full(store: VaultStore) -> None:

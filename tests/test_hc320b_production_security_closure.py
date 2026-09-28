@@ -56,7 +56,7 @@ def test_production_factory_requires_protected_key_and_encryption(tmp_path):
 
 
 def test_plaintext_or_corrupt_production_state_fails_closed(tmp_path):
-    plain = VaultStore(root=tmp_path / "plain")
+    plain = VaultStore(root=tmp_path / "plain", allow_plaintext=True)
     with pytest.raises(RuntimeError, match="production_vault_encryption_required"):
         create_health_vault_app(plain, production=True, bootstrap_password="Not-Used")
 
@@ -236,7 +236,7 @@ def test_bootstrap_password_cannot_return_after_change_or_registry_damage(tmp_pa
 
 
 def test_omitted_mode_is_production_fail_closed_for_injected_store(tmp_path):
-    plain = VaultStore(root=tmp_path / "ambiguous-plain")
+    plain = VaultStore(root=tmp_path / "ambiguous-plain", allow_plaintext=True)
     with pytest.raises(RuntimeError, match="production_vault_encryption_required"):
         create_health_vault_app(plain)
 
@@ -246,7 +246,7 @@ def test_omitted_mode_is_production_fail_closed_for_injected_store(tmp_path):
 
 
 def test_explicit_development_fixture_remains_available(tmp_path):
-    store = VaultStore(root=tmp_path / "development")
+    store = VaultStore(root=tmp_path / "development", allow_plaintext=True)
     app = create_health_vault_app(store, production=False, test_users={"fixture": "fixture-password"})
     assert app.state.production_mode is False
     assert store.encrypted is False

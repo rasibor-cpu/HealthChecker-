@@ -130,7 +130,7 @@ def cfg(tmp_path: Path):
 @pytest.fixture()
 def plaintext_store(tmp_path: Path) -> VaultStore:
     """Plaintext VaultStore for chain verification tests."""
-    return VaultStore(root=tmp_path / "vault_plaintext")
+    return VaultStore(root=tmp_path / "vault_plaintext", allow_plaintext=True)
 
 
 @pytest.fixture()

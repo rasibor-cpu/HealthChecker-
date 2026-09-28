@@ -20,7 +20,7 @@ from backend.health_vault.vault_store import VaultStore
 
 @pytest.fixture
 def store(tmp_path: Path):
-    return VaultStore(root=tmp_path)
+    return VaultStore(root=tmp_path, allow_plaintext=True)
 
 
 def test_monitoring_trend_metrics_include_health_connect_observables():

@@ -13,7 +13,7 @@ from backend.health_vault.trend_engine import TrendEngine
 def temp_vault_with_app():
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        store = VaultStore(root=tdp)
+        store = VaultStore(root=tdp, allow_plaintext=True)
         app = create_health_vault_app(store, production=False, test_users={
             "patient-A": "correct", "patient-B": "correct"
         })

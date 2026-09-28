@@ -51,7 +51,7 @@ TEST_PATIENT = "hc303-test-user"
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
-    return VaultStore(root=tmp_path / "vault")
+    return VaultStore(root=tmp_path / "vault", allow_plaintext=True)
 
 
 def _now() -> str:
@@ -240,14 +240,14 @@ def test_delivery_ingest_and_idempotent_retry(store: VaultStore):
 
 def test_persisted_replay_after_store_reopen(tmp_path: Path):
     root = tmp_path / "vault"
-    store1 = VaultStore(root=root)
+    store1 = VaultStore(root=root, allow_plaintext=True)
     _, token = _pair(store1)
     body = _body(batch_id="persist-replay", nonce="n-persist")
     first = companion_observations_handler(
         body, authorization="Bearer " + token, store=store1, local_dev=True
     )
     assert first["ok"] is True
-    store2 = VaultStore(root=root)
+    store2 = VaultStore(root=root, allow_plaintext=True)
     second = companion_observations_handler(
         body, authorization="Bearer " + token, store=store2, local_dev=True
     )

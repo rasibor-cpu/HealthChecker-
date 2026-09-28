@@ -19,7 +19,7 @@ from backend.health_vault.vault_store import VaultStore
 @pytest.fixture
 def store():
     with tempfile.TemporaryDirectory() as td:
-        yield VaultStore(root=Path(td))
+        yield VaultStore(root=Path(td), allow_plaintext=True)
 
 
 def _seed_health_connect_patient(store: VaultStore, patient_id: str, count: int) -> None:
