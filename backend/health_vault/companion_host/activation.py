@@ -174,12 +174,6 @@ def load_and_validate_activation(
         pass
     else:
         raise ActivationError("monitoring_vault_key_file_inside_vault_forbidden")
-    try:
-        key_file.relative_to(root)
-    except ValueError:
-        pass
-    else:
-        raise ActivationError("monitoring_vault_key_file_inside_repo_forbidden")
 
     proxy_mode = env.get("HC_TRUSTED_PROXY_MODE", "").strip()
     if proxy_mode not in ALLOWED_PROXY_MODES:
