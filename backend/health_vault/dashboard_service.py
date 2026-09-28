@@ -612,6 +612,7 @@ class DashboardService:
             active_warnings_count=active_warnings,
             widgets=ordered_widgets,
             display_name=display_name,
+            overall_status_label=status_label_override,
         )
 
     def get_trends_payload(
