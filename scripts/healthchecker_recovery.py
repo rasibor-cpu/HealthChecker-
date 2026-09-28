@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from backend.health_vault.production_runtime import create_production_vault
+from backend.health_vault.production_runtime import ProductionRuntimeError, create_production_vault
 from backend.health_vault.recovery import (
+    RecoveryError,
     VaultMigrationManager,
     create_encrypted_backup,
     restore_encrypted_backup,
 )
-from backend.health_vault.vault_key_protector import read_protected_key
+from backend.health_vault.vault_key_protector import VaultKeyProtectionError, read_protected_key
 
 
 def parser() -> argparse.ArgumentParser:
@@ -29,24 +31,29 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def main() -> int:
-    args = parser().parse_args()
-    if args.command == "backup":
-        create_encrypted_backup(
-            create_production_vault(), args.output, read_protected_key(args.recovery_key_file)
-        )
-        print("backup_complete")
-    elif args.command == "restore-isolated":
-        restore_encrypted_backup(
-            args.backup,
-            args.target,
-            read_protected_key(args.recovery_key_file),
-            read_protected_key(args.vault_key_file),
-        )
-        print("isolated_restore_complete")
-    else:
-        VaultMigrationManager().validate_current(create_production_vault())
-        print("schema_compatible")
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    try:
+        if args.command == "backup":
+            create_encrypted_backup(
+                create_production_vault(), args.output, read_protected_key(args.recovery_key_file)
+            )
+            print("backup_complete")
+        elif args.command == "restore-isolated":
+            restore_encrypted_backup(
+                args.backup,
+                args.target,
+                read_protected_key(args.recovery_key_file),
+                read_protected_key(args.vault_key_file),
+                require_empty_target=True,
+            )
+            print("isolated_restore_complete")
+        else:
+            VaultMigrationManager().validate_current(create_production_vault())
+            print("schema_compatible")
+    except (ProductionRuntimeError, RecoveryError, VaultKeyProtectionError, OSError):
+        print(f"recovery_failed:{args.command}", file=sys.stderr)
+        return 2
     return 0
 
 
