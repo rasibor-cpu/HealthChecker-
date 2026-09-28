@@ -273,3 +273,28 @@ def test_scheduled_intake_and_gmail_use_encrypted_user_bound_runtime(tmp_path):
         assert "create_production_vault()" in source
         assert "HC_RUNTIME_PATIENT_ID" in source
         assert "runtime_patient_identity_required" in source
+
+
+def test_plaintext_opt_in_stays_inside_explicit_development_factory():
+    root = Path(__file__).resolve().parents[1]
+    offenders = []
+    for directory in (root / "backend", root / "scripts"):
+        for path in directory.rglob("*.py"):
+            if "allow_plaintext=True" in path.read_text(encoding="utf-8"):
+                offenders.append(path.relative_to(root).as_posix())
+    assert offenders == ["backend/health_vault/api.py"]
+
+
+def test_manual_import_clis_activate_protected_production_vaults():
+    root = Path(__file__).resolve().parents[1]
+    backfill = (root / "backend/health_vault/backfill.py").read_text(encoding="utf-8")
+    recent_import = (root / "scripts/import_recent_hc301_records.py").read_text(encoding="utf-8")
+
+    backfill_main = backfill.split("def main(", 1)[1]
+    assert "create_production_vault(environ=env)" in backfill_main
+    assert "VaultStore(" not in backfill_main
+    assert "production_vault_activation_failed" in backfill_main
+
+    assert "create_production_vault()" in recent_import
+    assert "VaultStore()" not in recent_import
+    assert "production_vault_activation_failed" in recent_import
