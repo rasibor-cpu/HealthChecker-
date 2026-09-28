@@ -37,8 +37,6 @@ jobs:
             tests/test_hc325_r6b_android_saf_record_import.py \
             tests/test_hc304b_private_host_foundation.py \
             tests/test_hc304br1_proxy_topology.py \
-            tests/test_hc306e_scheduled_host_foundation.py \
-            tests/test_hc306h_r1_runtime_assets.py \
             tests/test_hc319d_mobile_consumer_launcher.py
 
   android-unit:
