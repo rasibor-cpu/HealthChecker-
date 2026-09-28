@@ -97,6 +97,32 @@ class SyncMutex(
         return AcquireResult(true, "acquired")
     }
 
+    /**
+     * Refresh a live lease before each bounded network attempt.
+     *
+     * A valid delivery can span many chunks and outlive [STALE_MS]. Renewal
+     * prevents a manual entrypoint from stealing that lease while its holder
+     * is still actively draining a durable pending plan.
+     */
+    fun renew(owner: String): Boolean {
+        if (!localHeld.get()) return false
+
+        synchronized(PROCESS_GATE_LOCK) {
+            if (processOwner != owner) return false
+            if (!prefs.getBoolean(KEY_HELD, false)) return false
+            if (prefs.getString(KEY_OWNER, null) != owner) return false
+
+            val now = clockMs()
+            val committed = prefs.edit()
+                .putLong(KEY_HELD_AT, now)
+                .commit()
+            if (committed) {
+                processHeldAt = now
+            }
+            return committed
+        }
+    }
+
     fun release(owner: String) {
         val current = prefs.getString(KEY_OWNER, null)
 
