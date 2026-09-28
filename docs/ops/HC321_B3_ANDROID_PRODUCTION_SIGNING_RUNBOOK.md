@@ -16,6 +16,9 @@ Owner role: `RELEASE/SIGNING OWNER — ASSIGN BEFORE EXTERNAL PRODUCTION HANDOFF
   - `HC_ANDROID_KEY_PASSWORD`
 - Optional fail-closed gate for distribution builds:
   - `HC_ANDROID_REQUIRE_PRODUCTION_SIGNING=1` — Gradle refuses release when material is missing
+  - Enabled values are `1`, `true`, `yes`, or `on` (case-insensitive); `0`, `false`,
+    `no`, `off`, an empty value, or an unset variable are disabled consistently in
+    Gradle and provenance.
 - **Never** use the Android debug keystore as a release fallback.
 - **Never** commit keystore files, private keys, passwords, or signing secrets.
 - **Never** generate an ad-hoc production keystore merely to make a gate green.
@@ -44,6 +47,11 @@ jarsigner -verify -verbose -certs android\app\build\outputs\bundle\release\app-r
 
 Record only: verify status, certificate subject/fingerprint (SHA-256), artifact SHA-256.
 Never record passwords or private key bytes.
+
+AAB verification and APK verification are separate evidence. Use `jarsigner` for the AAB.
+For the installable APK, `apksigner verify --verbose --print-certs` is mandatory so Android
+signature schemes are checked; an AAB's `jarsigner` result must never be used as proof
+that the APK is signed.
 
 ## Release APK for device acceptance
 
@@ -81,8 +89,14 @@ After each governed release build, run:
 
 Retain machine-readable JSON + concise operator text. Fields include HC release version,
 Android versionCode/versionName, Git SHA, build timestamp, AAB/APK names + SHA-256,
-signing verification status, cert fingerprint when safely obtainable, Gradle/tool info,
-whether production signing was available, and whether device upgrade proof completed.
+artifact-specific signing verification status, cert fingerprint when safely obtainable,
+Gradle/tool info, whether production signing was available, and whether device upgrade
+proof completed.
+
+The provenance script refuses `DeviceUpgradeProof=PASS` unless the APK is present in the
+same run and independently reports `SIGNED_VERIFIED` from `apksigner`. This guard does
+not replace physical S24 evidence; it prevents an unsigned or AAB-only artifact from being
+recorded as the upgraded candidate.
 
 Never include passwords, keystore bytes, or private material in provenance.
 
