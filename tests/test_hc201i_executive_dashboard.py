@@ -288,7 +288,7 @@ def test_printable_and_path_redaction_api():
     with tempfile.TemporaryDirectory() as td:
         store = _store(Path(td))
         _seed_full(store)
-        app = create_health_vault_app(store=store)
+        app = create_health_vault_app(store=store, production=False)
         assert app is not None
         client = TestClient(app)
         res = client.get("/api/health-vault/executive-briefing")
