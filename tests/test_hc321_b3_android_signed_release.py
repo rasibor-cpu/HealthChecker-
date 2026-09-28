@@ -142,6 +142,7 @@ def test_runbook_covers_governed_signing_and_key_custody():
         "HC_ANDROID_KEYSTORE_PASSWORD",
         "HC_ANDROID_KEY_ALIAS",
         "HC_ANDROID_KEY_PASSWORD",
+        "HC_ANDROID_EXPECTED_CERT_SHA256",
         "bundleRelease",
         "versionCode",
         "monotonic",
@@ -172,7 +173,14 @@ def test_provenance_script_is_non_secret_and_distinguishes_unsigned():
     assert "aabVerification" in PROVENANCE_SCRIPT
     assert "apkVerification" in PROVENANCE_SCRIPT
     assert "device_upgrade_proof_invalid" in PROVENANCE_SCRIPT
-    assert 'if ($DeviceUpgradeProof -eq "PASS"' in PROVENANCE_SCRIPT
+    assert "HC_ANDROID_EXPECTED_CERT_SHA256" in PROVENANCE_SCRIPT
+    assert "android_expected_signer_fingerprint_required" in PROVENANCE_SCRIPT
+    assert "android_expected_signer_fingerprint_invalid" in PROVENANCE_SCRIPT
+    assert "android_signer_continuity_failed" in PROVENANCE_SCRIPT
+    assert "signer_continuity_status" in PROVENANCE_SCRIPT
+    assert "AVAILABLE_VERIFIED_SIGNER_MATCH" in PROVENANCE_SCRIPT
+    assert '$signerContinuity -ne "MATCH"' in PROVENANCE_SCRIPT
+    assert '$DeviceUpgradeProof -eq "PASS"' in PROVENANCE_SCRIPT
     # Must not echo password env values into artifacts.
     assert "$env:HC_ANDROID_KEYSTORE_PASSWORD" not in PROVENANCE_SCRIPT
     assert "HC_ANDROID_KEYSTORE_PASSWORD)" in PROVENANCE_SCRIPT or "HC_ANDROID_KEYSTORE_PASSWORD\"" in PROVENANCE_SCRIPT
@@ -206,7 +214,8 @@ def test_provenance_script_parser_ok_and_emits_files(tmp_path: Path):
     assert doc["secrets_recorded"] is False
     assert doc["production_signing_status"] in {
         "BLOCKED_EXTERNAL_KEY_CUSTODY",
-        "AVAILABLE_AND_VERIFIED",
+        "AVAILABLE_VERIFIED_SIGNER_MATCH",
+        "ENV_PRESENT_SIGNER_CONTINUITY_UNPROVEN",
         "ENV_PRESENT_VERIFY_INCOMPLETE",
     }
     blob = (json_path.read_text(encoding="utf-8-sig") + "\n" + txt_path.read_text(encoding="utf-8-sig"))
@@ -219,3 +228,6 @@ def test_unsigned_vs_signed_status_vocabulary_documented():
     assert "UNSIGNED" in RUNBOOK or "unsigned" in RUNBOOK.lower()
     assert "SIGNED" in PROVENANCE_SCRIPT or "SIGNED_VERIFIED" in PROVENANCE_SCRIPT
     assert "BLOCKED_EXTERNAL_KEY_CUSTODY" in RUNBOOK
+    assert "HC_ANDROID_EXPECTED_CERT_SHA256" in RUNBOOK
+    assert "fingerprint" in RUNBOOK.lower()
+    assert "mismatched" in RUNBOOK.lower()
