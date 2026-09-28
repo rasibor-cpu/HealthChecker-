@@ -45,6 +45,7 @@ _COMPANION_ENV_KEYS = (
     "HC_COMPANION_PEPPER",
     "HC_PROXY_SHARED_TOKEN",
     "HC_MONITORING_VAULT_ROOT",
+    "HC_MONITORING_VAULT_KEY_FILE",
     "HC_TRUSTED_PROXY_MODE",
     "HC_EXTERNAL_HTTPS_ORIGIN",
     "HC_EXTERNAL_HTTPS_HOST",
@@ -68,6 +69,10 @@ def _restore_companion_process_env():
             os.environ[key] = value
 
 
+def _test_key_reader(_path: Path) -> bytes:
+    return b"K" * 32
+
+
 def _base_env(vault: Path) -> dict[str, str]:
     return {
         "HC_HOST_ACTIVATION": "enabled",
@@ -75,6 +80,7 @@ def _base_env(vault: Path) -> dict[str, str]:
         "HC_COMPANION_PEPPER": "test-pepper-value-24chars-min!!",
         "HC_PROXY_SHARED_TOKEN": "test-proxy-shared-token-24min!!",
         "HC_MONITORING_VAULT_ROOT": str(vault),
+        "HC_MONITORING_VAULT_KEY_FILE": str(vault.parent / "monitoring_vault.key"),
         "HC_TRUSTED_PROXY_MODE": "tailscale_https",
         "HC_EXTERNAL_HTTPS_ORIGIN": "https://phone-host.example.ts.net",
         "HC_BIND_HOST": "127.0.0.1",
@@ -738,7 +744,11 @@ def test_healthz_readyz_no_sensitive_config(monitoring_vault: Path):
     from backend.health_vault.companion_host import build_activated_app
 
     env = _base_env(monitoring_vault)
-    app, config, _store = build_activated_app(environ=env, repo_root=ROOT)
+    app, config, _store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     os.environ["HC_HOST_ALLOW_TESTCLIENT_PEER"] = "1"
     client = TestClient(app)
     for path in ("/healthz", "/readyz"):

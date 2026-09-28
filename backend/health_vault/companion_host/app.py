@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import hmac
 import secrets
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 try:
     from fastapi import FastAPI, Request
@@ -33,6 +34,7 @@ from backend.health_vault.companion_host.rate_limit import (
 )
 from backend.health_vault.companion.security import MAX_PAYLOAD_BYTES
 from backend.health_vault.auth import AuthenticationError, AuthenticationService
+from backend.health_vault.vault_key_protector import read_protected_key
 from backend.health_vault.vault_store import VaultStore
 
 # Exact inventory of routes this host may expose (method, path template).
@@ -432,13 +434,12 @@ def build_activated_app(
     *,
     environ: dict[str, str] | None = None,
     repo_root: Any = None,
+    vault_key_reader: Callable[[Path], bytes] = read_protected_key,
 ) -> tuple[Any, HostActivationConfig, VaultStore]:
     """
     Full fail-closed startup: validate activation → apply secrets → prepare vault → create app.
     Does not bind a socket.
     """
-    from pathlib import Path
-
     from backend.health_vault.companion_host.activation import (
         apply_secrets_to_environ,
         load_and_validate_activation,
@@ -452,7 +453,11 @@ def build_activated_app(
     # Tests that pass environ= must restore these keys after the request lifecycle
     # (see autouse fixtures in HC-304* tests) so other suites are not polluted.
     apply_secrets_to_environ(config, environ=None)
-    store = prepare_monitoring_vault(config.monitoring_vault_root)
+    store = prepare_monitoring_vault(
+        config.monitoring_vault_root,
+        config.monitoring_vault_key_file,
+        key_reader=vault_key_reader,
+    )
     recover_abandoned_in_progress_acks(store)
     app = create_companion_only_app(config=config, store=store)
     return app, config, store

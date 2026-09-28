@@ -171,6 +171,7 @@ def test_env_parser_rejects_unknown_duplicate_malformed_injection(tmp_path: Path
             "HC_COMPANION_PEPPER=test-pepper-value-24chars-min!!",
             "HC_PROXY_SHARED_TOKEN=test-proxy-shared-token-24min!!",
             r"HC_MONITORING_VAULT_ROOT=C:\HealthCheckerData\monitoring_vault",
+            r"HC_MONITORING_VAULT_KEY_FILE=C:\\ProgramData\\HealthChecker\\secrets\\monitoring_vault.key",
             "HC_TRUSTED_PROXY_MODE=tailscale_https",
             "HC_EXTERNAL_HTTPS_ORIGIN=https://example.ts.net",
             "HC_EXTERNAL_HTTPS_HOST=example.ts.net",

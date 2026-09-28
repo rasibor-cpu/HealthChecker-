@@ -47,6 +47,7 @@ class HostActivationConfig:
     pepper: str
     proxy_shared_token: str
     monitoring_vault_root: Path
+    monitoring_vault_key_file: Path
     trusted_proxy_mode: str
     external_https_origin: str
     bind_host: str
@@ -62,6 +63,7 @@ class HostActivationConfig:
             "bind_host": self.bind_host,
             "bind_port": self.bind_port,
             "monitoring_vault_configured": True,
+            "monitoring_vault_key_configured": True,
             "admin_token_configured": True,
             "pepper_configured": True,
             "proxy_shared_token_configured": bool(self.proxy_shared_token),
@@ -159,6 +161,20 @@ def load_and_validate_activation(
 
     vault_root = assert_safe_monitoring_vault_path(vault_raw, repo_root=root)
 
+    key_raw = env.get("HC_MONITORING_VAULT_KEY_FILE", "").strip()
+    if not key_raw:
+        raise ActivationError("monitoring_vault_key_file_required")
+    try:
+        key_file = Path(key_raw).expanduser().resolve(strict=False)
+    except OSError as exc:
+        raise ActivationError("monitoring_vault_key_file_invalid") from exc
+    try:
+        key_file.relative_to(vault_root)
+    except ValueError:
+        pass
+    else:
+        raise ActivationError("monitoring_vault_key_file_inside_vault_forbidden")
+
     proxy_mode = env.get("HC_TRUSTED_PROXY_MODE", "").strip()
     if proxy_mode not in ALLOWED_PROXY_MODES:
         raise ActivationError("trusted_proxy_mode_invalid")
@@ -191,6 +207,7 @@ def load_and_validate_activation(
         pepper=pepper,
         proxy_shared_token=proxy_shared,
         monitoring_vault_root=vault_root,
+        monitoring_vault_key_file=key_file,
         trusted_proxy_mode=proxy_mode,
         external_https_origin=origin,
         bind_host=bind_host,
@@ -222,6 +239,7 @@ def apply_secrets_to_environ(config: HostActivationConfig, environ: dict[str, st
     target["HC_COMPANION_PEPPER"] = config.pepper
     target["HC_HOST_ACTIVATION"] = config.activation
     target["HC_MONITORING_VAULT_ROOT"] = str(config.monitoring_vault_root)
+    target["HC_MONITORING_VAULT_KEY_FILE"] = str(config.monitoring_vault_key_file)
     target["HC_TRUSTED_PROXY_MODE"] = config.trusted_proxy_mode
     target["HC_EXTERNAL_HTTPS_ORIGIN"] = config.external_https_origin
     target["HC_BIND_HOST"] = config.bind_host

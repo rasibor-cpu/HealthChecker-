@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from backend.health_vault.companion_host.activation import ActivationError
 from backend.health_vault.models import utc_now
+from backend.health_vault.vault_key_protector import read_protected_key
 from backend.health_vault.vault_store import VaultStore
 
 MONITORING_SCHEMA = "hc.monitoring_vault.v1"
@@ -68,17 +69,32 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
         return False
 
 
-def prepare_monitoring_vault(root: Path) -> VaultStore:
+def prepare_monitoring_vault(
+    root: Path,
+    key_file: Path,
+    *,
+    key_reader: Callable[[Path], bytes] = read_protected_key,
+) -> VaultStore:
     """
-    Create/open an isolated monitoring vault AFTER activation validation.
-    Writes schema + activation markers. Never points at production vault_storage.
+    Create/open an encrypted isolated monitoring vault after activation validation.
+
+    The protected key must already exist. Existing plaintext pilot storage is
+    rejected rather than being rewritten in place without a verified migration.
     """
     root = Path(root).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    # HC-304B monitoring storage is an explicitly isolated pilot boundary.
-    # Keep its legacy plaintext mode visible until it receives a dedicated
-    # protected key; VaultStore defaults remain fail closed everywhere else.
-    store = VaultStore(root=root, allow_plaintext=True)
+    key_file = Path(key_file).resolve()
+    try:
+        key = key_reader(key_file)
+        store = VaultStore(root=root, encryption_key=key)
+        # Authenticate an existing index immediately; wrong/corrupt keys and
+        # legacy plaintext state must fail before the host can serve requests.
+        store._read_index()
+    except ActivationError:
+        raise
+    except Exception as exc:
+        raise ActivationError("monitoring_vault_activation_failed") from exc
+    if not store.encrypted:
+        raise ActivationError("monitoring_vault_encryption_required")
 
     marker = root / MARKER_NAME
     if not marker.exists():
@@ -93,6 +109,7 @@ def prepare_monitoring_vault(root: Path) -> VaultStore:
         "schema_version": MONITORING_SCHEMA,
         "activation": "enabled",
         "purpose": "companion_monitoring_pilot",
+        "encrypted_at_rest": True,
         "merges_into_production_vault": False,
         "simulated_clinical_observations": False,
         "updated_at": utc_now(),
@@ -114,7 +131,6 @@ def prepare_monitoring_vault(root: Path) -> VaultStore:
     except OSError:
         pass
 
-    # Ensure index notes monitoring schema without rewriting clinical docs.
     data = store._read_index()
     data["monitoring_schema_version"] = MONITORING_SCHEMA
     data["monitoring_activation"] = "enabled"

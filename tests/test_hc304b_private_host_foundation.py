@@ -46,6 +46,7 @@ _COMPANION_ENV_KEYS = (
     "HC_COMPANION_PEPPER",
     "HC_PROXY_SHARED_TOKEN",
     "HC_MONITORING_VAULT_ROOT",
+    "HC_MONITORING_VAULT_KEY_FILE",
     "HC_TRUSTED_PROXY_MODE",
     "HC_EXTERNAL_HTTPS_ORIGIN",
     "HC_EXTERNAL_HTTPS_HOST",
@@ -56,6 +57,13 @@ _COMPANION_ENV_KEYS = (
     "HC_TAILSCALE_SERVE_TARGET_PORT",
     "HC_HOST_ALLOW_TESTCLIENT_PEER",
 )
+
+
+TEST_VAULT_KEY = b"K" * 32
+
+
+def _test_key_reader(_path: Path) -> bytes:
+    return TEST_VAULT_KEY
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +84,7 @@ def _base_env(vault: Path, origin: str = "https://phone-host.example.ts.net") ->
         "HC_COMPANION_PEPPER": "test-pepper-value-24chars-min!!",
         "HC_PROXY_SHARED_TOKEN": "test-proxy-shared-token-24min!!",
         "HC_MONITORING_VAULT_ROOT": str(vault),
+        "HC_MONITORING_VAULT_KEY_FILE": str(vault.parent / "monitoring_vault.key"),
         "HC_TRUSTED_PROXY_MODE": "tailscale_https",
         "HC_EXTERNAL_HTTPS_ORIGIN": origin,
         "HC_BIND_HOST": "127.0.0.1",
@@ -107,6 +116,34 @@ def test_missing_activation_flag(monitoring_vault: Path):
     with pytest.raises(ActivationError) as ei:
         load_and_validate_activation(environ=env, repo_root=ROOT)
     assert ei.value.code == "host_activation_required"
+
+
+def test_monitoring_key_path_required_and_separated(monitoring_vault: Path):
+    env = _base_env(monitoring_vault)
+    env.pop("HC_MONITORING_VAULT_KEY_FILE")
+    with pytest.raises(ActivationError) as ei:
+        load_and_validate_activation(environ=env, repo_root=ROOT)
+    assert ei.value.code == "monitoring_vault_key_file_required"
+
+    env = _base_env(monitoring_vault)
+    env["HC_MONITORING_VAULT_KEY_FILE"] = str(monitoring_vault / "vault.key")
+    with pytest.raises(ActivationError) as ei:
+        load_and_validate_activation(environ=env, repo_root=ROOT)
+    assert ei.value.code == "monitoring_vault_key_file_inside_vault_forbidden"
+
+
+def test_monitoring_vault_key_failure_has_no_storage_side_effect(monitoring_vault: Path):
+    def fail_key(_path: Path) -> bytes:
+        raise RuntimeError("secret detail must not escape")
+
+    with pytest.raises(ActivationError) as ei:
+        prepare_monitoring_vault(
+            monitoring_vault,
+            monitoring_vault.parent / "monitoring_vault.key",
+            key_reader=fail_key,
+        )
+    assert ei.value.code == "monitoring_vault_activation_failed"
+    assert not monitoring_vault.exists()
 
 
 def test_missing_and_weak_secrets(monitoring_vault: Path):
@@ -177,11 +214,17 @@ def test_no_vault_creation_before_gate_success(monitoring_vault: Path):
 
 def test_build_activated_app_creates_isolated_vault(monitoring_vault: Path):
     env = _base_env(monitoring_vault)
-    app, config, store = build_activated_app(environ=env, repo_root=ROOT)
+    app, config, store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     assert monitoring_vault.exists()
     assert (monitoring_vault / ".hc_monitoring_vault").exists()
     assert store.root.resolve() == monitoring_vault.resolve()
     assert store.root.resolve() != (ROOT / "vault_storage").resolve()
+    assert store.encrypted is True
+    assert store.index_path.read_bytes().startswith(b"HCVE")
     normalized = set()
     for route in app.router.routes:
         if not hasattr(route, "methods") or not hasattr(route, "path"):
@@ -268,7 +311,11 @@ def test_rate_limiting_bounded_keys():
 
 
 def test_abandoned_ack_recovery(monitoring_vault: Path):
-    store = prepare_monitoring_vault(monitoring_vault)
+    store = prepare_monitoring_vault(
+        monitoring_vault,
+        monitoring_vault.parent / "monitoring_vault.key",
+        key_reader=_test_key_reader,
+    )
     with store.companion_lock():
         data = store._read_index()
         acks = dict(data.get("companion_batch_acks") or {})
@@ -292,9 +339,17 @@ def test_abandoned_ack_recovery(monitoring_vault: Path):
 
 
 def test_restart_persistence_marker(monitoring_vault: Path):
-    store = prepare_monitoring_vault(monitoring_vault)
+    store = prepare_monitoring_vault(
+        monitoring_vault,
+        monitoring_vault.parent / "monitoring_vault.key",
+        key_reader=_test_key_reader,
+    )
     store.save_companion_status({"phase": "HC-304B", "note": "meta_only"})
-    store2 = prepare_monitoring_vault(monitoring_vault)
+    store2 = prepare_monitoring_vault(
+        monitoring_vault,
+        monitoring_vault.parent / "monitoring_vault.key",
+        key_reader=_test_key_reader,
+    )
     assert (monitoring_vault / "host_meta.json").exists()
     assert store2.root == store.root
 
@@ -304,7 +359,11 @@ def test_http_surface_cors_proxy_admin(monitoring_vault: Path):
     from fastapi.testclient import TestClient
 
     env = _base_env(monitoring_vault)
-    app, config, store = build_activated_app(environ=env, repo_root=ROOT)
+    app, config, store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     app.state.hc_auth_service.create_user(
         user_id="mobile-test", name="Mobile Test", email_identifier="mobile@test.invalid",
         password="Mobile-Test-Password", must_change_password=False,
@@ -376,7 +435,11 @@ def test_devices_and_revoke_are_patient_scoped(monitoring_vault: Path):
     from fastapi.testclient import TestClient
 
     env = _base_env(monitoring_vault)
-    app, config, _store = build_activated_app(environ=env, repo_root=ROOT)
+    app, config, _store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     auth = app.state.hc_auth_service
     auth.create_user(
         user_id="patient-a", name="Patient A", email_identifier="a@test.invalid",
@@ -465,7 +528,11 @@ def test_oversized_body_without_content_length(monitoring_vault: Path):
     from fastapi.testclient import TestClient
 
     env = _base_env(monitoring_vault)
-    app, config, _store = build_activated_app(environ=env, repo_root=ROOT)
+    app, config, _store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     os.environ["HC_HOST_ALLOW_TESTCLIENT_PEER"] = "1"
     client = TestClient(app)
     huge = '{"x":"' + ("a" * (MAX_PAYLOAD_BYTES + 100)) + '"}'
@@ -504,6 +571,10 @@ def test_migration_safety_doc_contract():
 
 def test_production_vault_not_used_by_default_config(monitoring_vault: Path):
     env = _base_env(monitoring_vault)
-    _app, config, store = build_activated_app(environ=env, repo_root=ROOT)
+    _app, config, store = build_activated_app(
+        environ=env,
+        repo_root=ROOT,
+        vault_key_reader=_test_key_reader,
+    )
     assert store.root.resolve() != (ROOT / "vault_storage").resolve()
     assert store.root.resolve() == monitoring_vault.resolve()
