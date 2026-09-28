@@ -26,6 +26,10 @@ if str(ROOT) not in sys.path:
 from backend.health_vault.import_pipeline import ImportPipeline  # noqa: E402
 from backend.health_vault.import_service import ImportService  # noqa: E402
 from backend.health_vault.metric_normalization import normalize_measurement  # noqa: E402
+from backend.health_vault.production_runtime import (  # noqa: E402
+    ProductionRuntimeError,
+    create_production_vault,
+)
 from backend.health_vault.vault_store import VaultStore  # noqa: E402
 
 DEFAULT_PATIENT_ID = "default-patient"
@@ -268,22 +272,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    store = VaultStore()
-    # ImportService wraps ImportPipeline (canonical path); both share the same VaultStore.
-    service = ImportService(store=store)
-    assert isinstance(service.pipeline, ImportPipeline)
-
+    records = build_records()
     mode = "DRY-RUN (no writes)" if args.dry_run else "LIVE import"
     print(f"HC-301 recent records import - {mode} (manual script - not startup)")
-    print(f"Vault: {store.root}")
     print(f"BP measured_at (Z): {to_iso_z('2026-07-25T23:48:00-04:00')}")
     print(f"Glucose measured_at (Z): {to_iso_z('2026-07-26T05:08:00-04:00')}")
 
+    if args.dry_run:
+        for label, request in records:
+            print(f"{label}: DRY-RUN would import")
+            print(json.dumps(_dry_run_payload(request), indent=2, default=str))
+        print(f"Done. imported=0 skipped=0 failed=0 dry-run={len(records)}")
+        return 0
+
+    try:
+        store = create_production_vault()
+    except ProductionRuntimeError:
+        print("HC301_IMPORT_FAILED: production_vault_activation_failed", file=sys.stderr)
+        return 2
+    print(f"Vault: {store.root}")
+    # ImportService wraps ImportPipeline (canonical path); both share the encrypted store.
+    service = ImportService(store=store)
+    assert isinstance(service.pipeline, ImportPipeline)
+
     results = []
-    for label, req in build_records():
-        results.append(
-            import_record(service, store, label=label, request=req, dry_run=args.dry_run)
-        )
+    for label, req in records:
+        results.append(import_record(service, store, label=label, request=req))
 
     imported = results.count("imported")
     skipped = results.count("skipped")

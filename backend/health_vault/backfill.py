@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from backend.health_vault.models import (
     utc_now,
 )
 from backend.health_vault.parser_registry import ParserRegistry
+from backend.health_vault.production_runtime import ProductionRuntimeError, create_production_vault
 from backend.health_vault.parsers import register_builtin_parsers
 from backend.health_vault.timeline import build_timeline
 from backend.health_vault.vault_store import VaultStore
@@ -216,7 +218,6 @@ def run_backfill(
     if errors:
         raise BackfillValidationError("; ".join(errors))
 
-    vault = store or VaultStore()
     patient_id = str((payload.get("patient") or {}).get("patient_id") or "default-patient")
 
     report: dict[str, Any] = {
@@ -243,6 +244,7 @@ def run_backfill(
         report["finished_at"] = utc_now()
         return report
 
+    vault = store or VaultStore()
     apply_profile(vault, payload)
 
     reg = ParserRegistry()
@@ -295,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--vault-root",
         default=None,
-        help="Optional vault_storage root (defaults to repository vault_storage/)",
+        help="Optional encrypted production vault root override; key comes from HC_VAULT_KEY_FILE",
     )
     parser.add_argument(
         "--dry-run",
@@ -309,9 +311,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    store = VaultStore(root=args.vault_root) if args.vault_root else VaultStore()
     try:
-        report = run_backfill(args.input, store=store, dry_run=args.dry_run)
+        if args.dry_run:
+            report = run_backfill(args.input, dry_run=True)
+        else:
+            env = dict(os.environ)
+            if args.vault_root:
+                env["HC_VAULT_ROOT"] = str(Path(args.vault_root))
+            store = create_production_vault(environ=env)
+            report = run_backfill(args.input, store=store)
+    except ProductionRuntimeError:
+        print("BACKFILL_FAILED: production_vault_activation_failed", file=sys.stderr)
+        return 2
     except (BackfillValidationError, FileNotFoundError, json.JSONDecodeError) as exc:
         print(f"BACKFILL_FAILED: {exc}", file=sys.stderr)
         return 2
