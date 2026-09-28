@@ -14,7 +14,7 @@ def temp_vault_with_app():
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         store = VaultStore(root=tdp)
-        app = create_health_vault_app(store, test_users={
+        app = create_health_vault_app(store, production=False, test_users={
             "patient-1": "correct", "patient-A": "correct", "patient-B": "correct"
         })
         client = TestClient(app)

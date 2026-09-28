@@ -18,7 +18,7 @@ from backend.health_vault.vault_store import VaultStore
 @pytest.fixture
 def auth_app(tmp_path):
     store = VaultStore(root=tmp_path / "vault", encryption_key=b"A" * 32)
-    app = create_health_vault_app(store)
+    app = create_health_vault_app(store, production=False)
     return store, app.state.auth_service, TestClient(app)
 
 

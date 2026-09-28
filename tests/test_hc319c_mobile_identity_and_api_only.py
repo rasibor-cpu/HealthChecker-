@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture()
 def mobile_app(tmp_path):
     store = VaultStore(root=tmp_path / "vault", encryption_key=b"M" * 32)
-    app = create_health_vault_app(store)
+    app = create_health_vault_app(store, production=False)
     auth = app.state.auth_service
     auth.create_user(
         user_id="robert-test", name="Robert Test", email_identifier="robert@test.invalid",

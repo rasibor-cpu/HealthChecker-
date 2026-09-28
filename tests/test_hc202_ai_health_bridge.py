@@ -227,7 +227,7 @@ def test_api_routes_exist(tmp_path: Path):
     from fastapi.testclient import TestClient
 
     store = _store(tmp_path)
-    app = create_health_vault_app(store=store)
+    app = create_health_vault_app(store=store, production=False)
     assert app is not None
     client = TestClient(app)
     prev = client.post("/api/ai-health/import-preview", json=_sample_payload())
@@ -248,7 +248,7 @@ def test_api_redacts_absolute_paths(tmp_path: Path):
     from fastapi.testclient import TestClient
 
     store = _store(tmp_path)
-    app = create_health_vault_app(store=store)
+    app = create_health_vault_app(store=store, production=False)
     client = TestClient(app)
     payload = _sample_payload()
     payload["records"][0]["local_path"] = r"C:\Users\fictional\secret.pdf"

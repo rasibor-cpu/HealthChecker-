@@ -198,7 +198,10 @@ def create_health_vault_app(
         )
     app.mount("/js", StaticFiles(directory=frontend_root / "js"), name="frontend-js")
     app.mount("/css", StaticFiles(directory=frontend_root / "css"), name="frontend-css")
-    production_mode = (store is None) if production is None else bool(production)
+    # Secure default: omitted mode always means production. Development/test
+    # behavior (plaintext fixtures and the known development bootstrap) must be
+    # selected explicitly with production=False, including for injected stores.
+    production_mode = True if production is None else bool(production)
     if store is None:
         if production_mode:
             from backend.health_vault.production_runtime import create_production_vault

@@ -31,6 +31,7 @@ jobs:
             tests/test_hc329_t52_startup_wrapper_regression.py \
             tests/test_hc329_consumer_theme_account_recovery.py \
             tests/test_hc329_clinical_rules_parity.py \
+            tests/test_hc320b_production_security_closure.py \
             tests/test_hc321_b3_android_signed_release.py \
             tests/test_hc325_r6b_android_saf_record_import.py \
             tests/test_hc304b_private_host_foundation.py \

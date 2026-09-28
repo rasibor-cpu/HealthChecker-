@@ -25,7 +25,7 @@ def vault_app():
     with tempfile.TemporaryDirectory() as td:
         store = VaultStore(root=Path(td), encryption_key=b"3" * 32)
         client = TestClient(
-            create_health_vault_app(store, test_users={"patient-A": "correct", "patient-B": "correct"})
+            create_health_vault_app(store, production=False, test_users={"patient-A": "correct", "patient-B": "correct"})
         )
         yield store, client
 
