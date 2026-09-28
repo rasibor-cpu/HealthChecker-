@@ -47,7 +47,15 @@ def test_freshness_path_uses_health_connect_only_and_metric_windows():
                     "measured_at": "2026-09-28T06:00:00Z",
                     "source": "health_connect_companion",
                     "connector_id": "health_connect",
-                }
+                },
+                {
+                    "patient_id": "patient-A",
+                    "metric_type": "glucose_cgm_interstitial",
+                    "value": 169,
+                    "measured_at": "2026-09-26T10:00:00Z",
+                    "source": "health_connect_companion",
+                    "connector_id": "health_connect",
+                },
             ]
 
         def list_measurements(self):
@@ -74,6 +82,9 @@ def test_freshness_path_uses_health_connect_only_and_metric_windows():
     # Four hours is outside the configured 180-minute heart-rate window,
     # even though it is within the legacy seven-day default.
     assert path["by_metric"]["heart_rate"]["currentness"] == "stale"
+    # Glucose subclasses use the configured one-day glucose family window,
+    # not the seven-day default.
+    assert path["by_metric"]["glucose_cgm_interstitial"]["currentness"] == "stale"
     assert path["by_metric"]["systolic_bp"]["vault_latest_at"] is None
 
 
@@ -94,5 +105,6 @@ def test_dashboard_consumes_guard_without_downgrading_warnings():
     assert 'status_label_override = freshness_guard.get("headline_label_override")' in backend
     assert '"status_label_override": status_label_override' in backend
     assert "payload.status_label_override || payload.status.toUpperCase()" in classic
-    assert 'status.status_label_override || label(summary.overall_status)' in mobile
+    assert "overall_status_label=status_label_override" in backend
+    assert "summary.overall_status_label || status.status_label_override" in mobile
     assert 'payload.status === "normal" ? "ok" : "muted"' in classic
