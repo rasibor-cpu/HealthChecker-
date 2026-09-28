@@ -44,7 +44,7 @@ def vault_app():
         store = VaultStore(root=Path(td), encryption_key=b"I" * 32)
         client = TestClient(
             create_health_vault_app(
-                store,
+                store, production=False,
                 test_users={"patient-A": "correct", "patient-B": "correct"},
             )
         )
