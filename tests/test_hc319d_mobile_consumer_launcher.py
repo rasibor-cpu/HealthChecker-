@@ -89,7 +89,7 @@ def test_origin_policy_is_explicit_and_excludes_legacy_and_sensitive_paths():
 
 def test_mobile_logout_revokes_all_owned_devices_and_session(tmp_path):
     store = VaultStore(root=tmp_path / "vault", encryption_key=b"D" * 32)
-    app = create_health_vault_app(store)
+    app = create_health_vault_app(store, production=False)
     auth = app.state.auth_service
     auth.create_user(
         user_id="mobile-owner", name="Mobile Owner", email_identifier="owner@test.invalid",
