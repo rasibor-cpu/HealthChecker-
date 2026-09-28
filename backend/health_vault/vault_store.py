@@ -44,7 +44,10 @@ class VaultStore:
         root: str | Path | None = None,
         *,
         encryption_key: bytes | None = None,
+        allow_plaintext: bool = False,
     ) -> None:
+        if encryption_key is None and not allow_plaintext:
+            raise VaultCryptoKeyError("plaintext_vault_requires_explicit_opt_in")
         self.root = Path(root or Path(__file__).resolve().parents[2] / "vault_storage")
         self.documents_dir = self.root / "documents"
         self.index_path = self.root / "index.json"
