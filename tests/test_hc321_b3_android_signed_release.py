@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -162,6 +163,16 @@ def test_provenance_script_is_non_secret_and_distinguishes_unsigned():
     assert "UNSIGNED" in PROVENANCE_SCRIPT
     assert "secrets_recorded" in PROVENANCE_SCRIPT
     assert "GetEnvironmentVariable" in PROVENANCE_SCRIPT
+    assert "Test-EnvEnabled" in PROVENANCE_SCRIPT
+    assert '@("1", "true", "yes", "on")' in PROVENANCE_SCRIPT
+    # APK evidence must use Android signing-scheme verification; AAB jarsigner
+    # evidence cannot be reused to assert that the installable APK is signed.
+    assert "Invoke-SafeApkVerify" in PROVENANCE_SCRIPT
+    assert "apksigner" in PROVENANCE_SCRIPT
+    assert "aabVerification" in PROVENANCE_SCRIPT
+    assert "apkVerification" in PROVENANCE_SCRIPT
+    assert "device_upgrade_proof_invalid" in PROVENANCE_SCRIPT
+    assert 'if ($DeviceUpgradeProof -eq "PASS"' in PROVENANCE_SCRIPT
     # Must not echo password env values into artifacts.
     assert "$env:HC_ANDROID_KEYSTORE_PASSWORD" not in PROVENANCE_SCRIPT
     assert "HC_ANDROID_KEYSTORE_PASSWORD)" in PROVENANCE_SCRIPT or "HC_ANDROID_KEYSTORE_PASSWORD\"" in PROVENANCE_SCRIPT
@@ -169,6 +180,7 @@ def test_provenance_script_is_non_secret_and_distinguishes_unsigned():
     assert "sha256" in PROVENANCE_SCRIPT.lower()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="operator provenance script uses the governed Windows signing host")
 def test_provenance_script_parser_ok_and_emits_files(tmp_path: Path):
     out = tmp_path / "prov"
     result = _pwsh(
