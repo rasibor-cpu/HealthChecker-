@@ -208,7 +208,9 @@ def create_health_vault_app(
 
             vault = create_production_vault()
         else:
-            vault = VaultStore()
+            # Explicit development mode is the only factory path allowed to
+            # create a plaintext vault.
+            vault = VaultStore(allow_plaintext=True)
     else:
         vault = store
     if production_mode and not vault.encrypted:
