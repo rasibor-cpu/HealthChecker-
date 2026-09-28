@@ -132,6 +132,42 @@ class SyncMutexTest {
     }
 
     @Test
+    fun renewalKeepsLongRunningLeaseExclusive() {
+        val prefs: SharedPreferences =
+            RuntimeEnvironment.getApplication().getSharedPreferences("mutex_renewal", 0)
+        prefs.edit().clear().commit()
+        val clock = longArrayOf(1_000L)
+        val holder = SyncMutex(prefs) { clock[0] }
+        assertTrue(holder.tryAcquire("workmanager").acquired)
+
+        clock[0] += SyncMutex.STALE_MS - 1
+        assertTrue(holder.renew("workmanager"))
+
+        // Total elapsed time now exceeds STALE_MS from initial acquisition,
+        // but the active holder renewed before its bounded network attempt.
+        clock[0] += SyncMutex.STALE_MS - 1
+        val manual = SyncMutex(prefs) { clock[0] }
+        val denied = manual.tryAcquire("manual")
+        assertFalse(denied.acquired)
+        assertEquals("sync_already_running", denied.reason)
+
+        holder.release("workmanager")
+        assertFalse(holder.isHeld())
+    }
+
+    @Test
+    fun renewalRejectsWrongOwnerAndReleasedLease() {
+        val prefs: SharedPreferences =
+            RuntimeEnvironment.getApplication().getSharedPreferences("mutex_renewal_owner", 0)
+        prefs.edit().clear().commit()
+        val mutex = SyncMutex(prefs) { 1_000L }
+        assertTrue(mutex.tryAcquire("workmanager").acquired)
+        assertFalse(mutex.renew("manual"))
+        mutex.release("workmanager")
+        assertFalse(mutex.renew("workmanager"))
+    }
+
+    @Test
     fun simultaneousSeparateInstancesAllowExactlyOneWinner() {
         val prefs: SharedPreferences =
             RuntimeEnvironment.getApplication()
