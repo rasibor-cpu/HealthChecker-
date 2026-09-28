@@ -6,9 +6,12 @@ Application ID: `com.healthchecker.companion`
 
 | Line | versionCode | versionName |
 |------|-------------|-------------|
-| Prior (HC320D) | 320 | 0.320.0 |
-| Current (HC321-B3) | 321 | 0.321.0 |
+| Prior governed baseline (HC320D) | 320 | 0.320.0 |
+| Prior signing baseline (HC321-B3) | 321 | 0.321.0 |
+| Installed S24 UAT candidate (HC334) | 334 | 0.334.0 |
+| Current candidate (HC341) | 341 | 0.341.0 |
 
+The authoritative current Android version is declared in `app/build.gradle.kts`.
 Desktop release metadata (`config/healthchecker.release.json`) is independent and already at `0.321.0`.
 
 ## Debug (local only)

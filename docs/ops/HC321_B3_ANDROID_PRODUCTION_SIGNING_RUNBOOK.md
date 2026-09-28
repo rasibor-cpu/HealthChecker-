@@ -1,7 +1,8 @@
-# HC321-B3 Android Production Release Signing Runbook
+# HealthChecker Android Production Release Signing Runbook
 
-Status: production release ops (P0-04 / HC321-B3)  
-Android release line: `versionCode=321`, `versionName=0.321.0`  
+Status: production release operations (originated at P0-04 / HC321-B3)  
+Current Android candidate: `versionCode=341`, `versionName=0.341.0`  
+Installed S24 UAT baseline: `versionCode=334`, `versionName=0.334.0`  
 Owner role: `RELEASE/SIGNING OWNER — ASSIGN BEFORE EXTERNAL PRODUCTION HANDOFF`
 
 ## Governing rules
@@ -58,10 +59,11 @@ same signing identity (`com.healthchecker.companion`) and that local user data r
 
 ## VersionCode monotonicity
 
-- Prior Android release line: `320` / `0.320.0`
-- Current: `321` / `0.321.0`
-- Next production release must increase `versionCode` monotonically. Never reuse a prior
-  `versionCode` with a different signing identity.
+- Governed historical baseline: `320` / `0.320.0`
+- Installed S24 UAT baseline: `334` / `0.334.0`
+- Current candidate: `341` / `0.341.0`
+- Every production release must increase `versionCode` monotonically above the
+  installed baseline. Never reuse a prior `versionCode` with a different signing identity.
 
 ## Key loss / rotation / recovery
 

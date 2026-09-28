@@ -39,6 +39,9 @@ DESKTOP_VERSION = "0.321.0"
 #   floor established at HC321-B3. Since versionCode only ever increases, this
 #   floor never needs to move forward as later releases (327, 328, ...) land.
 PRIOR_ANDROID_VERSION_CODE = 320
+# HC341: physical UAT evidence confirms vc334 is already installed on the
+# authorized S24. Every new candidate must be a valid in-place upgrade.
+INSTALLED_S24_UAT_VERSION_CODE = 334
 
 ENV_VARS = (
     "HC_ANDROID_KEYSTORE_FILE",
@@ -79,6 +82,7 @@ def test_android_version_advanced_monotonically_beyond_governed_floor():
     assert ANDROID_VERSION_NAME == f"0.{ANDROID_VERSION_CODE}.0"
     # Monotonicity against a fixed, never-moving governed baseline (HC321-B3).
     assert ANDROID_VERSION_CODE > PRIOR_ANDROID_VERSION_CODE
+    assert ANDROID_VERSION_CODE > INSTALLED_S24_UAT_VERSION_CODE
     # Desktop release metadata remains independent of later Android version advances.
     assert RELEASE["version"] == DESKTOP_VERSION
     # README is historical/operator documentation and is not the authoritative
@@ -86,6 +90,8 @@ def test_android_version_advanced_monotonically_beyond_governed_floor():
     # version contract; retain only the historical-line documentation checks.
     assert "321" in README
     assert "320" in README  # prior line documented for monotonicity
+    assert "334" in README  # installed S24 baseline documented
+    assert str(ANDROID_VERSION_CODE) in README
 
 
 def test_signing_is_env_driven_fail_closed_no_debug_fallback():
