@@ -235,6 +235,16 @@ def test_bootstrap_password_cannot_return_after_change_or_registry_damage(tmp_pa
         )
 
 
+def test_omitted_mode_is_production_fail_closed_for_injected_store(tmp_path):
+    plain = VaultStore(root=tmp_path / "ambiguous-plain")
+    with pytest.raises(RuntimeError, match="production_vault_encryption_required"):
+        create_health_vault_app(plain)
+
+    encrypted = VaultStore(root=tmp_path / "ambiguous-encrypted", encryption_key=KEY)
+    with pytest.raises(AuthenticationStateError, match="auth_bootstrap_credential_required"):
+        create_health_vault_app(encrypted)
+
+
 def test_explicit_development_fixture_remains_available(tmp_path):
     store = VaultStore(root=tmp_path / "development")
     app = create_health_vault_app(store, production=False, test_users={"fixture": "fixture-password"})
