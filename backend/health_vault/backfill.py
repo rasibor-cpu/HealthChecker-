@@ -207,6 +207,7 @@ def run_backfill(
     *,
     store: VaultStore | None = None,
     dry_run: bool = False,
+    patient_id: str | None = None,
 ) -> dict[str, Any]:
     """Load, validate, and import all records. Safe to re-run."""
     path = Path(input_path)
@@ -218,7 +219,21 @@ def run_backfill(
     if errors:
         raise BackfillValidationError("; ".join(errors))
 
-    patient_id = str((payload.get("patient") or {}).get("patient_id") or "default-patient")
+    payload_patient_id = str(
+        (payload.get("patient") or {}).get("patient_id") or "default-patient"
+    )
+    if patient_id is None:
+        patient_id = payload_patient_id
+    else:
+        patient_id = str(patient_id).strip()
+        if not patient_id:
+            raise BackfillValidationError("runtime_patient_identity_required")
+        # A live production caller owns identity selection. Never permit an
+        # untrusted import payload to redirect profile or record writes.
+        payload = dict(payload)
+        patient = dict(payload.get("patient") or {})
+        patient["patient_id"] = patient_id
+        payload["patient"] = patient
 
     report: dict[str, Any] = {
         "ok": True,
@@ -318,8 +333,16 @@ def main(argv: list[str] | None = None) -> int:
             env = dict(os.environ)
             if args.vault_root:
                 env["HC_VAULT_ROOT"] = str(Path(args.vault_root))
+            runtime_patient_id = str(env.get("HC_RUNTIME_PATIENT_ID") or "").strip()
+            if not runtime_patient_id:
+                print("BACKFILL_FAILED: runtime_patient_identity_required", file=sys.stderr)
+                return 2
             store = create_production_vault(environ=env)
-            report = run_backfill(args.input, store=store)
+            report = run_backfill(
+                args.input,
+                store=store,
+                patient_id=runtime_patient_id,
+            )
     except ProductionRuntimeError:
         print("BACKFILL_FAILED: production_vault_activation_failed", file=sys.stderr)
         return 2
