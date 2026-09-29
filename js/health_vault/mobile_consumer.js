@@ -118,6 +118,9 @@
   }
 
   function setSecurityGate(active) {
+    if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
+      window.HCScreenshotPolicy.setRoute(active ? "password_recovery" : "dashboard");
+    }
     if (window.HCConsumerNav) HCConsumerNav.setSecurityGate(!!active);
   }
 

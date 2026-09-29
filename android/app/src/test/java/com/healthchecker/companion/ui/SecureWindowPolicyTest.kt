@@ -27,8 +27,19 @@ class SecureWindowPolicyTest {
     }
 
     @Test
+    fun onlySettingsAndCredentialEntryRoutesAreSensitive() {
+        assertTrue(ScreenshotPolicy.isSensitiveRoute("settings"))
+        assertTrue(ScreenshotPolicy.isSensitiveRoute("password_recovery"))
+        assertFalse(ScreenshotPolicy.isSensitiveRoute("dashboard"))
+        assertFalse(ScreenshotPolicy.isSensitiveRoute("login"))
+        assertFalse(ScreenshotPolicy.isSensitiveRoute(null))
+    }
+
+    @Test
     fun passwordRecoveryRouteProbeIsDesignatedSensitive() {
         assertTrue(SecureWindowPolicy.SENSITIVE_SURFACE_JS.contains("mobile_settings"))
+        assertTrue(SecureWindowPolicy.SENSITIVE_SURFACE_JS.contains("mobile_recovery_flow"))
+        assertTrue(SecureWindowPolicy.SENSITIVE_SURFACE_JS.contains("mobile_recovery_enroll"))
         assertTrue(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
         assertFalse(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = false))
     }

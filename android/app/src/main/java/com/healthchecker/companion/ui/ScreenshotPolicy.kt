@@ -26,6 +26,9 @@ object ScreenshotPolicy {
 
     fun isScreenshotBlockingEnabled(): Boolean = HAS_PROTECTED_SCREENS
 
+    fun isSensitiveRoute(route: String?): Boolean =
+        route == "settings" || route == "password_recovery"
+
     /**
      * Ensure a consumer window can be captured by the standard Android
      * screenshot gesture. Clears FLAG_SECURE if a previous caller set it;

@@ -22,9 +22,13 @@ object SecureWindowPolicy {
     const val SENSITIVE_SURFACE_JS =
         "(function(){var login=document.getElementById('mobile_login');" +
             "var pw=document.getElementById('mobile_password_change');" +
+            "var recovery=document.getElementById('mobile_recovery_flow');" +
+            "var enroll=document.getElementById('mobile_recovery_enroll');" +
             "var settings=document.getElementById('mobile_settings');" +
             "var loginVisible=!!(login&&!login.hidden);" +
-            "var pwVisible=!!(pw&&!pw.hidden);" +
+            "var pwVisible=!!(loginVisible&&pw&&!pw.hidden);" +
+            "var recoveryVisible=!!(loginVisible&&recovery&&!recovery.hidden);" +
+            "var enrollVisible=!!(loginVisible&&enroll&&!enroll.hidden);" +
             "var settingsVisible=!!(settings&&!settings.hidden);" +
-            "return !!(settingsVisible);})();"
+            "return !!(settingsVisible||pwVisible||recoveryVisible||enrollVisible);})();"
 }

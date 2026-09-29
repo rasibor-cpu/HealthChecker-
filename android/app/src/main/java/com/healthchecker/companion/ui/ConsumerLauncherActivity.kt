@@ -66,7 +66,10 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         @JavascriptInterface
         fun setRoute(route: String?) {
             runOnUiThread {
-                ScreenshotPolicy.applyConsumerScreenshotPolicy(window, route == "settings")
+                ScreenshotPolicy.applyConsumerScreenshotPolicy(
+                    window,
+                    ScreenshotPolicy.isSensitiveRoute(route),
+                )
             }
         }
     }
