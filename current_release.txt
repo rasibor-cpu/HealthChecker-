@@ -3,7 +3,8 @@ HealthChecker current release record
 Release candidate: Android 0.341.0 (versionCode 341)
 Application ID: com.healthchecker.companion
 Branch: main
-HEAD: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+Evidence capture source SHA: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+Verified closure commit: 1fe7c8d44bfefb9f66305c44a6dc9333f600a966
 
 Software verification status
 - Python focused release regressions: PASS after fixture corrections (security/auth, freshness, screenshot policy, import, Android release contract)

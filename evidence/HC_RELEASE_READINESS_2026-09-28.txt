@@ -2,7 +2,8 @@ HEALTHCHECKER RELEASE READINESS
 Date: 2026-09-28
 Repository: HealthChecker-
 Branch: main
-HEAD: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+Evidence capture source SHA: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+Verified closure commit: 1fe7c8d44bfefb9f66305c44a6dc9333f600a966
 
 RELEASE CANDIDATE
 - Android applicationId: com.healthchecker.companion
