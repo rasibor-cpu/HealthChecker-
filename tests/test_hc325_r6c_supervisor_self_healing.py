@@ -546,6 +546,61 @@ def test_singleton_protection_instance_already_running(tmp_path: Path):
         _kill_tree(first.pid)
 
 
+def test_recycled_pid_is_not_treated_as_healthchecker_supervisor(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    proc = None
+    try:
+        _wait_until(lambda: unrelated.poll() is None, 2)
+        _pid_path(config).write_text(str(unrelated.pid), encoding="ascii")
+        proc, _, control = _start_supervisor(config_path, tmp_path)
+        _wait_state(config, "running")
+        assert unrelated.poll() is None
+        assert len(_starts(control)) == 1
+        assert "event=runtime_stale_pid reason=reused" in (_read_text_retry(_log_path(config)) or "")
+    finally:
+        if proc and proc.poll() is None:
+            _kill_tree(proc.pid)
+        if unrelated.poll() is None:
+            unrelated.terminate()
+            unrelated.wait(timeout=10)
+
+
+def test_dead_pid_is_removed_and_startup_allowed(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    _pid_path(config).write_text("2147483647", encoding="ascii")
+    proc, _, control = _start_supervisor(config_path, tmp_path)
+    try:
+        _wait_state(config, "running")
+        assert len(_starts(control)) == 1
+        assert "event=runtime_stale_pid reason=dead" in (_read_text_retry(_log_path(config)) or "")
+    finally:
+        _kill_tree(proc.pid)
+
+
+def test_unrelated_listener_still_fails_closed(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", port))
+    listener.listen(1)
+    proc = None
+    try:
+        proc, _, _ = _start_supervisor(config_path, tmp_path)
+        proc.wait(timeout=20)
+        combined = (proc.stderr.read() or "") + (proc.stdout.read() or "")
+        assert proc.returncode not in (0, None)
+        assert "port_already_occupied" in combined
+    finally:
+        listener.close()
+        if proc and proc.poll() is None:
+            _kill_tree(proc.pid)
+
+
 def test_no_duplicate_child_during_healthy_and_restart(tmp_path: Path):
     port = _free_loopback_port()
     config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)

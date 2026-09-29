@@ -36,6 +36,29 @@ function Test-HcProcessAlive([int]$ProcessId) {
     return [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
 }
 
+function Test-HcSupervisorIdentity {
+    param(
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$ExpectedScriptPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedConfigPath
+    )
+    if ($ProcessId -le 0) { return $false }
+    try {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
+        if (-not $process) { return $false }
+        $name = ([string]$process.Name).ToLowerInvariant()
+        if ($name -notin @("powershell.exe", "pwsh.exe")) { return $false }
+        $commandLine = ([string]$process.CommandLine).ToLowerInvariant()
+        $scriptPath = ([System.IO.Path]::GetFullPath($ExpectedScriptPath)).ToLowerInvariant()
+        $configPath = ([System.IO.Path]::GetFullPath($ExpectedConfigPath)).ToLowerInvariant()
+        return $commandLine.Contains($scriptPath) -and
+            $commandLine.Contains("-configpath") -and
+            $commandLine.Contains($configPath)
+    } catch {
+        return $false
+    }
+}
+
 function Test-HcLoopbackService {
     param(
         [Parameter(Mandatory = $true)][string]$BindAddress,
@@ -173,8 +196,15 @@ $heartbeatPath = Join-Path $stateDir "healthchecker-consumer-api.heartbeat.json"
 $logPath = Join-Path $logDir "healthchecker-runtime.log"
 
 if (Test-Path -LiteralPath $pidPath) {
-    $oldPid = [int](Get-Content -LiteralPath $pidPath -Raw)
-    if (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) { Stop-WithCode "instance_already_running" }
+    $oldPid = 0
+    $pidText = (Get-Content -LiteralPath $pidPath -Raw -ErrorAction SilentlyContinue).Trim()
+    $validPid = [int]::TryParse($pidText, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$oldPid)
+    $scriptPath = Join-Path $PSScriptRoot "start_healthchecker_production.ps1"
+    if ($validPid -and (Test-HcSupervisorIdentity -ProcessId $oldPid -ExpectedScriptPath $scriptPath -ExpectedConfigPath $ConfigPath)) {
+        Stop-WithCode "instance_already_running"
+    }
+    $staleReason = if (-not $validPid) { "malformed" } elseif (Test-HcProcessAlive -ProcessId $oldPid) { "reused" } else { "dead" }
+    Add-Content -LiteralPath $logPath -Value "event=runtime_stale_pid reason=$staleReason"
     Remove-Item -LiteralPath $pidPath -Force
 }
 if (Get-NetTCPConnection -State Listen -LocalAddress $bindAddress -LocalPort $port -ErrorAction SilentlyContinue) {
