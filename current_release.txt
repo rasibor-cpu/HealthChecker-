@@ -3,8 +3,9 @@ HealthChecker current release record
 Release candidate: Android 0.341.0 (versionCode 341)
 Application ID: com.healthchecker.companion
 Branch: main
-Evidence capture source SHA: 8b3714e3311e880d765d6874f1a8d22aa10d0767
-Verified closure commit: 1fe7c8d44bfefb9f66305c44a6dc9333f600a966
+Evidence capture source SHA: 8414a232399bc0291ed9dac9e59e53102a1ac2ec
+Verified pushed HEAD: bb7cffedc458aad0a6876fcc8d89948de7df66e9
+Pushed commits: 1fe7c8d, 8414a23, 2f7c4c7, bb7cffe
 
 Software verification status
 - Python focused release regressions: PASS after fixture corrections (security/auth, freshness, screenshot policy, import, Android release contract)
@@ -14,6 +15,7 @@ Software verification status
 - Android production-signing gate: PASS as a fail-closed control; intentionally rejects incomplete signing environment.
 - Android SDK: BLOCKED. No local SDK/tooling was present; user-scoped Android Studio installation via winget produced no installer or SDK.
 - Physical Samsung S24 Ultra certification: NOT CLAIMED
+- Release authorization: NO
 
 External gates
 - Governed production signing: BLOCKED_EXTERNAL_KEY_CUSTODY until the approved keystore credentials and expected certificate fingerprint are injected on the protected build host.

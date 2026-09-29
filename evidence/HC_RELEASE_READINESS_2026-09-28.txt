@@ -2,8 +2,9 @@ HEALTHCHECKER RELEASE READINESS
 Date: 2026-09-28
 Repository: HealthChecker-
 Branch: main
-Evidence capture source SHA: 8b3714e3311e880d765d6874f1a8d22aa10d0767
-Verified closure commit: 1fe7c8d44bfefb9f66305c44a6dc9333f600a966
+Evidence capture source SHA: 8414a232399bc0291ed9dac9e59e53102a1ac2ec
+Verified pushed HEAD: bb7cffedc458aad0a6876fcc8d89948de7df66e9
+Pushed commits: 1fe7c8d, 8414a23, 2f7c4c7, bb7cffe
 
 RELEASE CANDIDATE
 - Android applicationId: com.healthchecker.companion
@@ -39,12 +40,12 @@ FAILURE MATRIX
 - tests/test_hc321_health_snapshot.py::test_api_health_snapshot_endpoint: STALE TEST ASSUMPTION. The test passed a plaintext store while omitting production=False; HC-343 correctly rejects that production boundary. The test now explicitly selects development mode and passes.
 - tests/test_hc321_uat1_consumer_browser_android_fixes.py::test_dashboard_summary_exposes_display_name_and_hc_sync: STALE FIXTURE ASSUMPTION. The fixture supplied a legacy clinical trend cache without its matching clinical revision, causing intentional recomputation to replace it. The fixture now marks the cache revision explicitly and the approved combined-plane merge passes.
 
-The baseline's only production-independent failure was the local isolated dependency environment. The remaining node passes when the locked dependency is exposed through PYTHONPATH, matching CI system-site availability. A final full rerun was started with that configuration and interrupted at 28% after only passing tests because the local runner remained in a long-running integration block. It is therefore not declared green.
+The baseline's only production-independent failure was the local isolated dependency environment. The remaining node passes when the locked dependency is exposed through PYTHONPATH, matching CI system-site availability. The later authoritative full suite completed green after the test-infrastructure PID-ownership repair below.
 
 FOCUSED POST-FIX RESULT
 - Previously failing nodes: 8 total; 7 pass after corrections; the remaining node passes in isolation with CI-equivalent dependency visibility.
 - Combined original-failure regression: 9 passed in 5.62s, exit code 0. This covers all eight original failure nodes; HC-314A contributes four nodes.
-- Final full-suite rerun: interrupted at 28%; no failure was emitted before interruption.
+- Final full-suite rerun: green; see the authoritative result below.
 - Focused release/security set: PASS before and after corrections.
 
 AUTHORITATIVE FULL PYTHON SUITE
@@ -74,6 +75,14 @@ ANDROID ENGINEERING GATE
 - Unsigned engineering gate: invoked with all HC_ANDROID_* variables removed; final Gradle completion output was unavailable from the local terminal wrapper. No signed artifact is claimed.
 - Android SDK investigation: ANDROID_HOME and ANDROID_SDK_ROOT were unset; C:\Users\wadys\AppData\Local\Android\Sdk, C:\Android\Sdk, and C:\ProgramData\Android\Sdk do not exist; android/local.properties is absent. Classification: ANDROID SDK = LOCAL ENVIRONMENT BLOCKER.
 - SDK installation attempt: winget located Google.AndroidStudio 2026.1.4.7, but a silent user-scoped install produced no installer process or SDK directory. Minimal next action is install Android Studio/command-line SDK tools and accept SDK licenses, then install platform android-35 and a compatible build-tools revision.
+
+RELEASE MATRIX
+- IMPLEMENTED: authentication boundary, encrypted vault defaults, dashboard freshness, consumer screenshot policy, Health Records import/persistence, Android signing controls, S24 handoff procedure.
+- AUTOMATED-TEST VERIFIED: combined original-red regression; security/release-critical suite (128 passed); HC309R3R1 and HC309R4D slow-region suites; full Python suite (1,529 passed, 3 skipped, 1 warning, 5 subtests, exit 0).
+- CI-VERIFIED: repository workflow definition present; no new remote CI result was queried in this closure.
+- GOVERNED-SIGNING VERIFIED: NO, blocked by external governed keystore credentials and expected signer fingerprint.
+- PHYSICAL-S24 VERIFIED: NO, pending current-candidate device execution.
+- RELEASE AUTHORIZED: NO.
 
 SIGNING STATUS
 BLOCKED_EXTERNAL_KEY_CUSTODY
