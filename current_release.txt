@@ -1,0 +1,21 @@
+HealthChecker current release record
+
+Release candidate: Android 0.341.0 (versionCode 341)
+Application ID: com.healthchecker.companion
+Branch: main
+HEAD: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+
+Software verification status
+- Python focused release regressions: PASS after fixture corrections (security/auth, freshness, screenshot policy, import, Android release contract)
+- Python full-suite baseline: 1,521 passed, 8 failed, 3 skipped, 1 warning, 5 subtests passed. Seven failures were corrected and focused-verified; the final full rerun was interrupted at 28% after only passing tests, so the suite is NOT declared green.
+- Combined original-failure regression: 9 passed, exit code 0 (the eight original failure nodes include four HC-314A tests).
+- Android release configuration: PASS (env-injected production signing, no debug fallback)
+- Android production-signing gate: PASS as a fail-closed control; intentionally rejects incomplete signing environment.
+- Android SDK: MISSING from conventional local locations; Android unit/build execution is blocked by the local environment.
+- Physical Samsung S24 Ultra certification: NOT CLAIMED
+
+External gates
+- Governed production signing: BLOCKED_EXTERNAL_KEY_CUSTODY until the approved keystore credentials and expected certificate fingerprint are injected on the protected build host.
+- S24 Ultra install/upgrade and device UAT: PENDING physical device execution.
+
+See evidence/HC_RELEASE_READINESS_2026-09-28.txt for the authoritative handoff and exact remaining steps.

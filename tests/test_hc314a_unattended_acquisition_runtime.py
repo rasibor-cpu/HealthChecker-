@@ -9,6 +9,7 @@ from google.auth.exceptions import GoogleAuthError
 from backend.health_vault.acquisition.acquisition_state import AcquisitionStateStore
 from backend.health_vault.acquisition.gmail_config import get_default_config
 from backend.health_vault.acquisition.watcher import AcquisitionWatcher
+from backend.health_vault.vault_store import VaultStore
 
 
 @pytest.fixture
@@ -20,17 +21,18 @@ def temp_workspace(tmp_path):
         acquisition_state_path=state_path,
         gmail_token_path=tmp_path / "non_existent_token.json",
     )
-    return incoming_dir, state_path, cfg
+    vault = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
+    return incoming_dir, state_path, cfg, vault
 
 
 # ---------------------------------------------------------------------------
 # Scenarios A, B, C, G: Scheduler config, intervals, no busy loop, persistence
 # ---------------------------------------------------------------------------
 def test_scheduler_configuration_and_persistence(temp_workspace):
-    _, state_path, cfg = temp_workspace
+    _, state_path, cfg, vault = temp_workspace
     store = AcquisitionStateStore(state_path)
     
-    watcher1 = AcquisitionWatcher(config=cfg, store=store, interval_seconds=300)
+    watcher1 = AcquisitionWatcher(config=cfg, store=store, vault_store=vault, interval_seconds=300)
     # Force a run (simulating a scan)
     # We use a mocked run to avoid real network
     watcher1._scheduler._state["next_due_at"] = None  # Force due
@@ -48,7 +50,7 @@ def test_scheduler_configuration_and_persistence(temp_workspace):
     assert state2["current_interval_seconds"] == 300
     
     # Watcher2 should see it's not due (no busy loop)
-    watcher2 = AcquisitionWatcher(config=cfg, store=store2, interval_seconds=300)
+    watcher2 = AcquisitionWatcher(config=cfg, store=store2, vault_store=vault, interval_seconds=300)
     res2 = watcher2._scheduler.run_due(dummy_scan)
     assert res2["ran"] is False
     assert res2["reason"] == "not_due"
@@ -58,9 +60,9 @@ def test_scheduler_configuration_and_persistence(temp_workspace):
 # Scenario D, E, F: Transients, missing auth, revoked auth
 # ---------------------------------------------------------------------------
 def test_transient_failure_backoff(temp_workspace):
-    _, state_path, cfg = temp_workspace
+    _, state_path, cfg, vault = temp_workspace
     store = AcquisitionStateStore(state_path)
-    watcher = AcquisitionWatcher(config=cfg, store=store, interval_seconds=300)
+    watcher = AcquisitionWatcher(config=cfg, store=store, vault_store=vault, interval_seconds=300)
     
     def failing_scan():
         raise GoogleAuthError("Missing or revoked authorization")
@@ -84,7 +86,7 @@ def test_transient_failure_backoff(temp_workspace):
 # Scenario H, N: Concurrent execution and Restart recovery
 # ---------------------------------------------------------------------------
 def test_concurrent_execution_exclusion(temp_workspace):
-    _, state_path, cfg = temp_workspace
+    _, state_path, cfg, vault = temp_workspace
     store = AcquisitionStateStore(state_path)
     
     # Force state to "running" to simulate concurrent lease
@@ -94,7 +96,7 @@ def test_concurrent_execution_exclusion(temp_workspace):
         "lease_expires_at": "2099-01-01T00:00:00Z",  # Future lease
     })
     
-    watcher = AcquisitionWatcher(config=cfg, store=store)
+    watcher = AcquisitionWatcher(config=cfg, store=store, vault_store=vault)
     res = watcher._scheduler.run_due(lambda: {"ok": True})
     assert res["ran"] is False
     assert res["reason"] == "already_running"
@@ -105,7 +107,7 @@ def test_concurrent_execution_exclusion(temp_workspace):
         "running": True,
         "lease_expires_at": "2000-01-01T00:00:00Z",  # Expired
     })
-    watcher2 = AcquisitionWatcher(config=cfg, store=store)
+    watcher2 = AcquisitionWatcher(config=cfg, store=store, vault_store=vault)
     res2 = watcher2._scheduler.run_due(lambda: {"ok": True}, force=True)
     assert res2["ran"] is True  # Recovered and ran
 
@@ -141,9 +143,9 @@ def test_install_task_script_safety():
 # tested in test_hc313a, but we verify the watcher routes correctly)
 # ---------------------------------------------------------------------------
 def test_watcher_run_if_due_returns_telemetry_without_phi(temp_workspace):
-    _, state_path, cfg = temp_workspace
+    _, state_path, cfg, vault = temp_workspace
     store = AcquisitionStateStore(state_path)
-    watcher = AcquisitionWatcher(config=cfg, store=store, force=True)
+    watcher = AcquisitionWatcher(config=cfg, store=store, vault_store=vault, force=True)
     
     # Since we don't have auth configured in temp space, it will fail closed
     res = watcher.run_if_due()

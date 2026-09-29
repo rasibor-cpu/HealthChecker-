@@ -383,7 +383,7 @@ def test_api_health_snapshot_endpoint():
 
     with tempfile.TemporaryDirectory() as td:
         store = VaultStore(root=Path(td), allow_plaintext=True)
-        app = create_health_vault_app(store=store)
+        app = create_health_vault_app(store=store, production=False)
         client = TestClient(app)
         res = client.get("/api/health-vault/health-snapshot")
         assert res.status_code == 200

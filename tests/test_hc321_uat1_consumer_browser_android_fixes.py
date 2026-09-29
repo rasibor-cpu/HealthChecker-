@@ -99,6 +99,12 @@ def test_dashboard_summary_exposes_display_name_and_hc_sync(tmp_path: Path):
             },
         }
     }
+    # Preserve this fixture's legacy clinical cache while exercising the
+    # dashboard plane merge; production recomputation remains unchanged.
+    data["health_intelligence"] = {
+        "clinical_revision": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "observations": [],
+    }
     data["observations"].extend(
         {
             "patient_id": "00000",

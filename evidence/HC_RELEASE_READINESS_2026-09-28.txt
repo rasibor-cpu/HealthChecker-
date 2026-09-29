@@ -1,0 +1,103 @@
+HEALTHCHECKER RELEASE READINESS
+Date: 2026-09-28
+Repository: HealthChecker-
+Branch: main
+HEAD: 8b3714e3311e880d765d6874f1a8d22aa10d0767
+
+RELEASE CANDIDATE
+- Android applicationId: com.healthchecker.companion
+- Android versionName: 0.341.0
+- Android versionCode: 341
+- Desktop release metadata: 0.321.0 (independent desktop lineage)
+
+REPOSITORY BASELINE
+- Worktree: clean at preflight; no tracked signing material found.
+- Remote: origin https://github.com/rasibor-cpu/HealthChecker-.git
+- Latest closure commit: HC-350 pin Android signer continuity before S24 upgrade.
+
+VERIFIED SOFTWARE SURFACES
+- Production API authentication is enforced by middleware for /api/ routes outside the explicit public authentication and companion-ingestion allowlist.
+- Authenticated patient scope is derived from the bearer session, not a caller-supplied patient_id.
+- Vault production construction requires encryption; plaintext is explicit development/test behavior.
+- Dashboard freshness guard prevents stale monitoring data from being presented as a normal current headline.
+- Consumer Android windows use the screenshot-capable policy; sensitive-window blocking is not global.
+- Android release signing is env-injected and rejects incomplete credentials, repo-local keystores, debug keystores, and required-signing builds without governed material.
+- Import, persistence, auth, screenshot, freshness, and Android release-contract regression tests are present in the repository and the focused release set passed during this closure pass.
+
+PYTHON ENVIRONMENT AND FULL-SUITE RESULT
+- Canonical test interpreter: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+- Evidence: .github/workflows/healthchecker-hc329-validation.yml uses CPython 3.12; requirements/production.txt is the CPython 3.12 lockfile.
+- Capture: evidence/HC_FULL_PYTEST_2026-09-28.txt
+- Exit code: 1
+- Totals: 1,521 passed; 8 failed; 3 skipped; 1 warning; 5 subtests passed.
+
+FAILURE MATRIX
+- tests/test_hc306h_r1_runtime_assets.py::test_packaged_import_with_bytecode_disabled_creates_no_cache: ENVIRONMENT/DEPENDENCY. The isolated subprocess disables user-site packages; cryptography 45.0.7 is available only in the local user site, while the staged interpreter system site lacks it. CI installs the locked dependency before running. No product defect established.
+- tests/test_hc314a_unattended_acquisition_runtime.py::{test_scheduler_configuration_and_persistence,test_transient_failure_backoff,test_concurrent_execution_exclusion,test_watcher_run_if_due_returns_telemetry_without_phi}: STALE TEST ASSUMPTION. Tests instantiated AcquisitionWatcher without a vault, but HC-343 correctly rejects implicit plaintext VaultStore construction. Fixtures now inject explicit development-only VaultStore and all four pass.
+- tests/test_hc321_b3_android_signed_release.py::test_provenance_script_parser_ok_and_emits_files: STALE TEST ENVIRONMENT. The inherited shell had HC_ANDROID_REQUIRE_PRODUCTION_SIGNING=true without the expected certificate fingerprint. The provenance script correctly failed closed. The test now isolates that non-secret gate and passes.
+- tests/test_hc321_health_snapshot.py::test_api_health_snapshot_endpoint: STALE TEST ASSUMPTION. The test passed a plaintext store while omitting production=False; HC-343 correctly rejects that production boundary. The test now explicitly selects development mode and passes.
+- tests/test_hc321_uat1_consumer_browser_android_fixes.py::test_dashboard_summary_exposes_display_name_and_hc_sync: STALE FIXTURE ASSUMPTION. The fixture supplied a legacy clinical trend cache without its matching clinical revision, causing intentional recomputation to replace it. The fixture now marks the cache revision explicitly and the approved combined-plane merge passes.
+
+The baseline's only production-independent failure was the local isolated dependency environment. The remaining node passes when the locked dependency is exposed through PYTHONPATH, matching CI system-site availability. A final full rerun was started with that configuration and interrupted at 28% after only passing tests because the local runner remained in a long-running integration block. It is therefore not declared green.
+
+FOCUSED POST-FIX RESULT
+- Previously failing nodes: 8 total; 7 pass after corrections; the remaining node passes in isolation with CI-equivalent dependency visibility.
+- Combined original-failure regression: 9 passed in 5.62s, exit code 0. This covers all eight original failure nodes; HC-314A contributes four nodes.
+- Final full-suite rerun: interrupted at 28%; no failure was emitted before interruption.
+- Focused release/security set: PASS before and after corrections.
+
+SLOW FULL-SUITE REGION
+- Collection contains 1,532 tests; the approximate 28% boundary falls in test_hc309r3r1_protected_runtime_policy.py and test_hc309r4d_synthetic_collector.py.
+- Independent timing run was attempted, but the local terminal wrapper returned during idle output before producing a durable completion file. No hang, failure, or green result is claimed.
+
+ANDROID ENGINEERING GATE
+- Production-signing configuration check: PASS fail-closed; an incomplete two-variable environment was rejected with hc_android_signing_env_incomplete.
+- Governed signed release: NOT RUN; credentials and expected certificate fingerprint are unavailable.
+- Unsigned engineering gate: invoked with all HC_ANDROID_* variables removed; final Gradle completion output was unavailable from the local terminal wrapper. No signed artifact is claimed.
+- Android SDK investigation: ANDROID_HOME and ANDROID_SDK_ROOT were unset; C:\Users\wadys\AppData\Local\Android\Sdk, C:\Android\Sdk, and C:\ProgramData\Android\Sdk do not exist; android/local.properties is absent. Classification: ANDROID SDK = LOCAL ENVIRONMENT BLOCKER.
+
+SIGNING STATUS
+BLOCKED_EXTERNAL_KEY_CUSTODY
+
+The production keystore and credentials are intentionally outside Git and were not exposed or guessed. A release build without those values is engineering-only and must not be treated as a production release. Do not create a replacement identity.
+
+PHYSICAL DEVICE STATUS
+NOT CERTIFIED. No physical Samsung S24 Ultra result is claimed by this record.
+
+OWNER ACTION REQUIRED — GOVERNED KEYSTORE UNLOCK
+
+Only the protected signing operator should inject the approved values on the signing host:
+- HC_ANDROID_KEYSTORE_FILE
+- HC_ANDROID_KEYSTORE_PASSWORD
+- HC_ANDROID_KEY_ALIAS
+- HC_ANDROID_KEY_PASSWORD
+- HC_ANDROID_EXPECTED_CERT_SHA256
+
+Do not place passwords or private key material in Git, reports, or terminal transcripts.
+
+S24 ULTRA CERTIFICATION PROCEDURE
+1. On the protected signing host, set HC_ANDROID_REQUIRE_PRODUCTION_SIGNING=1 and inject the approved external signing values.
+2. Run from android/: .\gradlew.bat :app:bundleRelease :app:assembleRelease
+3. Run the provenance script with the device-upgrade proof still unset or BLOCKED until the device result exists.
+4. Verify the AAB with jarsigner and the APK with apksigner; record only verification status, certificate SHA-256, and artifact SHA-256.
+5. Install the release APK over the existing com.healthchecker.companion installation without uninstalling or clearing data.
+6. Confirm versionCode 341 is an in-place upgrade from the installed 334 baseline and confirm existing app data remains available.
+7. Exercise login, password lifecycle, dashboard freshness label, records import, navigation, background/foreground, restart, and logout/login.
+8. Capture non-sensitive evidence for each result. Consumer screens may be screenshotted; restrict capture only for genuinely sensitive content.
+9. Mark PASS only when signer fingerprint continuity, install/upgrade continuity, data continuity, and all functional checks pass.
+
+EXPECTED PASS EVIDENCE
+- Production signing status: AVAILABLE_VERIFIED_SIGNER_MATCH
+- AAB jarsigner verification: PASS
+- APK apksigner verification: PASS
+- Signer fingerprint: matches HC_ANDROID_EXPECTED_CERT_SHA256
+- Device upgrade proof: PASS
+- Package: com.healthchecker.companion
+- Installed versionCode: 341
+- Existing user data: retained
+- Functional and regression checks: PASS
+
+KNOWN LIMITATIONS
+- Governed signing cannot be verified in this checkout without the owner-controlled credential material.
+- Physical Samsung S24 Ultra certification cannot be performed by repository automation.
+- This record does not claim live production deployment or physical-device certification.

@@ -60,6 +60,9 @@ SECRET_PATTERNS = (
 
 
 def _pwsh(*args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    isolated_env = os.environ.copy() if env is None else dict(env)
+    isolated_env["HC_ANDROID_REQUIRE_PRODUCTION_SIGNING"] = "false"
+    isolated_env.pop("HC_ANDROID_EXPECTED_CERT_SHA256", None)
     return subprocess.run(
         [
             "powershell.exe",
@@ -72,7 +75,7 @@ def _pwsh(*args: str, check: bool = True, env: dict | None = None) -> subprocess
         capture_output=True,
         text=True,
         check=check,
-        env=env,
+        env=isolated_env,
     )
 
 
