@@ -1,0 +1,8 @@
+COMMAND=python -m pytest -q tests/test_hc309r4d_synthetic_collector.py
+START=2026-09-29T04:56:04Z
+FINISH=2026-09-29T05:01:33Z
+DURATION_SECONDS=328.83
+EXIT_CODE=0
+..........................................................ss..           [100%]
+60 passed, 2 skipped in 328.21s (0:05:28)
+
