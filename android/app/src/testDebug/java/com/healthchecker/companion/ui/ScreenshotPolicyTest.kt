@@ -19,9 +19,9 @@ import org.robolectric.annotation.Config
 class ScreenshotPolicyTest {
 
     @Test
-    fun screenshotBlockingIsNotEnabledGlobally() {
-        assertFalse(ScreenshotPolicy.isScreenshotBlockingEnabled())
-        assertFalse(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
+    fun screenshotBlockingIsRouteSpecificNotGlobal() {
+        assertTrue(ScreenshotPolicy.isScreenshotBlockingEnabled())
+        assertTrue(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
     }
 
     @Test
@@ -32,10 +32,28 @@ class ScreenshotPolicyTest {
         assertTrue(ScreenshotPolicy.isFlagSecureSet(activity.window))
         ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window)
         assertFalse(ScreenshotPolicy.isFlagSecureSet(activity.window))
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window, sensitiveScreenVisible = true)
+        assertTrue(ScreenshotPolicy.isFlagSecureSet(activity.window))
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window, sensitiveScreenVisible = false)
+        assertFalse(ScreenshotPolicy.isFlagSecureSet(activity.window))
         assertEquals(
             0,
             activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE
         )
+    }
+
+    @Test
+    fun ordinaryToSensitiveBackToOrdinaryRestoresRoutePolicy() {
+        val activity = Robolectric.buildActivity(ToolbarHarnessActivity::class.java).setup().get()
+
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window, sensitiveScreenVisible = false)
+        assertFalse(ScreenshotPolicy.isFlagSecureSet(activity.window))
+
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window, sensitiveScreenVisible = true)
+        assertTrue(ScreenshotPolicy.isFlagSecureSet(activity.window))
+
+        ScreenshotPolicy.applyConsumerScreenshotPolicy(activity.window, sensitiveScreenVisible = false)
+        assertFalse(ScreenshotPolicy.isFlagSecureSet(activity.window))
     }
 
     @Test

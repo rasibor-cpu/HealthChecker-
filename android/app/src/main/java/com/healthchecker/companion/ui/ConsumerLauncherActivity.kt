@@ -16,6 +16,7 @@ import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -60,6 +61,15 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private val grantedSafUris = mutableListOf<Uri>()
     private var pendingImportUri: Uri? = null
 
+    private inner class ScreenshotRouteBridge {
+        @JavascriptInterface
+        fun setRoute(route: String?) {
+            runOnUiThread {
+                ScreenshotPolicy.applyConsumerScreenshotPolicy(window, route == "settings")
+            }
+        }
+    }
+
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -73,8 +83,6 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // HC322A: never set FLAG_SECURE. The consumer WebView is one Activity;
-        // a login-time secure flag would persist onto Dashboard/Snapshot/etc.
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
         setContentView(R.layout.activity_consumer_launcher)
         prefs = SecurePrefs(this)
@@ -107,7 +115,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                     if (!ConsumerInAppBackPolicy.didHandleInApp(raw)) {
                         finish()
                     } else {
-                        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+                        applyCurrentRouteScreenshotPolicy()
                     }
                 }
             }
@@ -128,7 +136,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+        applyCurrentRouteScreenshotPolicy()
         if (!::webView.isInitialized) return
         if (connectionPanel.visibility == View.VISIBLE) {
             loadConsumer()
@@ -178,6 +186,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             ),
             "HCNativeImport",
         )
+        webView.addJavascriptInterface(ScreenshotRouteBridge(), "HCScreenshotPolicy")
         webView.setDownloadListener { _, _, _, _, _ ->
             Toast.makeText(this, R.string.consumer_download_blocked, Toast.LENGTH_LONG).show()
             SafeLog.w("consumer_download_blocked")
@@ -221,7 +230,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                     return
                 }
                 if (originPolicy?.isAllowed(url) == true) showWebView()
-                ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+                applyCurrentRouteScreenshotPolicy()
             }
 
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
@@ -323,6 +332,20 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         webView.visibility = View.GONE
         connectionPanel.visibility = View.VISIBLE
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+    }
+
+    private fun applyCurrentRouteScreenshotPolicy() {
+        if (!::webView.isInitialized) {
+            ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+            return
+        }
+        webView.evaluateJavascript(SecureWindowPolicy.SENSITIVE_SURFACE_JS) { raw ->
+            if (isDestroyed || isFinishing) return@evaluateJavascript
+            ScreenshotPolicy.applyConsumerScreenshotPolicy(
+                window,
+                raw == "true",
+            )
+        }
     }
 
     private fun takeSafReadGrant(uri: Uri) {

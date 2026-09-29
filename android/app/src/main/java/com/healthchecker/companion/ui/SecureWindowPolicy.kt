@@ -1,34 +1,30 @@
 package com.healthchecker.companion.ui
 
 /**
- * HC322A: ordinary consumer screens allow screenshots/recording.
- * FLAG_SECURE is not applied by the consumer launcher. A single WebView
- * Activity would otherwise keep a login-time secure flag on Dashboard,
- * Health Snapshot, Trends, Observations, Timeline, and Reports.
- *
- * Sensitive-surface names remain documented for tests; they do not enable
- * screenshot blocking.
+ * HC322A / HC351: ordinary consumer screens allow screenshots/recording;
+ * Password & recovery is the designated sensitive WebView surface.
  */
 object SecureWindowPolicy {
     /**
      * @param loginSurfaceVisible unused; login is not automatically secured
-     * @param passwordChangeVisible unused; password change is not automatically secured
-     * @param credentialOrSecretVisible unused; secrets stay in EncryptedSharedPreferences
+    * @param passwordChangeVisible Password & recovery is visible.
+    * @param credentialOrSecretVisible Reserved for independently sensitive surfaces.
      */
-    @Suppress("UNUSED_PARAMETER")
     fun shouldSecureWindow(
         loginSurfaceVisible: Boolean = false,
         passwordChangeVisible: Boolean = false,
         credentialOrSecretVisible: Boolean = false,
     ): Boolean {
-        return false
+        return passwordChangeVisible || credentialOrSecretVisible
     }
 
-    /** Historical DOM probe IDs (not used to set FLAG_SECURE). */
+    /** Route-aware DOM probe used to restore policy after lifecycle transitions. */
     const val SENSITIVE_SURFACE_JS =
         "(function(){var login=document.getElementById('mobile_login');" +
             "var pw=document.getElementById('mobile_password_change');" +
+            "var settings=document.getElementById('mobile_settings');" +
             "var loginVisible=!!(login&&!login.hidden);" +
             "var pwVisible=!!(pw&&!pw.hidden);" +
-            "return !!(loginVisible||pwVisible);})();"
+            "var settingsVisible=!!(settings&&!settings.hidden);" +
+            "return !!(settingsVisible);})();"
 }

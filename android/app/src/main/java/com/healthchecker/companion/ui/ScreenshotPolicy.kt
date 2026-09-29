@@ -9,33 +9,35 @@ import android.view.WindowManager
  * Ordinary consumer-facing screens must remain screenshot-capable. This helper
  * never sets [WindowManager.LayoutParams.FLAG_SECURE].
  *
- * Protected screens (none on this branch):
- * - Screen: n/a
- * - Mechanism: n/a
- * - Security justification: n/a
+ * Protected screen:
+ * - Screen: consumer Settings / Password & recovery
+ * - Mechanism: FLAG_SECURE while that route is active
+ * - Security justification: password and recovery answers are credentials
  *
  * Pairing tokens and host credentials remain in EncryptedSharedPreferences.
  * Screenshot policy is not used to protect those secrets.
  *
- * Login / password-change fields are not automatically screenshot-blocked.
- * The consumer WebView is a single Activity; FLAG_SECURE must not persist
- * onto Welcome/Dashboard, Health Snapshot, or other authenticated surfaces.
+ * The consumer WebView is a single Activity, so every route transition and
+ * lifecycle resume must explicitly apply the current route policy.
  */
 object ScreenshotPolicy {
 
-    /** No Activity currently requires screenshot blocking. */
-    const val HAS_PROTECTED_SCREENS: Boolean = false
+    const val HAS_PROTECTED_SCREENS: Boolean = true
 
-    fun isScreenshotBlockingEnabled(): Boolean = false
+    fun isScreenshotBlockingEnabled(): Boolean = HAS_PROTECTED_SCREENS
 
     /**
      * Ensure a consumer window can be captured by the standard Android
      * screenshot gesture. Clears FLAG_SECURE if a previous caller set it;
      * does not set it.
      */
-    fun applyConsumerScreenshotPolicy(window: Window?) {
+    fun applyConsumerScreenshotPolicy(window: Window?, sensitiveScreenVisible: Boolean = false) {
         if (window == null) return
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = sensitiveScreenVisible)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     fun isFlagSecureSet(window: Window?): Boolean {

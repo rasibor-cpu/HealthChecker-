@@ -18,12 +18,19 @@ class SecureWindowPolicyTest {
     }
 
     @Test
-    fun loginAndPasswordSurfacesDoNotRequestFlagSecure() {
+    fun ordinaryScreensAreNotSecureAndPasswordRecoveryIsSecure() {
         assertFalse(SecureWindowPolicy.shouldSecureWindow(loginSurfaceVisible = true))
-        assertFalse(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
-        assertFalse(SecureWindowPolicy.shouldSecureWindow(credentialOrSecretVisible = true))
-        assertFalse(ScreenshotPolicy.isScreenshotBlockingEnabled())
-        assertFalse(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
+        assertTrue(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
+        assertTrue(SecureWindowPolicy.shouldSecureWindow(credentialOrSecretVisible = true))
+        assertTrue(ScreenshotPolicy.isScreenshotBlockingEnabled())
+        assertTrue(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
+    }
+
+    @Test
+    fun passwordRecoveryRouteProbeIsDesignatedSensitive() {
+        assertTrue(SecureWindowPolicy.SENSITIVE_SURFACE_JS.contains("mobile_settings"))
+        assertTrue(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = true))
+        assertFalse(SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = false))
     }
 
     @Test

@@ -632,6 +632,9 @@
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
+    if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
+      window.HCScreenshotPolicy.setRoute(name);
+    }
     if (name !== "dashboard" && window.HCHealthSnapshot && typeof HCHealthSnapshot.closeDrillDown === "function") {
       try { HCHealthSnapshot.closeDrillDown(); } catch (_) {}
     }
