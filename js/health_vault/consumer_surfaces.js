@@ -117,7 +117,39 @@
       return "Combined clinical + Health Connect observational";
     }
     if (provenance === "clinical") return "Clinical / lab evidence";
-    return String(provenance);
+    return friendlySourceLabel(provenance);
+  }
+
+  const FRIENDLY_SOURCE_LABELS = {
+    health_connect_companion: "Health Connect (companion app)",
+    health_connect_observational: "Health Connect observational",
+    health_connect_sync: "Health Connect (sync)",
+    hc_v6: "HealthChecker manual entry",
+    clinical_lab: "Clinical / lab report",
+    clinical: "Clinical / lab evidence",
+    manual_upload: "Manually uploaded document",
+    manual: "Manually entered",
+    wearable_screenshot: "Wearable app screenshot",
+    home_monitor: "Home monitoring device",
+    gmail: "Imported from email",
+    healthchecker_plus: "HealthChecker+",
+    user_reported: "Self-reported",
+    historical_summary: "Historical summary",
+  };
+
+  /**
+   * HC-352: consumer-friendly mapping for raw provenance/source identifiers.
+   * Preserves the underlying value (used elsewhere for auditability) — only
+   * changes the displayed text. Unknown identifiers fall back to a cleaned-up
+   * label rather than inventing meaning.
+   */
+  function friendlySourceLabel(raw) {
+    const key = String(raw || "").trim().toLowerCase();
+    if (!key) return "";
+    if (FRIENDLY_SOURCE_LABELS[key]) return FRIENDLY_SOURCE_LABELS[key];
+    return String(raw)
+      .replace(/_/g, " ")
+      .replace(/\b[a-z]/g, ch => ch.toUpperCase());
   }
 
   let metricFilter = null;
@@ -238,12 +270,13 @@
 
   function sourceLabel(event) {
     const doc = event && event.document && typeof event.document === "object" ? event.document : {};
-    return String(
+    const raw = String(
       (event && (event.provenance || event.source)) ||
       doc.provenance ||
       doc.source_system ||
       ""
     ).trim();
+    return friendlySourceLabel(raw);
   }
 
   function provenanceBucket(event) {

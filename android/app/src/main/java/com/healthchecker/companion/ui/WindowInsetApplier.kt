@@ -48,4 +48,27 @@ object WindowInsetApplier {
         }
         ViewCompat.requestApplyInsets(root)
     }
+
+    /**
+     * HC-352: header-only variant for edge-to-edge screens (targetSdk 35) whose content is a
+     * full-bleed view (e.g. WebView) rather than a scrollable list. Pads just the toolbar so it
+     * clears the status bar/cutout with a small amount of intentional breathing room, without
+     * reserving excess vertical space.
+     */
+    fun installHeader(
+        root: View,
+        toolbar: View,
+        extraTopPx: Int
+    ) {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            val top = maxOf(bars.top, cutout.top) + extraTopPx
+            val left = maxOf(bars.left, cutout.left)
+            val right = maxOf(bars.right, cutout.right)
+            toolbar.setPadding(left, top, right, toolbar.paddingBottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
 }

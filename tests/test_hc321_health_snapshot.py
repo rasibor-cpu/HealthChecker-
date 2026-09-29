@@ -625,7 +625,7 @@ console.log(JSON.stringify({html, missingTrend}));
     assert 'data-status="NORMAL"' in html
     assert "Last measured 18 minutes ago" in html
     assert "Improving" in html
-    assert "home_monitor" in html
+    assert "Home monitoring device" in html
     assert 'data-metric="blood_pressure"' in html
     assert 'data-category="blood_pressure"' in html
     assert "aria-label=" in html
@@ -2015,4 +2015,102 @@ def test_uat12h_compaction_and_batching_still_present():
     assert fetch_handler.find("if (isForbiddenCacheUrl(req.url)) return;") < fetch_handler.find("event.respondWith")
     assert "consumer_surfaces.js?v=hc334a" in html
     assert "health_snapshot.js?v=hc334a" in html
+
+
+def test_hc352_drill_stats_css_present_in_mobile_stylesheet():
+    """HC-352B: mobile.html only links style.css (not index.html's inline <style>),
+    so the drill-down stat/history/chart rules must live in style.css or the
+    Samples/Average/Min/Max values render as concatenated text on Android."""
+    css = (ROOT / "style.css").read_text(encoding="utf-8")
+    assert "hc-drill-stats" in css
+    assert "hc-drill-history" in css
+    assert "hc-metric-chart" in css
+    mobile = (ROOT / "mobile.html").read_text(encoding="utf-8")
+    assert '/style.css' in mobile
+    assert "<style" not in mobile.lower()
+
+
+def test_hc352_sparkline_includes_date_axis_labels():
+    out = _node_snapshot_eval(
+        """
+const history = [
+  {value: 34, measured_at: '2026-08-21T12:00:00Z'},
+  {value: 28, measured_at: '2026-08-15T12:00:00Z'},
+  {value: 24, measured_at: '2026-08-01T12:00:00Z'},
+];
+console.log(JSON.stringify({ chart: HS.sparklineMarkup(history, 'mL/min/1.73m2') }));
+"""
+    )
+    payload = __import__("json").loads(out)
+    chart = payload["chart"]
+    assert "hc-metric-chart-axis" in chart
+    assert "Aug 1" in chart
+    assert "Aug 21" in chart
+    assert "Range 24" in chart
+
+
+def test_hc352_sparkline_without_dates_falls_back_gracefully():
+    out = _node_snapshot_eval(
+        """
+const history = [{value: 10}, {value: 20}];
+console.log(JSON.stringify({ chart: HS.sparklineMarkup(history, '') }));
+"""
+    )
+    payload = __import__("json").loads(out)
+    chart = payload["chart"]
+    assert "hc-metric-chart" in chart
+    # No measured_at data available: don't fabricate axis labels, but the
+    # accessible aria-label still degrades gracefully.
+    assert "earliest available" in chart
+    assert "latest available" in chart
+
+
+def test_hc352_friendly_provenance_labels_known_and_unknown():
+    out = _node_snapshot_eval(
+        """
+console.log(JSON.stringify({
+  known: HS.friendlyProvenanceLabel('health_connect_companion'),
+  clinical: HS.friendlyProvenanceLabel('clinical_lab'),
+  unknown: HS.friendlyProvenanceLabel('some_new_device_id_v7'),
+  empty: HS.friendlyProvenanceLabel(''),
+}));
+"""
+    )
+    payload = __import__("json").loads(out)
+    assert payload["known"] == "Health Connect (companion app)"
+    assert payload["clinical"] == "Clinical / lab report"
+    # Unknown identifiers get a cleaned-up fallback label, not an invented meaning.
+    assert payload["unknown"] == "Some New Device Id V7"
+    assert payload["empty"] == ""
+
+
+def test_hc352_provenance_underlying_data_preserved_in_history_rows():
+    """Friendly labels must only change display text; the raw provenance/source
+    fields stay intact on the underlying observation rows for auditability."""
+    rows = [
+        _obs("heart_rate", 80, AS_OF - timedelta(hours=1), source="health_connect_companion"),
+    ]
+    detail = HealthSnapshotEngine().metric_detail("heart_rate", observations=rows, as_of=AS_OF)
+    assert detail["history"][0]["source"] == "health_connect_companion"
+
+
+def test_hc352_android_consumer_header_applies_top_inset():
+    """HC-352A: the consumer WebView header must consume system-bar/cutout insets
+    (edge-to-edge is enabled at targetSdk 35) with a small intentional gap, not
+    crowd the status bar or reserve excessive vertical space."""
+    activity = (
+        ROOT / "android/app/src/main/java/com/healthchecker/companion/ui/ConsumerLauncherActivity.kt"
+    ).read_text(encoding="utf-8")
+    assert "WindowCompat.setDecorFitsSystemWindows(window, false)" in activity
+    assert "WindowInsetApplier.installHeader" in activity
+    applier = (
+        ROOT / "android/app/src/main/java/com/healthchecker/companion/ui/WindowInsetApplier.kt"
+    ).read_text(encoding="utf-8")
+    assert "fun installHeader" in applier
+    layout = (
+        ROOT / "android/app/src/main/res/layout/activity_consumer_launcher.xml"
+    ).read_text(encoding="utf-8")
+    assert 'android:id="@+id/consumerRoot"' in layout
+    dimens = (ROOT / "android/app/src/main/res/values/dimens.xml").read_text(encoding="utf-8")
+    assert "consumer_header_extra_top" in dimens
 

@@ -1005,10 +1005,44 @@
     );
   }
 
+  const PROVENANCE_LABELS = {
+    health_connect_companion: "Health Connect (companion app)",
+    health_connect_observational: "Health Connect (observational)",
+    health_connect_sync: "Health Connect (sync)",
+    hc_v6: "HealthChecker manual entry",
+    clinical_lab: "Clinical / lab report",
+    clinical: "Clinical / lab evidence",
+    combined_clinical_and_health_connect: "Combined clinical + Health Connect",
+    manual_upload: "Manually uploaded document",
+    manual: "Manually entered",
+    wearable_screenshot: "Wearable app screenshot",
+    home_monitor: "Home monitoring device",
+    gmail: "Imported from email",
+    healthchecker_plus: "HealthChecker+",
+    user_reported: "Self-reported",
+    historical_summary: "Historical summary",
+  };
+
+  /**
+   * HC-352: map raw/technical provenance and source identifiers to a concise,
+   * human-readable label for ordinary consumer UI. The underlying identifier is
+   * preserved in the data (never mutated) — this only changes what is displayed.
+   * Unknown identifiers fall back to a cleaned-up (spaced/title-cased) version
+   * rather than inventing a meaning.
+   */
+  function friendlyProvenanceLabel(raw) {
+    const key = String(raw || "").trim().toLowerCase();
+    if (!key) return "";
+    if (PROVENANCE_LABELS[key]) return PROVENANCE_LABELS[key];
+    return String(raw)
+      .replace(/_/g, " ")
+      .replace(/\b[a-z]/g, function (ch) { return ch.toUpperCase(); });
+  }
+
   function provenanceMarkup(card) {
     const bits = [];
-    if (card.source) bits.push(card.source);
-    if (card.provenance) bits.push(card.provenance);
+    if (card.source) bits.push(friendlyProvenanceLabel(card.source));
+    if (card.provenance && card.provenance !== card.source) bits.push(friendlyProvenanceLabel(card.provenance));
     if (!bits.length) return "";
     return '<div class="hc-metric-source muted">' + esc(bits.join(" · ")) + "</div>";
   }
@@ -1151,15 +1185,26 @@
     return { history: history, stats: stats };
   }
 
+  function shortDateLabel(iso) {
+    const t = parseIso(iso);
+    if (t == null) return "";
+    try {
+      return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch (_) {
+      return String(iso).slice(0, 10);
+    }
+  }
+
   function sparklineMarkup(history, unit) {
-    const values = (history || [])
+    const points = (history || [])
       .map(function (h) {
-        return asNumber(h.value);
+        return { value: asNumber(h.value), measuredAt: h.measured_at };
       })
-      .filter(function (v) {
-        return v != null;
+      .filter(function (p) {
+        return p.value != null;
       })
       .reverse();
+    const values = points.map(function (p) { return p.value; });
     if (values.length < 2) {
       return '<p class="small muted">Trend chart needs at least two valid points.</p>';
     }
@@ -1175,8 +1220,21 @@
         return x.toFixed(1) + "," + y.toFixed(1);
       })
       .join(" ");
+    const oldestLabel = shortDateLabel(points[0].measuredAt);
+    const newestLabel = shortDateLabel(points[points.length - 1].measuredAt);
+    const axisHtml =
+      oldestLabel || newestLabel
+        ? '<div class="hc-metric-chart-axis small muted" aria-hidden="true">' +
+          '<span>' + esc(oldestLabel || "Earliest") + "</span>" +
+          '<span>' + esc(newestLabel || "Latest") + "</span>" +
+          "</div>"
+        : "";
     return (
-      '<div class="hc-metric-chart" role="img" aria-label="Recent trend chart">' +
+      '<div class="hc-metric-chart" role="img" aria-label="Recent trend chart from ' +
+      esc(oldestLabel || "earliest available") +
+      " to " +
+      esc(newestLabel || "latest available") +
+      '">' +
       '<svg viewBox="0 0 ' +
       w +
       " " +
@@ -1187,6 +1245,7 @@
       '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' +
       pts +
       '" /></svg>' +
+      axisHtml +
       '<div class="small muted">Range ' +
       esc(String(min)) +
       "–" +
@@ -1289,7 +1348,7 @@
               esc(row.historical_status_text || "") +
               '<div class="small muted">' +
               esc(String(row.measured_at || "").slice(0, 19)) +
-              (row.source || row.provenance ? " · " + esc([row.source, row.provenance].filter(Boolean).join(" · ")) : "") +
+              (row.source || row.provenance ? " · " + esc([row.source, row.provenance].map(friendlyProvenanceLabel).filter(Boolean).join(" · ")) : "") +
               (row.metric && row.metric !== card.metric_id ? " · source metric " + esc(row.metric) : "") +
               "</div></li>"
             );
@@ -1898,6 +1957,9 @@
     fallbackObservationIdentity: fallbackObservationIdentity,
     dedupeObservationHistory: dedupeObservationHistory,
     summarizeHistory: summarizeHistory,
+    sparklineMarkup: sparklineMarkup,
+    friendlyProvenanceLabel: friendlyProvenanceLabel,
+    renderDrillDown: renderDrillDown,
     loadLayout: loadLayout,
     saveLayout: saveLayout,
     applyTheme: applyTheme,

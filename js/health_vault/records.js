@@ -412,7 +412,7 @@
             <div class="record-card-meta small">
               <span class="badge">${this.escape(category)}</span>
               <span>${Number(record.metrics_count || 0)} extracted metrics</span>
-              <span>Source: ${this.escape(record.source_system || "Not available")}</span>
+              <span>Source: ${this.escape(this.label(record.source_system))}</span>
               <span>${this.escape(intelligenceText)}</span>
             </div>
             <button type="button" class="secondary records-inline-action" data-record-detail="${this.escapeAttr(record.document_id)}">View details</button>
@@ -440,7 +440,7 @@
             <span>Latest measurement: ${this.escape(latest)}</span>
             <span>Last Health Connect sync: ${this.escape(sync)}</span>
             <span>Available: ${this.escape(types)}</span>
-            <span>Source: ${this.escape(card.source || "health_connect_companion")}</span>
+            <span>Source: ${this.escape(this.label(card.source) || "Health Connect Companion")}</span>
           </div>
           <button type="button" class="secondary records-inline-action" data-open-device-data="1">View observations</button>
         </article>`;

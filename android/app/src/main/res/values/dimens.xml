@@ -3,4 +3,6 @@
     <dimen name="status_scroll_base_padding">16dp</dimen>
     <dimen name="status_scroll_extra_bottom">24dp</dimen>
     <dimen name="touch_target_min">48dp</dimen>
+    <!-- HC-352: small intentional gap below the status bar/cutout for the consumer header. -->
+    <dimen name="consumer_header_extra_top">8dp</dimen>
 </resources>

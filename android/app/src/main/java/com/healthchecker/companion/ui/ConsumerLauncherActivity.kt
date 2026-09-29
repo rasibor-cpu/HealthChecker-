@@ -23,6 +23,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 import com.healthchecker.companion.BuildConfig
 import com.healthchecker.companion.R
 import com.healthchecker.companion.consumer.ConsumerOriginLock
@@ -84,11 +85,18 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_consumer_launcher)
         prefs = SecurePrefs(this)
         webView = findViewById(R.id.consumerWebView)
         connectionPanel = findViewById(R.id.consumerConnectionRequired)
         connectionMessage = findViewById(R.id.consumerConnectionMessage)
+
+        WindowInsetApplier.installHeader(
+            root = findViewById(R.id.consumerRoot),
+            toolbar = findViewById(R.id.consumerToolbar),
+            extraTopPx = resources.getDimensionPixelSize(R.dimen.consumer_header_extra_top)
+        )
 
         findViewById<Button>(R.id.consumerSettings).setOnClickListener { openNativeSettings() }
         findViewById<Button>(R.id.consumerOpenSettings).setOnClickListener { openNativeSettings() }
