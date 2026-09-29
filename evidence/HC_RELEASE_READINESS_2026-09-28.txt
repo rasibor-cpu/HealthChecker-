@@ -47,15 +47,33 @@ FOCUSED POST-FIX RESULT
 - Final full-suite rerun: interrupted at 28%; no failure was emitted before interruption.
 - Focused release/security set: PASS before and after corrections.
 
+AUTHORITATIVE FULL PYTHON SUITE
+- Interpreter: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe
+- PYTHONPATH: C:\Users\wadys\AppData\Roaming\Python\Python312\site-packages
+- Command: C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe -m pytest -q
+- Source HEAD: 8414a232399bc0291ed9dac9e59e53102a1ac2ec
+- Start: 2026-09-29T05:33:38Z
+- Finish: 2026-09-29T05:43:42Z
+- Duration: 603.46 seconds
+- Result: 1,529 passed; 0 failed; 3 skipped; 1 warning; 5 subtests passed; exit code 0.
+- Evidence: evidence/HC_FULL_PYTEST_FINAL_2026-09-29.txt, evidence/HC_FULL_PYTEST_FINAL_2026-09-29.meta.txt, evidence/HC_FULL_PYTEST_FINAL_2026-09-29.exit.txt
+
+SUPERVISOR TEST INFRASTRUCTURE REPAIR
+- The staged full run exposed a Windows PID-reuse collision in test_hc325_r6c_supervisor_self_healing.py: test_child_exit_restarts used tasklist alone, and an unrelated process reused the recorded PID.
+- The test now verifies the restarted PID is an actual child of the test supervisor. Focused module result: 15 passed, exit code 0, 89.28 seconds.
+- This preserves the supervisor ownership invariant and does not weaken product behavior.
+
 SLOW FULL-SUITE REGION
 - Collection contains 1,532 tests; the approximate 28% boundary falls in test_hc309r3r1_protected_runtime_policy.py and test_hc309r4d_synthetic_collector.py.
 - Independent timing run was attempted, but the local terminal wrapper returned during idle output before producing a durable completion file. No hang, failure, or green result is claimed.
+- Completed measurements: HC309R3R1 = 33 passed, 4.38 seconds, exit 0; HC309R4D = 60 passed, 2 skipped, 331.38 seconds, exit 0. Classification: legitimate long-running bounded security testing with terminal output buffering, not a hang.
 
 ANDROID ENGINEERING GATE
 - Production-signing configuration check: PASS fail-closed; an incomplete two-variable environment was rejected with hc_android_signing_env_incomplete.
 - Governed signed release: NOT RUN; credentials and expected certificate fingerprint are unavailable.
 - Unsigned engineering gate: invoked with all HC_ANDROID_* variables removed; final Gradle completion output was unavailable from the local terminal wrapper. No signed artifact is claimed.
 - Android SDK investigation: ANDROID_HOME and ANDROID_SDK_ROOT were unset; C:\Users\wadys\AppData\Local\Android\Sdk, C:\Android\Sdk, and C:\ProgramData\Android\Sdk do not exist; android/local.properties is absent. Classification: ANDROID SDK = LOCAL ENVIRONMENT BLOCKER.
+- SDK installation attempt: winget located Google.AndroidStudio 2026.1.4.7, but a silent user-scoped install produced no installer process or SDK directory. Minimal next action is install Android Studio/command-line SDK tools and accept SDK licenses, then install platform android-35 and a compatible build-tools revision.
 
 SIGNING STATUS
 BLOCKED_EXTERNAL_KEY_CUSTODY

@@ -419,7 +419,7 @@ def test_child_exit_restarts(tmp_path: Path):
         _wait_state(config, "running", timeout=15)
         assert second != first
         assert not _alive(first)
-        assert _alive(second)
+        assert second in _child_pids(proc.pid)
         states = _read_json(_heartbeat_path(config))
         assert states["state"] == "running"
         assert states["attempt"] == 2

@@ -1,0 +1,55 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 23%]
+....s................................................................... [ 28%]
+..............................................................ss........ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 42%]
+........................................................................ [ 46%]
+........................................................................ [ 51%]
+........................................................................ [ 56%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 70%]
+................................................................... [ 74%]
+........................................................................ [ 79%]
+........................................................................ [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 93%]
+....................F................................................... [ 98%]
+.........................                                                [100%]
+================================== FAILURES ===================================
+__________________________ test_child_exit_restarts ___________________________
+
+tmp_path = WindowsPath('C:/Users/wadys/AppData/Local/Temp/healthchecker-pytest-24568-3903ef16d9ee4a23b7d313d623f9a278/pytest/test_child_exit_restarts0')
+
+    def test_child_exit_restarts(tmp_path: Path):
+        port = _free_loopback_port()
+        config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+        proc, config, control = _start_supervisor(config_path, tmp_path)
+        try:
+            _wait_state(config, "running")
+            first = _wait_child_count(control, 1)[0]
+            (control / "exit").write_text("1", encoding="ascii")
+            _wait_until(lambda: len(_starts(control)) >= 2, 15)
+            second = _starts(control)[1]
+            _wait_state(config, "running", timeout=15)
+            assert second != first
+            assert not _alive(first)
+>           assert _alive(second)
+E           assert False
+E            +  where False = _alive(3880)
+
+tests\test_hc325_r6c_supervisor_self_healing.py:422: AssertionError
+============================== warnings summary ===============================
+tests/test_hc304b_private_host_foundation.py::test_oversized_body_without_content_length
+  C:\ProgramData\HealthChecker\tools\python\3.12.10\Lib\site-packages\httpx2\_models.py:423: DeprecationWarning: Use 'content=<...>' to upload raw bytes/text content.
+    headers, stream = encode_request(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_hc325_r6c_supervisor_self_healing.py::test_child_exit_restarts
+1 failed, 1528 passed, 3 skipped, 1 warning, 5 subtests passed in 667.55s (0:11:07)
+\n

@@ -1,0 +1,1 @@
+INTERPRETER=C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe\nPYTHONPATH=C:\Users\wadys\AppData\Roaming\Python\Python312\site-packages\nCOMMAND=C:\ProgramData\HealthChecker\tools\python\3.12.10\python.exe -m pytest -q\nSOURCE_HEAD=8414a232399bc0291ed9dac9e59e53102a1ac2ec\nSTART=2026-09-29T05:15:52Z\nFINISH=2026-09-29T05:27:02Z\nDURATION_SECONDS=670.22\nEXIT_CODE=1\n

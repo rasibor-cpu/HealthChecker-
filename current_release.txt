@@ -8,11 +8,11 @@ Verified closure commit: 1fe7c8d44bfefb9f66305c44a6dc9333f600a966
 
 Software verification status
 - Python focused release regressions: PASS after fixture corrections (security/auth, freshness, screenshot policy, import, Android release contract)
-- Python full-suite baseline: 1,521 passed, 8 failed, 3 skipped, 1 warning, 5 subtests passed. Seven failures were corrected and focused-verified; the final full rerun was interrupted at 28% after only passing tests, so the suite is NOT declared green.
+- Python full suite: AUTOMATED-TEST VERIFIED. 1,529 passed, 3 skipped, 1 warning, 5 subtests passed, exit code 0, 603.46s.
 - Combined original-failure regression: 9 passed, exit code 0 (the eight original failure nodes include four HC-314A tests).
 - Android release configuration: PASS (env-injected production signing, no debug fallback)
 - Android production-signing gate: PASS as a fail-closed control; intentionally rejects incomplete signing environment.
-- Android SDK: MISSING from conventional local locations; Android unit/build execution is blocked by the local environment.
+- Android SDK: BLOCKED. No local SDK/tooling was present; user-scoped Android Studio installation via winget produced no installer or SDK.
 - Physical Samsung S24 Ultra certification: NOT CLAIMED
 
 External gates
