@@ -377,6 +377,29 @@ def test_supervisor_remains_singleton_owner_and_keeps_safety_gates():
         assert forbidden not in joined
 
 
+def test_supervisor_installs_console_ctrl_handler_and_reclaims_orphans():
+    # HC-354: the scheduled task runs this supervisor as an interactive console
+    # process (LogonType Interactive, required for DPAPI). Console processes in
+    # that session receive CTRL_LOGOFF_EVENT / CTRL_CLOSE_EVENT / CTRL_SHUTDOWN_EVENT
+    # signals on session lock/disconnect/teardown; PowerShell's default handler
+    # terminates on them (observed exit 0xC000013A), leaving the headless uvicorn
+    # child (no console, never signaled) running as an orphan. The supervisor must
+    # install a handler that swallows those specific signals, and must be able to
+    # positively identify and reclaim a leftover uvicorn child bound to its own
+    # port (e.g. left behind by Stop-ScheduledTask, which uses TerminateProcess and
+    # bypasses the finally-block cleanup) rather than failing closed forever.
+    text = LAUNCHER.read_text(encoding="utf-8")
+    assert "SetConsoleCtrlHandler" in text
+    assert "CTRL_LOGOFF_EVENT" in text
+    assert "CTRL_CLOSE_EVENT" in text
+    assert "CTRL_SHUTDOWN_EVENT" in text
+    assert "Test-HcOrphanedUvicornChild" in text
+    assert "event=runtime_orphan_child_reclaimed" in text
+    # Reclaim must still fail closed for anything not positively identified as our
+    # own uvicorn invocation, preserving the pre-existing safety gate.
+    assert "port_already_occupied" in text
+
+
 def test_isolated_harness_never_targets_production_or_css_ports():
     port = _free_loopback_port()
     assert port not in FORBIDDEN_PORTS
@@ -597,6 +620,48 @@ def test_unrelated_listener_still_fails_closed(tmp_path: Path):
         assert "port_already_occupied" in combined
     finally:
         listener.close()
+        if proc and proc.poll() is None:
+            _kill_tree(proc.pid)
+
+
+def test_orphaned_uvicorn_child_is_reclaimed_on_fresh_start(tmp_path: Path):
+    # HC-354: reproduces the observed production scenario where a previous
+    # supervisor was torn down (console-control signal, or Stop-ScheduledTask's
+    # TerminateProcess) without running its finally cleanup, leaving its own
+    # uvicorn child still bound to the port. A fresh supervisor start must
+    # positively identify that leftover child as its own and reclaim the port,
+    # rather than permanently failing closed with port_already_occupied.
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    fake_path = _write_fake_uvicorn(tmp_path / "orphan-pythonpath")
+    control = _control_dir(tmp_path)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(fake_path) + (";" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    env["HC325_R6C_FAKE_CONTROL"] = str(control)
+    orphan = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.health_vault.api:create_health_vault_app",
+         "--factory", "--host", "127.0.0.1", "--port", str(port), "--no-access-log"],
+        cwd=str(ROOT),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    proc = None
+    try:
+        assert _wait_until(lambda: len(_starts(control)) >= 1, 10), "orphan fake child never started"
+        orphan_pid = _starts(control)[0]
+        assert _alive(orphan_pid)
+        proc, config, control2 = _start_supervisor(config_path, tmp_path, extra_env={"HC325_R6C_FAKE_CONTROL": str(control)})
+        _wait_state(config, "running", timeout=20)
+        log = _read_text_retry(_log_path(config)) or ""
+        assert "event=runtime_orphan_child_reclaimed" in log
+        assert "port_already_occupied" not in log
+        assert not _alive(orphan_pid)
+        assert proc.poll() is None
+    finally:
+        if orphan.poll() is None:
+            _kill_tree(orphan.pid)
         if proc and proc.poll() is None:
             _kill_tree(proc.pid)
 
