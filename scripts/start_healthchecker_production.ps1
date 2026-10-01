@@ -39,10 +39,12 @@ public static class HcConsoleCtrlHandler {
     public const int CTRL_SHUTDOWN_EVENT = 6;
 }
 "@
+$hcDiagLogPath = "C:\ProgramData\HealthChecker\logs\healthchecker\healthchecker-runtime.log"
 try {
     Add-Type -TypeDefinition $hcConsoleCtrlHandlerSource -ErrorAction Stop
     $hcCtrlHandlerDelegate = [HcConsoleCtrlHandler+HandlerRoutine]{
         param([int]$ctrlType)
+        try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal type=$ctrlType pid=$PID" -ErrorAction SilentlyContinue } catch {}
         # Ignore session logoff/console-close/shutdown signals so the supervisor
         # keeps running and remains able to own and monitor its child process.
         # Returning $true tells Windows the signal was handled.
@@ -53,10 +55,12 @@ try {
         }
         return $false
     }
-    [HcConsoleCtrlHandler]::SetConsoleCtrlHandler($hcCtrlHandlerDelegate, $true) | Out-Null
+    $hcHandlerResult = [HcConsoleCtrlHandler]::SetConsoleCtrlHandler($hcCtrlHandlerDelegate, $true)
+    try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult pid=$PID" -ErrorAction SilentlyContinue } catch {}
 } catch {
     # Non-fatal: if the handler cannot be installed, fall back to prior behavior
     # rather than blocking startup.
+    try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registration_failed error=$($_.Exception.Message) pid=$PID" -ErrorAction SilentlyContinue } catch {}
 }
 
 function Write-HcHeartbeat {
