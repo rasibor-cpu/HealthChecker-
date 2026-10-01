@@ -407,7 +407,8 @@ class RecordsService:
         metadata = {key: doc.get(key) for key in (
             "document_type", "mime_type", "interpretation", "parser_version",
             "parser_confidence", "classification_confidence", "classification_method",
-            "date_confidence", "date_source", "secondary_categories",
+            "date_confidence", "date_source", "source_document_date",
+            "source_document_date_source", "secondary_categories",
         )}
         metadata["display_title"] = consumer["display_title"]
         metadata["consumer_category"] = consumer["consumer_category"]
@@ -423,6 +424,7 @@ class RecordsService:
             status=status,
             imported_at=doc.get("imported_at") or utc_now(),
             measured_at=doc.get("measured_at"),
+            source_document_date=doc.get("source_document_date") or doc.get("report_date"),
             size_bytes=doc.get("size_bytes"),
             metrics_count=metrics_count,
             metadata=metadata,
@@ -476,7 +478,15 @@ class RecordsService:
                     if document_id:
                         matching_docs.add(document_id)
             records = [record for record in records if record.document_id in matching_docs]
-        records.sort(key=lambda record: (record.measured_at or record.imported_at, record.document_id), reverse=True)
+        records.sort(
+            key=lambda record: (
+                record.measured_at
+                or record.source_document_date
+                or record.imported_at,
+                record.document_id,
+            ),
+            reverse=True,
+        )
         return records
 
     def _metrics_by_document(self, measurements: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
@@ -549,7 +559,7 @@ class RecordsService:
                 measurement.get("metric") or measurement.get("metric_type") or ""
             )
             measured_at = str(measurement.get("measured_at") or "")
-            if not metric:
+            if not metric or not measured_at:
                 continue
             previous = latest_value.get(metric)
             if previous is None or measured_at > previous[0]:
@@ -580,7 +590,7 @@ class RecordsService:
                 },
             )
             bucket["record_count"] += 1
-            stamp = record.measured_at or record.imported_at
+            stamp = record.measured_at
             if stamp and (not bucket["latest_at"] or str(stamp) > str(bucket["latest_at"])):
                 bucket["latest_at"] = stamp
             live = latest_value.get(metric)
@@ -681,7 +691,12 @@ class RecordsService:
             mode = "all"
 
         visible.sort(
-            key=lambda record: (record.measured_at or record.imported_at, record.document_id),
+            key=lambda record: (
+                record.measured_at
+                or record.source_document_date
+                or record.imported_at,
+                record.document_id,
+            ),
             reverse=True,
         )
         total_visible = len(visible)
@@ -758,6 +773,7 @@ class RecordsService:
         freshness: dict[str, Any],
     ) -> dict[str, Any]:
         origins: list[str] = []
+        last_data_received_at = None
         want_patient = str(patient_id or "default-patient")
         for row in self.store.list_observations() or []:
             if str(row.get("patient_id") or "default-patient") != want_patient:
@@ -766,6 +782,16 @@ class RecordsService:
             origin = device.get("data_origin") or device.get("package") or ""
             if origin:
                 origins.append(str(origin))
+            if "health_connect" not in str(row.get("source") or "").lower() and (
+                row.get("connector_id") != "health_connect"
+            ):
+                continue
+            received = row.get("ingested_at") or row.get("received_at")
+            if received and (
+                last_data_received_at is None
+                or str(received) > str(last_data_received_at)
+            ):
+                last_data_received_at = received
         latest_at = freshness.get("latest_measurement_at")
         currentness = "unknown"
         for row in (freshness.get("by_metric") or {}).values():
@@ -779,6 +805,8 @@ class RecordsService:
             "metric_types": [row["metric"] for row in summaries],
             "metric_labels": [row["label"] for row in summaries],
             "last_observation_at": latest_at,
+            "last_measurement_at": latest_at,
+            "last_data_received_at": last_data_received_at,
             "last_sync_at": freshness.get("last_health_connect_sync_at"),
             "last_sync_attempt_at": freshness.get("last_sync_attempt_at"),
             "currentness": currentness,

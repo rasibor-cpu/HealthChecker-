@@ -36,21 +36,23 @@ Each document stores:
 - `classification_confidence`, `classification_method`, `classification_version`
 - `requires_review`
 
-## Date extraction hierarchy
+## Date extraction and freshness
 
-1. Explicit `measured_at` / report date  
-2. Parser-extracted date  
-3. Source metadata  
-4. EXIF capture date  
-5. Filename date  
-6. `imported_at` fallback (low confidence, `requires_review`)
+Only an explicit observation timestamp, a unique measurement timestamp, or a
+parser-provided measurement timestamp may populate `measured_at`. Report,
+source-metadata, EXIF, and filename dates are retained as document dates; they
+do not make a clinical observation current. `imported_at` records receipt time
+and is never a measurement-time fallback. When no trustworthy observation time
+is available, `measured_at` remains unset and the document requires review.
 
-Fields: `measured_at`, `report_date`, `imported_at`, `file_capture_date`,
-`date_confidence`, `date_source`
+Fields: `measured_at`, `source_document_date`, `source_document_date_source`,
+`report_date`, `imported_at`, `file_capture_date`, `date_confidence`,
+`date_source`
 
 ## Chronological sorting
 
-Default: `measured_at` → `report_date` → `imported_at` (newest first).
+Default: `measured_at` → `report_date` → `source_document_date` → `imported_at`
+(newest first).
 
 Grouped multi-image reports sort by measured date; pages keep `sequence_number` /
 `page_number` order inside the group.

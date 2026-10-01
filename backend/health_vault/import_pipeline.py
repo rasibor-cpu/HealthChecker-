@@ -295,8 +295,8 @@ class ImportPipeline:
 
             date_info = extract_measured_date(
                 explicit_measured_at=req.get("measured_at") or document.measured_at,
-                report_date=req.get("report_date"),
-                parser_date=parsed.get("measured_at") or parsed.get("report_date"),
+                report_date=req.get("report_date") or parsed.get("report_date"),
+                parser_date=parsed.get("measured_at"),
                 source_metadata_date=req.get("source_metadata_date"),
                 exif_capture_date=req.get("exif_capture_date") or req.get("file_capture_date"),
                 filename=filename,
@@ -307,6 +307,10 @@ class ImportPipeline:
             )
             document.measured_at = date_info["measured_at"]
             document.report_date = date_info.get("report_date")
+            document.source_document_date = date_info.get("source_document_date")
+            document.source_document_date_source = date_info.get(
+                "source_document_date_source"
+            )
             document.file_capture_date = date_info.get("file_capture_date")
             document.date_confidence = date_info.get("date_confidence")
             document.date_source = date_info.get("date_source")

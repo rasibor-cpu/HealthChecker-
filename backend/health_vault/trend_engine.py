@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.health_vault.date_extraction import clinical_observation_timestamp
+
 from backend.health_vault.date_extraction import timeline_sort_key
 from backend.health_vault.metric_normalization import (
     MONITORING_TREND_METRICS,
@@ -132,11 +134,7 @@ class TrendEngine:
                     and float(doc.get("classification_confidence") or 0) < 0.45
                 ):
                     return False
-            if not (
-                doc.get("measured_at") or doc.get("report_date") or m.get("measured_at")
-            ):
-                return False
-        elif monitoring_ctx and not m.get("measured_at"):
+        if not clinical_observation_timestamp(m, doc):
             return False
         try:
             float(m["value"])
@@ -223,12 +221,7 @@ class TrendEngine:
         seen_observations: set[tuple[str, str, float, str]] = set()
         for item in items:
             document = docs.get(str(item.get("document_id") or ""), {}) or {}
-            observed_at = str(
-                item.get("measured_at")
-                or document.get("measured_at")
-                or document.get("report_date")
-                or ""
-            )
+            observed_at = clinical_observation_timestamp(item, document) or ""
             try:
                 numeric_value = float(item["value"])
             except (TypeError, ValueError, KeyError):
@@ -246,11 +239,10 @@ class TrendEngine:
         items = unique_items
 
         items.sort(
-            key=lambda x: str(
-                x.get("measured_at")
-                or (docs.get(str(x.get("document_id") or ""), {}) or {}).get("measured_at")
-                or ""
+            key=lambda x: clinical_observation_timestamp(
+                x, docs.get(str(x.get("document_id") or ""), {}) or {}
             )
+            or ""
         )
         values = []
         for m in items:
@@ -326,6 +318,31 @@ class TrendEngine:
             else:
                 continue
             result = self.classify(metric, series)
+            latest_measured_at = max(
+                (
+                    timestamp
+                    for m in self.store.list_measurements()
+                    if canonicalize_metric(m.get("metric")) == metric
+                    and self._eligible(m, docs)
+                    and (docs.get(str(m.get("document_id") or "")) or {}).get(
+                        "patient_id", "default-patient"
+                    )
+                    == patient_id
+                    and (
+                        (plane == "monitoring")
+                        == _is_health_connect_context(
+                            m, docs.get(str(m.get("document_id") or ""))
+                        )
+                    )
+                    for timestamp in [
+                        clinical_observation_timestamp(
+                            m, docs.get(str(m.get("document_id") or "")) or {}
+                        )
+                    ]
+                    if timestamp
+                ),
+                default=None,
+            )
             category = None
             for m in self.store.list_measurements():
                 if canonicalize_metric(m.get("metric")) != metric or not self._eligible(m, docs):
@@ -349,6 +366,7 @@ class TrendEngine:
                 "reason": result["reason"],
                 "sample_count": len(series),
                 "latest": series[-1] if series else None,
+                "latest_measured_at": latest_measured_at,
                 "category": category,
                 "provenance": provenance,
                 "data_plane": plane,

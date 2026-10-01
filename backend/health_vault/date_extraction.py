@@ -16,6 +16,37 @@ _ISO_RE = re.compile(
 _FILENAME_DATE_RE = re.compile(
     r"(20\d{2})[_\-]?(\d{2})[_\-]?(\d{2})|(?:^|[_\-])(\d{2})(\d{2})(\d{2})(?:[_\-]|$)"
 )
+NON_MEASUREMENT_DATE_SOURCES = frozenset(
+    {
+        "report_date",
+        "source_metadata",
+        "exif_capture_date",
+        "filename_date",
+        "source_document_date_only",
+        "imported_at_fallback",
+    }
+)
+
+
+def clinical_observation_timestamp(
+    measurement: dict[str, Any],
+    document: dict[str, Any] | None = None,
+) -> str | None:
+    """Return a trustworthy observation timestamp, excluding legacy fallbacks."""
+    document = document or {}
+    measured_at = measurement.get("measured_at")
+    document_measured_at = document.get("measured_at")
+    date_source = str(document.get("date_source") or "")
+    if (
+        date_source in NON_MEASUREMENT_DATE_SOURCES
+        and measured_at == document_measured_at
+    ):
+        return None
+    if measured_at:
+        return str(measured_at)
+    if date_source in NON_MEASUREMENT_DATE_SOURCES:
+        return None
+    return str(document_measured_at) if document_measured_at else None
 
 
 def _parse_candidate(value: str | None) -> str | None:
@@ -53,31 +84,25 @@ def extract_measured_date(
     measurement_dates: list[str | None] | None = None,
 ) -> dict[str, Any]:
     """
-    Priority:
-    1 explicit measurement/report date
-    2 parser-extracted date
-    3 trusted source metadata
-    4 EXIF capture date
-    5 filename date
-    6 upload/import time fallback
+    Only observation dates can populate ``measured_at``. Document dates and
+    receipt time remain separate so neither can make an old observation current.
     """
     original_extracted_text: str | None = None
 
     # A document containing one measurement can inherit that measurement date.
     # A multi-date bundle is a longitudinal package, so do not mislabel the
     # whole document with whichever historical row happens to appear first.
-    meas_dates = [_parse_candidate(d) for d in (measurement_dates or []) if d]
+    raw_meas_dates = [d for d in (measurement_dates or []) if d]
+    meas_dates = [_parse_candidate(d) for d in raw_meas_dates]
     meas_dates = [d for d in meas_dates if d]
     unique_meas_dates = sorted(set(meas_dates))
+    all_measurements_dated = bool(raw_meas_dates) and len(meas_dates) == len(raw_meas_dates)
 
     candidates: list[tuple[str, str, float]] = []
     for label, raw, conf in (
         ("explicit_measured_at", explicit_measured_at, 0.95),
         ("measurement_value", unique_meas_dates[0] if len(unique_meas_dates) == 1 else None, 0.92),
-        ("report_date", report_date, 0.9),
         ("parser_date", parser_date, 0.85),
-        ("source_metadata", source_metadata_date, 0.8),
-        ("exif_capture_date", exif_capture_date, 0.7),
     ):
         parsed = _parse_candidate(raw) if isinstance(raw, str) else raw
         if parsed:
@@ -85,21 +110,38 @@ def extract_measured_date(
             if original_extracted_text is None and isinstance(raw, str):
                 original_extracted_text = raw
 
-    if not candidates and filename:
-        original_extracted_text = filename
-        fd = _filename_date(filename)
-        if fd:
-            candidates.append(("filename_date", fd, 0.55))
+    source_document_candidates: list[tuple[str, str]] = []
+    for label, raw in (
+        ("report_date", report_date),
+        ("source_metadata", source_metadata_date),
+        ("exif_capture_date", exif_capture_date),
+    ):
+        parsed = _parse_candidate(raw) if isinstance(raw, str) else raw
+        if parsed:
+            source_document_candidates.append((label, parsed))
+            if original_extracted_text is None and isinstance(raw, str):
+                original_extracted_text = raw
+    if filename:
+        filename_date = _filename_date(filename)
+        if filename_date:
+            source_document_candidates.append(("filename_date", filename_date))
+            if original_extracted_text is None:
+                original_extracted_text = filename
 
+    source_document_date_source, source_document_date = (
+        source_document_candidates[0]
+        if source_document_candidates
+        else (None, None)
+    )
     if candidates:
         # Highest confidence first; ties keep first in priority list
         source, measured_at, confidence = max(candidates, key=lambda c: c[2])
         requires_review = confidence < 0.7
         return {
             "measured_at": measured_at,
-            "report_date": _parse_candidate(report_date) or (
-                measured_at if source == "report_date" else None
-            ),
+            "report_date": _parse_candidate(report_date),
+            "source_document_date": source_document_date,
+            "source_document_date_source": source_document_date_source,
             "imported_at": imported_at or utc_now(),
             "file_capture_date": _parse_candidate(exif_capture_date),
             "date_confidence": confidence,
@@ -108,14 +150,34 @@ def extract_measured_date(
             "original_date_text": original_extracted_text,
         }
 
-    fallback = imported_at or utc_now()
+    if len(unique_meas_dates) > 1:
+        return {
+            "measured_at": None,
+            "report_date": _parse_candidate(report_date),
+            "source_document_date": source_document_date,
+            "source_document_date_source": source_document_date_source,
+            "imported_at": imported_at or utc_now(),
+            "file_capture_date": _parse_candidate(exif_capture_date),
+            "date_confidence": 0.92,
+            "date_source": "measurement_values_multiple_dates",
+            "requires_review": not all_measurements_dated,
+            "original_date_text": original_extracted_text,
+        }
+
+    receipt_time = imported_at or utc_now()
     return {
-        "measured_at": fallback,
+        "measured_at": None,
         "report_date": _parse_candidate(report_date),
-        "imported_at": fallback,
+        "source_document_date": source_document_date,
+        "source_document_date_source": source_document_date_source,
+        "imported_at": receipt_time,
         "file_capture_date": _parse_candidate(exif_capture_date),
         "date_confidence": 0.25,
-        "date_source": "imported_at_fallback",
+        "date_source": (
+            "source_document_date_only"
+            if source_document_date
+            else "imported_at_fallback"
+        ),
         "requires_review": True,
         "original_date_text": original_extracted_text,
     }
@@ -145,12 +207,13 @@ def _filename_date(filename: str) -> str | None:
 
 
 def timeline_sort_key(doc: dict[str, Any] | None) -> str:
-    """measured_at > report_date > imported_at."""
+    """Sort by observation, document, then receipt date."""
     if not isinstance(doc, dict):
         return ""
     return str(
         doc.get("measured_at")
         or doc.get("report_date")
+        or doc.get("source_document_date")
         or doc.get("imported_at")
         or ""
     )

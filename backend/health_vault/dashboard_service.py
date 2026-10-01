@@ -11,6 +11,7 @@ from backend.health_vault.models import (
     DashboardSummary,
     DashboardWidget,
     UserDashboardPreferences,
+    utc_now,
 )
 from backend.health_vault.timeline import _measurements_by_document, build_timeline
 from backend.health_vault.vault_store import VaultStore
@@ -57,6 +58,7 @@ def _health_connect_sync_summary(
 
     rows = store.list_observations() if observations is None else observations
     last_observation_at = None
+    last_data_received_at = None
     observation_count = 0
     for row in rows:
         if str(row.get("patient_id") or "default-patient") != patient_id:
@@ -65,9 +67,15 @@ def _health_connect_sync_summary(
         if "health_connect" not in source and row.get("connector_id") != "health_connect":
             continue
         observation_count += 1
-        measured = row.get("measured_at") or row.get("ingested_at")
+        measured = row.get("measured_at")
         if measured and (last_observation_at is None or str(measured) > str(last_observation_at)):
             last_observation_at = measured
+        received = row.get("ingested_at") or row.get("received_at")
+        if received and (
+            last_data_received_at is None
+            or str(received) > str(last_data_received_at)
+        ):
+            last_data_received_at = received
 
     companion = store.get_companion_status() or {}
     companion_device = str(companion.get("device_id") or "")
@@ -135,6 +143,8 @@ def _health_connect_sync_summary(
         "paired_device_count": paired_count,
         "observation_count": observation_count,
         "last_observation_at": last_observation_at,
+        "last_measurement_at": last_observation_at,
+        "last_data_received_at": last_data_received_at,
         "last_device_seen_at": last_seen_at,
         "companion": companion_for_patient,
         "host_note": (
@@ -273,12 +283,12 @@ def _monitoring_trend_snapshot(
             float(row.get("value"))
         except (TypeError, ValueError):
             continue
-        if not (row.get("measured_at") or row.get("ingested_at")):
+        if not row.get("measured_at"):
             continue
         buckets[metric].append(row)
     trends: dict[str, Any] = {}
     for metric, metric_rows in buckets.items():
-        metric_rows.sort(key=lambda item: str(item.get("measured_at") or item.get("ingested_at") or ""))
+        metric_rows.sort(key=lambda item: str(item.get("measured_at") or ""))
         latest = metric_rows[-1]
         try:
             values = [float(r["value"]) for r in metric_rows]
@@ -301,7 +311,8 @@ def _monitoring_trend_snapshot(
             "reason": reason,
             "sample_count": len(metric_rows),
             "latest": latest.get("value"),
-            "updated_at": latest.get("measured_at") or latest.get("ingested_at"),
+            "latest_measured_at": latest.get("measured_at"),
+            "updated_at": latest.get("measured_at"),
             "category": "continuous_monitoring",
             "provenance": "health_connect_observational",
             "data_plane": "monitoring",
@@ -366,6 +377,30 @@ def _merge_trend_planes(
     return merged
 
 
+def _apply_trend_freshness(trends: dict[str, Any]) -> None:
+    from backend.health_vault.health_snapshot import (
+        compute_freshness,
+        load_health_snapshot_config,
+        parse_iso,
+    )
+
+    config = load_health_snapshot_config()
+    windows = config.get("freshness_windows_minutes") or {}
+    stale_multiplier = float(config.get("stale_escalation_multiplier") or 3)
+    as_of = parse_iso(utc_now())
+    for metric, trend in trends.items():
+        freshness = compute_freshness(
+            metric=metric,
+            measured_at=trend.get("latest_measured_at"),
+            now=as_of,
+            windows=windows,
+            stale_multiplier=stale_multiplier,
+        )
+        trend["currentness"] = freshness["currentness"]
+        trend["freshness_status"] = freshness["freshness_status"]
+        trend["freshness_label"] = freshness["label"]
+
+
 class DashboardService:
     """Orchestrates dashboard landing pages, preferences, and widgets."""
 
@@ -423,6 +458,13 @@ class DashboardService:
         if monitoring_cards:
             observations = monitoring_cards + observations
         trends = self.store.get_trends(patient_id=patient_id) or {}
+        if any(
+            not isinstance(trend, dict) or not trend.get("latest_measured_at")
+            for trend in trends.values()
+        ):
+            from backend.health_vault.trend_engine import TrendEngine
+
+            trends = TrendEngine(self.store).recompute(patient_id=patient_id)
         monitoring_trends: dict[str, Any] = {}
         health_connect_observation_count = 0
         if _patient_has_health_connect_observations(
@@ -441,6 +483,7 @@ class DashboardService:
                 )
             )
         trends = _merge_trend_planes(trends, monitoring_trends)
+        _apply_trend_freshness(trends)
         health_connect_sync = _health_connect_sync_summary(
             self.store, patient_id, observations=patient_observations
         )
@@ -479,6 +522,7 @@ class DashboardService:
         # Persisted abnormal flags are clinical attention evidence even when a
         # narrative observation is stale or uses neutral wording. Count the
         # latest eligible clinical result per canonical metric exactly once.
+        from backend.health_vault.date_extraction import clinical_observation_timestamp
         from backend.health_vault.metric_normalization import canonicalize_metric
         from backend.health_vault.trend_engine import _is_health_connect_context
 
@@ -497,7 +541,9 @@ class DashboardService:
             metric = canonicalize_metric(measurement.get("metric"))
             if not metric or metric == "unknown":
                 continue
-            measured_at = str(measurement.get("measured_at") or doc.get("measured_at") or "")
+            measured_at = clinical_observation_timestamp(measurement, doc)
+            if not measured_at:
+                continue
             previous = latest_clinical.get(metric)
             previous_at = str((previous or {}).get("_measured_at") or "")
             if previous is None or measured_at >= previous_at:

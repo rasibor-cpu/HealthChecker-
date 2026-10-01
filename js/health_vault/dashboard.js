@@ -1001,25 +1001,21 @@
         // Data freshness is separate from technical sync/pairing (HC321-UAT11).
         let dataFreshness = "Unknown";
         let dataFreshnessClass = "muted";
-        const lastObs = sync.last_observation_at || null;
+        const lastObs = sync.last_measurement_at || sync.last_observation_at || null;
+        const lastReceived = sync.last_data_received_at || null;
         const freshnessPath = payload.freshness_path || {};
-        if (lastObs) {
-          const ageMs = Date.now() - Date.parse(lastObs);
-          if (Number.isFinite(ageMs)) {
-            const ageHours = ageMs / 3600000;
-            if (ageHours <= 36) {
-              dataFreshness = "Current";
-              dataFreshnessClass = "ok";
-            } else if (ageHours <= 72) {
-              dataFreshness = "Aging";
-              dataFreshnessClass = "warn";
-            } else {
-              dataFreshness = "Stale";
-              dataFreshnessClass = "bad";
-            }
-          }
-        } else if (hcCount > 0) {
+        const metricFreshness = Object.values(freshnessPath.by_metric || {});
+        if (metricFreshness.some(row => row.currentness === "current")) {
+          dataFreshness = "Current readings present";
+          dataFreshnessClass = "ok";
+        } else if (metricFreshness.some(row => row.freshness_status === "aging")) {
           dataFreshness = "Aging";
+          dataFreshnessClass = "warn";
+        } else if (metricFreshness.some(row => row.currentness === "stale")) {
+          dataFreshness = "Stale";
+          dataFreshnessClass = "bad";
+        } else if (hcCount > 0) {
+          dataFreshness = "Measurement time unavailable";
           dataFreshnessClass = "warn";
         }
         const syncDetails = [
@@ -1029,6 +1025,7 @@
             ? `HC observations: ${sync.observation_count != null ? sync.observation_count : hcCount}`
             : null,
           lastObs ? `Latest measurement: ${String(lastObs).slice(0, 19)}` : null,
+          lastReceived ? `Most recent data received: ${String(lastReceived).slice(0, 19)}` : null,
           freshnessPath.last_health_connect_sync_at ? `Last Health Connect sync: ${String(freshnessPath.last_health_connect_sync_at).slice(0, 19)}` : (sync.last_device_seen_at ? `Last device seen: ${String(sync.last_device_seen_at).slice(0, 19)}` : null),
           this._summaryFetchedAt ? `Last refreshed: ${new Date(this._summaryFetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : null,
         ].filter(Boolean).map(line => `<div class="small muted">${this.escape(String(line))}</div>`).join("");
@@ -1105,15 +1102,6 @@
         if (!keys.length && !exclusions.length) {
           return '<div class="muted small">No metrics available for trend mapping yet. Import records or sync Health Connect observations to build longitudinal trends.</div>';
         }
-        const freshnessWindowsMin = {
-          heart_rate: 180,
-          oxygen_saturation: 360,
-          steps: 1440,
-          activity_minutes: 1440,
-          exercise_minutes: 1440,
-          sleep_duration: 2160,
-          default: 10080,
-        };
         const consumerMetricTitle = (metric) => {
           const key = String(metric || "").toLowerCase();
           if (key === "exercise_minutes" || key === "activity_minutes") return "Activity";
@@ -1121,14 +1109,6 @@
           if (key === "oxygen_saturation") return "Oxygen Saturation";
           if (key === "heart_rate") return "Heart Rate";
           return String(metric || "").replace(/_/g, " ");
-        };
-        const isObservationStale = (metric, updatedAt) => {
-          if (!updatedAt) return false;
-          const ts = Date.parse(updatedAt);
-          if (!Number.isFinite(ts)) return false;
-          const ageMin = (Date.now() - ts) / 60000;
-          const windowMin = freshnessWindowsMin[String(metric || "").toLowerCase()] || freshnessWindowsMin.default;
-          return ageMin > windowMin;
         };
         // Prefer Activity over EXERCISE_MINUTES when both present.
         const displayKeys = [];
@@ -1148,11 +1128,14 @@
                 : (provenance === "combined_clinical_and_health_connect" || tr.data_plane === "combined"
                   ? "Combined clinical + Health Connect observational"
                   : (provenance === "clinical" ? "Clinical / lab" : provenance));
-              const stale = isObservationStale(k, tr.updated_at || tr.measured_at);
-              const label = stale ? "Not current" : (tr.label || tr.direction || "Available");
+              const measuredAt = tr.latest_measured_at || tr.measured_at || "";
+              const stale = tr.currentness !== "current";
+              const label = stale
+                ? (measuredAt ? "Not current" : "Measurement date unavailable")
+                : (tr.label || tr.direction || "Available");
               const badgeClass = stale ? "muted" : (tr.direction === "worsening" ? "bad" : "ok");
               const latestNote = stale
-                ? `Last recorded ${String(tr.updated_at || tr.measured_at || "").slice(0, 19)} (not current)`
+                ? `${measuredAt ? `Last measured ${String(measuredAt).slice(0, 19)} (not current)` : "No eligible measurement date"}`
                 : `Sample count: ${tr.sample_count} · Latest value: ${tr.latest == null ? "—" : tr.latest}`;
               return `
                 <div class="kpi small" style="display: flex; justify-content: space-between; align-items: center; border-left: 2px solid ${isPriority ? "var(--accent)" : "var(--line)"}; padding-left: 8px;">

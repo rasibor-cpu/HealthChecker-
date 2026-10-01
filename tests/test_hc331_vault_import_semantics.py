@@ -127,8 +127,10 @@ def test_pipeline_preserves_package_date_patient_scope_and_builds_real_trends(tm
         }
     )
     assert result["ok"] is True
-    assert result["document"]["measured_at"] == "2026-09-18T00:00:00Z"
-    assert result["document"]["date_source"] == "parser_date"
+    assert result["document"]["measured_at"] is None
+    assert result["document"]["source_document_date"] == "2026-09-18T00:00:00Z"
+    assert result["document"]["date_source"] == "measurement_values_multiple_dates"
+    assert result["document"]["requires_review"] is False
     assert {row["patient_id"] for row in result["measurements"]} == {"robert"}
     assert result["trends"]["egfr"]["sample_count"] == 3
     assert result["trends"]["egfr"]["label"] == "Worsening"
@@ -180,4 +182,3 @@ def test_corrected_reimport_does_not_double_count_same_clinical_observation(tmp_
     assert trend["sample_count"] == 3
     assert trend["latest"] == 24.0
     assert trend["label"] == "Worsening"
-

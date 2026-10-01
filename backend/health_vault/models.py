@@ -52,6 +52,8 @@ class MedicalDocument:
     classification_version: str | None = None
     requires_review: bool = False
     report_date: str | None = None
+    source_document_date: str | None = None
+    source_document_date_source: str | None = None
     file_capture_date: str | None = None
     date_confidence: float | None = None
     date_source: str | None = None
@@ -547,6 +549,7 @@ class HealthRecord:
     status: RecordStatus
     imported_at: str
     measured_at: str | None = None
+    source_document_date: str | None = None
     size_bytes: int | None = None
     metrics_count: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -566,6 +569,7 @@ class HealthRecord:
             "primary_category": self.primary_category.value if isinstance(self.primary_category, RecordCategory) else self.primary_category,
             "status": self.status.value if isinstance(self.status, RecordStatus) else self.status,
             "measured_at": self.measured_at,
+            "source_document_date": self.source_document_date,
             "imported_at": self.imported_at,
             "size_bytes": self.size_bytes,
             "metrics_count": self.metrics_count,

@@ -27,6 +27,7 @@ from backend.health_vault.clinical_rules import (
     FLAG_UNKNOWN,
     ClinicalRulesEngine,
 )
+from backend.health_vault.date_extraction import clinical_observation_timestamp
 from backend.health_vault.metric_normalization import canonicalize_metric
 from backend.health_vault.models import utc_now
 from backend.health_vault.trend_engine import HIGHER_BETTER, LOWER_BETTER, TrendEngine
@@ -708,7 +709,7 @@ def _row_from_measurement(m: dict[str, Any], docs_by_id: dict[str, dict[str, Any
         "value": m.get("value"),
         "units": m.get("units") or m.get("unit"),
         "unit": m.get("units") or m.get("unit"),
-        "measured_at": m.get("measured_at"),
+        "measured_at": clinical_observation_timestamp(m, doc),
         "provenance": m.get("provenance") or doc.get("provenance"),
         "source": m.get("source") or doc.get("source_system"),
         "quality": m.get("quality") or {"unit_compatible": m.get("unit_compatible", True)},

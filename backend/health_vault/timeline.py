@@ -16,6 +16,8 @@ CONSUMER_TIMELINE_LIMIT = 400
 _CONSUMER_ENTRY_KEYS = (
     "date",
     "measured_at",
+    "source_document_date",
+    "source_document_date_source",
     "report_date",
     "imported_at",
     "primary_category",
@@ -43,6 +45,8 @@ _CONSUMER_DOCUMENT_KEYS = (
     "source_system",
     "original_filename",
     "measured_at",
+    "source_document_date",
+    "source_document_date_source",
     "report_date",
     "imported_at",
     "primary_category",
@@ -194,6 +198,10 @@ def build_timeline(
             {
                 "date": sort_date,
                 "measured_at": doc.get("measured_at"),
+                "source_document_date": doc.get("source_document_date"),
+                "source_document_date_source": doc.get(
+                    "source_document_date_source"
+                ),
                 "report_date": doc.get("report_date"),
                 "imported_at": doc.get("imported_at"),
                 "primary_category": doc.get("primary_category"),

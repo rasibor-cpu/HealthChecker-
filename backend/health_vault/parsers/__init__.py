@@ -332,8 +332,8 @@ class GenericJsonParser(_Base):
         notes = ["Generic JSON measurement parser"]
         if isinstance(data, dict) and data.get("schema") == "healthchecker.vault_import.v1":
             # A vault package may contain many historical measurement dates.
-            # Date the package by its generation timestamp while preserving each
-            # measurement's own measured_at value for timeline/trend use.
+            # Preserve the generation timestamp as a document date, not as a
+            # clinical observation timestamp.
             package_date = data.get("generated_at")
             report_date = package_date
             dates = sorted(
@@ -349,7 +349,7 @@ class GenericJsonParser(_Base):
             "measurements": measurements,
             "confidence": 0.7 if measurements else 0.2,
             "notes": notes,
-            "measured_at": package_date,
+            "measured_at": None,
             "report_date": report_date,
         }
 

@@ -311,17 +311,20 @@
       const syncAt = path.last_health_connect_sync_at || path.last_sync_attempt_at;
       const latest = path.latest_measurement_at;
       const hcInventory = path.latest_health_connect_inventory_at;
+      const metricFreshness = Object.values(path.by_metric || {});
+      const freshnessLabel = metricFreshness.some(row => row.currentness === "current")
+        ? "Current readings present"
+        : (metricFreshness.some(row => row.freshness_status === "aging")
+          ? "Aging"
+          : (metricFreshness.some(row => row.currentness === "stale")
+            ? "Stale"
+            : "Unknown"));
       const syncLine = syncAt ? `Last Health Connect sync ${this.formatDate(syncAt)}` : "Last Health Connect sync: not available";
       const latestLine = latest ? `Latest measurement ${this.formatDate(latest)}` : "Latest measurement: not available";
       const hcLine = hcInventory
         ? `Latest in Health Connect ${this.formatDate(hcInventory)}`
         : "Latest in Health Connect: not reported by companion";
-      let stale = "";
-      if (latest) {
-        const ageMs = Date.now() - Date.parse(latest);
-        if (Number.isFinite(ageMs) && ageMs > 36 * 3600000) stale = " · Data may be stale";
-      }
-      this.text("records_last_refreshed", `${refreshed}. ${syncLine}. ${latestLine}. ${hcLine}${stale}`);
+      this.text("records_last_refreshed", `${refreshed}. ${syncLine}. ${latestLine}. Health Connect freshness: ${freshnessLabel}. ${hcLine}`);
     }
 
     emptyCopy() {
@@ -423,7 +426,9 @@
     sourceCardHtml() {
       const card = this.sourceCard;
       if (!card || !Number(card.observation_count || 0)) return "";
-      const latest = card.last_observation_at ? this.formatDate(card.last_observation_at) : "Not available";
+      const lastMeasurement = card.last_measurement_at || card.last_observation_at;
+      const latest = lastMeasurement ? this.formatDate(lastMeasurement) : "Not available";
+      const received = card.last_data_received_at ? this.formatDate(card.last_data_received_at) : "Not available";
       const sync = card.last_sync_at ? this.formatDate(card.last_sync_at) : (card.last_sync_attempt_at ? this.formatDate(card.last_sync_attempt_at) : "Not available");
       const types = (card.metric_labels || []).join(", ") || "Health Connect metrics";
       const stale = card.currentness === "stale" ? "Data may be stale" : (card.status_text || "Unknown");
@@ -438,6 +443,7 @@
           </div>
           <div class="record-card-meta small">
             <span>Latest measurement: ${this.escape(latest)}</span>
+            <span>Most recent data received: ${this.escape(received)}</span>
             <span>Last Health Connect sync: ${this.escape(sync)}</span>
             <span>Available: ${this.escape(types)}</span>
             <span>Source: ${this.escape(this.label(card.source) || "Health Connect Companion")}</span>
@@ -577,6 +583,7 @@
           ${this.definitionList([
             ["Category", record.consumer_category_label || this.label(record.primary_category)],
             ["Measured", this.formatDate(record.measured_at)],
+            ["Source document date", this.formatDate(record.source_document_date)],
             ["Imported", this.formatDate(record.imported_at)], ["Size", this.formatBytes(record.size_bytes)],
             ["Document type", metadata.document_type], ["Interpretation", metadata.interpretation],
           ])}
@@ -670,7 +677,11 @@
     }
 
     dateLabel(record) {
-      return record.measured_at ? `Measured ${this.formatDate(record.measured_at)}` : `Imported ${this.formatDate(record.imported_at)}`;
+      if (record.measured_at) return `Measured ${this.formatDate(record.measured_at)}`;
+      if (record.source_document_date) {
+        return `Document date ${this.formatDate(record.source_document_date)} · Imported ${this.formatDate(record.imported_at)}`;
+      }
+      return `Imported ${this.formatDate(record.imported_at)}`;
     }
 
     formatDate(value) {
