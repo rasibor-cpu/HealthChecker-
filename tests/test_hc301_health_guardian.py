@@ -36,6 +36,8 @@ from backend.health_vault.models import MedicalDocument, create_measurement
 from backend.health_vault.timeline import build_timeline, build_unified_timeline
 from backend.health_vault.vault_store import VaultStore
 
+BASELINE_TEST_AS_OF = "2026-07-27T12:00:00Z"
+
 
 @pytest.fixture()
 def store(tmp_path: Path) -> VaultStore:
@@ -263,7 +265,7 @@ def test_baseline_calculation_insufficient_and_units(store: VaultStore):
         },
     )
     _seed_glucose(store, [(f"2026-07-0{i+1}T08:00:00Z", 100 + i) for i in range(3)])
-    summary = eng.rebuild()
+    summary = eng.rebuild(as_of=BASELINE_TEST_AS_OF)
     assert summary["baselines"]["glucose"]["insufficient_data"] is True
     assert summary["baselines"]["glucose"]["ready"] is False
 
@@ -279,7 +281,7 @@ def test_baseline_calculation_insufficient_and_units(store: VaultStore):
         ],
         content=b"{}",
     )
-    s2 = BaselineEngine(store2, config=eng.config).rebuild()
+    s2 = BaselineEngine(store2, config=eng.config).rebuild(as_of=BASELINE_TEST_AS_OF)
     g = s2["baselines"]["glucose"]
     assert g["ready"] is True
     assert g["units"] == "mg/dL"
@@ -310,7 +312,7 @@ def test_baseline_deviation_feeds_rules(store: VaultStore):
         content=b"{}",
     )
     base = BaselineEngine(store, config=cfg)
-    base.rebuild()
+    base.rebuild(as_of="2026-07-20T07:59:00Z")
     rules = ExpandedClinicalRulesEngine(store, baseline=base)
     ids = {e["rule_id"] for e in rules.evaluate(now="2026-07-20T09:00:00Z") if e.get("triggered")}
     assert "baseline_deviation_glucose" in ids
@@ -853,7 +855,7 @@ def test_baseline_calc_ready(store: VaultStore):
         "contexts": [],
     }
     _seed_glucose(store, [(f"2026-07-{i+1:02d}T08:00:00Z", 100 + i) for i in range(6)])
-    summary = BaselineEngine(store, config=cfg).rebuild()
+    summary = BaselineEngine(store, config=cfg).rebuild(as_of=BASELINE_TEST_AS_OF)
     g = summary["baselines"]["glucose"]
     assert g["ready"] is True
     assert g["sample_count"] == 6
@@ -870,7 +872,7 @@ def test_baseline_insufficient(store: VaultStore):
         "contexts": [],
     }
     _seed_glucose(store, [(f"2026-07-0{i+1}T08:00:00Z", 110) for i in range(2)])
-    g = BaselineEngine(store, config=cfg).rebuild()["baselines"]["glucose"]
+    g = BaselineEngine(store, config=cfg).rebuild(as_of=BASELINE_TEST_AS_OF)["baselines"]["glucose"]
     assert g["ready"] is False
     assert g["insufficient_data"] is True
 
@@ -903,7 +905,7 @@ def test_baseline_unit_separation(store: VaultStore):
             ],
             content=b"{}",
         )
-    g = BaselineEngine(store, config=cfg).rebuild()["baselines"]["glucose"]
+    g = BaselineEngine(store, config=cfg).rebuild(as_of=BASELINE_TEST_AS_OF)["baselines"]["glucose"]
     assert g["units"] == "mg/dL"
     assert g["sample_count"] == 6
 
@@ -930,7 +932,7 @@ def test_baseline_context_separation_fasting_vs_post_meal(store: VaultStore):
         context="post_meal",
         doc_prefix="post",
     )
-    g = BaselineEngine(store, config=cfg).rebuild()["baselines"]["glucose"]
+    g = BaselineEngine(store, config=cfg).rebuild(as_of=BASELINE_TEST_AS_OF)["baselines"]["glucose"]
     assert "fasting" in (g.get("contextual") or {})
     assert "post_meal" in (g.get("contextual") or {})
     assert g["contextual"]["fasting"]["median"] < g["contextual"]["post_meal"]["median"]
@@ -948,7 +950,7 @@ def test_baseline_deviation(store: VaultStore):
     }
     _seed_glucose(store, [(f"2026-07-{i+1:02d}T08:00:00Z", 100) for i in range(6)])
     eng = BaselineEngine(store, config=cfg)
-    eng.rebuild()
+    eng.rebuild(as_of=BASELINE_TEST_AS_OF)
     inside = eng.deviation("glucose", 100, units="mg/dL")
     outside = eng.deviation("glucose", 250, units="mg/dL")
     assert inside["available"] is True

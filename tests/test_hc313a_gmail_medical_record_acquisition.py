@@ -1201,20 +1201,10 @@ if __name__ == "__main__":
 
 
 def test_hc313_handoff_path_resolution():
-    from backend.health_vault.acquisition.gmail_config import get_default_config
-    from pathlib import Path
-    cfg = get_default_config()
-    assert cfg.intake_incoming_dir.name == 'incoming'
-    assert cfg.intake_incoming_dir.parent.name == 'hc_intake'
-    assert cfg.intake_incoming_dir.parent.parent.name.startswith('HealthChecker')
+    from backend.health_vault.acquisition import gmail_config
 
-
-
-def test_hc313_handoff_path_resolution():
-    from backend.health_vault.acquisition.gmail_config import get_default_config
-    from pathlib import Path
-    cfg = get_default_config()
-    assert cfg.intake_incoming_dir.name == 'incoming'
-    assert cfg.intake_incoming_dir.parent.name == 'hc_intake'
-    assert cfg.intake_incoming_dir.parent.parent.name.startswith('HealthChecker')
-
+    config = gmail_config.get_default_config()
+    assert config.intake_incoming_dir == gmail_config._REPO_ROOT / "hc_intake" / "incoming"
+    assert config.acquisition_state_path == (
+        gmail_config._REPO_ROOT / "hc313a_state" / "acquisition_state.json"
+    )
