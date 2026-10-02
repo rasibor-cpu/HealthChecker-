@@ -4,3 +4,4 @@
 fastapi==0.141.1
 uvicorn==0.52.0
 tzdata==2026.3
+PyMuPDF==1.28.2

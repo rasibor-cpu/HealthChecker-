@@ -6,6 +6,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>HealthChecker+</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc352" />
 </head>
 <body class="mobile-consumer light-theme">
   <header class="mobile-app-header">HealthChecker+</header>
@@ -71,6 +72,10 @@
       <p id="mobile_status" role="status" aria-live="polite"></p>
       <section id="mobile_dashboard" class="card mobile-dash-panel" data-mobile-panel>
         <h1 class="mobile-dash-title">Dashboard</h1>
+        <div class="mobile-record-actions" aria-label="Record actions">
+          <button id="mobile_add_record" type="button" class="mobile-record-add">+ ADD RECORD</button>
+          <button id="mobile_view_last_record" type="button" class="mobile-record-last" disabled>VIEW LAST RECORD</button>
+        </div>
         <div id="hc_health_snapshot" aria-label="Health Snapshot"></div>
         <div data-mobile-content></div>
       </section>

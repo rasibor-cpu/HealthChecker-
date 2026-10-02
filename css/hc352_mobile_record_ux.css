@@ -1,0 +1,100 @@
+/* HC-352: mobile dashboard add/view record actions and compact recent record card. */
+body.mobile-consumer .mobile-record-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 12px;
+}
+body.mobile-consumer .mobile-record-actions button {
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .mobile-record-actions .mobile-record-add {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+body.mobile-consumer .mobile-record-actions button:disabled {
+    opacity: 0.58;
+}
+body.mobile-consumer .mobile-recent-record {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    margin: 8px 0 4px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+}
+body.mobile-consumer .mobile-recent-record h2 {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 16px;
+}
+body.mobile-consumer .mobile-record-thumbnail {
+    width: 88px;
+    min-height: 112px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--status-grey-bg);
+    color: var(--text);
+}
+body.mobile-consumer .mobile-record-thumbnail img {
+    display: block;
+    width: 100%;
+    height: 112px;
+    object-fit: cover;
+}
+body.mobile-consumer .mobile-record-thumbnail-fallback {
+    display: grid;
+    min-height: 112px;
+    place-items: center;
+    padding: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .mobile-recent-record-content {
+    min-width: 0;
+}
+body.mobile-consumer .mobile-recent-record-title {
+    margin: 0 0 6px;
+    font-size: 15px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .mobile-recent-record-meta {
+    margin: 3px 0;
+    font-size: 13px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+body.mobile-consumer .mobile-record-open {
+    width: auto;
+    min-height: 40px;
+    margin: 8px 0 0;
+    padding: 6px 10px;
+}
+body.mobile-consumer .mobile-record-detail-preview {
+    max-width: 480px;
+    margin: 10px auto;
+    text-align: center;
+}
+body.mobile-consumer .mobile-record-detail-preview img {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+    margin: 0 auto;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}

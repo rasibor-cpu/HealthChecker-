@@ -437,7 +437,12 @@ class DashboardService:
             patient_id,
             measurement_counts=measurement_counts,
         )
-        record_summaries = [record.to_summary_dict() for record in patient_records[:5]]
+        received_records = sorted(
+            patient_records,
+            key=lambda record: (record.imported_at or "", record.document_id),
+            reverse=True,
+        )
+        record_summaries = [record.to_summary_dict() for record in received_records[:5]]
         records_count = len(patient_records)
         measurements_count = sum(record.metrics_count for record in patient_records)
         

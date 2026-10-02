@@ -12,6 +12,8 @@
   let recoveryToken = null;
   let pendingPasswordChange = null;
   let authState = "login";
+  let recentReceivedRecord = null;
+  const recordPreviewUrls = new Set();
 
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
@@ -446,6 +448,8 @@
     summary = null;
     records = [];
     preferences = null;
+    recentReceivedRecord = null;
+    clearRecordPreviews();
     if (window.HCConsumerNav) {
       setAuthState("login");
       HCConsumerNav.reset();
@@ -475,6 +479,138 @@
     });
   }
 
+  function clearRecordPreviews() {
+    recordPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    recordPreviewUrls.clear();
+    document.querySelectorAll("img[data-record-preview]").forEach(image => {
+      image.removeAttribute("src");
+    });
+  }
+
+  function friendlyRecordSource(source) {
+    const labels = {
+      health_connect_companion: "Health Connect",
+      healthchecker_plus: "HealthChecker upload",
+      manual_upload: "HealthChecker upload",
+      hc313a_gmail: "Gmail import",
+      gmail: "Gmail import",
+      hc312a_intake: "Imported file",
+    };
+    return labels[String(source || "").trim().toLowerCase()] || "Source not available";
+  }
+
+  function recordFileType(record) {
+    const name = String(record.original_filename || record.display_title || "").toLowerCase();
+    const extension = name.split(".").pop();
+    if (extension === "pdf") return "PDF";
+    if (["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff", "bmp"].includes(extension)) return "Image";
+    if (extension === "json") return "Data file";
+    return "Record";
+  }
+
+  function recordDate(value) {
+    if (!value) return "Not available";
+    const raw = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "Not available";
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: raw.includes("T") ? "short" : undefined,
+    }).format(parsed);
+  }
+
+  async function loadRecordPreview(record, image, fallback) {
+    const path = `/api/records/thumbnail/${encodeURIComponent(record.document_id)}`;
+    let response;
+    try {
+      response = await fetch(path, {
+        cache: "no-store",
+        headers: { Accept: "image/png", ...authHeaders() },
+      });
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+      fallback.textContent = "Preview unavailable";
+      return;
+    }
+    const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
+    if (session && (response.status === 401 || response.status === 403) && !gated) {
+      await logout(false);
+      return;
+    }
+    if (!response.ok || !String(response.headers.get("content-type") || "").toLowerCase().startsWith("image/png")) {
+      fallback.textContent = `${recordFileType(record)} preview unavailable`;
+      return;
+    }
+    const blob = await response.blob();
+    if (!image.isConnected) return;
+    const url = URL.createObjectURL(blob);
+    recordPreviewUrls.add(url);
+    image.src = url;
+    image.hidden = false;
+    fallback.hidden = true;
+  }
+
+  function appendRecordMeta(target, labelText, value) {
+    if (!value) return;
+    const line = document.createElement("p");
+    line.className = "mobile-recent-record-meta";
+    const labelNode = document.createElement("strong");
+    labelNode.textContent = `${labelText}: `;
+    line.append(labelNode, document.createTextNode(value));
+    target.appendChild(line);
+  }
+
+  function renderRecentRecord(target, recentRecords) {
+    clearRecordPreviews();
+    recentReceivedRecord = recentRecords[0] || null;
+    const viewLast = byId("mobile_view_last_record");
+    viewLast.disabled = !recentReceivedRecord;
+    if (!recentReceivedRecord) {
+      text(target, "No records have been received yet.", "muted");
+      return;
+    }
+
+    const record = recentReceivedRecord;
+    const card = document.createElement("article");
+    card.className = "mobile-recent-record";
+    const heading = document.createElement("h2");
+    heading.textContent = "Recent record";
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "mobile-record-thumbnail";
+    previewButton.setAttribute("aria-label", `Open ${record.display_title || "recent record"}`);
+    const fallback = document.createElement("span");
+    fallback.className = "mobile-record-thumbnail-fallback";
+    fallback.textContent = recordFileType(record);
+    const image = document.createElement("img");
+    image.alt = `${record.display_title || "Recent record"} preview`;
+    image.hidden = true;
+    image.dataset.recordPreview = "true";
+    previewButton.append(fallback, image);
+    previewButton.addEventListener("click", () => openRecord(record.document_id));
+
+    const content = document.createElement("div");
+    content.className = "mobile-recent-record-content";
+    const title = document.createElement("h3");
+    title.className = "mobile-recent-record-title";
+    title.textContent = record.display_title || "Health record";
+    content.appendChild(title);
+    appendRecordMeta(content, "Source", friendlyRecordSource(record.source_system));
+    appendRecordMeta(content, "Document date", recordDate(record.source_document_date));
+    appendRecordMeta(content, "Clinical date", recordDate(record.measured_at));
+    appendRecordMeta(content, "Received", recordDate(record.imported_at));
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary mobile-record-open";
+    open.textContent = "Open record";
+    open.addEventListener("click", () => openRecord(record.document_id));
+    content.appendChild(open);
+    card.append(heading, previewButton, content);
+    target.appendChild(card);
+    loadRecordPreview(record, image, fallback);
+  }
+
   async function loadDashboard() {
     summary = await request("/api/dashboard/summary");
     preferences = await request("/api/dashboard/preferences");
@@ -490,6 +626,7 @@
       `${Number(imported.records_count || 0)} records · ${Number(status.measurements_count || 0)} measurements`,
       "mobile-dash-meta"
     );
+    renderRecentRecord(target, imported.recent_records || []);
     byId("mobile_identity").textContent = session.name && session.name !== session.userId
       ? `Signed in as ${session.name} (Patient ID: ${session.userId})`
       : `Signed in as Patient ID ${session.userId}`;
@@ -510,14 +647,23 @@
     const body = await request("/api/records?surface=clinical_document");
     records = Array.isArray(body.records) ? body.records : [];
     renderList(clearContent("mobile_records"), records, "No records available. Use Import to add your first report.", (card, row) => {
-      text(card, row.original_filename || row.title || "Health record");
+      card.dataset.recordCard = "true";
+      card.dataset.documentId = row.document_id;
+      text(card, row.display_title || row.original_filename || row.title || "Health record");
       text(card, `${label(row.primary_category)} · ${label(row.status)}`, "muted");
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = "View details";
+      button.textContent = "Open record";
       button.addEventListener("click", () => loadRecordDetail(row.document_id, card));
       card.appendChild(button);
     });
+  }
+
+  async function openRecord(documentId) {
+    await showView("records");
+    const cards = Array.from(byId("mobile_records").querySelectorAll("[data-record-card]"));
+    const card = cards.find(item => item.dataset.documentId === documentId);
+    if (card) await loadRecordDetail(documentId, card);
   }
 
   async function loadRecordDetail(documentId, card) {
@@ -542,7 +688,22 @@
     try {
       const record = await request(`/api/records/${encodeURIComponent(documentId)}`);
       detail.querySelectorAll("p").forEach(node => node.remove());
-      text(detail, `Source: ${(record.source_provenance || {}).source_system || "Not available"}`);
+      text(detail, `Source: ${friendlyRecordSource((record.source_provenance || {}).source_system)}`);
+      text(detail, `Document date: ${recordDate(record.source_document_date)}`);
+      text(detail, `Clinical date: ${recordDate(record.measured_at)}`);
+      text(detail, `Received: ${recordDate(record.imported_at)}`);
+      const preview = document.createElement("div");
+      preview.className = "mobile-record-detail-preview";
+      const image = document.createElement("img");
+      image.alt = `${record.display_title || "Record"} preview`;
+      image.hidden = true;
+      image.dataset.recordPreview = "true";
+      const fallback = document.createElement("p");
+      fallback.className = "muted";
+      fallback.textContent = `${recordFileType(record)} preview loading…`;
+      preview.append(image, fallback);
+      detail.appendChild(preview);
+      loadRecordPreview(record, image, fallback);
       text(detail, `${(record.extracted_measurements || []).length} extracted measurements`);
       text(detail, `${(record.trend_references || []).length} related trends`);
       text(detail, `${(record.ai_observations || []).length} AI observations`);
@@ -633,6 +794,7 @@
       return;
     }
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
+    if (name !== "dashboard") clearRecordPreviews();
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
     if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
@@ -1004,6 +1166,10 @@
   byId("mobile_settings_recovery_form").addEventListener("submit", handleSettingsRecovery);
   byId("mobile_logout_button").addEventListener("click", () => logout(true));
   byId("mobile_upload_button").addEventListener("click", upload);
+  byId("mobile_add_record").addEventListener("click", () => showView("import"));
+  byId("mobile_view_last_record").addEventListener("click", () => {
+    if (recentReceivedRecord) openRecord(recentReceivedRecord.document_id);
+  });
   byId("mobile_save_preferences").addEventListener("click", savePreferences);
   document.querySelectorAll("[data-mobile-view]").forEach(button => {
     button.setAttribute("aria-pressed", "false");

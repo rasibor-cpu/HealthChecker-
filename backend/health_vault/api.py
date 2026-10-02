@@ -59,6 +59,41 @@ _BANNED_PATH_KEYS = {
 }
 
 
+class RecordPreviewUnavailable(Exception):
+    """The stored document cannot be rendered safely as a small preview."""
+
+
+def _render_record_thumbnail(content: bytes) -> bytes:
+    """Render only the first PDF page or a supported image to an in-memory PNG."""
+    try:
+        import pymupdf
+    except ImportError as exc:
+        raise RecordPreviewUnavailable("preview_renderer_unavailable") from exc
+
+    is_pdf = content.startswith(b"%PDF-")
+    is_image = (
+        content.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"BM"))
+        or content.startswith((b"II*\x00", b"MM\x00*"))
+        or (content.startswith(b"RIFF") and content[8:12] == b"WEBP")
+    )
+    if not (is_pdf or is_image):
+        raise RecordPreviewUnavailable("preview_format_unsupported")
+
+    try:
+        with pymupdf.open(stream=content) as document:
+            if document.page_count < 1:
+                raise RecordPreviewUnavailable("preview_page_unavailable")
+            page = document.load_page(0)
+            rect = page.rect
+            if rect.width <= 0 or rect.height <= 0 or rect.width * rect.height > 40_000_000:
+                raise RecordPreviewUnavailable("preview_dimensions_unsupported")
+            scale = min(480 / rect.width, 640 / rect.height)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+            return pixmap.tobytes("png")
+    except (pymupdf.FileDataError, pymupdf.EmptyFileError, ValueError) as exc:
+        raise RecordPreviewUnavailable("preview_document_unavailable") from exc
+
+
 def _sanitize_value(value: Any) -> Any:
     """Remove absolute filesystem paths from API payloads."""
     if isinstance(value, dict):
@@ -140,7 +175,7 @@ def create_health_vault_app(
     try:
         from fastapi import FastAPI, File, Form, UploadFile
         from fastapi.concurrency import run_in_threadpool
-        from fastapi.responses import FileResponse, JSONResponse
+        from fastapi.responses import FileResponse, JSONResponse, Response
         from fastapi.staticfiles import StaticFiles
     except Exception:
         return None
@@ -154,7 +189,7 @@ def create_health_vault_app(
             headers = {
                 "Cache-Control": "no-store",
                 "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+                    "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; "
                     "script-src 'self'; style-src 'self'; object-src 'none'; "
                     "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
                 ),
@@ -1373,7 +1408,6 @@ def create_health_vault_app(
         except Exception:
             return JSONResponse({"ok": False, "error": "Failed to decrypt record"}, status_code=500)
 
-        from fastapi.responses import Response
         filename = sanitize_filename(doc.get("original_filename") or f"{document_id}.bin")
         media_type = doc.get("mime_type") or "application/octet-stream"
         return Response(
@@ -1382,6 +1416,49 @@ def create_health_vault_app(
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"'
             }
+        )
+
+    @app.get("/api/records/thumbnail/{document_id}")
+    async def thumbnail_health_record(document_id: str, request: Request):
+        try:
+            pid = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+
+        doc = next(
+            (
+                item for item in vault.list_documents()
+                if item.get("id") == document_id and item.get("patient_id", "default-patient") == pid
+            ),
+            None,
+        )
+        if not doc:
+            return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
+
+        try:
+            content = await run_in_threadpool(
+                vault.read_document_bytes,
+                storage_uri=doc.get("storage_uri"),
+                document_id=document_id,
+            )
+            if len(content) > 30 * 1024 * 1024:
+                return JSONResponse({"ok": False, "error": "Preview is too large"}, status_code=413)
+            thumbnail = await run_in_threadpool(_render_record_thumbnail, content)
+        except RecordPreviewUnavailable:
+            return JSONResponse({"ok": False, "error": "Preview unavailable"}, status_code=415)
+        except FileNotFoundError:
+            return JSONResponse({"ok": False, "error": "Record not found"}, status_code=404)
+
+        return Response(
+            content=thumbnail,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-store, private",
+                "Pragma": "no-cache",
+                "Vary": "Authorization",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": 'inline; filename="record-preview.png"',
+            },
         )
 
     @app.api_route(
