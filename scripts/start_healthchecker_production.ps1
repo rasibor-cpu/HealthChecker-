@@ -9,19 +9,14 @@ function Stop-WithCode([string]$Code) {
     throw "HealthChecker production startup failed: $Code"
 }
 
-# HC-354 root-cause fix: the scheduled task runs this supervisor as an interactive
-# console process (LogonType Interactive is required for DPAPI credential loading).
-# Console processes in that session receive CTRL_LOGOFF_EVENT / CTRL_CLOSE_EVENT /
-# CTRL_SHUTDOWN_EVENT signals when the interactive session is locked, disconnected,
-# or torn down. PowerShell's default console-control handler terminates the process
-# on these signals (observed exit code 0xC000013A / STATUS_CONTROL_C_EXIT), while the
-# uvicorn child (spawned headless with no console) never receives that signal and is
-# left running as an orphan. Installing a handler that reports these signals as
-# "handled" (without terminating) keeps the supervisor alive across session-console
-# events so it can continue to own/monitor its child. Task Scheduler's own stop path
-# (Stop-ScheduledTask) terminates the process directly and is unaffected by this
-# handler, and the script's own finally block still performs deterministic child
-# cleanup whenever the supervisor process actually exits.
+# HC-354 defensive mitigation: the scheduled task runs this supervisor as an
+# interactive console process (LogonType Interactive is required for DPAPI
+# credential loading). The supervisor records known console-control callbacks and
+# handles selected session/console signals so it can continue monitoring its child.
+# HC-355B observed handler registration but no corresponding signal callbacks;
+# exit code 0xC000013A alone does not establish that a control signal caused exit.
+# The termination root cause therefore remains unconfirmed. Task Scheduler's
+# direct termination path bypasses this handler and the finally-block cleanup.
 $hcConsoleCtrlHandlerSource = @"
 using System;
 using System.Runtime.InteropServices;
@@ -288,13 +283,10 @@ if (Test-Path -LiteralPath $pidPath) {
 }
 $existingListener = Get-NetTCPConnection -State Listen -LocalAddress $bindAddress -LocalPort $port -ErrorAction SilentlyContinue
 if ($existingListener) {
-    # HC-354: a prior supervisor can be torn down via TerminateProcess (e.g.
-    # Stop-ScheduledTask, or an interactive-session console-close event that
-    # occurs before the console-control handler above was installed on an older
-    # running instance) without running its finally cleanup, leaving its uvicorn
-    # child listening on this port. Reclaim ONLY when the owning process's own
-    # identity positively matches our exact uvicorn invocation; otherwise fail
-    # closed exactly as before to avoid touching an unrelated process.
+    # HC-354: if a prior supervisor exits without running its finally cleanup, its
+    # uvicorn child can remain listening on this port. Reclaim ONLY when the owning
+    # process's own identity positively matches our exact uvicorn invocation;
+    # otherwise fail closed to avoid touching an unrelated process.
     $reclaimed = $false
     foreach ($ownerId in @($existingListener | Select-Object -ExpandProperty OwningProcess -Unique)) {
         if (Test-HcOrphanedUvicornChild -ProcessId $ownerId -Port $port) {

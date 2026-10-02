@@ -22,11 +22,11 @@ def test_consumer_launcher_does_not_blanket_flag_secure():
     assert "refreshSecureWindowFromDom" not in source
     assert "ScreenshotPolicy.applyConsumerScreenshotPolicy(window)" in source
     policy = (ANDROID_UI / "SecureWindowPolicy.kt").read_text(encoding="utf-8")
-    assert "shouldSecureWindow" in policy
-    assert "return false" in policy
+    assert "return passwordChangeVisible || credentialOrSecretVisible" in policy
     screenshot = (ANDROID_UI / "ScreenshotPolicy.kt").read_text(encoding="utf-8")
     assert "clearFlags(WindowManager.LayoutParams.FLAG_SECURE)" in screenshot
-    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in screenshot
+    assert "if (SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = sensitiveScreenVisible))" in screenshot
+    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" in screenshot
 
 
 def test_dashboard_js_greeting_avoids_raw_patient_id(tmp_path: Path):
@@ -89,11 +89,13 @@ def test_dashboard_summary_exposes_display_name_and_hc_sync(tmp_path: Path):
                 "metric": "oxygen_saturation",
                 "latest": 90,
                 "sample_count": 2,
+                "latest_measured_at": "2026-08-18T11:02:00Z",
             },
             "heart_rate": {
                 "metric": "heart_rate",
                 "latest": 70,
                 "sample_count": 3,
+                "latest_measured_at": "2026-08-18T12:02:00Z",
                 "provenance": "clinical",
                 "data_plane": "clinical",
             },

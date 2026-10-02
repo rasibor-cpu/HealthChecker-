@@ -41,14 +41,11 @@ import com.healthchecker.companion.util.SafeLog
  * debug localhost defaults must not become the consumer WebView URL.
  * HC325-R6B: SAF content:// documents selected via the file chooser are
  * readable for FormData upload; file:// access stays disabled.
- * HC329: [ConsumerRecordImportBridge] is the one JavaScript interface
- * installed on this WebView. It exposes a single, parameterless method that
- * reads the bytes of whatever URI the native file-chooser callback most
- * recently recorded — JS supplies no URI/path of its own, so the bridge
- * cannot be used to read anything beyond what the user just picked via the
- * system SAF picker. No clinical data is persisted natively; the bytes only
- * ever live transiently in memory en route to the existing authenticated
- * upload endpoint.
+ * HC329: [ConsumerRecordImportBridge] exposes only a parameterless read of
+ * the URI most recently recorded by the native SAF picker; JavaScript cannot
+ * supply an arbitrary URI or path. HC-322A's route-only screenshot bridge
+ * serves the first-party mobile page; lifecycle checks also probe visible
+ * sensitive surfaces.
  * Native Health Connect and WorkManager remain in [CompanionStatusActivity].
  */
 class ConsumerLauncherActivity : AppCompatActivity() {

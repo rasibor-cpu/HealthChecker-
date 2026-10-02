@@ -286,4 +286,5 @@ def test_screenshot_allowance_on_consumer_screens_is_preserved():
     assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in launcher
     assert "ScreenshotPolicy.applyConsumerScreenshotPolicy" in launcher
     assert "clearFlags(WindowManager.LayoutParams.FLAG_SECURE)" in policy
-    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" not in policy
+    assert "if (SecureWindowPolicy.shouldSecureWindow(passwordChangeVisible = sensitiveScreenVisible))" in policy
+    assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" in policy

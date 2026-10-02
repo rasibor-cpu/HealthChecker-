@@ -7,6 +7,7 @@ production vault/auth data.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,23 +58,66 @@ def test_no_broad_storage_permissions():
     assert "MANAGE_EXTERNAL_STORAGE" not in manifest
 
 
-def test_javascript_bridge_is_exactly_one_narrowly_scoped_import_reader():
-    # HC329: ConsumerRecordImportBridge is now the one intentional JavaScript
-    # interface on this WebView (see its class doc for why — Chromium can
-    # fail to stream a content:// blob directly into a multipart upload
-    # body). It must remain the *only* bridge, expose exactly one
-    # parameterless method, and take no JS-supplied URI/path — it can only
-    # ever read whatever the native file-chooser callback most recently
-    # recorded, never an arbitrary location JS asks for.
+def test_javascript_bridges_match_the_approved_native_contracts():
     launcher = _read(LAUNCHER)
     bridge = _read(BRIDGE)
-    assert launcher.count("addJavascriptInterface(") == 1
-    assert '"HCNativeImport"' in launcher
+
+    registrations = re.findall(
+        r"webView\.addJavascriptInterface\(([\s\S]*?),\s*\"([^\"]+)\"\s*,?\s*\)",
+        launcher,
+    )
+    main_sources = list(ANDROID.rglob("*.kt")) + list(ANDROID.rglob("*.java"))
+    assert sum(_read(path).count("addJavascriptInterface(") for path in main_sources) == len(registrations)
+    assert [
+        ("ConsumerRecordImportBridge" if "ConsumerRecordImportBridge(" in instance else
+         "ScreenshotRouteBridge" if "ScreenshotRouteBridge()" in instance else "unexpected", name)
+        for instance, name in registrations
+    ] == [
+        ("ConsumerRecordImportBridge", "HCNativeImport"),
+        ("ScreenshotRouteBridge", "HCScreenshotPolicy"),
+    ]
+
+    exposed_methods = [
+        signature
+        for path in main_sources
+        for signature in re.findall(
+            r"@JavascriptInterface\s+fun\s+(\w+)\(([^)]*)\)(?:\s*:\s*([A-Za-z0-9?<>]+))?",
+            _read(path),
+        )
+    ]
+    assert sorted(exposed_methods) == sorted([
+        ("setRoute", "route: String?", ""),
+        ("readSelectedRecordBase64", "", "String"),
+    ])
+
+    # HC329 import reads only the native SAF pick, without a JS-supplied URI.
     assert bridge.count("@JavascriptInterface") == 1
     assert "fun readSelectedRecordBase64(): String {" in bridge
     assert "pendingUriProvider: () -> Uri?" in bridge
     assert "classifyImportRead" in bridge
     assert "MAX_IMPORT_BYTES" in _read(POLICY)
+
+    # Screenshot routing is a separate, single-method bridge. A non-sensitive
+    # route signal uses the exact native route policy.
+    assert launcher.count("@JavascriptInterface") == 1
+    assert "private inner class ScreenshotRouteBridge" in launcher
+    assert "fun setRoute(route: String?)" in launcher
+    assert "ScreenshotPolicy.isSensitiveRoute(route)" in launcher
+
+    # Both interfaces belong only to the governed mobile WebView. Its initial
+    # page is /mobile, navigation is origin/path allowlisted, and the page
+    # disallows external scripts and framing.
+    origin = _read(ANDROID / "java/com/healthchecker/companion/consumer/ConsumerOriginPolicy.kt")
+    origin_lock = _read(ANDROID / "java/com/healthchecker/companion/consumer/ConsumerOriginLock.kt")
+    mobile = _read(ROOT / "mobile.html")
+    js = _read(MOBILE_JS)
+    assert 'PRODUCTION_MOBILE_PATH = "/mobile"' in origin_lock
+    assert 'path == "/mobile"' in origin
+    assert "candidateOrigin != origin" in origin
+    assert "frame-ancestors 'none'" in _read(ROOT / "backend/health_vault/api.py")
+    assert "<iframe" not in mobile.lower()
+    assert 'window.HCScreenshotPolicy.setRoute(active ? "password_recovery" : "dashboard")' in js
+    assert "window.HCScreenshotPolicy.setRoute(name)" in js
 
 
 def test_stale_and_cancel_callbacks_are_cleared():

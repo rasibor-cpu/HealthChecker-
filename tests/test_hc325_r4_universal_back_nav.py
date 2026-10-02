@@ -248,17 +248,15 @@ def test_android_system_back_uses_in_app_hierarchy_not_webview_history():
     assert "didHandleInApp" in handle
     assert "webView.goBack" not in launcher
     assert "canGoBack" not in launcher
-    # HC329: back-navigation itself still never touches WebView history or a
-    # JS bridge (still true — asserted above). ConsumerRecordImportBridge is
-    # a separate, narrowly scoped, unrelated JS interface for SAF record
-    # import only (see tests/test_hc325_r6b_android_saf_record_import.py) —
-    # assert it's exactly that one bridge, not a blanket absence.
-    assert launcher.count("addJavascriptInterface(") == 1
-    assert '"HCNativeImport"' in launcher
+    # HC329: neither back navigation nor its evaluated script invokes a native
+    # bridge; bridge registrations are governed by the SAF/screenshot contract.
+    assert "addJavascriptInterface" not in handle
+    assert "HCNativeImport" not in handle
+    assert "HCScreenshotPolicy" not in handle
     assert "HCConsumerNav.handleSystemBack" in policy
     assert 'path == "/js/health_vault/consumer_nav.js"' in origin
     assert "parsed.fragment != null" in origin
-    assert "ScreenshotPolicy.applyConsumerScreenshotPolicy" in handle
+    assert "applyCurrentRouteScreenshotPolicy()" in handle
 
 
 def test_existing_mobile_launcher_and_health_snapshot_contracts_remain():

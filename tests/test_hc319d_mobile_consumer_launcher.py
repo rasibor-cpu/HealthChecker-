@@ -25,7 +25,7 @@ def test_existing_application_id_and_launcher_activity_are_reused():
     assert 'android:icon="@mipmap/ic_launcher"' in manifest
 
 
-def test_launcher_is_hardened_and_has_no_javascript_bridge():
+def test_launcher_is_hardened_with_only_approved_javascript_bridges():
     source = (ANDROID / "java/com/healthchecker/companion/ui/ConsumerLauncherActivity.kt").read_text(
         encoding="utf-8"
     )
@@ -48,11 +48,11 @@ def test_launcher_is_hardened_and_has_no_javascript_bridge():
     assert "refreshSecureWindowFromDom" not in source
     assert "shouldSecureWindow" in policy
     assert "return passwordChangeVisible || credentialOrSecretVisible" in policy
-    # The only WebView bridges are the parameterless SAF-picked-document reader
-    # and the route-specific screenshot-policy signal.
-    assert source.count("addJavascriptInterface(") == 2
+    # Bridge class/name bindings are checked against their full contracts in
+    # test_hc325_r6b_android_saf_record_import.py.
+    assert "ConsumerRecordImportBridge(" in source
     assert '"HCNativeImport"' in source
-    assert '"HCScreenshotPolicy"' in source
+    assert 'ScreenshotRouteBridge(), "HCScreenshotPolicy"' in source
     assert "setWebContentsDebuggingEnabled(true)" not in source
     assert "ACTION_VIEW" not in source
     assert "prefs.getConsumerOrigin() ?: debugConsumerOrigin()" not in source
