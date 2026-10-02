@@ -6,18 +6,21 @@
   <meta name="referrer" content="no-referrer" />
   <title>HealthChecker+</title>
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc352" />
+  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc344" />
 </head>
 <body class="mobile-consumer light-theme">
   <header class="mobile-app-header">HealthChecker+</header>
   <main id="mobile_app">
     <section id="mobile_login" class="card">
       <h1>Sign in</h1>
-      <label for="mobile_user_id">User ID</label>
-      <input id="mobile_user_id" autocomplete="username" />
-      <label for="mobile_password">Password</label>
-      <input id="mobile_password" type="password" autocomplete="current-password" />
-      <button id="mobile_login_button" type="button">Sign in</button>
+      <form id="mobile_login_form" action="/api/auth/login" method="post" autocomplete="on">
+        <label for="mobile_user_id">User ID</label>
+        <input id="mobile_user_id" name="username" autocomplete="username" required />
+        <label for="mobile_password">Password</label>
+        <input id="mobile_password" name="password" type="password" autocomplete="current-password" required />
+        <button id="mobile_login_button" type="submit">Sign in</button>
+      </form>
+      <p class="muted small">Your device password manager can remember this sign-in. HealthChecker keeps only a session for this page and never saves your password.</p>
       <button id="mobile_forgot_password_btn" type="button" class="secondary">Forgot password? Reset it securely</button>
       <p id="mobile_login_error" class="bad" role="alert"></p>
       <form id="mobile_password_change" hidden>
@@ -102,8 +105,20 @@
       <section id="mobile_import" class="card" data-mobile-panel hidden>
         <button type="button" class="secondary" data-hc-back>← Back</button>
         <h1>Import</h1>
+        <p class="muted small">Review the selected file before confirming. Selecting a file does not import it.</p>
         <input id="mobile_record_file" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
-        <button id="mobile_upload_button" type="button">Upload securely</button>
+        <section id="mobile_upload_review" class="mobile-upload-review" aria-live="polite" hidden>
+          <h2>Review selected record</h2>
+          <p id="mobile_upload_file_name" class="mobile-upload-file-name"></p>
+          <p id="mobile_upload_file_summary" class="mobile-upload-file-summary"></p>
+          <div class="mobile-upload-preview">
+            <img id="mobile_upload_preview_image" alt="Selected record preview" hidden />
+            <p id="mobile_upload_preview_message" class="muted"></p>
+          </div>
+          <button id="mobile_cancel_upload_review" type="button" class="secondary">Cancel selection</button>
+        </section>
+        <button id="mobile_upload_button" type="button" disabled>Confirm and upload</button>
+        <p id="mobile_upload_status" role="status" aria-live="polite"></p>
         <div data-mobile-content></div>
       </section>
       <section id="mobile_settings" class="card" data-mobile-panel hidden>
@@ -166,6 +181,6 @@
   <script src="/js/health_vault/json_contract.js"></script>
   <script src="/js/health_vault/consumer_nav.js"></script>
   <script src="/js/health_vault/health_snapshot.js"></script>
-  <script src="/js/health_vault/mobile_consumer.js?v=hc343"></script>
+  <script src="/js/health_vault/mobile_consumer.js?v=hc344"></script>
 </body>
 </html>

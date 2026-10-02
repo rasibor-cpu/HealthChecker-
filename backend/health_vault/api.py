@@ -49,6 +49,13 @@ except Exception:  # pragma: no cover - FastAPI optional at import time
     Request = Any  # type: ignore[misc,assignment]
 
 _ABS_PATH_RE = re.compile(r"(?i)([a-z]:\\|\\\\|/home/|/Users/|/var/|/tmp/)")
+_MAX_RECORD_PREVIEW_BYTES = 30 * 1024 * 1024
+_RECORD_PREVIEW_HEADERS = {
+    "Cache-Control": "no-store, private",
+    "Pragma": "no-cache",
+    "Vary": "Authorization",
+    "X-Content-Type-Options": "nosniff",
+}
 _BANNED_PATH_KEYS = {
     "path",
     "filepath",
@@ -268,6 +275,41 @@ def create_health_vault_app(
     )
     app.state.auth_service = auth_service
     app.state.production_mode = production_mode
+
+    def record_preview_auth_error(request: Request) -> JSONResponse | None:
+        try:
+            _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": "Unauthorized", "code": exc.code},
+                status_code=exc.status_code,
+                headers=_RECORD_PREVIEW_HEADERS,
+            )
+        return None
+
+    async def render_temporary_record_preview(content: bytes) -> Response:
+        if len(content) > _MAX_RECORD_PREVIEW_BYTES:
+            return JSONResponse(
+                {"ok": False, "error": "Preview is too large"},
+                status_code=413,
+                headers=_RECORD_PREVIEW_HEADERS,
+            )
+        try:
+            preview = await run_in_threadpool(_render_record_thumbnail, content)
+        except RecordPreviewUnavailable:
+            return JSONResponse(
+                {"ok": False, "error": "Preview unavailable"},
+                status_code=415,
+                headers=_RECORD_PREVIEW_HEADERS,
+            )
+        return Response(
+            content=preview,
+            media_type="image/png",
+            headers={
+                **_RECORD_PREVIEW_HEADERS,
+                "Content-Disposition": 'inline; filename="record-preview.png"',
+            },
+        )
 
     def _bearer_token(request: Request) -> str:
         auth = request.headers.get("Authorization")
@@ -1331,6 +1373,21 @@ def create_health_vault_app(
     # Register the static upload route before the document-id route so Starlette
     # does not interpret "upload" as a document identifier and return 405.
     if multipart_ok:
+        @app.post("/api/records/preview")
+        async def preview_selected_health_record(
+            request: Request,
+            file: UploadFile = File(...),
+        ) -> Response:
+            auth_error = record_preview_auth_error(request)
+            if auth_error:
+                await file.close()
+                return auth_error
+            try:
+                content = await file.read(_MAX_RECORD_PREVIEW_BYTES + 1)
+            finally:
+                await file.close()
+            return await render_temporary_record_preview(content)
+
         @app.post("/api/records/upload")
         async def upload_health_record(
             request: Request,
@@ -1352,6 +1409,23 @@ def create_health_vault_app(
             code = 200 if result.get("ok") else 400
             return JSONResponse(_sanitize_value(result), status_code=code)
     else:
+        @app.post("/api/records/preview")
+        async def preview_selected_health_record_fallback(request: Request) -> Response:
+            auth_error = record_preview_auth_error(request)
+            if auth_error:
+                return auth_error
+            try:
+                _filename, _mime_type, content = _parse_single_multipart(
+                    request.headers.get("Content-Type") or "", await request.body()
+                )
+            except ValueError as exc:
+                return JSONResponse(
+                    {"ok": False, "error": str(exc)},
+                    status_code=400,
+                    headers=_RECORD_PREVIEW_HEADERS,
+                )
+            return await render_temporary_record_preview(content)
+
         @app.post("/api/records/upload")
         async def upload_health_record_fallback(request: Request) -> JSONResponse:
             try:
@@ -1441,7 +1515,7 @@ def create_health_vault_app(
                 storage_uri=doc.get("storage_uri"),
                 document_id=document_id,
             )
-            if len(content) > 30 * 1024 * 1024:
+            if len(content) > _MAX_RECORD_PREVIEW_BYTES:
                 return JSONResponse({"ok": False, "error": "Preview is too large"}, status_code=413)
             thumbnail = await run_in_threadpool(_render_record_thumbnail, content)
         except RecordPreviewUnavailable:
@@ -1453,10 +1527,7 @@ def create_health_vault_app(
             content=thumbnail,
             media_type="image/png",
             headers={
-                "Cache-Control": "no-store, private",
-                "Pragma": "no-cache",
-                "Vary": "Authorization",
-                "X-Content-Type-Options": "nosniff",
+                **_RECORD_PREVIEW_HEADERS,
                 "Content-Disposition": 'inline; filename="record-preview.png"',
             },
         )

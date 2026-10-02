@@ -129,6 +129,65 @@ def test_thumbnail_uses_clean_fallback_for_unsupported_record(tmp_path):
     assert response.json()["error"] == "Preview unavailable"
 
 
+def test_selected_file_preview_is_authenticated_temporary_and_non_mutating(tmp_path):
+    store = VaultStore(root=tmp_path / "vault", encryption_key=b"R" * 32)
+    pdf_bytes = _sample_pdf()
+    image_bytes = _sample_png()
+    client = TestClient(
+        create_health_vault_app(
+            store,
+            production=False,
+            test_users={"patient-A": "correct"},
+        )
+    )
+    token = client.post(
+        "/api/auth/login", json={"patient_id": "patient-A", "password": "correct"}
+    ).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    before_documents = store.list_documents()
+
+    unauthorized = client.post(
+        "/api/records/preview",
+        files={"file": ("laboratory.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert unauthorized.status_code == 401
+    assert unauthorized.headers["cache-control"] == "no-store, private"
+
+    response = client.post(
+        "/api/records/preview",
+        headers=headers,
+        files={"file": ("laboratory.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-store, private"
+    assert response.headers["vary"] == "Authorization"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    with pymupdf.open(stream=response.content) as preview:
+        page = preview.load_page(0)
+        assert page.rect.width <= 480
+        assert page.rect.height <= 640
+
+    image_preview = client.post(
+        "/api/records/preview",
+        headers=headers,
+        files={"file": ("scan.png", image_bytes, "image/png")},
+    )
+    assert image_preview.status_code == 200
+    assert image_preview.headers["content-type"] == "image/png"
+    assert image_preview.headers["cache-control"] == "no-store, private"
+
+    unsupported = client.post(
+        "/api/records/preview",
+        headers=headers,
+        files={"file": ("measurements.json", b'{"value": 42}', "application/json")},
+    )
+    assert unsupported.status_code == 415
+    assert unsupported.headers["cache-control"] == "no-store, private"
+    assert store.list_documents() == before_documents
+    assert not list((tmp_path / "vault").rglob("laboratory.pdf"))
+
+
 def test_dashboard_recent_record_is_ordered_by_receipt_not_clinical_date(tmp_path):
     store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
     received_later = MedicalDocument(
@@ -173,3 +232,35 @@ def test_mobile_dashboard_record_actions_and_preview_contract():
     assert 'appendRecordMeta(content, "Received"' in script
     assert "cache: \"no-store\"" in script and "URL.revokeObjectURL" in script
     assert "img-src 'self' data: blob:" in api and "object-src 'none'" in api
+    assert '<form id="mobile_login_form"' in html and 'name="username" autocomplete="username"' in html
+    assert 'name="password" type="password" autocomplete="current-password"' in html
+    assert "HealthChecker keeps only a session for this page and never saves your password." in html
+    assert 'id="mobile_upload_review"' in html and 'id="mobile_upload_button" type="button" disabled' in html
+    assert 'id="mobile_cancel_upload_review"' in html
+    assert 'byId("mobile_record_file").addEventListener("change", reviewSelectedFile)' in script
+    assert 'byId("mobile_upload_button").addEventListener("click", upload)' in script
+    assert 'fetch("/api/records/preview"' in script
+    assert 'request("/api/records/upload"' in script
+    assert "No records have been received yet." in script
+    assert "localStorage" not in script
+    assert 'android:importantForAutofill="yes"' in (
+        ROOT / "android" / "app" / "src" / "main" / "res" / "layout" / "activity_consumer_launcher.xml"
+    ).read_text(encoding="utf-8")
+
+
+def test_mobile_route_serves_versioned_consumer_assets(tmp_path):
+    store = VaultStore(root=tmp_path / "vault", allow_plaintext=True)
+    client = TestClient(create_health_vault_app(store, production=False))
+
+    page = client.get("/mobile")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "+ ADD RECORD" in page.text
+    assert "VIEW LAST RECORD" in page.text
+    assert 'hc352_mobile_record_ux.css?v=hc344' in page.text
+    assert 'mobile_consumer.js?v=hc344' in page.text
+
+    stylesheet = client.get("/css/hc352_mobile_record_ux.css?v=hc344")
+    script = client.get("/js/health_vault/mobile_consumer.js?v=hc344")
+    assert stylesheet.status_code == 200 and ".mobile-upload-review" in stylesheet.text
+    assert script.status_code == 200 and 'fetch("/api/records/preview"' in script.text

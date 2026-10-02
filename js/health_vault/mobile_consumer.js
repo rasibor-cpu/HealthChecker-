@@ -14,6 +14,10 @@
   let authState = "login";
   let recentReceivedRecord = null;
   const recordPreviewUrls = new Set();
+  let pendingUploadPayload = null;
+  let pendingUploadPreviewUrl = null;
+  let uploadPreviewController = null;
+  let uploadReviewGeneration = 0;
 
   const byId = id => document.getElementById(id);
   const authHeaders = () => session ? { Authorization: `Bearer ${session.token}` } : {};
@@ -340,7 +344,6 @@
         expiresAt: body.password_expires_at,
         recoveryEnrolled: !!body.recovery_enrolled,
       });
-      byId("mobile_password").value = "";
       if (body.must_change_password) {
         enterPasswordGate();
         return;
@@ -348,6 +351,7 @@
       setAuthState("authenticated");
       showAuthenticated(true);
       await loadDashboard();
+      byId("mobile_password").value = "";
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
       if (deep) await showView(deep);
     } catch (err) { error.textContent = err.message; }
@@ -391,6 +395,7 @@
     setAuthState("authenticated");
     showAuthenticated(true);
     await loadDashboard();
+    byId("mobile_password").value = "";
     const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
     if (deep) await showView(deep);
   }
@@ -450,6 +455,7 @@
     preferences = null;
     recentReceivedRecord = null;
     clearRecordPreviews();
+    clearUploadReview(true);
     if (window.HCConsumerNav) {
       setAuthState("login");
       HCConsumerNav.reset();
@@ -795,6 +801,7 @@
     }
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     if (name !== "dashboard") clearRecordPreviews();
+    if (name !== "import") clearUploadReview(true);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
     if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
@@ -970,26 +977,159 @@
     return message || "Upload failed.";
   }
 
-  async function upload() {
-    const target = clearContent("mobile_import");
+  function clearUploadReview(clearSelection) {
+    uploadReviewGeneration += 1;
+    if (uploadPreviewController) {
+      uploadPreviewController.abort();
+      uploadPreviewController = null;
+    }
+    pendingUploadPayload = null;
+    if (pendingUploadPreviewUrl) {
+      URL.revokeObjectURL(pendingUploadPreviewUrl);
+      pendingUploadPreviewUrl = null;
+    }
+    const image = byId("mobile_upload_preview_image");
+    image.removeAttribute("src");
+    image.hidden = true;
+    byId("mobile_upload_review").hidden = true;
+    byId("mobile_upload_file_name").textContent = "";
+    byId("mobile_upload_file_summary").textContent = "";
+    byId("mobile_upload_preview_message").textContent = "";
+    byId("mobile_upload_button").disabled = true;
+    byId("mobile_cancel_upload_review").disabled = false;
+    if (clearSelection) byId("mobile_record_file").value = "";
+    return uploadReviewGeneration;
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function selectedFileKind(name, mimeType) {
+    const lowerName = String(name || "").toLowerCase();
+    const mime = String(mimeType || "").toLowerCase();
+    if (mime === "application/pdf" || lowerName.endsWith(".pdf")) return "pdf";
+    if (
+      ["image/png", "image/jpeg"].includes(mime) ||
+      /\.(png|jpe?g)$/i.test(lowerName)
+    ) return "image";
+    if (mime === "application/json" || lowerName.endsWith(".json")) return "data";
+    return "other";
+  }
+
+  async function loadSelectedFilePreview(payload, kind, generation) {
+    const image = byId("mobile_upload_preview_image");
+    const message = byId("mobile_upload_preview_message");
+    if (kind === "data") {
+      message.textContent = "Preview is not available for this data file. Confirm its name and type before importing.";
+      return;
+    }
+    if (kind === "other") {
+      message.textContent = "No safe preview is available for this file type. Confirm its name and type before importing.";
+      return;
+    }
+
+    message.textContent = kind === "pdf" ? "Creating a secure first-page preview…" : "Creating a secure image preview…";
+    const form = new FormData();
+    form.append("file", payload.blob, payload.name);
+    uploadPreviewController = new AbortController();
+    try {
+      const response = await fetch("/api/records/preview", {
+        method: "POST",
+        body: form,
+        cache: "no-store",
+        signal: uploadPreviewController.signal,
+        headers: { Accept: "image/png", ...authHeaders() },
+      });
+      uploadPreviewController = null;
+      if (generation !== uploadReviewGeneration) return;
+      const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
+      if (session && (response.status === 401 || response.status === 403) && !gated) {
+        await logout(false);
+        return;
+      }
+      if (!response.ok || !String(response.headers.get("content-type") || "").toLowerCase().startsWith("image/png")) {
+        message.textContent = response.status === 413
+          ? "This file is too large to preview safely. Confirm the file name and type before importing."
+          : "Preview unavailable. Confirm the file name and type before importing.";
+        return;
+      }
+      const preview = await response.blob();
+      if (generation !== uploadReviewGeneration) return;
+      pendingUploadPreviewUrl = URL.createObjectURL(preview);
+      image.src = pendingUploadPreviewUrl;
+      image.alt = kind === "pdf" ? "First page of selected PDF" : "Selected image preview";
+      image.hidden = false;
+      message.textContent = kind === "pdf" ? "First page preview" : "Image preview";
+    } catch (error) {
+      uploadPreviewController = null;
+      if (generation !== uploadReviewGeneration) return;
+      message.textContent = error instanceof TypeError
+        ? "Preview could not reach the service. Confirm the file name and type before importing."
+        : "Preview unavailable. Confirm the file name and type before importing.";
+    }
+  }
+
+  async function reviewSelectedFile() {
+    const inputFile = byId("mobile_record_file").files[0];
+    const generation = clearUploadReview(false);
+    byId("mobile_upload_status").textContent = "";
+    if (!inputFile && !window.HCNativeImport) return;
+
+    byId("mobile_upload_review").hidden = false;
+    byId("mobile_upload_preview_message").textContent = "Preparing file review…";
     let payload;
     try {
       payload = await readSelectedFileViaNativeBridge();
     } catch (error) {
-      return text(target, describeUploadError(error), "bad");
+      if (generation !== uploadReviewGeneration) return;
+      byId("mobile_upload_preview_message").textContent = describeUploadError(error);
+      return;
     }
+    if (!payload && inputFile) payload = { blob: inputFile, name: inputFile.name };
+    if (generation !== uploadReviewGeneration) return;
     if (!payload) {
-      const file = byId("mobile_record_file").files[0];
-      if (!file) return text(target, "Choose a report first.", "bad");
-      payload = { blob: file, name: file.name };
+      byId("mobile_upload_review").hidden = true;
+      return;
     }
+
+    pendingUploadPayload = payload;
+    const kind = selectedFileKind(payload.name, payload.blob.type);
+    byId("mobile_upload_file_name").textContent = payload.name || "Selected record";
+    const typeLabel = kind === "pdf" ? "PDF" : kind === "image" ? "Image" : kind === "data" ? "Data file" : "File type not recognized";
+    byId("mobile_upload_file_summary").textContent = `${typeLabel} · ${formatFileSize(payload.blob.size)}`;
+    byId("mobile_upload_button").disabled = false;
+    await loadSelectedFilePreview(payload, kind, generation);
+  }
+
+  async function upload() {
+    const status = byId("mobile_upload_status");
+    if (!pendingUploadPayload) {
+      status.textContent = "Choose and review a record before confirming the upload.";
+      return;
+    }
+    const payload = pendingUploadPayload;
+    byId("mobile_upload_button").disabled = true;
+    byId("mobile_record_file").disabled = true;
+    byId("mobile_cancel_upload_review").disabled = true;
+    status.textContent = "Uploading securely and processing the confirmed record…";
     const form = new FormData();
     form.append("file", payload.blob, payload.name);
     try {
       const result = await request("/api/records/upload", { method: "POST", body: form });
-      text(target, `Upload ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`);
+      clearUploadReview(true);
+      status.textContent = `Upload ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`;
       summary = null; records = [];
-    } catch (error) { text(target, describeUploadError(error), "bad"); }
+    } catch (error) {
+      status.textContent = describeUploadError(error);
+      byId("mobile_upload_button").disabled = !pendingUploadPayload;
+    } finally {
+      byId("mobile_record_file").disabled = false;
+      byId("mobile_cancel_upload_review").disabled = false;
+      byId("mobile_upload_button").disabled = !pendingUploadPayload;
+    }
   }
 
   async function savePreferences() {
@@ -1148,7 +1288,10 @@
     } catch (err) { error.textContent = err.message; }
   }
 
-  byId("mobile_login_button").addEventListener("click", login);
+  byId("mobile_login_form").addEventListener("submit", event => {
+    event.preventDefault();
+    login();
+  });
   byId("mobile_password_change").addEventListener("submit", changePassword);
   byId("mobile_recovery_enroll").addEventListener("submit", submitEnrollment);
   byId("mobile_forgot_password_btn").addEventListener("click", showRecoveryFlow);
@@ -1166,6 +1309,11 @@
   byId("mobile_settings_recovery_form").addEventListener("submit", handleSettingsRecovery);
   byId("mobile_logout_button").addEventListener("click", () => logout(true));
   byId("mobile_upload_button").addEventListener("click", upload);
+  byId("mobile_record_file").addEventListener("change", reviewSelectedFile);
+  byId("mobile_cancel_upload_review").addEventListener("click", () => {
+    clearUploadReview(true);
+    byId("mobile_upload_status").textContent = "Selection canceled. Nothing was imported.";
+  });
   byId("mobile_add_record").addEventListener("click", () => showView("import"));
   byId("mobile_view_last_record").addEventListener("click", () => {
     if (recentReceivedRecord) openRecord(recentReceivedRecord.document_id);

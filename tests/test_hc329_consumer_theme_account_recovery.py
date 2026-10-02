@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +26,12 @@ def test_mobile_exposes_password_change_and_lost_password_recovery():
     html = _read("mobile.html")
     js = _read("js/health_vault/mobile_consumer.js")
 
-    assert '/js/health_vault/mobile_consumer.js?v=hc343' in html
+    version_match = re.search(
+        r'versionCode\s*=\s*(\d+)',
+        _read("android/app/build.gradle.kts"),
+    )
+    assert version_match
+    assert f'/js/health_vault/mobile_consumer.js?v=hc{version_match.group(1)}' in html
     assert "Forgot password? Reset it securely" in html
     assert "Recover your account" in html
     assert "Password &amp; recovery" in html
