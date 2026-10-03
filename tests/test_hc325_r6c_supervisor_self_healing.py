@@ -427,15 +427,15 @@ def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path:
         + source
         + "\n'@\n"
         + "Add-Type -TypeDefinition $source -ErrorAction Stop\n"
-        + "$handledSignals = @([HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT, "
+        + "$handledSignals = @([HcConsoleCtrlHandler]::CTRL_C_EVENT, "
+        + "[HcConsoleCtrlHandler]::CTRL_BREAK_EVENT, "
+        + "[HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_LOGOFF_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_SHUTDOWN_EVENT)\n"
         + "foreach ($signal in $handledSignals) {\n"
         + "  if (-not [HcConsoleCtrlHandler]::Handle($signal)) { exit 1 }\n"
         + "  if ([HcConsoleCtrlHandler]::TakePendingSignal() -ne $signal) { exit 2 }\n"
-        + "}\n"
-        + "if ([HcConsoleCtrlHandler]::Handle([HcConsoleCtrlHandler]::CTRL_C_EVENT)) { exit 3 }\n"
-        + "if ([HcConsoleCtrlHandler]::TakePendingSignal() -ne [HcConsoleCtrlHandler]::CTRL_C_EVENT) { exit 4 }\n",
+        + "}\n",
         encoding="utf-8",
     )
     completed = subprocess.run(

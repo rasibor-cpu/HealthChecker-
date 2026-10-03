@@ -43,8 +43,10 @@ public static class HcConsoleCtrlHandler {
 
     public static bool Handle(int ctrlType) {
         Interlocked.Exchange(ref _pendingSignal, ctrlType);
-        return ctrlType == CTRL_LOGOFF_EVENT ||
+        return ctrlType == CTRL_C_EVENT ||
+            ctrlType == CTRL_BREAK_EVENT ||
             ctrlType == CTRL_CLOSE_EVENT ||
+            ctrlType == CTRL_LOGOFF_EVENT ||
             ctrlType == CTRL_SHUTDOWN_EVENT;
     }
 
