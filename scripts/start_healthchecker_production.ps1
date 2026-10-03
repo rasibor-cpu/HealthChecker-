@@ -33,6 +33,12 @@ public static class HcConsoleCtrlHandler {
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool SetConsoleCtrlHandler(HandlerRoutine handler, bool add);
 
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FreeConsole();
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateFile(
         string path, uint access, uint share, IntPtr securityAttributes,
@@ -68,6 +74,17 @@ public static class HcConsoleCtrlHandler {
             throw new Win32Exception(Marshal.GetLastWin32Error());
         }
         _signalLogHandle = handle;
+    }
+
+    public static bool HasConsole() {
+        return GetConsoleWindow() != IntPtr.Zero;
+    }
+
+    public static void DetachFromConsole() {
+        if (GetConsoleWindow() != IntPtr.Zero && !FreeConsole()) {
+            int error = Marshal.GetLastWin32Error();
+            if (error != 6) throw new Win32Exception(error);
+        }
     }
 
     public static bool Register() {
@@ -406,18 +423,6 @@ function Test-HcLoopbackService {
         [string]$Path = "/healthz",
         [int]$TimeoutMs = 2000
     )
-    $client = $null
-    try {
-        $client = New-Object System.Net.Sockets.TcpClient
-        $async = $client.BeginConnect($BindAddress, $Port, $null, $null)
-        $opened = $async.AsyncWaitHandle.WaitOne(500, $false)
-        if (-not $opened) { return $false }
-        $client.EndConnect($async)
-    } catch {
-        return $false
-    } finally {
-        if ($client) { $client.Close() }
-    }
     if (-not $Path) { $Path = "/healthz" }
     if (-not $Path.StartsWith("/")) { $Path = "/" + $Path }
     try {
@@ -558,12 +563,14 @@ $heartbeatPath = Join-Path $stateDir "healthchecker-consumer-api.heartbeat.json"
 $logPath = Join-Path $logDir "healthchecker-runtime.log"
 try {
     [HcConsoleCtrlHandler]::ConfigureSignalLog($logPath)
+    $consoleWasAttached = [HcConsoleCtrlHandler]::HasConsole()
+    [HcConsoleCtrlHandler]::DetachFromConsole()
     $hcHandlerResult = [HcConsoleCtrlHandler]::Register()
     if (-not $hcHandlerResult) {
         throw "SetConsoleCtrlHandler returned false."
     }
     $hcCtrlHandlerAvailable = $true
-    Add-Content -LiteralPath $logPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult pid=$PID"
+    Add-Content -LiteralPath $logPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult console_was_attached=$consoleWasAttached pid=$PID"
 } catch {
     Add-Content -LiteralPath $logPath -Value "event=hc_diag_ctrl_handler_registration_failed error=$($_.Exception.Message) pid=$PID"
     throw

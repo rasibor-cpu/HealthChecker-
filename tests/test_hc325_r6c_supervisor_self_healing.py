@@ -22,6 +22,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "scripts" / "start_healthchecker_production.ps1"
 TASK_INSTALLER = ROOT / "scripts" / "install_healthchecker_runtime_task.ps1"
+RUNTIME_HEALTH = ROOT / "scripts" / "Test-HealthCheckerRuntimeHealth.ps1"
 EXAMPLE = json.loads(
     (ROOT / "config" / "healthchecker.production.example.json").read_text(encoding="utf-8")
 )
@@ -384,6 +385,8 @@ def test_supervisor_installs_console_ctrl_handler_and_reclaims_orphans():
     installer = TASK_INSTALLER.read_text(encoding="utf-8")
     assert "SetConsoleCtrlHandler" in text
     assert "[HcConsoleCtrlHandler]::Register()" in text
+    assert "[HcConsoleCtrlHandler]::DetachFromConsole()" in text
+    assert "[HcConsoleCtrlHandler]::HasConsole()" in text
     assert "CTRL_LOGOFF_EVENT" in text
     assert "CTRL_CLOSE_EVENT" in text
     assert "CTRL_SHUTDOWN_EVENT" in text
@@ -406,6 +409,17 @@ def test_task_installer_preserves_runtime_across_power_and_duplicate_starts():
     assert "-MultipleInstances IgnoreNew" in text
     assert "-RestartCount 5" in text
     assert "-ExecutionTimeLimit ([TimeSpan]::Zero)" in text
+
+
+def test_runtime_health_probes_use_bounded_http_without_short_tcp_preflight():
+    supervisor = LAUNCHER.read_text(encoding="utf-8")
+    monitor = RUNTIME_HEALTH.read_text(encoding="utf-8")
+    for text in (supervisor, monitor):
+        assert "BeginConnect" not in text
+        assert "WaitOne(500" not in text
+        assert "HttpWebRequest]::Create" in text
+    assert "$request.Timeout = $TimeoutMs" in supervisor
+    assert "$request.Timeout = 2000" in monitor
 
 
 def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path: Path):
@@ -434,6 +448,8 @@ def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path:
         + "\n'@\n"
         + "Add-Type -TypeDefinition $source -ErrorAction Stop\n"
         + "[HcConsoleCtrlHandler]::ConfigureSignalLog($env:HC_HANDLER_SIGNAL_LOG)\n"
+        + "[HcConsoleCtrlHandler]::DetachFromConsole()\n"
+        + "if ([HcConsoleCtrlHandler]::HasConsole()) { exit 5 }\n"
         + "$handledSignals = @([HcConsoleCtrlHandler]::CTRL_C_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_BREAK_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT, "

@@ -49,6 +49,11 @@ change. Re-verify the deployed head for each release:
   and appends the signal type/PID through Win32 file I/O. PowerShell observation
   is drained from the supervisor's main runspace; cmdlets must not run from the
   native callback thread.
+- The supervisor detaches from its interactive console after runtime setup.
+  This retains the interactive user token for DPAPI while preventing console
+  close events from terminating the long-running supervisor.
+- Supervisor and read-only monitor health probes use a bounded HTTP `/healthz`
+  request without a separate short TCP preflight.
 - The task installer explicitly ignores duplicate starts and does not stop or
   refuse to start the runtime on battery power.
 - Runtime state lives entirely outside the repo, under

@@ -162,31 +162,20 @@ function Test-HealthCheckerRuntimeHealth {
     }
 
     $localHealthz = $false
-    $client = $null
     try {
-        $client = New-Object System.Net.Sockets.TcpClient
-        $async = $client.BeginConnect($BindAddress, $Port, $null, $null)
-        $opened = $async.AsyncWaitHandle.WaitOne(500, $false)
-        if ($opened) {
-            $client.EndConnect($async)
-            $client.Close()
-            $client = $null
-            $request = [System.Net.HttpWebRequest]::Create("http://${BindAddress}:${Port}/healthz")
-            $request.Method = "GET"
-            $request.Timeout = 2000
-            $request.ReadWriteTimeout = 2000
-            $request.Proxy = New-Object System.Net.WebProxy
-            $response = $request.GetResponse()
-            try {
-                $localHealthz = ([int]$response.StatusCode -eq 200)
-            } finally {
-                $response.Close()
-            }
+        $request = [System.Net.HttpWebRequest]::Create("http://${BindAddress}:${Port}/healthz")
+        $request.Method = "GET"
+        $request.Timeout = 2000
+        $request.ReadWriteTimeout = 2000
+        $request.Proxy = New-Object System.Net.WebProxy
+        $response = $request.GetResponse()
+        try {
+            $localHealthz = ([int]$response.StatusCode -eq 200)
+        } finally {
+            $response.Close()
         }
     } catch {
         $localHealthz = $false
-    } finally {
-        if ($client) { $client.Close() }
     }
     if (-not $localHealthz) { $reasons.Add("local_healthz_failed") }
 
