@@ -223,7 +223,11 @@ textarea{
     <label class="small muted">Patient ID</label>
     <input id="login_patient_id" placeholder="Patient ID (e.g. 00000)" style="margin-top: 4px;" autocomplete="username" />
     <label class="small muted">Password</label>
-    <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" />
+    <input id="login_password" type="password" placeholder="Password" style="margin-top: 4px;" autocomplete="current-password" />
+    <label class="small" style="display:flex; gap:8px; align-items:flex-start; margin:10px 0;">
+      <input id="login_use_password_manager" type="checkbox" style="width:auto; margin-top:3px;" />
+      <span><strong>Remember sign-in on this device</strong><br /><span class="muted">Stores only your Patient ID in HealthChecker. Your password stays with Samsung Pass, Google Password Manager, or another Android autofill service.</span></span>
+    </label>
     <button id="login_btn">Sign In</button>
     <button id="forgot_password_btn" type="button" class="secondary">Forgot password?</button>
     <div id="login_error" class="bad small" style="margin-top: 10px; font-weight: bold;"></div>
@@ -509,8 +513,15 @@ textarea{
       <input id="records_file_input" type="file" accept=".pdf,.json,.png,.jpg,.jpeg,application/pdf,application/json,image/png,image/jpeg" />
     </div>
     <div id="records_file_preview" class="muted small">No file selected.</div>
+    <section id="records_document_preview" class="records-detail-section" hidden aria-live="polite" style="margin-top:12px;">
+      <h5 style="margin:0 0 8px;">Document preview — not uploaded yet</h5>
+      <img id="records_document_preview_image" hidden alt="Preview of the selected medical record" style="display:block; max-width:100%; max-height:55vh; margin:auto;" />
+      <iframe id="records_document_preview_pdf" hidden title="Preview of the selected PDF medical record" referrerpolicy="no-referrer" style="width:100%; min-height:50vh; border:1px solid var(--line); border-radius:8px;"></iframe>
+      <pre id="records_document_preview_text" hidden class="small" style="max-height:50vh; overflow:auto; white-space:pre-wrap; word-break:break-word;"></pre>
+      <p class="small muted" style="margin-bottom:0;">Check that this is the intended document, then confirm import. The preview is created locally on this device.</p>
+    </section>
     <div class="records-upload-actions">
-      <button id="records_upload_submit_btn" type="button" disabled>Upload securely</button>
+      <button id="records_upload_submit_btn" type="button" disabled>Confirm secure import</button>
       <button id="records_upload_cancel_btn" type="button" class="secondary">Cancel</button>
     </div>
     <div id="records_upload_status" class="records-state" role="status" aria-live="polite"></div>
