@@ -9,17 +9,17 @@ function Stop-WithCode([string]$Code) {
     throw "HealthChecker production startup failed: $Code"
 }
 
-# HC-354 defensive mitigation: the scheduled task runs this supervisor as an
-# interactive console process (LogonType Interactive is required for DPAPI
-# credential loading). The supervisor records known console-control callbacks and
-# handles selected session/console signals so it can continue monitoring its child.
-# HC-355B observed handler registration but no corresponding signal callbacks;
-# exit code 0xC000013A alone does not establish that a control signal caused exit.
-# The termination root cause therefore remains unconfirmed. Task Scheduler's
-# direct termination path bypasses this handler and the finally-block cleanup.
+# The scheduled task runs this supervisor as an interactive process (LogonType
+# Interactive is required for DPAPI credential loading). Windows invokes console
+# handlers on a native callback thread, so the handler must not call PowerShell
+# scriptblocks or cmdlets. The child is also contained in a kill-on-close job so
+# any unexpected supervisor exit cannot leave a serving orphan.
 $hcConsoleCtrlHandlerSource = @"
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 
 public static class HcConsoleCtrlHandler {
     public delegate bool HandlerRoutine(int ctrlType);
@@ -32,30 +32,263 @@ public static class HcConsoleCtrlHandler {
     public const int CTRL_CLOSE_EVENT = 2;
     public const int CTRL_LOGOFF_EVENT = 5;
     public const int CTRL_SHUTDOWN_EVENT = 6;
+
+    private static HandlerRoutine _handler;
+    private static int _pendingSignal = -1;
+
+    public static bool Register() {
+        _handler = Handle;
+        return SetConsoleCtrlHandler(_handler, true);
+    }
+
+    public static bool Handle(int ctrlType) {
+        Interlocked.Exchange(ref _pendingSignal, ctrlType);
+        return ctrlType == CTRL_LOGOFF_EVENT ||
+            ctrlType == CTRL_CLOSE_EVENT ||
+            ctrlType == CTRL_SHUTDOWN_EVENT;
+    }
+
+    public static int TakePendingSignal() {
+        return Interlocked.Exchange(ref _pendingSignal, -1);
+    }
+}
+
+public static class HcManagedChildJob {
+    private const uint JobObjectExtendedLimitInformation = 9;
+    private const uint JobObjectLimitKillOnJobClose = 0x2000;
+    private const uint CreateSuspended = 0x00000004;
+    private const uint CreateNoWindow = 0x08000000;
+    private const uint StartfUseStdHandles = 0x00000100;
+    private const uint GenericRead = 0x80000000;
+    private const uint GenericWrite = 0x40000000;
+    private const uint FileShareRead = 0x00000001;
+    private const uint FileShareWrite = 0x00000002;
+    private const uint OpenExisting = 3;
+    private const uint FileAttributeNormal = 0x00000080;
+
+    private static readonly object JobLock = new object();
+    private static IntPtr _jobHandle = IntPtr.Zero;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SecurityAttributes {
+        public int Length;
+        public IntPtr SecurityDescriptor;
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool InheritHandle;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct StartupInfo {
+        public int Size;
+        public string Reserved;
+        public string Desktop;
+        public string Title;
+        public int X;
+        public int Y;
+        public int XSize;
+        public int YSize;
+        public int XCountChars;
+        public int YCountChars;
+        public int FillAttribute;
+        public int Flags;
+        public short ShowWindow;
+        public short Reserved2Length;
+        public IntPtr Reserved2;
+        public IntPtr StandardInput;
+        public IntPtr StandardOutput;
+        public IntPtr StandardError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInformation {
+        public IntPtr Process;
+        public IntPtr Thread;
+        public uint ProcessId;
+        public uint ThreadId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicLimitInformation {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IoCounters {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ExtendedLimitInformation {
+        public BasicLimitInformation BasicLimit;
+        public IoCounters Io;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetInformationJobObject(
+        IntPtr job, uint informationClass, ref ExtendedLimitInformation information, uint length);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateFile(
+        string name, uint access, uint share, ref SecurityAttributes attributes,
+        uint creationDisposition, uint flags, IntPtr templateFile);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateProcess(
+        string applicationName, StringBuilder commandLine, IntPtr processAttributes,
+        IntPtr threadAttributes, bool inheritHandles, uint creationFlags,
+        IntPtr environment, string currentDirectory, ref StartupInfo startupInfo,
+        out ProcessInformation processInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint ResumeThread(IntPtr thread);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    public static void Initialize() {
+        lock (JobLock) {
+            if (_jobHandle != IntPtr.Zero) return;
+            IntPtr job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            ExtendedLimitInformation information = new ExtendedLimitInformation();
+            information.BasicLimit.LimitFlags = JobObjectLimitKillOnJobClose;
+            uint size = (uint)Marshal.SizeOf(typeof(ExtendedLimitInformation));
+            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref information, size)) {
+                int error = Marshal.GetLastWin32Error();
+                CloseHandle(job);
+                throw new Win32Exception(error);
+            }
+            _jobHandle = job;
+        }
+    }
+
+    public static int StartProcess(string executable, string arguments, string workingDirectory) {
+        Initialize();
+        SecurityAttributes security = new SecurityAttributes();
+        security.Length = Marshal.SizeOf(typeof(SecurityAttributes));
+        security.InheritHandle = true;
+        IntPtr standardInput = CreateFile(
+            "NUL", GenericRead, FileShareRead | FileShareWrite, ref security,
+            OpenExisting, FileAttributeNormal, IntPtr.Zero);
+        IntPtr standardOutput = CreateFile(
+            "NUL", GenericWrite, FileShareRead | FileShareWrite, ref security,
+            OpenExisting, FileAttributeNormal, IntPtr.Zero);
+        IntPtr standardError = CreateFile(
+            "NUL", GenericWrite, FileShareRead | FileShareWrite, ref security,
+            OpenExisting, FileAttributeNormal, IntPtr.Zero);
+        if (IsInvalidHandle(standardInput) || IsInvalidHandle(standardOutput) ||
+            IsInvalidHandle(standardError)) {
+            int error = Marshal.GetLastWin32Error();
+            CloseIfValid(standardInput);
+            CloseIfValid(standardOutput);
+            CloseIfValid(standardError);
+            throw new Win32Exception(error);
+        }
+
+        try {
+            StartupInfo startup = new StartupInfo();
+            startup.Size = Marshal.SizeOf(typeof(StartupInfo));
+            startup.Flags = (int)StartfUseStdHandles;
+            startup.StandardInput = standardInput;
+            startup.StandardOutput = standardOutput;
+            startup.StandardError = standardError;
+            ProcessInformation process;
+            string command = "\"" + executable + "\" " + arguments;
+            StringBuilder mutableCommand = new StringBuilder(command, command.Length + 1);
+            if (!CreateProcess(
+                executable, mutableCommand, IntPtr.Zero, IntPtr.Zero, true,
+                CreateSuspended | CreateNoWindow, IntPtr.Zero, workingDirectory,
+                ref startup, out process)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            bool resumed = false;
+            try {
+                if (!AssignProcessToJobObject(_jobHandle, process.Process)) {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                if (ResumeThread(process.Thread) == UInt32.MaxValue) {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                resumed = true;
+                return checked((int)process.ProcessId);
+            } finally {
+                bool terminationFailed = false;
+                int terminateError = 0;
+                if (!resumed && !TerminateProcess(process.Process, 1)) {
+                    terminationFailed = true;
+                    terminateError = Marshal.GetLastWin32Error();
+                }
+                CloseHandle(process.Thread);
+                CloseHandle(process.Process);
+                if (terminationFailed) {
+                    throw new Win32Exception(
+                        terminateError,
+                        "Failed to terminate the suspended HealthChecker child process.");
+                }
+            }
+        } finally {
+            CloseHandle(standardInput);
+            CloseHandle(standardOutput);
+            CloseHandle(standardError);
+        }
+    }
+
+    private static bool IsInvalidHandle(IntPtr handle) {
+        return handle == IntPtr.Zero || handle == new IntPtr(-1);
+    }
+
+    private static void CloseIfValid(IntPtr handle) {
+        if (!IsInvalidHandle(handle)) CloseHandle(handle);
+    }
 }
 "@
 $hcDiagLogPath = "C:\ProgramData\HealthChecker\logs\healthchecker\healthchecker-runtime.log"
+$hcNativeRuntimeTypesAvailable = $false
+$hcCtrlHandlerAvailable = $false
 try {
     Add-Type -TypeDefinition $hcConsoleCtrlHandlerSource -ErrorAction Stop
-    $hcCtrlHandlerDelegate = [HcConsoleCtrlHandler+HandlerRoutine]{
-        param([int]$ctrlType)
-        try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal type=$ctrlType pid=$PID" -ErrorAction SilentlyContinue } catch {}
-        # Ignore session logoff/console-close/shutdown signals so the supervisor
-        # keeps running and remains able to own and monitor its child process.
-        # Returning $true tells Windows the signal was handled.
-        if ($ctrlType -eq [HcConsoleCtrlHandler]::CTRL_LOGOFF_EVENT -or
-            $ctrlType -eq [HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT -or
-            $ctrlType -eq [HcConsoleCtrlHandler]::CTRL_SHUTDOWN_EVENT) {
-            return $true
-        }
-        return $false
-    }
-    $hcHandlerResult = [HcConsoleCtrlHandler]::SetConsoleCtrlHandler($hcCtrlHandlerDelegate, $true)
+    $hcNativeRuntimeTypesAvailable = $true
+    $hcHandlerResult = [HcConsoleCtrlHandler]::Register()
+    $hcCtrlHandlerAvailable = [bool]$hcHandlerResult
     try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult pid=$PID" -ErrorAction SilentlyContinue } catch {}
 } catch {
-    # Non-fatal: if the handler cannot be installed, fall back to prior behavior
-    # rather than blocking startup.
     try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registration_failed error=$($_.Exception.Message) pid=$PID" -ErrorAction SilentlyContinue } catch {}
+}
+
+function Write-HcPendingControlSignal {
+    if (-not $hcCtrlHandlerAvailable) { return }
+    $ctrlType = [HcConsoleCtrlHandler]::TakePendingSignal()
+    if ($ctrlType -ge 0) {
+        Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal type=$ctrlType pid=$PID"
+    }
 }
 
 function Write-HcHeartbeat {
@@ -212,16 +445,9 @@ function Start-HcUvicornChild {
         [Parameter(Mandatory = $true)][string]$BindAddress,
         [Parameter(Mandatory = $true)][int]$Port
     )
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $Python
-    $psi.Arguments = "-m uvicorn backend.health_vault.api:create_health_vault_app --factory --host $BindAddress --port $Port --no-access-log"
-    $psi.WorkingDirectory = $InstallRoot
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $proc = New-Object System.Diagnostics.Process
-    $proc.StartInfo = $psi
-    if (-not $proc.Start()) { return $null }
-    return $proc
+    $arguments = "-m uvicorn backend.health_vault.api:create_health_vault_app --factory --host $BindAddress --port $Port --no-access-log"
+    $childPid = [HcManagedChildJob]::StartProcess($Python, $arguments, $InstallRoot)
+    return [System.Diagnostics.Process]::GetProcessById($childPid)
 }
 
 $assertRuntime = Join-Path $PSScriptRoot "Assert-HealthCheckerManagedRuntime.ps1"
@@ -263,6 +489,10 @@ if ($origin.Scheme -ne "https" -or $origin.Host -ne "health.capitalstratasystems
     Stop-WithCode "approved_https_origin_required"
 }
 
+if (-not $hcNativeRuntimeTypesAvailable) {
+    Stop-WithCode "native_runtime_support_unavailable"
+}
+[HcManagedChildJob]::Initialize()
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $pidPath = Join-Path $stateDir "healthchecker-consumer-api.pid"
@@ -323,6 +553,7 @@ try {
             $child = $null
         }
         $attempt++
+        Write-HcPendingControlSignal
         Write-HcHeartbeat -Path $heartbeatPath -State "starting" -Attempt $attempt
         Add-Content -LiteralPath $logPath -Value "event=runtime_start attempt=$attempt"
         $child = Start-HcUvicornChild -Python $python -InstallRoot $installRoot -BindAddress $bindAddress -Port $port
@@ -340,6 +571,7 @@ try {
         $readyDeadline = [DateTime]::UtcNow.AddSeconds($readyTimeoutSeconds)
         $becameHealthy = $false
         while ([DateTime]::UtcNow -lt $readyDeadline) {
+            Write-HcPendingControlSignal
             if (-not (Test-HcProcessAlive -ProcessId $childPid)) { break }
             if (Test-HcLoopbackService -BindAddress $bindAddress -Port $port) {
                 $becameHealthy = $true
@@ -353,6 +585,7 @@ try {
             Add-Content -LiteralPath $logPath -Value "event=runtime_healthy attempt=$attempt"
             $consecutiveProbeFailures = 0
             while (Test-HcProcessAlive -ProcessId $childPid) {
+                Write-HcPendingControlSignal
                 if (Test-HcLoopbackService -BindAddress $bindAddress -Port $port) {
                     if ($consecutiveProbeFailures -gt 0) {
                         Add-Content -LiteralPath $logPath -Value "event=runtime_probe_recovered attempt=$attempt"

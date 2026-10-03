@@ -24,8 +24,9 @@ It does **not** cover:
 
 ## 2. Architecture facts this runbook depends on
 
-Verified directly against the running system as of
-`HEAD=f649036f9fae38367a32ce32984b0f2a0a01a481`:
+Verified directly against the canonical production checkout at
+`HEAD=1a5148dfef614b1a51cc2d42ddb6e146d11fddf9` before the HC-357 lifecycle
+change. Re-verify the deployed head for each release:
 
 - The scheduled task action is:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
@@ -39,6 +40,16 @@ Verified directly against the running system as of
   `python -m uvicorn backend.health_vault.api:create_health_vault_app --factory`
   with `WorkingDirectory = $installRoot`, so the exact Python source on disk
   at rollback time is what serves traffic after a restart.
+- The supervisor starts the child suspended, assigns it to a private Windows
+  Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and resumes it only
+  after assignment. A supervisor exit therefore closes the job and terminates
+  its managed child instead of leaving an orphan listener. Startup retains
+  exact-identity reclaim for orphans created by older supervisor versions.
+- The console-control callback is native C# and only records pending signal
+  state atomically. PowerShell logging is drained from the supervisor's main
+  runspace; PowerShell cmdlets must not run from the native callback thread.
+- The task installer explicitly ignores duplicate starts and does not stop or
+  refuse to start the runtime on battery power.
 - Runtime state lives entirely outside the repo, under
   `C:\ProgramData\HealthChecker\` (config, PID, heartbeat, logs) and is
   **not affected by a git checkout** of the repo.
@@ -51,7 +62,8 @@ Verified directly against the running system as of
 
 | Tag / commit | Description |
 |---|---|
-| `f649036` (current, `main` HEAD) | HC-354 runtime supervisor fix — current production |
+| `1a5148d` (pre-HC-357 production) | HC-352 VC344 consumer record UX |
+| `f649036` (previous runtime baseline) | HC-354 runtime supervisor fix |
 | `31c4023` | HC-353 — auth recovery screenshot protection + mobile asset cache fix |
 | `5bfab5e` | HC-352 — consumer UI polish |
 | `d9199a0` | HC final closure — password recovery screenshot protection (pre-HC-352 baseline) |
@@ -108,9 +120,9 @@ git log --oneline -10   # confirm target commit is present and reachable
 ## 7. Rollback execution (governed, non-destructive to data)
 
 ```powershell
-# 1. Stop only the governed task (this also lets Windows send the
-#    supervisor's cleanup path a chance to run; the supervisor's own
-#    orphan-reclaim logic will heal a bypassed cleanup on next start).
+# 1. Stop only the governed task. Task Scheduler may hard-terminate the
+#    supervisor, so do not rely on its finally block; the Job Object contains
+#    current children, and startup identity-checks and reclaims older orphans.
 Stop-ScheduledTask -TaskName HealthCheckerConsumerRuntime
 
 # 2. Confirm no unintended process remains before touching source.
@@ -123,9 +135,8 @@ Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue
 git -C C:\rasib\source\HealthChecker- checkout <target-commit-sha>
 
 # 4. Restart the governed task. The supervisor's startup port-check will
-#    positively identify and reclaim any leftover child from step 1 if
-#    Stop-ScheduledTask bypassed cleanup (same mechanism validated in
-#    HC-354), then launch a fresh child from the checked-out source.
+#    positively identify and reclaim any leftover child from a pre-containment
+#    version or interrupted rollback, then launch from the checked-out source.
 Start-ScheduledTask -TaskName HealthCheckerConsumerRuntime
 ```
 

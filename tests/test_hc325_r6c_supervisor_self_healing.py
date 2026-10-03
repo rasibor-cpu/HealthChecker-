@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -20,6 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "scripts" / "start_healthchecker_production.ps1"
+TASK_INSTALLER = ROOT / "scripts" / "install_healthchecker_runtime_task.ps1"
 EXAMPLE = json.loads(
     (ROOT / "config" / "healthchecker.production.example.json").read_text(encoding="utf-8")
 )
@@ -378,20 +380,104 @@ def test_supervisor_remains_singleton_owner_and_keeps_safety_gates():
 
 
 def test_supervisor_installs_console_ctrl_handler_and_reclaims_orphans():
-    # HC-355B found handler registration but no logged control-signal callbacks;
-    # 0xC000013A is not proof that a console signal caused a supervisor exit.
-    # Keep this defense and exact-identity orphan reclaim without asserting the
-    # unresolved production termination cause.
     text = LAUNCHER.read_text(encoding="utf-8")
+    installer = TASK_INSTALLER.read_text(encoding="utf-8")
     assert "SetConsoleCtrlHandler" in text
+    assert "[HcConsoleCtrlHandler]::Register()" in text
     assert "CTRL_LOGOFF_EVENT" in text
     assert "CTRL_CLOSE_EVENT" in text
     assert "CTRL_SHUTDOWN_EVENT" in text
+    assert "[HcConsoleCtrlHandler]::TakePendingSignal()" in text
     assert "Test-HcOrphanedUvicornChild" in text
     assert "event=runtime_orphan_child_reclaimed" in text
     # Reclaim must still fail closed for anything not positively identified as our
     # own uvicorn invocation, preserving the pre-existing safety gate.
     assert "port_already_occupied" in text
+    assert "-AllowStartIfOnBatteries" in installer
+    assert "-DontStopIfGoingOnBatteries" in installer
+    assert "-MultipleInstances IgnoreNew" in installer
+
+
+def test_task_installer_preserves_runtime_across_power_and_duplicate_starts():
+    text = TASK_INSTALLER.read_text(encoding="utf-8")
+    assert "-AllowStartIfOnBatteries" in text
+    assert "-DontStopIfGoingOnBatteries" in text
+    assert "-MultipleInstances IgnoreNew" in text
+    assert "-RestartCount 5" in text
+    assert "-ExecutionTimeLimit ([TimeSpan]::Zero)" in text
+
+
+def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path: Path):
+    text = LAUNCHER.read_text(encoding="utf-8")
+    match = re.search(
+        r'\$hcConsoleCtrlHandlerSource\s*=\s*@"\r?\n(.*?)\r?\n"@',
+        text,
+        flags=re.DOTALL,
+    )
+    assert match, "native console handler source not found"
+    source = match.group(1)
+    assert "Interlocked.Exchange" in source
+    assert "public static bool Handle(int ctrlType)" in source
+    assert "Add-Content" not in source
+    assert "$hcCtrlHandlerDelegate" not in text
+
+    script_path = tmp_path / "test-console-handler.ps1"
+    script_path.write_text(
+        "$source = @'\n"
+        + source
+        + "\n'@\n"
+        + "Add-Type -TypeDefinition $source -ErrorAction Stop\n"
+        + "$handledSignals = @([HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT, "
+        + "[HcConsoleCtrlHandler]::CTRL_LOGOFF_EVENT, "
+        + "[HcConsoleCtrlHandler]::CTRL_SHUTDOWN_EVENT)\n"
+        + "foreach ($signal in $handledSignals) {\n"
+        + "  if (-not [HcConsoleCtrlHandler]::Handle($signal)) { exit 1 }\n"
+        + "  if ([HcConsoleCtrlHandler]::TakePendingSignal() -ne $signal) { exit 2 }\n"
+        + "}\n"
+        + "if ([HcConsoleCtrlHandler]::Handle([HcConsoleCtrlHandler]::CTRL_C_EVENT)) { exit 3 }\n"
+        + "if ([HcConsoleCtrlHandler]::TakePendingSignal() -ne [HcConsoleCtrlHandler]::CTRL_C_EVENT) { exit 4 }\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_child_job_terminates_orphan_when_supervisor_exits(tmp_path: Path):
+    port = _free_loopback_port()
+    config_path = _isolated_config(tmp_path, port=port, restart_limit=5, backoff=1)
+    proc, config, control = _start_supervisor(config_path, tmp_path)
+    child_pid = 0
+    try:
+        _wait_state(config, "running")
+        child_pid = _wait_child_count(control, 1)[0]
+        assert _alive(child_pid)
+
+        proc.kill()
+        proc.wait(timeout=10)
+
+        assert _wait_until(lambda: not _alive(child_pid), timeout=10), (
+            "managed child survived its supervisor"
+        )
+        with socket.socket() as probe:
+            probe.settimeout(0.5)
+            assert probe.connect_ex(("127.0.0.1", port)) != 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=10)
+        if child_pid and _alive(child_pid):
+            subprocess.run(
+                ["taskkill", "/PID", str(child_pid), "/F"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
 
 def test_isolated_harness_never_targets_production_or_css_ports():
