@@ -5,6 +5,7 @@
   "use strict";
 
   const STORAGE_KEY = "hc_auth_session";
+  const REMEMBER_ID_KEY = "hc_remembered_patient_id";
 
   function userFacingAuthError(code, fallback) {
     const map = {
@@ -47,9 +48,32 @@
     }
 
     init() {
+      this.loadRememberedPatientId();
       this.loadSession();
       this.bindEvents();
       this.bootstrapSession();
+    }
+
+    loadRememberedPatientId() {
+      const checkbox = document.getElementById("login_use_password_manager");
+      const patientId = document.getElementById("login_patient_id");
+      try {
+        const remembered = localStorage.getItem(REMEMBER_ID_KEY) || "";
+        if (patientId && remembered) patientId.value = remembered;
+        if (checkbox) checkbox.checked = !!remembered;
+      } catch (_err) {
+        if (checkbox) checkbox.checked = false;
+      }
+    }
+
+    saveRememberedPatientId(patientId) {
+      const checkbox = document.getElementById("login_use_password_manager");
+      try {
+        if (checkbox && checkbox.checked) localStorage.setItem(REMEMBER_ID_KEY, patientId);
+        else localStorage.removeItem(REMEMBER_ID_KEY);
+      } catch (_err) {
+        // Android autofill can still save the password; HealthChecker never does.
+      }
     }
 
     async bootstrapSession() {
@@ -282,6 +306,7 @@
             return;
         }
         const loginName = (data.name && data.name !== data.patient_id) ? data.name : null;
+        this.saveRememberedPatientId(data.patient_id);
         this.saveSession(data.patient_id, data.token, loginName);
         this.applySessionMeta(data);
         
@@ -1050,6 +1075,18 @@
       target.querySelectorAll("[data-open-health-records]").forEach(button => {
         button.onclick = () => this.openScreen("health_records_screen");
       });
+      target.querySelectorAll("[data-add-health-record]").forEach(button => {
+        button.onclick = () => {
+          this.openScreen("health_records_screen");
+          if (global.HCRecordsUI) global.HCRecordsUI.toggleUpload(true);
+        };
+      });
+      target.querySelectorAll("[data-recent-record-id]").forEach(button => {
+        button.onclick = () => {
+          this.openScreen("health_records_screen");
+          if (global.HCRecordsUI) global.HCRecordsUI.openDetail(button.getAttribute("data-recent-record-id"));
+        };
+      });
       target.querySelectorAll("[data-open-full-timeline]").forEach(button => {
         button.onclick = () => this.openScreen("consumer_timeline_screen");
       });
@@ -1312,13 +1349,21 @@
 
       if (type === "import_entry") {
         const recent = payload.recent_records || [];
+        const recentRows = recent.slice(0, 3).map(record => `
+          <button type="button" class="secondary records-inline-action" data-recent-record-id="${this.escape(record.document_id || "")}" style="width:100%; text-align:left; margin:4px 0;">
+            ${this.escape(record.display_title || record.original_filename || "Health record")}
+          </button>`).join("");
         return `
           <div class="small">
             <p><strong>${Number(payload.records_count || 0)}</strong> health records available.</p>
-            ${recent.length ? `<div class="muted">Recent: ${recent.slice(0, 3).map(r => this.escape(r.original_filename || "Record")).join(" · ")}</div>` : '<div class="muted">No records have been added yet.</div>'}
+            <div class="card" style="padding:10px; margin:8px 0;">
+              <strong>Recent records</strong>
+              ${recentRows || '<div class="muted" style="margin-top:6px;">No records have been added yet.</div>'}
+            </div>
             <p>Upload reports and review extracted metrics, provenance, trends, and observations.</p>
-            <div style="margin-top: 8px;">
-              <button type="button" data-open-health-records style="width: auto; padding: 6px 12px; margin: 0;">Open Health Records</button>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+              <button type="button" data-add-health-record style="margin:0; min-height:48px;">Add records</button>
+              <button type="button" class="secondary" data-open-health-records style="margin:0; min-height:48px;">View records</button>
             </div>
           </div>
         `;

@@ -233,3 +233,33 @@ def test_dashboard_records_widget_remains_compatible(records_app):
     payload = widgets["import_wizard"]["payload"]
     assert payload["records_count"] == 1
     assert payload["recent_records"][0]["document_id"] == "dashboard-record"
+
+
+def test_hc358_consumer_uat_remediation_contract():
+    html = Path("index.html").read_text(encoding="utf-8")
+    dashboard = Path("js/health_vault/dashboard.js").read_text(encoding="utf-8")
+    records = Path("js/health_vault/records.js").read_text(encoding="utf-8")
+
+    # Prominent dashboard entry points and a real recent-records card.
+    assert "data-add-health-record" in dashboard
+    assert ">Add records<" in dashboard
+    assert ">View records<" in dashboard
+    assert "Recent records" in dashboard
+    assert "data-recent-record-id" in dashboard
+
+    # Passwords remain with Android autofill/password manager, never HealthChecker storage.
+    assert 'autocomplete="current-password"' in html
+    assert 'id="login_use_password_manager"' in html
+    assert "Samsung Pass" in html
+    assert 'localStorage.setItem(REMEMBER_ID_KEY, patientId)' in dashboard
+    assert "login_password" not in dashboard.split("localStorage.setItem", 1)[1].split("\n", 1)[0]
+
+    # Selection creates a local preview before the explicit import action.
+    assert 'id="records_document_preview"' in html
+    assert "Document preview — not uploaded yet" in html
+    assert ">Confirm secure import<" in html
+    assert "renderDocumentPreview(file)" in records
+    assert "URL.createObjectURL(file)" in records
+    assert "URL.revokeObjectURL(this.previewUrl)" in records
+    assert 'form.append("file"' in records
+    assert records.index("renderDocumentPreview(file)") < records.index('this.request("/api/records/upload"')

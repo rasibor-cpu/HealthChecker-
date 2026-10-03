@@ -18,6 +18,7 @@
       this.metricFilter = null;
       this.metricAliases = [];
       this.selectedFile = null;
+      this.previewUrl = null;
       this.listRequest = null;
       this.detailRequest = null;
       this.intelligenceByDocument = new Map();
@@ -489,6 +490,7 @@
     }
 
     selectFile(file) {
+      this.clearDocumentPreview();
       this.selectedFile = file || null;
       const input = document.getElementById("records_file_input");
       if (!file && input) input.value = "";
@@ -498,13 +500,75 @@
         : "No file selected.";
       const submit = document.getElementById("records_upload_submit_btn");
       if (submit) submit.disabled = !file;
+      if (file) {
+        this.renderDocumentPreview(file);
+        this.text("records_upload_status", "Review the local preview, then confirm secure import.");
+      }
+    }
+
+    clearDocumentPreview() {
+      if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+      this.previewUrl = null;
+      const host = document.getElementById("records_document_preview");
+      const image = document.getElementById("records_document_preview_image");
+      const pdf = document.getElementById("records_document_preview_pdf");
+      const text = document.getElementById("records_document_preview_text");
+      if (image) { image.removeAttribute("src"); image.hidden = true; }
+      if (pdf) { pdf.removeAttribute("src"); pdf.hidden = true; }
+      if (text) { text.textContent = ""; text.hidden = true; }
+      if (host) host.hidden = true;
+    }
+
+    renderDocumentPreview(file) {
+      const host = document.getElementById("records_document_preview");
+      const image = document.getElementById("records_document_preview_image");
+      const pdf = document.getElementById("records_document_preview_pdf");
+      const text = document.getElementById("records_document_preview_text");
+      if (!host) return;
+      host.hidden = false;
+      const type = String(file.type || "").toLowerCase();
+      if (type.startsWith("image/") && image) {
+        this.previewUrl = URL.createObjectURL(file);
+        image.src = this.previewUrl;
+        image.hidden = false;
+        return;
+      }
+      if ((type === "application/pdf" || /\.pdf$/i.test(file.name)) && pdf) {
+        this.previewUrl = URL.createObjectURL(file);
+        pdf.src = this.previewUrl;
+        pdf.hidden = false;
+        return;
+      }
+      if ((type === "application/json" || /\.json$/i.test(file.name)) && text) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (this.selectedFile !== file) return;
+          const value = String(reader.result || "");
+          text.textContent = value.length > 100000
+            ? value.slice(0, 100000) + "\n\nPreview truncated at 100 KB."
+            : value;
+          text.hidden = false;
+        };
+        reader.onerror = () => {
+          if (this.selectedFile === file) {
+            text.textContent = "This JSON file could not be previewed. Choose it again or cancel.";
+            text.hidden = false;
+          }
+        };
+        reader.readAsText(file);
+        return;
+      }
+      if (text) {
+        text.textContent = "A visual preview is not available for this file type. Confirm the name, size, and type above before importing.";
+        text.hidden = false;
+      }
     }
 
     async uploadSelected() {
       if (!this.selectedFile || !this.isAuthenticated()) return;
       const submit = document.getElementById("records_upload_submit_btn");
       if (submit) submit.disabled = true;
-      this.text("records_upload_status", "Uploading securely and processing through HealthChecker intake…");
+      this.text("records_upload_status", "Confirmed. Uploading securely and processing through HealthChecker intake…");
       const form = new FormData();
       form.append("file", this.selectedFile, this.selectedFile.name);
       try {
