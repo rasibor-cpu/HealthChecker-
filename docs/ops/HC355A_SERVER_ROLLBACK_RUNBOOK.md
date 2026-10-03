@@ -45,9 +45,10 @@ change. Re-verify the deployed head for each release:
   after assignment. A supervisor exit therefore closes the job and terminates
   its managed child instead of leaving an orphan listener. Startup retains
   exact-identity reclaim for orphans created by older supervisor versions.
-- The console-control callback is native C# and only records pending signal
-  state atomically. PowerShell logging is drained from the supervisor's main
-  runspace; PowerShell cmdlets must not run from the native callback thread.
+- The console-control callback is native C#; it records signal state atomically
+  and appends the signal type/PID through Win32 file I/O. PowerShell observation
+  is drained from the supervisor's main runspace; cmdlets must not run from the
+  native callback thread.
 - The task installer explicitly ignores duplicate starts and does not stop or
   refuse to start the runtime on battery power.
 - Runtime state lives entirely outside the repo, under

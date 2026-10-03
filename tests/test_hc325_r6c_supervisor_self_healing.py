@@ -388,6 +388,7 @@ def test_supervisor_installs_console_ctrl_handler_and_reclaims_orphans():
     assert "CTRL_CLOSE_EVENT" in text
     assert "CTRL_SHUTDOWN_EVENT" in text
     assert "[HcConsoleCtrlHandler]::TakePendingSignal()" in text
+    assert "ConfigureSignalLog($logPath)" in text
     assert "Test-HcOrphanedUvicornChild" in text
     assert "event=runtime_orphan_child_reclaimed" in text
     # Reclaim must still fail closed for anything not positively identified as our
@@ -418,15 +419,21 @@ def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path:
     source = match.group(1)
     assert "Interlocked.Exchange" in source
     assert "public static bool Handle(int ctrlType)" in source
+    assert "WriteFile" in source
+    assert "FlushFileBuffers" in source
     assert "Add-Content" not in source
     assert "$hcCtrlHandlerDelegate" not in text
 
     script_path = tmp_path / "test-console-handler.ps1"
+    signal_log = tmp_path / "console-signals.log"
+    env = os.environ.copy()
+    env["HC_HANDLER_SIGNAL_LOG"] = str(signal_log)
     script_path.write_text(
         "$source = @'\n"
         + source
         + "\n'@\n"
         + "Add-Type -TypeDefinition $source -ErrorAction Stop\n"
+        + "[HcConsoleCtrlHandler]::ConfigureSignalLog($env:HC_HANDLER_SIGNAL_LOG)\n"
         + "$handledSignals = @([HcConsoleCtrlHandler]::CTRL_C_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_BREAK_EVENT, "
         + "[HcConsoleCtrlHandler]::CTRL_CLOSE_EVENT, "
@@ -443,9 +450,19 @@ def test_native_console_handler_does_not_call_powershell_from_callback(tmp_path:
         capture_output=True,
         text=True,
         check=False,
+        env=env,
         timeout=30,
     )
     assert completed.returncode == 0, completed.stderr
+    logged_signals = signal_log.read_text(encoding="ascii").splitlines()
+    assert len(logged_signals) == 5
+    assert [re.search(r"type=(\d+)", line).group(1) for line in logged_signals] == [
+        "0",
+        "1",
+        "2",
+        "5",
+        "6",
+    ]
 
 
 def test_child_job_terminates_orphan_when_supervisor_exits(tmp_path: Path):
@@ -564,7 +581,12 @@ def test_restart_backoff_is_applied(tmp_path: Path):
     extra = {"HC325_R6C_FAKE_AUTO_EXIT_SEC": "0.05"}
     proc, config, control = _start_supervisor(config_path, tmp_path, extra_env=extra)
     try:
-        _wait_until(lambda: len(_starts(control)) >= 2, 20)
+        def _started_twice():
+            lines = (_read_text_retry(control / "starts.log") or "").splitlines()
+            return lines if len(lines) >= 2 else None
+
+        start_records = _wait_until(_started_twice, 20)
+        assert start_records, "supervisor did not record its second child start"
         log = _wait_until(
             lambda: _log_path(config).is_file()
             and _read_text_retry(_log_path(config))
@@ -574,9 +596,8 @@ def test_restart_backoff_is_applied(tmp_path: Path):
         assert log
         text = _read_text_retry(_log_path(config)) or ""
         assert "event=runtime_backoff seconds=2 attempt=1" in text
-        starts_log = (_read_text_retry(control / "starts.log") or "").splitlines()
-        t0 = float(starts_log[0].split()[1])
-        t1 = float(starts_log[1].split()[1])
+        t0 = float(start_records[0].split()[1])
+        t1 = float(start_records[1].split()[1])
         assert (t1 - t0) >= 1.8
     finally:
         _kill_tree(proc.pid)

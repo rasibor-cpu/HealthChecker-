@@ -22,10 +22,31 @@ using System.Text;
 using System.Threading;
 
 public static class HcConsoleCtrlHandler {
+    private const uint FileAppendData = 0x00000004;
+    private const uint FileShareRead = 0x00000001;
+    private const uint FileShareWrite = 0x00000002;
+    private const uint OpenAlways = 4;
+    private const uint FileAttributeNormal = 0x00000080;
+
     public delegate bool HandlerRoutine(int ctrlType);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool SetConsoleCtrlHandler(HandlerRoutine handler, bool add);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateFile(
+        string path, uint access, uint share, IntPtr securityAttributes,
+        uint creationDisposition, uint flags, IntPtr templateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool WriteFile(
+        IntPtr file, byte[] buffer, uint bytesToWrite, out uint bytesWritten, IntPtr overlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FlushFileBuffers(IntPtr file);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentProcessId();
 
     public const int CTRL_C_EVENT = 0;
     public const int CTRL_BREAK_EVENT = 1;
@@ -34,7 +55,20 @@ public static class HcConsoleCtrlHandler {
     public const int CTRL_SHUTDOWN_EVENT = 6;
 
     private static HandlerRoutine _handler;
+    private static readonly object SignalLogLock = new object();
     private static int _pendingSignal = -1;
+    private static int _signalLogWriteError;
+    private static IntPtr _signalLogHandle = IntPtr.Zero;
+
+    public static void ConfigureSignalLog(string path) {
+        IntPtr handle = CreateFile(
+            path, FileAppendData, FileShareRead | FileShareWrite,
+            IntPtr.Zero, OpenAlways, FileAttributeNormal, IntPtr.Zero);
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1)) {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        _signalLogHandle = handle;
+    }
 
     public static bool Register() {
         _handler = Handle;
@@ -43,6 +77,23 @@ public static class HcConsoleCtrlHandler {
 
     public static bool Handle(int ctrlType) {
         Interlocked.Exchange(ref _pendingSignal, ctrlType);
+        if (_signalLogHandle != IntPtr.Zero) {
+            lock (SignalLogLock) {
+                string entry = "event=hc_diag_ctrl_signal type=" + ctrlType +
+                    " pid=" + GetCurrentProcessId() + "\r\n";
+                byte[] bytes = Encoding.ASCII.GetBytes(entry);
+                uint written;
+                bool writeSucceeded = WriteFile(
+                    _signalLogHandle, bytes, (uint)bytes.Length, out written, IntPtr.Zero);
+                bool flushSucceeded = writeSucceeded &&
+                    written == (uint)bytes.Length &&
+                    FlushFileBuffers(_signalLogHandle);
+                if (!writeSucceeded || written != (uint)bytes.Length || !flushSucceeded) {
+                    int error = Marshal.GetLastWin32Error();
+                    Interlocked.Exchange(ref _signalLogWriteError, error == 0 ? -1 : error);
+                }
+            }
+        }
         return ctrlType == CTRL_C_EVENT ||
             ctrlType == CTRL_BREAK_EVENT ||
             ctrlType == CTRL_CLOSE_EVENT ||
@@ -52,6 +103,10 @@ public static class HcConsoleCtrlHandler {
 
     public static int TakePendingSignal() {
         return Interlocked.Exchange(ref _pendingSignal, -1);
+    }
+
+    public static int TakeSignalLogWriteError() {
+        return Interlocked.Exchange(ref _signalLogWriteError, 0);
     }
 }
 
@@ -278,18 +333,19 @@ $hcCtrlHandlerAvailable = $false
 try {
     Add-Type -TypeDefinition $hcConsoleCtrlHandlerSource -ErrorAction Stop
     $hcNativeRuntimeTypesAvailable = $true
-    $hcHandlerResult = [HcConsoleCtrlHandler]::Register()
-    $hcCtrlHandlerAvailable = [bool]$hcHandlerResult
-    try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult pid=$PID" -ErrorAction SilentlyContinue } catch {}
 } catch {
-    try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_handler_registration_failed error=$($_.Exception.Message) pid=$PID" -ErrorAction SilentlyContinue } catch {}
+    try { Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_native_runtime_types_failed error=$($_.Exception.Message) pid=$PID" -ErrorAction SilentlyContinue } catch {}
 }
 
 function Write-HcPendingControlSignal {
     if (-not $hcCtrlHandlerAvailable) { return }
     $ctrlType = [HcConsoleCtrlHandler]::TakePendingSignal()
     if ($ctrlType -ge 0) {
-        Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal type=$ctrlType pid=$PID"
+        Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal_seen type=$ctrlType pid=$PID"
+    }
+    $writeError = [HcConsoleCtrlHandler]::TakeSignalLogWriteError()
+    if ($writeError -ne 0) {
+        Add-Content -LiteralPath $hcDiagLogPath -Value "event=hc_diag_ctrl_signal_log_failed error=$writeError pid=$PID"
     }
 }
 
@@ -500,6 +556,18 @@ New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $pidPath = Join-Path $stateDir "healthchecker-consumer-api.pid"
 $heartbeatPath = Join-Path $stateDir "healthchecker-consumer-api.heartbeat.json"
 $logPath = Join-Path $logDir "healthchecker-runtime.log"
+try {
+    [HcConsoleCtrlHandler]::ConfigureSignalLog($logPath)
+    $hcHandlerResult = [HcConsoleCtrlHandler]::Register()
+    if (-not $hcHandlerResult) {
+        throw "SetConsoleCtrlHandler returned false."
+    }
+    $hcCtrlHandlerAvailable = $true
+    Add-Content -LiteralPath $logPath -Value "event=hc_diag_ctrl_handler_registered result=$hcHandlerResult pid=$PID"
+} catch {
+    Add-Content -LiteralPath $logPath -Value "event=hc_diag_ctrl_handler_registration_failed error=$($_.Exception.Message) pid=$PID"
+    throw
+}
 
 if (Test-Path -LiteralPath $pidPath) {
     $oldPid = 0
