@@ -40,6 +40,7 @@
       this._recoveryId = null;
       this._recoveryToken = null;
       this._pendingPasswordChange = null;
+      this._loginChallenge = null;
       // Soft throttle for repeated auto-refresh / rapid navigation (ms).
       this.REFRESH_COOLDOWN_MS = 4000;
       this.SUMMARY_TTL_MS = 15000;
@@ -211,6 +212,10 @@
         event.preventDefault();
         this.handleSettingsRecoveryReplace();
       };
+      const totpChallenge = document.getElementById("login_totp_challenge");
+      if (totpChallenge) totpChallenge.onsubmit = event => this.verifyLoginTotp(event);
+      const totpCancel = document.getElementById("login_totp_cancel");
+      if (totpCancel) totpCancel.onclick = () => this.cancelTotpChallenge();
     }
 
     updateUIVisibility() {
@@ -271,6 +276,11 @@
         }
 
         const data = await res.json();
+        if (data.requires_totp) {
+          if (pwdEl) pwdEl.value = "";
+            this.showTotpChallenge(data.challenge_token);
+            return;
+        }
         const loginName = (data.name && data.name !== data.patient_id) ? data.name : null;
         this.saveSession(data.patient_id, data.token, loginName);
         this.applySessionMeta(data);
@@ -297,6 +307,76 @@
       } finally {
         this._loginInFlight = false;
         if (loginBtn) loginBtn.disabled = false;
+      }
+    }
+
+    showTotpChallenge(challengeToken) {
+      this._loginChallenge = challengeToken;
+      this.clearSession();
+      const credentials = document.getElementById("login_credentials");
+      const form = document.getElementById("login_totp_challenge");
+      const code = document.getElementById("login_totp_code");
+      const recovery = document.getElementById("login_totp_recovery_code");
+      const error = document.getElementById("login_totp_error");
+      const password = document.getElementById("login_password");
+      if (credentials) credentials.hidden = true;
+      if (form) form.hidden = false;
+      if (password) password.value = "";
+      if (code) code.value = "";
+      if (recovery) recovery.value = "";
+      if (error) error.textContent = "";
+      this.setAuthState("totp_challenge");
+      this.updateUIVisibility();
+    }
+
+    cancelTotpChallenge() {
+      this._loginChallenge = null;
+      const credentials = document.getElementById("login_credentials");
+      const form = document.getElementById("login_totp_challenge");
+      if (credentials) credentials.hidden = false;
+      if (form) form.hidden = true;
+      ["login_totp_code", "login_totp_recovery_code"].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = "";
+      });
+      this.setAuthState("login");
+      this.updateUIVisibility();
+    }
+
+    async verifyLoginTotp(event) {
+      event.preventDefault();
+      const code = document.getElementById("login_totp_code");
+      const recovery = document.getElementById("login_totp_recovery_code");
+      const error = document.getElementById("login_totp_error");
+      if (!this._loginChallenge || !code || !recovery || !error) return;
+      const totp = code.value.trim();
+      const recoveryCode = recovery.value.trim();
+      error.textContent = "";
+      if (!!totp === !!recoveryCode) {
+        error.textContent = "Enter either an authenticator code or one recovery code.";
+        return;
+      }
+      try {
+        const response = await fetch("/api/auth/login/totp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            challenge_token: this._loginChallenge,
+            code: totp || undefined,
+            recovery_code: recoveryCode || undefined,
+          }),
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error("verification_failed");
+        this._loginChallenge = null;
+        const form = document.getElementById("login_totp_challenge");
+        if (form) form.hidden = true;
+        await this.finishAuthenticated(data);
+      } catch (_err) {
+        error.textContent = "Verification failed. Check your code and try again.";
+        code.value = "";
+        recovery.value = "";
       }
     }
 
@@ -465,8 +545,16 @@
     }
 
     async finishAuthenticated(data) {
+      if (data.requires_totp) {
+        this.showTotpChallenge(data.challenge_token);
+        return;
+      }
       this.saveSession(data.patient_id, data.token, (data.name && data.name !== data.patient_id) ? data.name : this.displayName);
       this.applySessionMeta(data);
+      if (data.must_change_password || data.scope !== "full") {
+        this.enterSecurityGate();
+        return;
+      }
       this._pendingPasswordChange = null;
       this.setAuthState("authenticated");
       const form = document.getElementById("password_change_form");

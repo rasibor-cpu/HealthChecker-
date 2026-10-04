@@ -43,7 +43,7 @@ def test_post_login_and_session_change_trigger_server_refresh():
     assert "hc:session-changed" in dash
     assert "authenticated: !!this.token" in dash
     assert "HCConsumerDashboard.token && window.HCExecutiveDashboard" in html
-    assert "dashboard.js?v=hc334a" in html
+    assert "dashboard.js?v=hc345" in html
 
 
 def test_production_shaped_briefing_maps_nonzero_vault_summary_fields():

@@ -12,6 +12,10 @@
   let recoveryToken = null;
   let pendingPasswordChange = null;
   let authState = "login";
+  let loginChallenge = null;
+  let rememberDeviceRequested = false;
+  let totpSetupSecret = null;
+  let trustedReturnInFlight = false;
   let recentReceivedRecord = null;
   const recordPreviewUrls = new Set();
   let pendingUploadPayload = null;
@@ -107,7 +111,9 @@
       password_change_required: "A new password is required before HealthChecker can be used.",
       password_policy_violation: "Choose a password with at least 8 characters that is not the temporary sign-in password.",
       password_confirmation_mismatch: "New passwords must match.",
-      invalid_credentials: "That current password was not accepted. Check it and try again.",
+      invalid_credentials: "Sign-in details or verification were not accepted.",
+      invalid_totp: "That authenticator code was not accepted.",
+      totp_already_enabled: "Two-factor authentication is already enabled.",
       invalid_recovery: "Recovery could not be completed.",
     };
     const key = String(code || "");
@@ -121,6 +127,53 @@
     try { document.body.dataset.hcAuthState = state; } catch (_) {}
     const gated = state === "password_change_required" || state === "recovery_enrollment_required";
     setSecurityGate(gated);
+    if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
+      const secretVisible = ["totp_challenge", "totp_setup", "recovery_codes"].includes(state);
+      window.HCScreenshotPolicy.setRoute(gated ? "password_recovery" : (secretVisible ? "auth_secrets" : "dashboard"));
+    }
+  }
+
+  function saveSafeNavigationState(route, recordId) {
+    const bridge = window.HCNavigationState;
+    if (!bridge || typeof bridge.saveSafeState !== "function") return;
+    const saved = bridge.saveSafeState(route, recordId || null);
+    if (saved !== true) console.warn("consumer_navigation_state_not_saved");
+  }
+
+  function readSafeNavigationState() {
+    const bridge = window.HCNavigationState;
+    if (!bridge || typeof bridge.readSafeState !== "function") return null;
+    try {
+      const state = JSON.parse(bridge.readSafeState() || "{}");
+      if (!["dashboard", "records", "trends", "observations", "timeline", "reports", "settings", "import"].includes(state.route)) {
+        return null;
+      }
+      if (state.record_id && (state.route !== "records" || !/^[A-Za-z0-9_-]{1,128}$/.test(state.record_id))) {
+        return null;
+      }
+      return { route: state.route, recordId: state.record_id || null };
+    } catch (_error) {
+      console.warn("consumer_navigation_state_unavailable");
+      return null;
+    }
+  }
+
+  async function restoreSafeNavigationState() {
+    const state = readSafeNavigationState();
+    if (!state || state.route === "dashboard") {
+      await showView("dashboard");
+      return;
+    }
+    await showView(state.route);
+    if (state.route === "records" && state.recordId) {
+      const card = Array.from(byId("mobile_records").querySelectorAll("[data-record-card]"))
+        .find(item => item.dataset.documentId === state.recordId);
+      if (card) {
+        await loadRecordDetail(state.recordId, card);
+      } else {
+        saveSafeNavigationState("records", null);
+      }
+    }
   }
 
   function setSecurityGate(active) {
@@ -172,8 +225,22 @@
     });
     const gated = window.HCConsumerNav && HCConsumerNav.isSecurityGate && HCConsumerNav.isSecurityGate();
     if (session && (response.status === 401 || response.status === 403) && !gated) {
-      await logout(false);
-      throw new Error(response.status === 403 ? "Password change required" : "Session expired");
+      const reauthenticationPath =
+        path === "/api/auth/password/change" ||
+        path.startsWith("/api/auth/totp/") ||
+        path.startsWith("/api/auth/trusted-devices/");
+      let expired = !reauthenticationPath;
+      if (reauthenticationPath) {
+        const check = await fetch("/api/auth/session", {
+          headers: { Accept: "application/json", ...authHeaders() },
+          cache: "no-store",
+        });
+        expired = !check.ok;
+      }
+      if (expired) {
+        await logout(false);
+        throw new Error(response.status === 403 ? "Password change required" : "Session expired");
+      }
     }
     const body = await parseJsonResponse(response, path);
     if (!response.ok) throw new Error(userFacingAuthError(body.code || body.error, "Request failed"));
@@ -329,14 +396,52 @@
     }
   }
 
-  async function login() {
-    const error = byId("mobile_login_error");
-    error.textContent = "";
-    try {
-      const body = await request("/api/auth/login", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: byId("mobile_user_id").value.trim(), password: byId("mobile_password").value })
+  function showTotpChallenge(challengeToken) {
+    loginChallenge = challengeToken;
+    saveSession(null);
+    showAuthenticated(false);
+    hideLifecycleForms();
+    const loginButton = byId("mobile_login_button");
+    const forgotButton = byId("mobile_forgot_password_btn");
+    if (loginButton) loginButton.hidden = true;
+    if (forgotButton) forgotButton.hidden = true;
+    byId("mobile_totp_challenge").hidden = false;
+    byId("mobile_totp_code").value = "";
+    byId("mobile_totp_recovery_code").value = "";
+    byId("mobile_totp_error").textContent = "";
+    byId("mobile_password").value = "";
+    setAuthState("totp_challenge");
+  }
+
+  async function trustThisDevice() {
+    const bridge = window.HCTrustedDevice;
+    if (!rememberDeviceRequested || !bridge ||
+        typeof bridge.deviceId !== "function" || typeof bridge.saveCredential !== "function") return;
+    const deviceId = bridge.deviceId();
+    if (!deviceId) throw new Error("This device could not be securely identified.");
+    const issued = await request("/api/auth/trusted-devices/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId, label: "Android device" }),
+    });
+    if (!bridge.saveCredential(deviceId, issued.trusted_device_token)) {
+      await request("/api/auth/trusted-devices/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId }),
       });
+      throw new Error("Device trust could not be saved securely. Sign-in is still available.");
+    }
+    session.trustedDeviceId = deviceId;
+    saveSession(session);
+  }
+
+  async function finishLogin(body) {
+    if (body.requires_totp) {
+      showTotpChallenge(body.challenge_token);
+      return;
+    }
+    if (body.must_change_password) {
       saveSession({
         token: body.token,
         userId: body.user_id,
@@ -344,17 +449,75 @@
         expiresAt: body.password_expires_at,
         recoveryEnrolled: !!body.recovery_enrolled,
       });
-      if (body.must_change_password) {
-        enterPasswordGate();
-        return;
-      }
-      setAuthState("authenticated");
-      showAuthenticated(true);
-      await loadDashboard();
-      byId("mobile_password").value = "";
-      const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
-      if (deep) await showView(deep);
+      enterPasswordGate();
+      return;
+    }
+    loginChallenge = null;
+    byId("mobile_totp_challenge").hidden = true;
+    saveSession({
+      token: body.token,
+      userId: body.user_id,
+      name: body.name,
+      expiresAt: body.password_expires_at,
+      recoveryEnrolled: !!body.recovery_enrolled,
+      trustedDeviceId: body.device_id || null,
+      totpEnabled: !!body.totp_enabled,
+    });
+    setAuthState("authenticated");
+    showAuthenticated(true);
+    byId("mobile_password").value = "";
+    byId("mobile_totp_code").value = "";
+    byId("mobile_totp_recovery_code").value = "";
+    try {
+      await trustThisDevice();
+    } catch (error) {
+      byId("mobile_status").textContent = error.message;
+    }
+    rememberDeviceRequested = false;
+    const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
+    if (deep) await showView(deep);
+    else await restoreSafeNavigationState();
+  }
+
+  async function login() {
+    const error = byId("mobile_login_error");
+    error.textContent = "";
+    rememberDeviceRequested = !!byId("mobile_remember_device")?.checked;
+    try {
+      const body = await request("/api/auth/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: byId("mobile_user_id").value.trim(), password: byId("mobile_password").value })
+      });
+      await finishLogin(body);
     } catch (err) { error.textContent = err.message; }
+  }
+
+  async function verifyLoginTotp(event) {
+    event.preventDefault();
+    const error = byId("mobile_totp_error");
+    error.textContent = "";
+    const code = byId("mobile_totp_code").value.trim();
+    const recoveryCode = byId("mobile_totp_recovery_code").value.trim();
+    if (!loginChallenge || (!!code === !!recoveryCode)) {
+      error.textContent = "Enter either an authenticator code or one recovery code.";
+      return;
+    }
+    try {
+      const body = await request("/api/auth/login/totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challenge_token: loginChallenge,
+          code: code || undefined,
+          recovery_code: recoveryCode || undefined,
+        }),
+      });
+      await finishLogin(body);
+    } catch (_error) {
+      error.textContent = "Verification failed. Check the code and try again.";
+      byId("mobile_totp_code").value = "";
+      byId("mobile_totp_recovery_code").value = "";
+    }
   }
 
   async function submitPasswordChange(payload) {
@@ -376,13 +539,19 @@
   }
 
   async function finishAuthenticated(body) {
-    saveSession({
-      token: body.token,
-      userId: body.user_id,
-      name: body.name,
-      expiresAt: body.password_expires_at,
-      recoveryEnrolled: !!body.recovery_enrolled,
-    });
+    if (pendingPasswordChange && window.HCTrustedDevice &&
+        typeof HCTrustedDevice.clearCredential === "function") {
+      HCTrustedDevice.clearCredential();
+    }
+    if (body.requires_totp) {
+      pendingPasswordChange = null;
+      ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => {
+        if (byId(id)) byId(id).value = "";
+      });
+      hideLifecycleForms();
+      showTotpChallenge(body.challenge_token);
+      return;
+    }
     pendingPasswordChange = null;
     ["mobile_current_password", "mobile_new_password", "mobile_confirm_password"].forEach(id => {
       if (byId(id)) byId(id).value = "";
@@ -392,12 +561,7 @@
     const forgot = byId("mobile_forgot_password_btn");
     if (loginBtn) loginBtn.hidden = false;
     if (forgot) forgot.hidden = false;
-    setAuthState("authenticated");
-    showAuthenticated(true);
-    await loadDashboard();
-    byId("mobile_password").value = "";
-    const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
-    if (deep) await showView(deep);
+    await finishLogin(body);
   }
 
   async function changePassword(event) {
@@ -449,29 +613,78 @@
 
   async function logout(notifyServer) {
     const token = session && session.token;
+    const trustedDeviceId = (session && session.trustedDeviceId) ||
+      (window.HCTrustedDevice && typeof HCTrustedDevice.deviceId === "function"
+        ? HCTrustedDevice.deviceId()
+        : "");
     saveSession(null);
-    summary = null;
-    records = [];
-    preferences = null;
-    recentReceivedRecord = null;
-    clearRecordPreviews();
-    clearUploadReview(true);
+    clearAuthenticatedConsumerData();
     if (window.HCConsumerNav) {
       setAuthState("login");
       HCConsumerNav.reset();
     }
-    document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
-    const snap = byId("hc_health_snapshot");
-    if (snap) snap.replaceChildren();
     showAuthenticated(false);
+    byId("mobile_totp_challenge").hidden = true;
+    loginChallenge = null;
     if (notifyServer && token) {
       await fetch("/api/auth/logout", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ revoke_companion_devices: true })
+        body: JSON.stringify({
+          revoke_companion_devices: true,
+          trusted_device_id: trustedDeviceId || undefined,
+        })
       }).catch(() => {});
+      if (window.HCTrustedDevice && typeof HCTrustedDevice.clearCredential === "function") {
+        HCTrustedDevice.clearCredential();
+      }
+      if (window.HCNavigationState && typeof HCNavigationState.clearSafeState === "function") {
+        HCNavigationState.clearSafeState();
+      }
     }
-    window.location.replace("/mobile/native-logout-complete");
+    if (notifyServer) window.location.replace("/mobile/native-logout-complete");
+  }
+
+  function clearAuthenticatedConsumerData() {
+    summary = null;
+    records = [];
+    preferences = null;
+    recentReceivedRecord = null;
+    totpSetupSecret = null;
+    pendingPasswordChange = null;
+    recoveryId = null;
+    recoveryToken = null;
+    clearRecordPreviews();
+    clearUploadReview(true);
+    document.querySelectorAll("[data-mobile-content]").forEach(node => node.replaceChildren());
+    const snap = byId("hc_health_snapshot");
+    if (snap) snap.replaceChildren();
+    [
+      "mobile_password",
+      "mobile_current_password",
+      "mobile_new_password",
+      "mobile_confirm_password",
+      "mobile_settings_current",
+      "mobile_settings_new",
+      "mobile_settings_confirm",
+      "mobile_settings_recovery_current",
+      "mobile_recovery_new_password",
+      "mobile_recovery_confirm_password",
+      "mobile_totp_code",
+      "mobile_totp_recovery_code",
+      "mobile_totp_setup_password",
+      "mobile_totp_confirm_code",
+      "mobile_totp_regenerate_password",
+      "mobile_totp_regenerate_code",
+      "mobile_totp_disable_password",
+      "mobile_totp_disable_code",
+      "mobile_recovery_codes_text",
+      "mobile_totp_manual_key",
+    ].forEach(id => {
+      const node = byId(id);
+      if (node instanceof HTMLInputElement) node.value = "";
+      else if (node) node.textContent = "";
+    });
   }
 
   function renderList(target, rows, emptyMessage, formatter) {
@@ -673,6 +886,7 @@
   }
 
   async function loadRecordDetail(documentId, card) {
+    saveSafeNavigationState("records", documentId);
     card.querySelectorAll("[data-record-detail]").forEach(node => node.remove());
     const detail = document.createElement("section");
     detail.dataset.recordDetail = "true";
@@ -689,6 +903,7 @@
     const closeDetail = () => {
       detail.remove();
       if (window.HCConsumerNav) HCConsumerNav.dismissOverlay("mobile-record-detail");
+      saveSafeNavigationState("records", null);
     };
     if (window.HCConsumerNav) HCConsumerNav.pushOverlay("mobile-record-detail", closeDetail);
     try {
@@ -800,6 +1015,7 @@
       return;
     }
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
+    saveSafeNavigationState(name, null);
     if (name !== "dashboard") clearRecordPreviews();
     if (name !== "import") clearUploadReview(true);
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
@@ -912,6 +1128,7 @@
       try {
         await loadCatalog();
         renderQuestionPickers("mobile_settings_recovery_questions", "mobile_settings_enroll");
+        await loadAuthSecuritySettings();
         ok();
       } catch (error) {
         fail("settings", error);
@@ -1157,16 +1374,77 @@
       session.name = current.name;
       session.expiresAt = current.password_expires_at || current.password_expiry_date;
       session.recoveryEnrolled = !!current.recovery_enrolled;
+      session.totpEnabled = !!current.totp_enabled;
       if (current.must_change_password || current.scope !== "full") {
         enterPasswordGate();
         return;
       }
       setAuthState("authenticated");
       showAuthenticated(true);
-      await showView("dashboard");
+      await restoreSafeNavigationState();
       const deep = window.HCConsumerNav && HCConsumerNav.peekDeepLink();
       if (deep) await showView(deep, { fromNav: false });
     } catch (_) { await logout(false); }
+  }
+
+  function configureTrustedReturn() {
+    const bridge = window.HCTrustedDevice;
+    const rememberLabel = byId("mobile_remember_device_label");
+    const fastReturn = byId("mobile_fast_return");
+    if (!bridge ||
+        typeof bridge.supportsFastReturn !== "function" ||
+        typeof bridge.hasCredential !== "function" ||
+        typeof bridge.requestFastReturn !== "function") return;
+    if (!bridge.supportsFastReturn()) return;
+    if (rememberLabel) rememberLabel.hidden = false;
+    const available = bridge.hasCredential();
+    if (fastReturn) {
+      fastReturn.hidden = !available;
+      fastReturn.addEventListener("click", () => {
+        byId("mobile_login_error").textContent = "";
+        if (trustedReturnInFlight) return;
+        trustedReturnInFlight = true;
+        fastReturn.disabled = true;
+        bridge.requestFastReturn();
+      });
+    }
+    window.HCTrustedReturnCancelled = function () {
+      trustedReturnInFlight = false;
+      if (fastReturn) fastReturn.disabled = false;
+    };
+    window.HCTrustedReturnCredential = async function (rawCredential) {
+      try {
+        const credential = JSON.parse(String(rawCredential || "{}"));
+        const body = await request("/api/auth/login/trusted-device", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(credential),
+        });
+        const saved = bridge.saveCredential(
+          body.device_id,
+          body.trusted_device_token,
+        );
+        await finishLogin(body);
+        if (!saved) {
+          byId("mobile_status").textContent =
+            "Signed in, but this device could not refresh its fast sign-in credential.";
+          bridge.clearCredential();
+        }
+      } catch (_error) {
+        if (typeof bridge.clearCredential === "function") bridge.clearCredential();
+        byId("mobile_login_error").textContent =
+          "Fast sign-in is unavailable. Sign in with your password and two-factor code.";
+        if (fastReturn) fastReturn.hidden = true;
+      } finally {
+        trustedReturnInFlight = false;
+        if (fastReturn) fastReturn.disabled = false;
+      }
+    };
+    if (available && !sessionStorage.getItem(SESSION_KEY)) {
+      trustedReturnInFlight = true;
+      if (fastReturn) fastReturn.disabled = true;
+      bridge.requestFastReturn();
+    }
   }
 
   function showRecoveryFlow() {
@@ -1267,7 +1545,7 @@
           confirm_password: byId("mobile_settings_confirm").value,
         }),
       });
-      saveSession({ token: body.token, userId: body.user_id, name: body.name, expiresAt: body.password_expires_at });
+      await finishAuthenticated(body);
       ["mobile_settings_current", "mobile_settings_new", "mobile_settings_confirm"].forEach(id => { byId(id).value = ""; });
     } catch (err) { error.textContent = err.message; }
   }
@@ -1288,9 +1566,202 @@
     } catch (err) { error.textContent = err.message; }
   }
 
+  async function loadAuthSecuritySettings() {
+    const current = await request("/api/auth/session");
+    session.totpEnabled = !!current.totp_enabled;
+    byId("mobile_totp_status").textContent = session.totpEnabled
+      ? "Authenticator verification is enabled for new sign-ins."
+      : "Two-factor authentication is optional. Enable it to require an authenticator or recovery code at sign-in.";
+    byId("mobile_totp_setup_form").hidden = session.totpEnabled;
+    byId("mobile_totp_recovery_regenerate_form").hidden = !session.totpEnabled;
+    byId("mobile_totp_disable_form").hidden = !session.totpEnabled;
+    const deviceBody = await request("/api/auth/trusted-devices");
+    const host = byId("mobile_trusted_devices_list");
+    host.replaceChildren();
+    if (!deviceBody.devices.length) {
+      text(host, "No trusted devices.", "muted");
+      return;
+    }
+    deviceBody.devices.forEach(device => {
+      const row = document.createElement("div");
+      row.className = "mobile-trusted-device";
+      text(row, device.label || "Trusted device");
+      text(row, `Expires ${recordDate(device.expires_at)} · Last used ${recordDate(device.last_used_at)}`, "muted");
+      if (!device.revoked) {
+        const revoke = document.createElement("button");
+        revoke.type = "button";
+        revoke.className = "secondary";
+        revoke.textContent = "Revoke device";
+        revoke.addEventListener("click", async () => {
+          try {
+            await request("/api/auth/trusted-devices/revoke", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ device_id: device.device_id }),
+            });
+            if (window.HCTrustedDevice &&
+                typeof HCTrustedDevice.deviceId === "function" &&
+                HCTrustedDevice.deviceId() === device.device_id) {
+              HCTrustedDevice.clearCredential();
+            }
+            await loadAuthSecuritySettings();
+          } catch (error) {
+            setMobileStatus(error.message);
+          }
+        });
+        row.appendChild(revoke);
+      } else {
+        text(row, "Revoked", "muted");
+      }
+      host.appendChild(row);
+    });
+  }
+
+  async function handleTotpSetupStart(event) {
+    event.preventDefault();
+    const error = byId("mobile_totp_setup_error");
+    error.textContent = "";
+    try {
+      const result = await request("/api/auth/totp/setup/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: byId("mobile_totp_setup_password").value }),
+      });
+      totpSetupSecret = result.secret;
+      byId("mobile_totp_manual_key").textContent = result.secret;
+      byId("mobile_totp_setup_password").value = "";
+      byId("mobile_totp_setup_details").hidden = false;
+      setAuthState("totp_setup");
+    } catch (failure) {
+      error.textContent = failure.message;
+    }
+  }
+
+  function cancelTotpSetup() {
+    totpSetupSecret = null;
+    byId("mobile_totp_setup_password").value = "";
+    byId("mobile_totp_confirm_code").value = "";
+    byId("mobile_totp_manual_key").textContent = "";
+    byId("mobile_totp_setup_details").hidden = true;
+    setAuthState("authenticated");
+  }
+
+  function displayRecoveryCodes(codes) {
+    saveSession(null);
+    clearAuthenticatedConsumerData();
+    if (window.HCTrustedDevice && typeof HCTrustedDevice.clearCredential === "function") {
+      HCTrustedDevice.clearCredential();
+    }
+    byId("mobile_recovery_codes_text").textContent = Array.isArray(codes) ? codes.join("\n") : "";
+    byId("mobile_recovery_codes").hidden = false;
+    byId("mobile_totp_setup_form").hidden = true;
+    byId("mobile_totp_setup_details").hidden = true;
+    byId("mobile_totp_recovery_regenerate_form").hidden = true;
+    byId("mobile_totp_disable_form").hidden = true;
+    setAuthState("recovery_codes");
+    if (window.HCConsumerNav) HCConsumerNav.setSecurityGate(true);
+  }
+
+  function requireSignInAfterSecurityChange(message) {
+    saveSession(null);
+    clearAuthenticatedConsumerData();
+    if (window.HCTrustedDevice && typeof HCTrustedDevice.clearCredential === "function") {
+      HCTrustedDevice.clearCredential();
+    }
+    showAuthenticated(false);
+    loginChallenge = null;
+    byId("mobile_totp_challenge").hidden = true;
+    byId("mobile_recovery_codes").hidden = true;
+    setAuthState("login");
+    byId("mobile_login_error").textContent = message;
+  }
+
+  async function handleTotpSetupConfirm(event) {
+    event.preventDefault();
+    const error = byId("mobile_totp_confirm_error");
+    error.textContent = "";
+    if (!totpSetupSecret) {
+      error.textContent = "Start a new authenticator setup before confirming.";
+      return;
+    }
+    try {
+      const result = await request("/api/auth/totp/setup/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: byId("mobile_totp_confirm_code").value.trim() }),
+      });
+      byId("mobile_totp_confirm_code").value = "";
+      totpSetupSecret = null;
+      displayRecoveryCodes(result.recovery_codes);
+      byId("mobile_login_error").textContent =
+        "Two-factor authentication is enabled. Save the recovery codes, then sign in again.";
+    } catch (_failure) {
+      error.textContent = "That code was not accepted. Check your device time and try again.";
+      byId("mobile_totp_confirm_code").value = "";
+    }
+  }
+
+  async function handleTotpRecoveryRegenerate(event) {
+    event.preventDefault();
+    const error = byId("mobile_totp_regenerate_error");
+    error.textContent = "";
+    try {
+      const result = await request("/api/auth/totp/recovery-codes/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: byId("mobile_totp_regenerate_password").value,
+          code: byId("mobile_totp_regenerate_code").value.trim(),
+        }),
+      });
+      byId("mobile_totp_regenerate_password").value = "";
+      byId("mobile_totp_regenerate_code").value = "";
+      displayRecoveryCodes(result.recovery_codes);
+      byId("mobile_login_error").textContent =
+        "Recovery codes were replaced. Save the new codes, then sign in again.";
+    } catch (_failure) {
+      error.textContent = "Verification failed. Check your password and authenticator code.";
+    }
+  }
+
+  async function handleTotpDisable(event) {
+    event.preventDefault();
+    const error = byId("mobile_totp_disable_error");
+    error.textContent = "";
+    const factor = byId("mobile_totp_disable_code").value.trim();
+    const body = {
+      current_password: byId("mobile_totp_disable_password").value,
+    };
+    if (/^[0-9]{6}$/.test(factor)) body.code = factor;
+    else body.recovery_code = factor;
+    try {
+      await request("/api/auth/totp/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      requireSignInAfterSecurityChange(
+        "Two-factor authentication was disabled. Sign in again to continue."
+      );
+    } catch (_failure) {
+      error.textContent = "Verification failed. Check your password and second factor.";
+      byId("mobile_totp_disable_code").value = "";
+    }
+  }
+
   byId("mobile_login_form").addEventListener("submit", event => {
     event.preventDefault();
     login();
+  });
+  byId("mobile_totp_challenge").addEventListener("submit", verifyLoginTotp);
+  byId("mobile_totp_cancel").addEventListener("click", () => {
+    loginChallenge = null;
+    rememberDeviceRequested = false;
+    byId("mobile_totp_challenge").hidden = true;
+    byId("mobile_login_button").hidden = false;
+    byId("mobile_forgot_password_btn").hidden = false;
+    byId("mobile_remember_device").checked = false;
+    setAuthState("login");
   });
   byId("mobile_password_change").addEventListener("submit", changePassword);
   byId("mobile_recovery_enroll").addEventListener("submit", submitEnrollment);
@@ -1307,6 +1778,14 @@
   byId("mobile_recovery_cancel_btn").addEventListener("click", cancelRecoveryFlow);
   byId("mobile_settings_password_form").addEventListener("submit", handleSettingsPassword);
   byId("mobile_settings_recovery_form").addEventListener("submit", handleSettingsRecovery);
+  byId("mobile_totp_setup_form").addEventListener("submit", handleTotpSetupStart);
+  byId("mobile_totp_confirm_form").addEventListener("submit", handleTotpSetupConfirm);
+  byId("mobile_totp_setup_cancel").addEventListener("click", cancelTotpSetup);
+  byId("mobile_totp_recovery_regenerate_form").addEventListener("submit", handleTotpRecoveryRegenerate);
+  byId("mobile_totp_disable_form").addEventListener("submit", handleTotpDisable);
+  byId("mobile_recovery_codes_saved").addEventListener("click", () => {
+    requireSignInAfterSecurityChange("Save any remaining recovery information, then sign in again.");
+  });
   byId("mobile_logout_button").addEventListener("click", () => logout(true));
   byId("mobile_upload_button").addEventListener("click", upload);
   byId("mobile_record_file").addEventListener("change", reviewSelectedFile);
@@ -1328,5 +1807,6 @@
       return showView(route, { fromNav: true, fromBack: !!(options && options.fromBack) });
     }
   };
+  configureTrustedReturn();
   restore();
 }());

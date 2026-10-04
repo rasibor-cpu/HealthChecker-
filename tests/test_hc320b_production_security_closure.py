@@ -86,6 +86,8 @@ def test_every_production_clinical_route_rejects_missing_and_forged_sessions(tmp
     _, _, client = _production_app(tmp_path)
     public = {
         ("POST", "/api/auth/login"),
+        ("POST", "/api/auth/login/totp"),
+        ("POST", "/api/auth/login/trusted-device"),
         ("GET", "/api/auth/session"),
         ("POST", "/api/auth/password/change"),
         ("POST", "/api/auth/logout"),

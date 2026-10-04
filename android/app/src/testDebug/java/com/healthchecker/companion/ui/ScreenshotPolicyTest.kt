@@ -22,6 +22,10 @@ class ScreenshotPolicyTest {
     fun screenshotBlockingIsRouteSpecificNotGlobal() {
         assertTrue(ScreenshotPolicy.isScreenshotBlockingEnabled())
         assertTrue(ScreenshotPolicy.HAS_PROTECTED_SCREENS)
+        listOf("settings", "password_recovery", "auth_secrets", "totp_setup", "recovery_codes")
+            .forEach { assertTrue(it, ScreenshotPolicy.isSensitiveRoute(it)) }
+        listOf(null, "dashboard", "records", "trends", "import", "unknown")
+            .forEach { assertFalse(it, ScreenshotPolicy.isSensitiveRoute(it)) }
     }
 
     @Test

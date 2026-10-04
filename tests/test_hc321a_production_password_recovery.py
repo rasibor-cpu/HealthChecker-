@@ -103,8 +103,14 @@ def test_recovery_is_not_exposed_as_public_api(tmp_path):
     assert "/api/auth/reset-password" not in paths
     assert not any(
         ("reset-password" in path or "local-recovery" in path)
-        or ("recover" in path and "/api/auth/recovery/" not in path)
+        or (
+            "recover" in path
+            and "/api/auth/recovery/" not in path
+            and path != "/api/auth/totp/recovery-codes/regenerate"
+        )
         for path in paths
     )
     client = TestClient(app)
     assert client.post("/api/auth/reset-password", json={}).status_code in {401, 404}
+    assert "/api/auth/totp/recovery-codes/regenerate" in paths
+    assert client.post("/api/auth/totp/recovery-codes/regenerate", json={}).status_code == 401

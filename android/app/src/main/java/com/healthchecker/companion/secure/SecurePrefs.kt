@@ -6,7 +6,9 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.healthchecker.companion.sync.PendingBatch
 import com.healthchecker.companion.sync.SyncMutex
+import com.healthchecker.companion.ui.ConsumerSafeNavigationState
 import com.healthchecker.companion.util.SafeLog
+import java.util.UUID
 
 /**
  * Keystore-backed secure preferences for companion credentials and cursors.
@@ -76,6 +78,10 @@ class SecurePrefs(context: Context) {
     fun clearUserScopedState() {
         hostStore.clearPairingCredentials()
         prefs.edit()
+            .remove(KEY_TRUSTED_DEVICE_ID)
+            .remove(KEY_TRUSTED_DEVICE_TOKEN)
+            .remove(KEY_CONSUMER_ROUTE)
+            .remove(KEY_CONSUMER_RECORD_ID)
             .remove(KEY_CHANGES)
             .remove(KEY_CHANGES_SCOPE)
             .remove(KEY_PENDING_BATCH)
@@ -87,6 +93,58 @@ class SecurePrefs(context: Context) {
             .remove(KEY_QUEUED)
             .commit()
     }
+
+    fun getOrCreateTrustedDeviceId(): String {
+        val current = prefs.getString(KEY_TRUSTED_DEVICE_ID, null)
+        if (!current.isNullOrBlank()) return current
+        val generated = UUID.randomUUID().toString()
+        if (!prefs.edit().putString(KEY_TRUSTED_DEVICE_ID, generated).commit()) {
+            throw IllegalStateException("trusted_device_id_persist_failed")
+        }
+        return generated
+    }
+
+    fun getTrustedDeviceId(): String? = prefs.getString(KEY_TRUSTED_DEVICE_ID, null)
+
+    fun hasTrustedDeviceCredential(): Boolean =
+        !prefs.getString(KEY_TRUSTED_DEVICE_ID, null).isNullOrBlank() &&
+            !prefs.getString(KEY_TRUSTED_DEVICE_TOKEN, null).isNullOrBlank()
+
+    fun getTrustedDeviceToken(): String? = prefs.getString(KEY_TRUSTED_DEVICE_TOKEN, null)
+
+    fun saveTrustedDeviceCredential(deviceId: String, token: String): Boolean {
+        if (deviceId.isBlank() || token.length !in 32..256) return false
+        return prefs.edit()
+            .putString(KEY_TRUSTED_DEVICE_ID, deviceId)
+            .putString(KEY_TRUSTED_DEVICE_TOKEN, token)
+            .commit()
+    }
+
+    fun clearTrustedDeviceCredential(): Boolean =
+        prefs.edit()
+            .remove(KEY_TRUSTED_DEVICE_ID)
+            .remove(KEY_TRUSTED_DEVICE_TOKEN)
+            .commit()
+
+    fun saveConsumerNavigationState(route: String?, recordId: String?): Boolean {
+        val state = ConsumerSafeNavigationState.normalize(route, recordId) ?: return false
+        val editor = prefs.edit().putString(KEY_CONSUMER_ROUTE, state.route)
+        if (state.recordId == null) editor.remove(KEY_CONSUMER_RECORD_ID)
+        else editor.putString(KEY_CONSUMER_RECORD_ID, state.recordId)
+        return editor.commit()
+    }
+
+    fun getConsumerNavigationState(): ConsumerSafeNavigationState? =
+        ConsumerSafeNavigationState.normalize(
+            prefs.getString(KEY_CONSUMER_ROUTE, null),
+            prefs.getString(KEY_CONSUMER_RECORD_ID, null),
+        )
+
+    fun clearConsumerNavigationState(): Boolean =
+        prefs.edit()
+            .remove(KEY_CONSUMER_ROUTE)
+            .remove(KEY_CONSUMER_RECORD_ID)
+            .commit()
 
     fun getChangesToken(): String? = prefs.getString(KEY_CHANGES, null)
 
@@ -162,5 +220,9 @@ class SecurePrefs(context: Context) {
         private const val KEY_LAST_QUERY_PERFORMED = "last_query_performed"
         private const val KEY_QUEUED = "queued_count"
         private const val KEY_PENDING_BATCH = "pending_batch_json"
+        private const val KEY_TRUSTED_DEVICE_ID = "trusted_device_id"
+        private const val KEY_TRUSTED_DEVICE_TOKEN = "trusted_device_token"
+        private const val KEY_CONSUMER_ROUTE = "consumer_safe_route"
+        private const val KEY_CONSUMER_RECORD_ID = "consumer_safe_record_id"
     }
 }

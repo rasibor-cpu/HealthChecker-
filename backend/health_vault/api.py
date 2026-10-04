@@ -334,6 +334,8 @@ def create_health_vault_app(
     # clinical API surface is account-authenticated before route dispatch.
     production_public_api = {
         "/api/auth/login",
+        "/api/auth/login/totp",
+        "/api/auth/login/trusted-device",
         "/api/auth/session",
         "/api/auth/password/change",
         "/api/auth/logout",
@@ -996,15 +998,165 @@ def create_health_vault_app(
         try:
             result = auth_service.login(str(user_id or ""), str(body.get("password") or ""))
         except AuthenticationError:
-            return JSONResponse({"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"}, status_code=401)
-        return JSONResponse({"ok": True, **result})
+            return JSONResponse(
+                {"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/auth/login/totp")
+    async def dashboard_login_totp(body: dict[str, Any] | None = None) -> JSONResponse:
+        body = body or {}
+        try:
+            result = auth_service.verify_login_totp(
+                str(body.get("challenge_token") or ""),
+                code=str(body.get("code") or "") or None,
+                recovery_code=str(body.get("recovery_code") or "") or None,
+            )
+        except AuthenticationError:
+            return JSONResponse(
+                {"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/auth/login/trusted-device")
+    async def dashboard_trusted_device_login(body: dict[str, Any] | None = None) -> JSONResponse:
+        body = body or {}
+        try:
+            result = auth_service.restore_trusted_device(
+                str(body.get("device_id") or ""),
+                str(body.get("trusted_device_token") or ""),
+            )
+        except AuthenticationError:
+            return JSONResponse(
+                {"ok": False, "error": "Invalid credentials", "code": "invalid_credentials"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/auth/session")
     async def auth_session(request: Request) -> JSONResponse:
         try:
-            return JSONResponse(auth_service.safe_session(_bearer_token(request)))
+            return JSONResponse(
+                auth_service.safe_session(_bearer_token(request)),
+                headers={"Cache-Control": "no-store"},
+            )
         except AuthenticationError as exc:
-            return JSONResponse({"ok": False, "error": exc.code}, status_code=exc.status_code)
+            return JSONResponse(
+                {"ok": False, "error": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/totp/setup/start")
+    async def auth_totp_setup_start(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.totp_setup_start(
+                _bearer_token(request), str(body.get("current_password") or "")
+            )
+            return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/totp/setup/confirm")
+    async def auth_totp_setup_confirm(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.totp_setup_confirm(
+                _bearer_token(request), str(body.get("code") or "")
+            )
+            return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/totp/disable")
+    async def auth_totp_disable(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.totp_disable(
+                _bearer_token(request),
+                str(body.get("current_password") or ""),
+                code=str(body.get("code") or "") or None,
+                recovery_code=str(body.get("recovery_code") or "") or None,
+            )
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/totp/recovery-codes/regenerate")
+    async def auth_totp_recovery_codes_regenerate(
+        request: Request, body: dict[str, Any]
+    ) -> JSONResponse:
+        try:
+            result = auth_service.totp_regenerate_recovery_codes(
+                _bearer_token(request),
+                str(body.get("current_password") or ""),
+                code=str(body.get("code") or "") or None,
+                recovery_code=str(body.get("recovery_code") or "") or None,
+            )
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/trusted-devices/issue")
+    async def auth_trusted_device_issue(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.issue_trusted_device(
+                _bearer_token(request),
+                str(body.get("device_id") or ""),
+                str(body.get("label") or "Android device"),
+            )
+            return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.get("/api/auth/trusted-devices")
+    async def auth_trusted_devices(request: Request) -> JSONResponse:
+        try:
+            devices = auth_service.list_trusted_devices(_bearer_token(request))
+            return JSONResponse({"ok": True, "devices": devices}, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    @app.post("/api/auth/trusted-devices/revoke")
+    async def auth_trusted_device_revoke(request: Request, body: dict[str, Any]) -> JSONResponse:
+        try:
+            result = auth_service.revoke_trusted_device(
+                _bearer_token(request), str(body.get("device_id") or "")
+            )
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except AuthenticationError as exc:
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
 
     @app.post("/api/auth/password/change")
     async def auth_password_change(request: Request, body: dict[str, Any]) -> JSONResponse:
@@ -1015,9 +1167,13 @@ def create_health_vault_app(
                 confirmation=body.get("confirm_password", body.get("confirmation")),
                 recovery_answers=body.get("recovery_answers"),
             )
-            return JSONResponse({"ok": True, **result})
+            return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
         except AuthenticationError as exc:
-            return JSONResponse({"ok": False, "error": exc.code, "code": exc.code}, status_code=exc.status_code)
+            return JSONResponse(
+                {"ok": False, "error": exc.code, "code": exc.code},
+                status_code=exc.status_code,
+                headers={"Cache-Control": "no-store"},
+            )
 
     @app.get("/api/auth/recovery/catalog")
     async def auth_recovery_catalog() -> JSONResponse:
@@ -1037,11 +1193,12 @@ def create_health_vault_app(
             result = auth_service.recovery_verify(
                 str(body.get("recovery_id") or ""), body.get("answers"),
             )
-            return JSONResponse({"ok": True, **result})
+            return JSONResponse({"ok": True, **result}, headers={"Cache-Control": "no-store"})
         except AuthenticationError:
             return JSONResponse(
                 {"ok": False, "error": "Recovery could not be completed.", "code": "invalid_recovery"},
                 status_code=401,
+                headers={"Cache-Control": "no-store"},
             )
 
     @app.post("/api/auth/recovery/complete")
@@ -1072,6 +1229,7 @@ def create_health_vault_app(
     async def auth_logout(request: Request, body: dict[str, Any] | None = None) -> JSONResponse:
         device_revoked = False
         devices_revoked = 0
+        token = ""
         try:
             token = _bearer_token(request)
             account, _ = auth_service.resolve(token, require_full=False)
@@ -1095,14 +1253,17 @@ def create_health_vault_app(
                         status_code=403,
                     )
                 device_revoked = True
-            auth_service.logout(token)
         except AuthenticationError:
             pass
-        return JSONResponse({
-            "ok": True,
-            "device_revoked": device_revoked,
-            "devices_revoked": devices_revoked,
-        })
+        auth_service.logout(token, str((body or {}).get("trusted_device_id") or ""))
+        return JSONResponse(
+            {
+                "ok": True,
+                "device_revoked": device_revoked,
+                "devices_revoked": devices_revoked,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
     from backend.health_vault.privacy_rights import PrivacyDataRightsService, PrivacyRightsError
 

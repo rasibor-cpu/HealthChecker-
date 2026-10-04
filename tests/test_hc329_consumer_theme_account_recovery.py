@@ -31,7 +31,9 @@ def test_mobile_exposes_password_change_and_lost_password_recovery():
         _read("android/app/build.gradle.kts"),
     )
     assert version_match
-    assert f'/js/health_vault/mobile_consumer.js?v=hc{version_match.group(1)}' in html
+    version = version_match.group(1)
+    assert f'/js/health_vault/mobile_consumer.js?v=hc{version}' in html
+    assert f'/css/hc352_mobile_record_ux.css?v=hc{version}' in html
     assert "Forgot password? Reset it securely" in html
     assert "Recover your account" in html
     assert "Password &amp; recovery" in html

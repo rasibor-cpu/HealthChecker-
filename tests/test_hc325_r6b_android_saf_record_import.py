@@ -68,13 +68,18 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     )
     main_sources = list(ANDROID.rglob("*.kt")) + list(ANDROID.rglob("*.java"))
     assert sum(_read(path).count("addJavascriptInterface(") for path in main_sources) == len(registrations)
-    assert [
+    bridge_registrations = [
         ("ConsumerRecordImportBridge" if "ConsumerRecordImportBridge(" in instance else
-         "ScreenshotRouteBridge" if "ScreenshotRouteBridge()" in instance else "unexpected", name)
+         "ScreenshotRouteBridge" if "ScreenshotRouteBridge()" in instance else
+         "ConsumerNavigationBridge" if "ConsumerNavigationBridge()" in instance else
+         "TrustedDeviceBridge" if "TrustedDeviceBridge()" in instance else "unexpected", name)
         for instance, name in registrations
-    ] == [
+    ]
+    assert bridge_registrations == [
         ("ConsumerRecordImportBridge", "HCNativeImport"),
         ("ScreenshotRouteBridge", "HCScreenshotPolicy"),
+        ("ConsumerNavigationBridge", "HCNavigationState"),
+        ("TrustedDeviceBridge", "HCTrustedDevice"),
     ]
 
     exposed_methods = [
@@ -87,6 +92,15 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     ]
     assert sorted(exposed_methods) == sorted([
         ("setRoute", "route: String?", ""),
+        ("saveSafeState", "route: String?, recordId: String?", "Boolean"),
+        ("readSafeState", "", "String"),
+        ("clearSafeState", "", "Boolean"),
+        ("hasCredential", "", "Boolean"),
+        ("supportsFastReturn", "", "Boolean"),
+        ("deviceId", "", "String"),
+        ("saveCredential", "deviceId: String?, token: String?", "Boolean"),
+        ("clearCredential", "", "Boolean"),
+        ("requestFastReturn", "", ""),
         ("readSelectedRecordBase64", "", "String"),
     ])
 
@@ -97,14 +111,23 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     assert "classifyImportRead" in bridge
     assert "MAX_IMPORT_BYTES" in _read(POLICY)
 
-    # Screenshot routing is a separate, single-method bridge. A non-sensitive
-    # route signal uses the exact native route policy.
-    assert launcher.count("@JavascriptInterface") == 1
+    # Screenshot routing is a separate, single-method bridge. Its sensitive
+    # route decision stays native and the other first-party bridges expose only
+    # their explicitly enumerated methods above.
+    assert launcher.count("@JavascriptInterface") == len(exposed_methods) - 1
     assert "private inner class ScreenshotRouteBridge" in launcher
     assert "fun setRoute(route: String?)" in launcher
     assert "ScreenshotPolicy.isSensitiveRoute(route)" in launcher
+    assert "fun saveSafeState(route: String?, recordId: String?): Boolean" in launcher
+    assert "fun requestFastReturn()" in launcher
+    assert "runOnUiThread { showTrustedDevicePrompt() }" in launcher
+    assert "if (!isFirstPartyBridgeCall()) return" in launcher
+    assert "isAuthorizedOrigin = { isFirstPartyBridgeCall() }" in launcher
+    assert 'android.permission.USE_BIOMETRIC' in _read(
+        ANDROID / "AndroidManifest.xml"
+    )
 
-    # Both interfaces belong only to the governed mobile WebView. Its initial
+    # All interfaces belong only to the governed mobile WebView. Its initial
     # page is /mobile, navigation is origin/path allowlisted, and the page
     # disallows external scripts and framing.
     origin = _read(ANDROID / "java/com/healthchecker/companion/consumer/ConsumerOriginPolicy.kt")
@@ -114,6 +137,8 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     assert 'PRODUCTION_MOBILE_PATH = "/mobile"' in origin_lock
     assert 'path == "/mobile"' in origin
     assert "candidateOrigin != origin" in origin
+    assert "isFirstPartyBridgeCall()" in launcher
+    assert launcher.count("addJavascriptInterface(") == 4
     assert "frame-ancestors 'none'" in _read(ROOT / "backend/health_vault/api.py")
     assert "<iframe" not in mobile.lower()
     assert 'window.HCScreenshotPolicy.setRoute(active ? "password_recovery" : "dashboard")' in js

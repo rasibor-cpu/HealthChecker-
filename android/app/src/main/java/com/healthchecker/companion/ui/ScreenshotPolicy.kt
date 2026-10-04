@@ -27,7 +27,7 @@ object ScreenshotPolicy {
     fun isScreenshotBlockingEnabled(): Boolean = HAS_PROTECTED_SCREENS
 
     fun isSensitiveRoute(route: String?): Boolean =
-        route == "settings" || route == "password_recovery"
+        route in setOf("settings", "password_recovery", "auth_secrets", "totp_setup", "recovery_codes")
 
     /**
      * Ensure a consumer window can be captured by the standard Android

@@ -10,9 +10,16 @@ Application ID: `com.healthchecker.companion`
 | Prior signing baseline (HC321-B3) | 321 | 0.321.0 |
 | Installed S24 UAT candidate (HC334) | 334 | 0.334.0 |
 | Corrected consumer UX candidate (HC352 remediation) | 344 | 0.344.0 |
+| Secure lifecycle restoration and optional 2FA | 345 | 0.345.0 |
 
 The authoritative current Android version is declared in `app/build.gradle.kts`.
 Desktop release metadata (`config/healthchecker.release.json`) is independent and already at `0.321.0`.
+
+## Secure consumer return and optional 2FA
+
+The mobile consumer can save only an allowlisted section and an opaque record ID in Android encrypted preferences; it does not restore WebView history or persist clinical measurements. Fast return is opt-in, requires an Android system biometric or device-credential prompt, and uses a server-revocable credential that rotates on use and expires after 30 days. Password sign-in remains available.
+
+Authenticator-app TOTP is optional and is enrolled from consumer Settings after current-password confirmation. Ten single-use recovery codes are shown once. Enabling, disabling, or replacing factors revokes existing sessions and trusted-device credentials. Ordinary consumer screens remain screenshot-capable; password/recovery and 2FA secret screens remain protected by the route-specific screenshot policy.
 
 ## Debug (local only)
 

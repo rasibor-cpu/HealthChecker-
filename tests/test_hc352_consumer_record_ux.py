@@ -234,7 +234,7 @@ def test_mobile_dashboard_record_actions_and_preview_contract():
     assert "img-src 'self' data: blob:" in api and "object-src 'none'" in api
     assert '<form id="mobile_login_form"' in html and 'name="username" autocomplete="username"' in html
     assert 'name="password" type="password" autocomplete="current-password"' in html
-    assert "HealthChecker keeps only a session for this page and never saves your password." in html
+    assert "HealthChecker never saves your password." in html
     assert 'id="mobile_upload_review"' in html and 'id="mobile_upload_button" type="button" disabled' in html
     assert 'id="mobile_cancel_upload_review"' in html
     assert 'byId("mobile_record_file").addEventListener("change", reviewSelectedFile)' in script
@@ -257,10 +257,10 @@ def test_mobile_route_serves_versioned_consumer_assets(tmp_path):
     assert page.headers["cache-control"] == "no-store"
     assert "+ ADD RECORD" in page.text
     assert "VIEW LAST RECORD" in page.text
-    assert 'hc352_mobile_record_ux.css?v=hc344' in page.text
-    assert 'mobile_consumer.js?v=hc344' in page.text
+    assert 'hc352_mobile_record_ux.css?v=hc345' in page.text
+    assert 'mobile_consumer.js?v=hc345' in page.text
 
-    stylesheet = client.get("/css/hc352_mobile_record_ux.css?v=hc344")
-    script = client.get("/js/health_vault/mobile_consumer.js?v=hc344")
+    stylesheet = client.get("/css/hc352_mobile_record_ux.css?v=hc345")
+    script = client.get("/js/health_vault/mobile_consumer.js?v=hc345")
     assert stylesheet.status_code == 200 and ".mobile-upload-review" in stylesheet.text
     assert script.status_code == 200 and 'fetch("/api/records/preview"' in script.text

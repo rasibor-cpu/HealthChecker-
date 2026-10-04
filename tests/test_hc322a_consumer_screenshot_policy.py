@@ -25,7 +25,7 @@ def test_screenshot_policy_is_route_specific():
     )
     assert "HAS_PROTECTED_SCREENS: Boolean = true" in policy
     assert "fun isScreenshotBlockingEnabled(): Boolean = HAS_PROTECTED_SCREENS" in policy
-    assert 'route == "settings" || route == "password_recovery"' in policy
+    assert 'route in setOf("settings", "password_recovery", "auth_secrets", "totp_setup", "recovery_codes")' in policy
     assert "clearFlags(WindowManager.LayoutParams.FLAG_SECURE)" in policy
     assert "addFlags(WindowManager.LayoutParams.FLAG_SECURE)" in policy
 

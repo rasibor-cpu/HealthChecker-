@@ -36,9 +36,11 @@ class ConsumerRecordImportBridge(
     private val contentResolver: ContentResolver,
     private val pendingUriProvider: () -> Uri?,
     private val onConsumed: () -> Unit,
+    private val isAuthorizedOrigin: () -> Boolean,
 ) {
     @JavascriptInterface
     fun readSelectedRecordBase64(): String {
+        if (!isAuthorizedOrigin()) return errorJson("unauthorized_origin")
         val uri = pendingUriProvider() ?: return errorJson("no_file_selected")
 
         // Early-rejection optimization only — a provider's declared size can

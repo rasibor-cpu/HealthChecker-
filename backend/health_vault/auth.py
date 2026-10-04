@@ -17,11 +17,16 @@ from uuid import uuid4
 
 from backend.health_vault.models import UserAccount, utc_now
 from backend.health_vault.vault_crypto import decrypt_bytes, encrypt_bytes
+from backend.health_vault.auth_factors import matching_totp_counter, new_recovery_codes, new_totp_secret
 
 PASSWORD_DAYS = 90
 SESSION_HOURS = 12
 CHANGE_SESSION_MINUTES = 10
 RECOVERY_MINUTES = 10
+TOTP_SETUP_MINUTES = 10
+TOTP_LOGIN_MINUTES = 5
+TOTP_STEP_SECONDS = 30
+TRUSTED_DEVICE_DAYS = 30
 # Temporary consumer bootstrap only. Never log, return, or persist this value.
 _CONSUMER_BOOTSTRAP = "0" * 6
 
@@ -240,7 +245,15 @@ class AuthenticationService:
     def _token_hash(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    def _issue_session(self, data: dict[str, Any], account: UserAccount, scope: str) -> str:
+    def _issue_session(
+        self,
+        data: dict[str, Any],
+        account: UserAccount,
+        scope: str,
+        *,
+        auth_method: str = "password",
+        trusted_device_id: str | None = None,
+    ) -> str:
         token = secrets.token_urlsafe(32)
         if scope == "password_change":
             lifetime = timedelta(minutes=CHANGE_SESSION_MINUTES)
@@ -252,8 +265,28 @@ class AuthenticationService:
             "session_id": str(uuid4()), "user_id": account.user_id, "scope": scope,
             "password_version": int(data["accounts"][account.user_id].get("password_version", 1)),
             "issued_at": utc_now(), "expires_at": _iso(_now() + lifetime), "revoked_at": None,
+            "auth_method": auth_method,
+            "trusted_device_id": trusted_device_id,
         }
         return token
+
+    def _issue_login_challenge(
+        self, data: dict[str, Any], user_id: str, scope: str = "full"
+    ) -> dict[str, Any]:
+        challenge = secrets.token_urlsafe(32)
+        data.setdefault("login_challenges", {})[self._token_hash(challenge)] = {
+            "user_id": user_id,
+            "scope": scope,
+            "expires_at": _iso(_now() + timedelta(minutes=TOTP_LOGIN_MINUTES)),
+            "failed_count": 0,
+        }
+        return {
+            "requires_totp": True,
+            "challenge_token": challenge,
+            "user_id": user_id,
+            "must_change_password": scope != "full",
+            "scope": scope,
+        }
 
     def _clear_lockout_state(self, row: dict[str, Any]) -> None:
         row["failed_login_count"] = 0
@@ -318,10 +351,15 @@ class AuthenticationService:
             raise AuthenticationError("invalid_credentials")
         expired = bool(_parse(account.password_expiry_date) and _parse(account.password_expiry_date) <= _now())
         restricted = account.must_change_password or expired
+        scope = "password_change" if restricted else "full"
         if expired:
             row["account_status"] = "password_expired"
         self._clear_lockout_state(row)
-        scope = "password_change" if restricted else "full"
+        if bool(row.get("totp_enabled")):
+            self._audit(data, "login_password_verified_totp_required", uid)
+            challenge_result = self._issue_login_challenge(data, uid, scope)
+            self._write(data)
+            return challenge_result
         token = self._issue_session(data, account, scope)
         self._audit(data, "login_succeeded", uid)
         self._write(data)
@@ -329,6 +367,376 @@ class AuthenticationService:
                 "must_change_password": restricted, "password_expiry_date": account.password_expiry_date,
                 "password_expires_at": account.password_expiry_date, "scope": scope,
                 "recovery_enrolled": len(list(row.get("recovery_questions") or [])) >= 3}
+
+    @staticmethod
+    def _totp_attempt_locked(row: dict[str, Any]) -> bool:
+        locked_until = _parse(row.get("totp_locked_until"))
+        return bool(locked_until and locked_until > _now())
+
+    def _record_totp_failure(self, data: dict[str, Any], row: dict[str, Any], user_id: str) -> None:
+        failures = int(row.get("totp_failed_count") or 0) + 1
+        row["totp_failed_count"] = failures
+        row["totp_last_failed_at"] = utc_now()
+        if failures >= max_failed_logins():
+            row["totp_locked_until"] = _iso(_now() + timedelta(minutes=lockout_minutes()))
+            self._audit(data, "totp_lockout_engaged", user_id, "denied")
+        self._audit(data, "totp_verification_failed", user_id, "denied")
+
+    @staticmethod
+    def _consume_recovery_code(row: dict[str, Any], code: str) -> bool:
+        if not isinstance(code, str) or not code:
+            return False
+        codes = row.get("totp_recovery_codes")
+        if not isinstance(codes, list):
+            return False
+        candidate = code.strip().lower()
+        for entry in codes:
+            if not isinstance(entry, dict) or entry.get("used_at"):
+                continue
+            encoded = str(entry.get("code_hash") or "")
+            if encoded and verify_password(candidate, encoded):
+                entry["used_at"] = utc_now()
+                return True
+        return False
+
+    def _verify_factor(
+        self,
+        data: dict[str, Any],
+        row: dict[str, Any],
+        user_id: str,
+        *,
+        code: str | None = None,
+        recovery_code: str | None = None,
+        consume_recovery: bool = True,
+    ) -> tuple[bool, str | None]:
+        if self._totp_attempt_locked(row):
+            self._audit(data, "totp_verification_locked", user_id, "denied")
+            return False, None
+        if recovery_code:
+            valid = self._consume_recovery_code(row, recovery_code) if consume_recovery else any(
+                isinstance(item, dict)
+                and not item.get("used_at")
+                and verify_password(recovery_code.strip().lower(), str(item.get("code_hash") or ""))
+                for item in row.get("totp_recovery_codes", [])
+            )
+            if valid:
+                row["totp_failed_count"] = 0
+                row["totp_locked_until"] = None
+                self._audit(data, "totp_recovery_code_used", user_id)
+                return True, "recovery_code"
+        secret = str(row.get("totp_secret") or "")
+        counter = matching_totp_counter(secret, code or "") if secret else None
+        last_counter = int(row.get("totp_last_counter", -1))
+        if counter is not None and counter > last_counter:
+            row["totp_last_counter"] = counter
+            row["totp_failed_count"] = 0
+            row["totp_locked_until"] = None
+            self._audit(data, "totp_verified", user_id)
+            return True, "totp"
+        self._record_totp_failure(data, row, user_id)
+        return False, None
+
+    @_synchronized
+    def verify_login_totp(
+        self, challenge_token: str, *, code: str | None = None, recovery_code: str | None = None
+    ) -> dict[str, Any]:
+        data = self._read()
+        challenges = data.setdefault("login_challenges", {})
+        challenge_key = self._token_hash(str(challenge_token or ""))
+        challenge = challenges.get(challenge_key)
+        if not challenge or (_parse(challenge.get("expires_at")) or _now()) <= _now():
+            challenges.pop(challenge_key, None)
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        user_id = str(challenge.get("user_id") or "")
+        row = data.get("accounts", {}).get(user_id)
+        if not row or not row.get("totp_enabled") or self._totp_attempt_locked(row):
+            challenges.pop(challenge_key, None)
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        valid, method = self._verify_factor(
+            data, row, user_id, code=code, recovery_code=recovery_code
+        )
+        challenge["failed_count"] = int(challenge.get("failed_count") or 0) + (0 if valid else 1)
+        if valid:
+            challenges.pop(challenge_key, None)
+            row["totp_failed_count"] = 0
+            row["totp_locked_until"] = None
+            account = UserAccount.from_dict(row)
+            scope = str(challenge.get("scope") or "full")
+            if scope not in {"full", "password_change"}:
+                challenges.pop(challenge_key, None)
+                self._write(data)
+                raise AuthenticationError("invalid_credentials")
+            token = self._issue_session(data, account, scope, auth_method=method or "totp")
+            self._audit(data, "login_succeeded", user_id)
+            self._write(data)
+            return {
+                "token": token, "user_id": user_id, "patient_id": user_id, "name": account.name,
+                "must_change_password": scope != "full", "password_expiry_date": account.password_expiry_date,
+                "password_expires_at": account.password_expiry_date, "scope": scope,
+                "recovery_enrolled": len(list(row.get("recovery_questions") or [])) >= 3,
+                "totp_enabled": True,
+            }
+        if int(challenge["failed_count"]) >= max_failed_logins():
+            challenges.pop(challenge_key, None)
+        self._write(data)
+        raise AuthenticationError("invalid_credentials")
+
+    @_synchronized
+    def totp_setup_start(self, token: str, current_password: str) -> dict[str, Any]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        row = data["accounts"][account.user_id]
+        if not verify_password(current_password, row["password_hash"]):
+            self._record_totp_failure(data, row, account.user_id)
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        if row.get("totp_enabled"):
+            raise AuthenticationError("totp_already_enabled", 409)
+        secret = new_totp_secret()
+        row["totp_pending_secret"] = secret
+        row["totp_pending_expires_at"] = _iso(_now() + timedelta(minutes=TOTP_SETUP_MINUTES))
+        self._audit(data, "totp_setup_started", account.user_id)
+        self._write(data)
+        label = account.email_identifier or account.user_id
+        issuer = "HealthChecker"
+        import urllib.parse
+
+        uri = (
+            f"otpauth://totp/{urllib.parse.quote(issuer + ':' + label, safe='')}?"
+            f"secret={secret}&issuer={urllib.parse.quote(issuer)}&algorithm=SHA1&digits=6&period=30"
+        )
+        return {"secret": secret, "provisioning_uri": uri, "expires_in_seconds": TOTP_SETUP_MINUTES * 60}
+
+    @staticmethod
+    def _revoke_sessions_for_user(data: dict[str, Any], user_id: str) -> None:
+        for session in data.get("sessions", {}).values():
+            if session.get("user_id") == user_id and not session.get("revoked_at"):
+                session["revoked_at"] = utc_now()
+        for device in data.get("trusted_devices", {}).values():
+            if device.get("user_id") == user_id and not device.get("revoked_at"):
+                device["revoked_at"] = utc_now()
+
+    @staticmethod
+    def _trusted_device_key(device_id: str) -> str:
+        return hashlib.sha256(device_id.encode()).hexdigest()
+
+    @_synchronized
+    def issue_trusted_device(self, token: str, device_id: str, label: str = "Android device") -> dict[str, Any]:
+        account, session = self.resolve(token, require_full=True)
+        data = self._read()
+        row = data["accounts"][account.user_id]
+        if session.get("auth_method") == "trusted_device":
+            raise AuthenticationError("recent_authentication_required", 403)
+        if row.get("totp_enabled") and session.get("auth_method") != "totp":
+            raise AuthenticationError("second_factor_required", 403)
+        safe_id = str(device_id or "").strip()
+        if not 16 <= len(safe_id) <= 128 or not safe_id.isascii():
+            raise AuthenticationError("invalid_device_id", 400)
+        safe_label = " ".join(str(label or "Android device").split())[:64] or "Android device"
+        devices = data.setdefault("trusted_devices", {})
+        key = self._trusted_device_key(safe_id)
+        existing = devices.get(key)
+        if existing and existing.get("user_id") != account.user_id:
+            raise AuthenticationError("invalid_device_id", 400)
+        secret = secrets.token_urlsafe(32)
+        devices[key] = {
+            "device_id": safe_id,
+            "user_id": account.user_id,
+            "token_hash": self._token_hash(secret),
+            "label": safe_label,
+            "created_at": utc_now(),
+            "last_used_at": None,
+            "expires_at": _iso(_now() + timedelta(days=TRUSTED_DEVICE_DAYS)),
+            "password_version": int(row.get("password_version", 1)),
+            "totp_factor_version": int(row.get("totp_factor_version", 0)),
+            "revoked_at": None,
+        }
+        data["sessions"][self._token_hash(token)]["trusted_device_id"] = safe_id
+        self._audit(data, "trusted_device_issued", account.user_id)
+        self._write(data)
+        return {
+            "device_id": safe_id,
+            "trusted_device_token": secret,
+            "expires_at": devices[key]["expires_at"],
+        }
+
+    @_synchronized
+    def restore_trusted_device(self, device_id: str, device_token: str) -> dict[str, Any]:
+        data = self._read()
+        safe_id = str(device_id or "").strip()
+        key = self._trusted_device_key(safe_id) if safe_id else ""
+        device = data.get("trusted_devices", {}).get(key)
+        generic = AuthenticationError("invalid_credentials")
+        if not isinstance(device, dict):
+            raise generic
+        user_id = str(device.get("user_id") or "")
+        row = data.get("accounts", {}).get(user_id)
+        expires = _parse(device.get("expires_at"))
+        valid = bool(
+            row
+            and not device.get("revoked_at")
+            and expires
+            and expires > _now()
+            and int(device.get("password_version", 0)) == int(row.get("password_version", 1))
+            and int(device.get("totp_factor_version", 0)) == int(row.get("totp_factor_version", 0))
+            and row.get("account_status") not in {"disabled", "locked", "password_expired"}
+            and not row.get("must_change_password")
+            and hmac.compare_digest(
+                str(device.get("token_hash") or ""), self._token_hash(str(device_token or ""))
+            )
+        )
+        if not valid:
+            raise generic
+        account = UserAccount.from_dict(row)
+        if _parse(account.password_expiry_date) and _parse(account.password_expiry_date) <= _now():
+            device["revoked_at"] = utc_now()
+            self._write(data)
+            raise generic
+        new_secret = secrets.token_urlsafe(32)
+        device["token_hash"] = self._token_hash(new_secret)
+        device["last_used_at"] = utc_now()
+        session_token = self._issue_session(
+            data,
+            account,
+            "full",
+            auth_method="trusted_device",
+            trusted_device_id=safe_id,
+        )
+        self._audit(data, "trusted_device_restored", user_id)
+        self._write(data)
+        return {
+            "token": session_token,
+            "trusted_device_token": new_secret,
+            "device_id": safe_id,
+            "user_id": user_id,
+            "patient_id": user_id,
+            "name": account.name,
+            "must_change_password": False,
+            "password_expiry_date": account.password_expiry_date,
+            "password_expires_at": account.password_expiry_date,
+            "scope": "full",
+            "recovery_enrolled": len(list(row.get("recovery_questions") or [])) >= 3,
+            "totp_enabled": bool(row.get("totp_enabled")),
+        }
+
+    @_synchronized
+    def list_trusted_devices(self, token: str) -> list[dict[str, Any]]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        return [
+            {
+                "device_id": device.get("device_id"),
+                "label": device.get("label"),
+                "created_at": device.get("created_at"),
+                "last_used_at": device.get("last_used_at"),
+                "expires_at": device.get("expires_at"),
+                "revoked": bool(device.get("revoked_at")),
+            }
+            for device in data.get("trusted_devices", {}).values()
+            if device.get("user_id") == account.user_id
+        ]
+
+    @_synchronized
+    def revoke_trusted_device(self, token: str, device_id: str) -> dict[str, Any]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        key = self._trusted_device_key(str(device_id or "").strip())
+        device = data.get("trusted_devices", {}).get(key)
+        if not device or device.get("user_id") != account.user_id:
+            raise AuthenticationError("trusted_device_not_found", 404)
+        if not device.get("revoked_at"):
+            device["revoked_at"] = utc_now()
+            self._audit(data, "trusted_device_revoked", account.user_id)
+            self._write(data)
+        return {"ok": True, "device_id": device.get("device_id")}
+
+
+    @_synchronized
+    def totp_setup_confirm(self, token: str, code: str) -> dict[str, Any]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        row = data["accounts"][account.user_id]
+        secret = str(row.get("totp_pending_secret") or "")
+        expires = _parse(row.get("totp_pending_expires_at"))
+        counter = matching_totp_counter(secret, code) if secret and expires and expires > _now() else None
+        if counter is None:
+            self._record_totp_failure(data, row, account.user_id)
+            self._write(data)
+            raise AuthenticationError("invalid_totp", 401)
+        codes = new_recovery_codes()
+        row.update({
+            "totp_enabled": True,
+            "totp_secret": secret,
+            "totp_last_counter": counter,
+            "totp_recovery_codes": [{"code_hash": hash_password(value), "used_at": None} for value in codes],
+            "totp_failed_count": 0,
+            "totp_locked_until": None,
+            "totp_factor_version": int(row.get("totp_factor_version", 0)) + 1,
+        })
+        row.pop("totp_pending_secret", None)
+        row.pop("totp_pending_expires_at", None)
+        self._revoke_sessions_for_user(data, account.user_id)
+        self._audit(data, "totp_enabled", account.user_id)
+        self._write(data)
+        return {"ok": True, "recovery_codes": codes}
+
+    @_synchronized
+    def totp_disable(
+        self, token: str, current_password: str, *, code: str | None = None, recovery_code: str | None = None
+    ) -> dict[str, Any]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        row = data["accounts"][account.user_id]
+        if not row.get("totp_enabled"):
+            raise AuthenticationError("invalid_credentials")
+        if not verify_password(current_password, row["password_hash"]):
+            self._record_totp_failure(data, row, account.user_id)
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        valid, _ = self._verify_factor(data, row, account.user_id, code=code, recovery_code=recovery_code)
+        if not valid:
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        row["totp_enabled"] = False
+        row["totp_factor_version"] = int(row.get("totp_factor_version", 0)) + 1
+        row.pop("totp_secret", None)
+        row.pop("totp_last_counter", None)
+        row.pop("totp_recovery_codes", None)
+        row.pop("totp_pending_secret", None)
+        row.pop("totp_pending_expires_at", None)
+        self._revoke_sessions_for_user(data, account.user_id)
+        self._audit(data, "totp_disabled", account.user_id)
+        self._write(data)
+        return {"ok": True}
+
+    @_synchronized
+    def totp_regenerate_recovery_codes(
+        self, token: str, current_password: str, *, code: str | None = None, recovery_code: str | None = None
+    ) -> dict[str, Any]:
+        account, _ = self.resolve(token, require_full=True)
+        data = self._read()
+        row = data["accounts"][account.user_id]
+        if not row.get("totp_enabled"):
+            raise AuthenticationError("invalid_credentials")
+        if not verify_password(current_password, row["password_hash"]):
+            self._record_totp_failure(data, row, account.user_id)
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        valid, _ = self._verify_factor(data, row, account.user_id, code=code, recovery_code=recovery_code)
+        if not valid:
+            self._write(data)
+            raise AuthenticationError("invalid_credentials")
+        codes = new_recovery_codes()
+        row["totp_recovery_codes"] = [
+            {"code_hash": hash_password(value), "used_at": None} for value in codes
+        ]
+        row["totp_factor_version"] = int(row.get("totp_factor_version", 0)) + 1
+        self._revoke_sessions_for_user(data, account.user_id)
+        self._audit(data, "totp_recovery_codes_regenerated", account.user_id)
+        self._write(data)
+        return {"ok": True, "recovery_codes": codes}
 
     @_synchronized
     def unlock_after_cooldown(self, user_id: str, password: str) -> dict[str, Any]:
@@ -394,10 +802,13 @@ class AuthenticationService:
                     "password_version": int(row.get("password_version", 1)) + 1})
         self._clear_lockout_state(row)
         data["accounts"][account.user_id] = row
-        for session_row in data["sessions"].values():
-            if session_row.get("user_id") == account.user_id and not session_row.get("revoked_at"):
-                session_row["revoked_at"] = utc_now()
-        updated, new_token = UserAccount.from_dict(row), None
+        self._revoke_sessions_for_user(data, account.user_id)
+        updated = UserAccount.from_dict(row)
+        if row.get("totp_enabled"):
+            challenge_result = self._issue_login_challenge(data, account.user_id)
+            self._audit(data, "password_changed_totp_required", account.user_id)
+            self._write(data)
+            return challenge_result
         new_token = self._issue_session(data, updated, "full")
         self._audit(data, "password_changed", account.user_id)
         self._write(data)
@@ -513,9 +924,7 @@ class AuthenticationService:
             "recovery_failed_count": 0,
             "recovery_locked_until": None,
         })
-        for session_row in data["sessions"].values():
-            if session_row.get("user_id") == account.user_id and not session_row.get("revoked_at"):
-                session_row["revoked_at"] = utc_now()
+        self._revoke_sessions_for_user(data, account.user_id)
         self._audit(data, "password_recovered", account.user_id)
         self._write(data)
         return {
@@ -548,12 +957,20 @@ class AuthenticationService:
         return {"ok": True, "recovery_enrolled": True, "user_id": account.user_id}
 
     @_synchronized
-    def logout(self, token: str) -> None:
+    def logout(self, token: str, trusted_device_id: str | None = None) -> None:
         data, key = self._read(), self._token_hash(token)
         session = data.get("sessions", {}).get(key)
         if session and not session.get("revoked_at"):
             session["revoked_at"] = utc_now()
-            self._audit(data, "logout", str(session.get("user_id")))
+            user_id = str(session.get("user_id"))
+            device_id = str(trusted_device_id or session.get("trusted_device_id") or "").strip()
+            if device_id:
+                device_key = self._trusted_device_key(device_id)
+                device = data.get("trusted_devices", {}).get(device_key)
+                if device and device.get("user_id") == user_id and not device.get("revoked_at"):
+                    device["revoked_at"] = utc_now()
+                    self._audit(data, "trusted_device_revoked", user_id)
+            self._audit(data, "logout", user_id)
             self._write(data)
 
     def safe_session(self, token: str) -> dict[str, Any]:
@@ -565,7 +982,8 @@ class AuthenticationService:
                 "must_change_password": account.must_change_password or session["scope"] != "full",
                 "password_expiry_date": account.password_expiry_date,
                 "password_expires_at": account.password_expiry_date,
-                "recovery_enrolled": len(enrolled) >= 3}
+                "recovery_enrolled": len(enrolled) >= 3,
+                "totp_enabled": bool(row.get("totp_enabled"))}
 
     # --- HC321-C-C admin lifecycle (least privilege; auditable; no silent escalation) ---
 
@@ -660,9 +1078,7 @@ class AuthenticationService:
             raise AuthenticationError("forbidden", 403)
         row["account_status"] = status_norm
         if status_norm == "disabled":
-            for session in data.get("sessions", {}).values():
-                if session.get("user_id") == uid and not session.get("revoked_at"):
-                    session["revoked_at"] = utc_now()
+            self._revoke_sessions_for_user(data, uid)
         self._audit(data, f"account_{status_norm}", actor.user_id)
         data.setdefault("audit", []).append(
             {
@@ -727,6 +1143,9 @@ class AuthenticationService:
             if session.get("user_id") == target and not session.get("revoked_at"):
                 session["revoked_at"] = utc_now()
                 revoked += 1
+        for device in data.get("trusted_devices", {}).values():
+            if device.get("user_id") == target and not device.get("revoked_at"):
+                device["revoked_at"] = utc_now()
         self._audit(data, "sessions_revoked", account.user_id)
         self._write(data)
         return {"ok": True, "user_id": target, "sessions_revoked": revoked}

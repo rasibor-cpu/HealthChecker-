@@ -21,4 +21,7 @@
     <string name="consumer_tls_error">The HealthChecker host certificate could not be verified. The connection was blocked.</string>
     <string name="consumer_navigation_blocked">HealthChecker blocked navigation outside the trusted consumer service.</string>
     <string name="consumer_download_blocked">Downloads are blocked in the mobile consumer. View records securely in HealthChecker.</string>
+    <string name="trusted_device_prompt_title">Unlock HealthChecker</string>
+    <string name="trusted_device_prompt_subtitle">Verify your identity to restore this trusted device session.</string>
+    <string name="cancel">Cancel</string>
 </resources>

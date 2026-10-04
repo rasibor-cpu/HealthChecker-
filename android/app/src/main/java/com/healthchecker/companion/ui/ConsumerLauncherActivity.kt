@@ -1,10 +1,14 @@
 package com.healthchecker.companion.ui
 
 import android.annotation.SuppressLint
+import android.app.KeyguardManager
 import android.content.Intent
+import android.hardware.biometrics.BiometricPrompt
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
@@ -20,6 +24,7 @@ import android.webkit.JavascriptInterface
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -59,10 +64,84 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private val grantedSafUris = mutableListOf<Uri>()
     private var pendingImportUri: Uri? = null
 
+    private inner class ConsumerNavigationBridge {
+        @JavascriptInterface
+        fun saveSafeState(route: String?, recordId: String?): Boolean {
+            if (!isFirstPartyBridgeCall()) return false
+            val saved = prefs.saveConsumerNavigationState(route, recordId)
+            if (!saved) SafeLog.w("consumer_safe_navigation_state_rejected")
+            return saved
+        }
+
+        @JavascriptInterface
+        fun readSafeState(): String {
+            if (!isFirstPartyBridgeCall()) return "{}"
+            val state = prefs.getConsumerNavigationState() ?: return "{}"
+            return JSONObject()
+                .put("route", state.route)
+                .put("record_id", state.recordId)
+                .toString()
+        }
+
+        @JavascriptInterface
+        fun clearSafeState(): Boolean {
+            if (!isFirstPartyBridgeCall()) return false
+            return prefs.clearConsumerNavigationState()
+        }
+    }
+
+    private inner class TrustedDeviceBridge {
+        @JavascriptInterface
+        fun hasCredential(): Boolean =
+            isFirstPartyBridgeCall() &&
+                canUseTrustedDevicePrompt() &&
+                prefs.hasTrustedDeviceCredential()
+
+        @JavascriptInterface
+        fun supportsFastReturn(): Boolean = canUseTrustedDevicePrompt()
+
+        @JavascriptInterface
+        fun deviceId(): String {
+            if (!isFirstPartyBridgeCall() || !canUseTrustedDevicePrompt()) return ""
+            return prefs.getOrCreateTrustedDeviceId()
+        }
+
+        @JavascriptInterface
+        fun saveCredential(deviceId: String?, token: String?): Boolean {
+            if (!isFirstPartyBridgeCall() || !canUseTrustedDevicePrompt()) return false
+            val safeId = deviceId?.trim().orEmpty()
+            val safeToken = token?.trim().orEmpty()
+            if (safeId != prefs.getOrCreateTrustedDeviceId() ||
+                !safeToken.matches(Regex("^[A-Za-z0-9_-]{32,256}$"))
+            ) {
+                SafeLog.w("trusted_device_credential_rejected")
+                return false
+            }
+            return prefs.saveTrustedDeviceCredential(safeId, safeToken)
+        }
+
+        @JavascriptInterface
+        fun clearCredential(): Boolean {
+            if (!isFirstPartyBridgeCall()) return false
+            return prefs.clearTrustedDeviceCredential()
+        }
+
+        @JavascriptInterface
+        fun requestFastReturn() {
+            if (!isFirstPartyBridgeCall() ||
+                !canUseTrustedDevicePrompt() ||
+                !prefs.hasTrustedDeviceCredential()
+            ) return
+            runOnUiThread { showTrustedDevicePrompt() }
+        }
+    }
+
     private inner class ScreenshotRouteBridge {
         @JavascriptInterface
         fun setRoute(route: String?) {
+            if (!isFirstPartyBridgeCall()) return
             runOnUiThread {
+                if (!isFirstPartyBridgeCall()) return@runOnUiThread
                 ScreenshotPolicy.applyConsumerScreenshotPolicy(
                     window,
                     ScreenshotPolicy.isSensitiveRoute(route),
@@ -84,6 +163,10 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SafeLog.i(
+            "consumer_activity_created process_id=${android.os.Process.myPid()} " +
+                "instance_restored=${savedInstanceState != null}"
+        )
         ScreenshotPolicy.applyConsumerScreenshotPolicy(window)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_consumer_launcher)
@@ -133,8 +216,30 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        SafeLog.i("consumer_activity_new_intent process_id=${android.os.Process.myPid()}")
         setIntent(intent)
         loadConsumer()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SafeLog.i("consumer_activity_started process_id=${android.os.Process.myPid()}")
+    }
+
+    override fun onPause() {
+        SafeLog.i(
+            "consumer_activity_paused process_id=${android.os.Process.myPid()} " +
+                "changing_configurations=$isChangingConfigurations"
+        )
+        super.onPause()
+    }
+
+    override fun onStop() {
+        SafeLog.i(
+            "consumer_activity_stopped process_id=${android.os.Process.myPid()} " +
+                "changing_configurations=$isChangingConfigurations"
+        )
+        super.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -144,6 +249,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        SafeLog.i("consumer_activity_resumed process_id=${android.os.Process.myPid()}")
         applyCurrentRouteScreenshotPolicy()
         if (!::webView.isInitialized) return
         if (connectionPanel.visibility == View.VISIBLE) {
@@ -191,10 +297,13 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                 contentResolver,
                 pendingUriProvider = { pendingImportUri },
                 onConsumed = { pendingImportUri = null },
+                isAuthorizedOrigin = { isFirstPartyBridgeCall() },
             ),
             "HCNativeImport",
         )
         webView.addJavascriptInterface(ScreenshotRouteBridge(), "HCScreenshotPolicy")
+        webView.addJavascriptInterface(ConsumerNavigationBridge(), "HCNavigationState")
+        webView.addJavascriptInterface(TrustedDeviceBridge(), "HCTrustedDevice")
         webView.setDownloadListener { _, _, _, _, _ ->
             Toast.makeText(this, R.string.consumer_download_blocked, Toast.LENGTH_LONG).show()
             SafeLog.w("consumer_download_blocked")
@@ -384,7 +493,78 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         startActivity(Intent(this, CompanionStatusActivity::class.java))
     }
 
+    private fun isFirstPartyBridgeCall(): Boolean =
+        ::webView.isInitialized && originPolicy?.isAllowed(webView.url) == true
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun showTrustedDevicePrompt() {
+        if (isFinishing || isDestroyed || !isFirstPartyBridgeCall() || !canUseTrustedDevicePrompt()) return
+        val builder = BiometricPrompt.Builder(this)
+            .setTitle(getString(R.string.trusted_device_prompt_title))
+            .setSubtitle(getString(R.string.trusted_device_prompt_subtitle))
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> builder.setAllowedAuthenticators(
+                android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> builder.setDeviceCredentialAllowed(true)
+            else -> builder.setNegativeButton(
+                getString(R.string.cancel),
+                mainExecutor,
+            ) { _, _ -> SafeLog.i("trusted_device_prompt_cancelled") }
+        }
+        val prompt = builder.build()
+        prompt.authenticate(
+            CancellationSignal(),
+            mainExecutor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
+                    super.onAuthenticationSucceeded(result)
+                    if (!isFirstPartyBridgeCall()) return
+                    val deviceId = prefs.getTrustedDeviceId()
+                    val token = prefs.getTrustedDeviceToken()
+                    if (deviceId.isNullOrBlank() || token.isNullOrBlank()) {
+                        webView.evaluateJavascript(
+                            "window.HCTrustedReturnCancelled&&window.HCTrustedReturnCancelled()",
+                            null,
+                        )
+                        return
+                    }
+                    val credential = JSONObject()
+                        .put("device_id", deviceId)
+                        .put("trusted_device_token", token)
+                        .toString()
+                    webView.evaluateJavascript(
+                        "window.HCTrustedReturnCredential&&window.HCTrustedReturnCredential(" +
+                            "${JSONObject.quote(credential)})",
+                        null,
+                    )
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                    super.onAuthenticationError(errorCode, errString)
+                    SafeLog.i("trusted_device_prompt_unavailable_or_cancelled code=$errorCode")
+                    if (isFirstPartyBridgeCall()) {
+                        webView.evaluateJavascript(
+                            "window.HCTrustedReturnCancelled&&window.HCTrustedReturnCancelled()",
+                            null,
+                        )
+                    }
+                }
+            },
+        )
+    }
+
+    private fun canUseTrustedDevicePrompt(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+
     override fun onDestroy() {
+        SafeLog.i(
+            "consumer_activity_destroyed process_id=${android.os.Process.myPid()} " +
+                "changing_configurations=$isChangingConfigurations finishing=$isFinishing"
+        )
         fileCallback?.onReceiveValue(null)
         fileCallback = null
         pendingImportUri = null

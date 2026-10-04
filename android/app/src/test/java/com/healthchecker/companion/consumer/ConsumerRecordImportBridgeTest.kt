@@ -31,7 +31,7 @@ class ConsumerRecordImportBridgeTest {
 
     @Test
     fun noSelectionReturnsErrorWithoutTouchingContentResolver() {
-        val bridge = ConsumerRecordImportBridge(resolver, { null }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { null }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, body.getBoolean("ok"))
         assertEquals("no_file_selected", body.getString("error"))
@@ -43,7 +43,7 @@ class ConsumerRecordImportBridgeTest {
     fun a_exactlyMaxImportBytesSucceeds() {
         val payload = ByteArray(ConsumerSafFileChooserPolicy.MAX_IMPORT_BYTES) { (it % 251).toByte() }
         shadowOf(resolver).registerInputStream(uri, ByteArrayInputStream(payload))
-        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(true, body.getBoolean("ok"))
         val decoded = Base64.getDecoder().decode(body.getString("base64"))
@@ -54,7 +54,7 @@ class ConsumerRecordImportBridgeTest {
     fun b_maxImportBytesPlusOneFails() {
         val oversized = ByteArray(ConsumerSafFileChooserPolicy.MAX_IMPORT_BYTES + 1)
         shadowOf(resolver).registerInputStream(uri, ByteArrayInputStream(oversized))
-        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, body.getBoolean("ok"))
         assertEquals("file_too_large", body.getString("error"))
@@ -97,7 +97,7 @@ class ConsumerRecordImportBridgeTest {
         val oversized = ByteArray(ConsumerSafFileChooserPolicy.MAX_IMPORT_BYTES + 1)
         shadowOf(resolver).registerInputStream(uri, ByteArrayInputStream(oversized))
         assertNull(resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null))
-        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, body.getBoolean("ok"))
         assertEquals("file_too_large", body.getString("error"))
@@ -108,7 +108,7 @@ class ConsumerRecordImportBridgeTest {
         // No stream registered for this URI -> openInputStream throws (matches
         // real Android behavior for a revoked/nonexistent grant far more
         // often than it returns null) -> caught and reported as read_failed.
-        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, body.getBoolean("ok"))
         assertEquals("read_failed", body.getString("error"))
@@ -127,7 +127,7 @@ class ConsumerRecordImportBridgeTest {
         // null for this fake authority, which the read_failed/file_unreadable
         // branches would surface instead of file_too_large — proving the
         // short circuit happened before any read attempt.
-        val bridge = ConsumerRecordImportBridge(resolver, { sizedUri }, {})
+        val bridge = ConsumerRecordImportBridge(resolver, { sizedUri }, {}, { true })
         val body = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, body.getBoolean("ok"))
         assertEquals("file_too_large", body.getString("error"))
@@ -153,7 +153,7 @@ class ConsumerRecordImportBridgeTest {
         val payload = "one-shot fixture".toByteArray()
         shadowOf(resolver).registerInputStream(uri, ByteArrayInputStream(payload))
         var pending: Uri? = uri
-        val bridge = ConsumerRecordImportBridge(resolver, { pending }, { pending = null })
+        val bridge = ConsumerRecordImportBridge(resolver, { pending }, { pending = null }, { true })
 
         val first = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(true, first.getBoolean("ok"))
@@ -170,7 +170,7 @@ class ConsumerRecordImportBridgeTest {
         shadowOf(resolver).registerInputStream(first, ByteArrayInputStream("first".toByteArray()))
         shadowOf(resolver).registerInputStream(second, ByteArrayInputStream("second".toByteArray()))
         var pending: Uri? = first
-        val bridge = ConsumerRecordImportBridge(resolver, { pending }, { pending = null })
+        val bridge = ConsumerRecordImportBridge(resolver, { pending }, { pending = null }, { true })
 
         assertEquals(true, JSONObject(bridge.readSelectedRecordBase64()).getBoolean("ok"))
         // Simulate the user picking a new document via the native picker.
@@ -184,7 +184,7 @@ class ConsumerRecordImportBridgeTest {
     fun failedReadLeavesSelectionInPlaceForRetry() {
         // No stream registered -> read_failed. onConsumed must NOT be invoked.
         var consumedCalls = 0
-        val bridge = ConsumerRecordImportBridge(resolver, { uri }, { consumedCalls++ })
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, { consumedCalls++ }, { true })
         val first = JSONObject(bridge.readSelectedRecordBase64())
         assertEquals(false, first.getBoolean("ok"))
         assertEquals(0, consumedCalls)
@@ -203,6 +203,14 @@ class ConsumerRecordImportBridgeTest {
         val method = ConsumerRecordImportBridge::class.java.getMethod("readSelectedRecordBase64")
         assertEquals(0, method.parameterCount)
         assertTrue(method.isAnnotationPresent(android.webkit.JavascriptInterface::class.java))
+    }
+
+    @Test
+    fun rejectsReadsOutsideTheAuthorizedFirstPartyOrigin() {
+        val bridge = ConsumerRecordImportBridge(resolver, { uri }, {}, { false })
+        val body = JSONObject(bridge.readSelectedRecordBase64())
+        assertEquals(false, body.getBoolean("ok"))
+        assertEquals("unauthorized_origin", body.getString("error"))
     }
 
     // ---- pure classifier --------------------------------------------------

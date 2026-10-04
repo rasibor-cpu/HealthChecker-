@@ -137,3 +137,31 @@ body.mobile-consumer #mobile_upload_button {
 body.mobile-consumer #mobile_upload_button:disabled {
     opacity: 0.58;
 }
+body.mobile-consumer .mobile-checkbox-row:not([hidden]) {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+body.mobile-consumer .mobile-checkbox-row input {
+    flex: 0 0 auto;
+    width: 20px;
+    min-height: 20px;
+    margin: 2px 0 0;
+}
+body.mobile-consumer .mobile-totp-secret,
+body.mobile-consumer .mobile-recovery-codes {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--status-grey-bg);
+    color: var(--text);
+    font-family: ui-monospace, monospace;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+body.mobile-consumer .mobile-recovery-codes {
+    white-space: pre-wrap;
+    line-height: 1.7;
+}

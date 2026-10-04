@@ -24,11 +24,17 @@ object SecureWindowPolicy {
             "var pw=document.getElementById('mobile_password_change');" +
             "var recovery=document.getElementById('mobile_recovery_flow');" +
             "var enroll=document.getElementById('mobile_recovery_enroll');" +
+            "var mfa=document.getElementById('mobile_totp_challenge');" +
+            "var setup=document.getElementById('mobile_totp_setup_details');" +
+            "var codes=document.getElementById('mobile_recovery_codes');" +
             "var settings=document.getElementById('mobile_settings');" +
             "var loginVisible=!!(login&&!login.hidden);" +
             "var pwVisible=!!(loginVisible&&pw&&!pw.hidden);" +
             "var recoveryVisible=!!(loginVisible&&recovery&&!recovery.hidden);" +
             "var enrollVisible=!!(loginVisible&&enroll&&!enroll.hidden);" +
             "var settingsVisible=!!(settings&&!settings.hidden);" +
-            "return !!(settingsVisible||pwVisible||recoveryVisible||enrollVisible);})();"
+            "var mfaVisible=!!(loginVisible&&mfa&&!mfa.hidden);" +
+            "var setupVisible=!!(settingsVisible&&setup&&!setup.hidden);" +
+            "var codesVisible=!!(settingsVisible&&codes&&!codes.hidden);" +
+            "return !!(settingsVisible||pwVisible||recoveryVisible||enrollVisible||mfaVisible||setupVisible||codesVisible);})();"
 }

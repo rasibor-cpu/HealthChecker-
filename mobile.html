@@ -6,7 +6,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>HealthChecker+</title>
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc344" />
+  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc345" />
 </head>
 <body class="mobile-consumer light-theme">
   <header class="mobile-app-header">HealthChecker+</header>
@@ -18,11 +18,27 @@
         <input id="mobile_user_id" name="username" autocomplete="username" required />
         <label for="mobile_password">Password</label>
         <input id="mobile_password" name="password" type="password" autocomplete="current-password" required />
+        <label id="mobile_remember_device_label" class="mobile-checkbox-row" hidden>
+          <input id="mobile_remember_device" type="checkbox" />
+          <span>Remember this device for faster, biometric sign-in</span>
+        </label>
         <button id="mobile_login_button" type="submit">Sign in</button>
       </form>
-      <p class="muted small">Your device password manager can remember this sign-in. HealthChecker keeps only a session for this page and never saves your password.</p>
+      <button id="mobile_fast_return" type="button" class="secondary" hidden>Use device unlock</button>
+      <p class="muted small">HealthChecker never saves your password. Device trust stores only a revocable, expiring credential protected by Android.</p>
       <button id="mobile_forgot_password_btn" type="button" class="secondary">Forgot password? Reset it securely</button>
       <p id="mobile_login_error" class="bad" role="alert"></p>
+      <form id="mobile_totp_challenge" hidden>
+        <h2>Two-factor verification</h2>
+        <p class="muted small">Enter a current code from your authenticator app, or use one unused recovery code.</p>
+        <label for="mobile_totp_code">Authenticator code</label>
+        <input id="mobile_totp_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
+        <label for="mobile_totp_recovery_code">Recovery code</label>
+        <input id="mobile_totp_recovery_code" autocomplete="off" autocapitalize="none" />
+        <button id="mobile_totp_verify" type="submit">Verify and sign in</button>
+        <button id="mobile_totp_cancel" type="button" class="secondary">Cancel</button>
+        <p id="mobile_totp_error" class="bad" role="alert"></p>
+      </form>
       <form id="mobile_password_change" hidden>
         <h2>Change password</h2>
         <p class="muted small">Replace the temporary sign-in password before HealthChecker can be used.</p>
@@ -144,6 +160,52 @@
           <button type="submit">Save recovery questions</button>
           <p id="mobile_settings_recovery_error" class="bad" role="alert"></p>
         </form>
+        <section id="mobile_settings_totp">
+          <h2>Two-factor authentication</h2>
+          <p id="mobile_totp_status" class="muted small"></p>
+          <form id="mobile_totp_setup_form">
+            <label for="mobile_totp_setup_password">Confirm your current password to begin setup</label>
+            <input id="mobile_totp_setup_password" type="password" autocomplete="current-password" />
+            <button type="submit">Set up authenticator app</button>
+            <p id="mobile_totp_setup_error" class="bad" role="alert"></p>
+          </form>
+          <div id="mobile_totp_setup_details" hidden>
+            <p class="muted small">Enter this key in your authenticator app. Setup expires in 10 minutes; confirmation is required to enable two-factor authentication.</p>
+            <p id="mobile_totp_manual_key" class="mobile-totp-secret"></p>
+            <form id="mobile_totp_confirm_form">
+              <label for="mobile_totp_confirm_code">Authenticator confirmation code</label>
+              <input id="mobile_totp_confirm_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
+              <button type="submit">Confirm and enable</button>
+              <p id="mobile_totp_confirm_error" class="bad" role="alert"></p>
+            </form>
+            <button id="mobile_totp_setup_cancel" type="button" class="secondary">Cancel setup</button>
+          </div>
+          <section id="mobile_recovery_codes" hidden>
+            <h3>Save your recovery codes</h3>
+            <p class="muted small">Each code works once. Store these securely; they are shown only now.</p>
+            <pre id="mobile_recovery_codes_text" class="mobile-recovery-codes"></pre>
+            <button id="mobile_recovery_codes_saved" type="button">I saved these codes</button>
+          </section>
+          <form id="mobile_totp_recovery_regenerate_form" hidden>
+            <h3>Replace recovery codes</h3>
+            <input id="mobile_totp_regenerate_password" type="password" autocomplete="current-password" placeholder="Current password" />
+            <input id="mobile_totp_regenerate_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Authenticator code" />
+            <button type="submit">Generate new recovery codes</button>
+            <p id="mobile_totp_regenerate_error" class="bad" role="alert"></p>
+          </form>
+          <form id="mobile_totp_disable_form" hidden>
+            <h3>Turn off two-factor authentication</h3>
+            <input id="mobile_totp_disable_password" type="password" autocomplete="current-password" placeholder="Current password" />
+            <input id="mobile_totp_disable_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Authenticator or recovery code" />
+            <button type="submit" class="secondary">Turn off two-factor authentication</button>
+            <p id="mobile_totp_disable_error" class="bad" role="alert"></p>
+          </form>
+        </section>
+        <section id="mobile_trusted_devices">
+          <h2>Trusted devices</h2>
+          <p class="muted small">Trusted access expires after 30 days and is revoked when you sign out, change your password, or change two-factor settings.</p>
+          <div id="mobile_trusted_devices_list"></div>
+        </section>
         <div class="mobile-select-field">
         <label for="mobile_theme">Appearance</label>
         <select id="mobile_theme">
@@ -181,6 +243,6 @@
   <script src="/js/health_vault/json_contract.js"></script>
   <script src="/js/health_vault/consumer_nav.js"></script>
   <script src="/js/health_vault/health_snapshot.js"></script>
-  <script src="/js/health_vault/mobile_consumer.js?v=hc344"></script>
+  <script src="/js/health_vault/mobile_consumer.js?v=hc345"></script>
 </body>
 </html>

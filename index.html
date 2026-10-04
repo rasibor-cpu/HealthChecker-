@@ -228,6 +228,17 @@ textarea{
     <button id="forgot_password_btn" type="button" class="secondary">Forgot password?</button>
     <div id="login_error" class="bad small" style="margin-top: 10px; font-weight: bold;"></div>
   </div>
+  <form id="login_totp_challenge" hidden>
+    <h4 class="section-title">Two-factor verification</h4>
+    <p class="small muted">Enter a current authenticator code or one unused recovery code.</p>
+    <label class="small muted" for="login_totp_code">Authenticator code</label>
+    <input id="login_totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+    <label class="small muted" for="login_totp_recovery_code">Recovery code</label>
+    <input id="login_totp_recovery_code" autocomplete="off" autocapitalize="none" />
+    <button id="login_totp_verify" type="submit">Verify and sign in</button>
+    <button id="login_totp_cancel" type="button" class="secondary">Cancel</button>
+    <div id="login_totp_error" class="bad small" role="alert"></div>
+  </form>
   <form id="password_change_form" hidden style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
     <h4 class="section-title">Change your temporary password</h4>
     <p class="small muted">Replace the temporary sign-in password before health information can be accessed.</p>
@@ -797,7 +808,7 @@ textarea{
 <script src="js/health_vault/health_guardian.js"></script>
 <script src="js/health_vault/continuous_monitoring.js"></script>
 <script src="js/health_vault/ui.js"></script>
-<script src="js/health_vault/dashboard.js?v=hc334a"></script>
+<script src="js/health_vault/dashboard.js?v=hc345"></script>
 <script src="js/health_vault/records.js?v=hc334a"></script>
 <script src="js/health_vault/consumer_nav.js?v=hc325r4"></script>
 <script src="js/health_vault/trends.js?v=hc321uat12e"></script>
