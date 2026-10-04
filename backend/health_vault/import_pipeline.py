@@ -415,7 +415,12 @@ class ImportPipeline:
                 storage=storage_conf,
             )
             # Persist confidence on index import record
-            self._attach_confidence(document.id, conf.to_dict())
+            # The document is already committed; a metadata failure must not
+            # report the import as failed.
+            try:
+                self._attach_confidence(document.id, conf.to_dict())
+            except Exception as cexc:
+                warnings.append(f"confidence_persist_skipped:{type(cexc).__name__}")
 
             timings["total_ms"] = (time.perf_counter() - t0) * 1000
             self.last_perf = timings
@@ -448,7 +453,10 @@ class ImportPipeline:
                 "perf_ms": {k: round(v, 3) for k, v in timings.items()},
                 "ui_notify": True,
             }
-            self._append_import_log(result)
+            try:
+                self._append_import_log(result)
+            except Exception as lexc:
+                result.setdefault("warnings", []).append(f"import_log_skipped:{type(lexc).__name__}")
             self.bus.publish(
                 IMPORT_COMPLETED,
                 {"document_id": document.id, "overall_confidence": conf.overall_confidence},
@@ -488,7 +496,10 @@ class ImportPipeline:
                 "imported_at": utc_now(),
                 "perf_ms": {"total_ms": round((time.perf_counter() - t0) * 1000, 3)},
             }
-            self._append_import_log(fail)
+            try:
+                self._append_import_log(fail)
+            except Exception:
+                pass
             return fail
 
     def _normalize_input(

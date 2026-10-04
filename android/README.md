@@ -48,3 +48,8 @@ Never commit keystores or passwords. Never use the debug keystore for release.
 ```
 
 Writes non-secret JSON + text under an operator-chosen evidence directory (default outside source tree when possible).
+
+## Current version
+
+Android versionCode 346 / versionName 0.346.0 (JavaBridge thread-safety fix; remembered User ID).
+
