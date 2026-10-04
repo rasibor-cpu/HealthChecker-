@@ -117,7 +117,7 @@ def test_mobile_consumer_contract_covers_required_experience_without_local_phi()
     for destination in ("dashboard", "records", "trends", "observations", "import", "settings"):
         assert f'data-mobile-view="{destination}"' in html
     for endpoint in ("/api/auth/login", "/api/auth/session", "/api/auth/password/change",
-                     "/api/auth/logout", "/api/dashboard/summary", "/api/records", "/api/records/upload"):
+                     "/api/auth/logout", "/api/dashboard/summary", "/api/records", "/api/records/import-preview"):
         assert endpoint in js
     assert "revoke_companion_devices: true" in js
     assert "/mobile/native-logout-complete" in js

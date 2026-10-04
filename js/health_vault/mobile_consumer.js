@@ -19,6 +19,7 @@
   let recentReceivedRecord = null;
   const recordPreviewUrls = new Set();
   let pendingUploadPayload = null;
+  let pendingImportToken = null;
   let pendingUploadPreviewUrl = null;
   let uploadPreviewController = null;
   let uploadReviewGeneration = 0;
@@ -1043,7 +1044,7 @@
     if (!options.fromNav && window.HCConsumerNav) HCConsumerNav.note(name);
     saveSafeNavigationState(name, null);
     if (name !== "dashboard") clearRecordPreviews();
-    if (name !== "import") clearUploadReview(true);
+    if (name !== "import") { cancelImportPreview(); clearUploadReview(true); }
     document.querySelectorAll("[data-mobile-panel]").forEach(panel => { panel.hidden = panel.id !== `mobile_${name}`; });
     document.querySelectorAll("[data-mobile-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mobileView === name)));
     if (window.HCScreenshotPolicy && typeof window.HCScreenshotPolicy.setRoute === "function") {
@@ -1227,6 +1228,9 @@
       uploadPreviewController = null;
     }
     pendingUploadPayload = null;
+    pendingImportToken = null;
+    const details = byId("mobile_upload_details");
+    if (details) details.textContent = "";
     if (pendingUploadPreviewUrl) {
       URL.revokeObjectURL(pendingUploadPreviewUrl);
       pendingUploadPreviewUrl = null;
@@ -1343,35 +1347,102 @@
     byId("mobile_upload_file_name").textContent = payload.name || "Selected record";
     const typeLabel = kind === "pdf" ? "PDF" : kind === "image" ? "Image" : kind === "data" ? "Data file" : "File type not recognized";
     byId("mobile_upload_file_summary").textContent = `${typeLabel} · ${formatFileSize(payload.blob.size)}`;
-    byId("mobile_upload_button").disabled = false;
     await loadSelectedFilePreview(payload, kind, generation);
+    await requestImportPreview(payload, generation);
+  }
+
+  const IMPORT_ERROR_MESSAGES = {
+    preview_token_invalid: "This review is no longer valid. Select the file again.",
+    preview_expired: "This review expired. Select the file again to continue.",
+    preview_cancelled: "This import was cancelled. Select the file again to continue.",
+    preview_content_mismatch: "The file changed after review. Select it again.",
+    empty_file: "That file is empty.",
+    file_too_large: "That file is too large to import.",
+    import_failed: "The import could not be completed. Nothing was added. Please try again.",
+    PREVIEW_CONFIRMATION_REQUIRED: "Review the file before importing.",
+  };
+
+  function importErrorMessage(error) {
+    const message = String((error && error.message) || "");
+    for (const code of Object.keys(IMPORT_ERROR_MESSAGES)) {
+      if (message.includes(code)) return IMPORT_ERROR_MESSAGES[code];
+    }
+    return describeUploadError(error);
+  }
+
+  function renderImportDetails(preview) {
+    const box = byId("mobile_upload_details");
+    box.textContent = "";
+    const line = (value, cls) => { if (value) text(box, value, cls || "muted"); };
+    const range = preview.date_range;
+    line(`Document type: ${label(preview.document_type || "unknown")}${preview.source ? ` · Source: ${label(preview.source)}` : ""}`);
+    line(`${Number(preview.record_count || 0)} record · ${Number(preview.observation_count || 0)} measurements detected`);
+    if (range && range.from) line(`Dates: ${String(range.from).slice(0, 10)}${range.to && range.to !== range.from ? ` to ${String(range.to).slice(0, 10)}` : ""}`);
+    if (preview.fingerprint) line(`Fingerprint: ${preview.fingerprint}`);
+    if (preview.duplicate) line("This document is already in your records. Nothing will be added.", "mobile-upload-warning");
+    (preview.warnings || []).forEach(w => line(`Warning: ${w}`, "mobile-upload-warning"));
+    (preview.errors || []).forEach(e => line(`Problem: ${e}`, "mobile-upload-warning"));
+  }
+
+  async function requestImportPreview(payload, generation) {
+    const status = byId("mobile_upload_status");
+    const form = new FormData();
+    form.append("file", payload.blob, payload.name);
+    status.textContent = "Reading the record (nothing is saved yet)…";
+    try {
+      const preview = await request("/api/records/import-preview", { method: "POST", body: form, cache: "no-store" });
+      if (generation !== uploadReviewGeneration) return;
+      status.textContent = "";
+      renderImportDetails(preview);
+      pendingImportToken = preview.preview_token || null;
+      byId("mobile_upload_button").disabled = !(preview.eligible && pendingImportToken);
+    } catch (error) {
+      if (generation !== uploadReviewGeneration) return;
+      pendingImportToken = null;
+      byId("mobile_upload_button").disabled = true;
+      status.textContent = importErrorMessage(error);
+    }
+  }
+
+  async function cancelImportPreview() {
+    const token = pendingImportToken;
+    pendingImportToken = null;
+    if (!token) return;
+    try {
+      await request(`/api/records/import-preview/${encodeURIComponent(token)}/cancel`, { method: "POST" });
+    } catch (_) {
+      // The server expires abandoned previews itself; nothing was committed.
+    }
   }
 
   async function upload() {
     const status = byId("mobile_upload_status");
-    if (!pendingUploadPayload) {
+    if (!pendingUploadPayload || !pendingImportToken) {
       status.textContent = "Choose and review a record before confirming the upload.";
       return;
     }
-    const payload = pendingUploadPayload;
+    const token = pendingImportToken;
     byId("mobile_upload_button").disabled = true;
     byId("mobile_record_file").disabled = true;
     byId("mobile_cancel_upload_review").disabled = true;
     status.textContent = "Uploading securely and processing the confirmed record…";
-    const form = new FormData();
-    form.append("file", payload.blob, payload.name);
+    let committed = false;
     try {
-      const result = await request("/api/records/upload", { method: "POST", body: form });
+      const result = await request(`/api/records/import-preview/${encodeURIComponent(token)}/confirm`, { method: "POST" });
+      committed = true;
       clearUploadReview(true);
-      status.textContent = `Upload ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`;
+      status.textContent = `Import ${label(result.status || "accepted")}. ${result.document_id ? "The record is now available in Records." : "The record is processing."}`;
       summary = null; records = [];
     } catch (error) {
-      status.textContent = describeUploadError(error);
-      byId("mobile_upload_button").disabled = !pendingUploadPayload;
+      const dropped = error instanceof TypeError;
+      status.textContent = dropped
+        ? "The connection dropped. The import may have completed. Tap Confirm again to check; it will not be added twice."
+        : importErrorMessage(error);
+      if (!dropped && !/import_failed|Request failed/.test(String(error.message))) pendingImportToken = null;
     } finally {
       byId("mobile_record_file").disabled = false;
       byId("mobile_cancel_upload_review").disabled = false;
-      byId("mobile_upload_button").disabled = !pendingUploadPayload;
+      byId("mobile_upload_button").disabled = committed || !(pendingUploadPayload && pendingImportToken);
     }
   }
 
@@ -1817,6 +1888,7 @@
   byId("mobile_upload_button").addEventListener("click", upload);
   byId("mobile_record_file").addEventListener("change", reviewSelectedFile);
   byId("mobile_cancel_upload_review").addEventListener("click", () => {
+    cancelImportPreview();
     clearUploadReview(true);
     byId("mobile_upload_status").textContent = "Selection canceled. Nothing was imported.";
   });

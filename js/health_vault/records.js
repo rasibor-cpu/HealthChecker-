@@ -572,7 +572,20 @@
       const form = new FormData();
       form.append("file", this.selectedFile, this.selectedFile.name);
       try {
-        const response = await this.request("/api/records/upload", { method: "POST", body: form });
+        // HC-358: the server only commits a record after a preview token is confirmed.
+        const staged = await this.request("/api/records/import-preview", { method: "POST", body: form });
+        const stagedBody = await staged.json();
+        if (!staged.ok || !stagedBody.preview_token) {
+          const problems = [].concat(stagedBody.warnings || [], stagedBody.errors || []).filter(Boolean);
+          this.text("records_upload_status", stagedBody.duplicate
+            ? "Duplicate detected. This document is already in your records."
+            : `Upload could not be reviewed. ${problems.join(" ")}`.trim());
+          return;
+        }
+        const response = await this.request(
+          `/api/records/import-preview/${encodeURIComponent(stagedBody.preview_token)}/confirm`,
+          { method: "POST" }
+        );
         const body = await response.json();
         const state = body.status || (response.ok ? "imported" : "failed");
         const messages = [].concat(body.warnings || [], body.errors || []).filter(Boolean);

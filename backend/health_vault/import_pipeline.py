@@ -68,7 +68,9 @@ class ImportPipeline:
         self.ocr = get_ocr_provider()
         self.last_perf: dict[str, float] = {}
 
-    def run(self, request: dict[str, Any]) -> dict[str, Any]:
+    def run(self, request: dict[str, Any], *, dry_run: bool = False) -> dict[str, Any]:
+        """Canonical import. ``dry_run`` parses/validates only and never writes
+        to the Vault, import log or audit trail."""
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         req = dict(request or {})
@@ -98,6 +100,19 @@ class ImportPipeline:
             # --- Duplicate detection (before store) ---
             dup = self._find_duplicate(sha256, req.get("measured_at"), filename, document_type)
             if dup is not None:
+                if dry_run:
+                    return {
+                        "ok": True,
+                        "dry_run": True,
+                        "duplicate": True,
+                        "status": "Duplicate",
+                        "original_document_id": dup.get("id"),
+                        "document_type": document_type,
+                        "measurements": [],
+                        "warnings": ["Duplicate content - already in your records"],
+                        "errors": [],
+                        "sha256": sha256,
+                    }
                 self.bus.publish(
                     DUPLICATE_DETECTED,
                     {"original_id": dup.get("id"), "sha256": sha256},
@@ -362,6 +377,27 @@ class ImportPipeline:
             ]
             clinical_conf = self.confidence.clinical_from_flags(flags)
 
+            if dry_run:
+                return {
+                    "ok": True,
+                    "dry_run": True,
+                    "duplicate": False,
+                    "status": "parsed" if measurements else "partial",
+                    "document_type": document.document_type,
+                    "source_system": document.source_system,
+                    "primary_category": document.primary_category,
+                    "secondary_categories": list(document.secondary_categories or []),
+                    "requires_review": bool(document.requires_review),
+                    "parser": parsed.get("parser"),
+                    "measurements": [
+                        m.to_dict() if hasattr(m, "to_dict") else m for m in measurements
+                    ],
+                    "measured_at": document.measured_at,
+                    "warnings": warnings,
+                    "errors": errors,
+                    "sha256": sha256,
+                }
+
             # --- Store (immutable append) ---
             t_store = time.perf_counter()
             document.status = "parsed" if measurements else "partial"
@@ -482,6 +518,15 @@ class ImportPipeline:
             return result
 
         except Exception as exc:
+            if dry_run:
+                return {
+                    "ok": False,
+                    "dry_run": True,
+                    "duplicate": False,
+                    "measurements": [],
+                    "warnings": warnings,
+                    "errors": errors + [f"parse_exception:{type(exc).__name__}"],
+                }
             self.bus.publish(IMPORT_FAILED, {"error": type(exc).__name__})
             fail = {
                 "ok": False,

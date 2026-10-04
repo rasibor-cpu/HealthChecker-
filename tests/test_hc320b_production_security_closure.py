@@ -157,12 +157,8 @@ def test_legacy_timeline_and_import_ignore_forged_patient_identity(tmp_path):
     assert "robert-private" not in timeline.text
     assert "private-robert-timeline" not in timeline.text
 
-    imported = client.post(
-        "/api/records/upload",
-        headers=headers,
-        data={"patient_id": "00000"},
-        files={"file": ("secondary.json", b'{"systolic":120,"diastolic":70}', "application/json")},
-    )
+    from tests.import_flow_helpers import preview_and_confirm
+    imported = preview_and_confirm(client, headers, "secondary.json", b'{"systolic":120,"diastolic":70}')
     assert imported.status_code == 200
     assert imported.json()["ok"] is True
     created = next(row for row in store.list_documents() if row["id"] == imported.json()["document_id"])

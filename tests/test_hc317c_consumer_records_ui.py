@@ -58,7 +58,7 @@ def test_records_ui_assets_and_navigation_contract():
     assert 'params.set("q"' in js
     assert "device_data" in js
     assert "clinical_document" in js
-    assert '"/api/records/upload"' in js
+    assert '"/api/records/import-preview"' in js
     assert "`/api/records/${encodeURIComponent(documentId)}`" in js
     assert "`/api/records/download/${encodeURIComponent(documentId)}`" in js
     assert "getAuthorizationHeaders" in dashboard
@@ -95,11 +95,8 @@ def test_authenticated_upload_list_detail_and_encrypted_download(records_app):
         }
     ).encode("utf-8")
 
-    upload = client.post(
-        "/api/records/upload",
-        headers=headers,
-        files={"file": ("consumer-record.json", payload, "application/json")},
-    )
+    from tests.import_flow_helpers import preview_and_confirm
+    upload = preview_and_confirm(client, headers, "consumer-record.json", payload)
     assert upload.status_code == 200
     document_id = upload.json()["document_id"]
     assert document_id
@@ -262,4 +259,4 @@ def test_hc358_consumer_uat_remediation_contract():
     assert "URL.createObjectURL(file)" in records
     assert "URL.revokeObjectURL(this.previewUrl)" in records
     assert 'form.append("file"' in records
-    assert records.index("renderDocumentPreview(file)") < records.index('this.request("/api/records/upload"')
+    assert records.index("renderDocumentPreview(file)") < records.index('this.request("/api/records/import-preview"')

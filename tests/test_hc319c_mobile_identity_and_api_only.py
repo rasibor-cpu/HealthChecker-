@@ -157,7 +157,8 @@ def test_mobile_consumer_is_api_only_and_has_no_clinical_browser_store(mobile_ap
     assert "sessionStorage" in script.text
     assert "/api/dashboard/summary" in script.text
     assert "/api/records" in script.text
-    assert "/api/records/upload" in script.text
+    assert "/api/records/import-preview" in script.text
+    assert 'request("/api/records/upload"' not in script.text
 
 
 def test_mobile_page_has_no_external_navigation_file_access_or_native_bridge(mobile_app):

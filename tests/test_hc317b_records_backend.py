@@ -38,11 +38,8 @@ def test_records_upload_and_lifecycle(temp_vault_with_app):
     }
     file_bytes = json.dumps(clinical_payload).encode("utf-8")
 
-    upload_resp = client.post(
-        "/api/records/upload",
-        headers={"Authorization": f"Bearer {token_a}"},
-        files={"file": ("lab_report.json", file_bytes, "application/json")},
-    )
+    from tests.import_flow_helpers import preview_and_confirm
+    upload_resp = preview_and_confirm(client, {"Authorization": f"Bearer {token_a}"}, "lab_report.json", file_bytes)
     assert upload_resp.status_code == 200
     res = upload_resp.json()
     assert res["ok"] is True
@@ -235,11 +232,8 @@ def test_listing_filters_and_upload_identity_binding(temp_vault_with_app):
     assert [row["document_id"] for row in labs] == ["lab-a"]
 
     payload = json.dumps({"patient_id": "patient-B", "measured_at": "2026-08-16T10:00:00Z"}).encode()
-    uploaded = client.post(
-        "/api/records/upload",
-        headers=headers,
-        files={"file": ("../identity.json", payload, "application/json")},
-    )
+    from tests.import_flow_helpers import preview_and_confirm
+    uploaded = preview_and_confirm(client, headers, "../identity.json", payload)
     assert uploaded.status_code == 200
     doc_id = uploaded.json()["document_id"]
     stored = next(doc for doc in store.list_documents() if doc["id"] == doc_id)

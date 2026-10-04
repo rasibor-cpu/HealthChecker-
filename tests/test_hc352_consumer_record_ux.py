@@ -240,7 +240,9 @@ def test_mobile_dashboard_record_actions_and_preview_contract():
     assert 'byId("mobile_record_file").addEventListener("change", reviewSelectedFile)' in script
     assert 'byId("mobile_upload_button").addEventListener("click", upload)' in script
     assert 'fetch("/api/records/preview"' in script
-    assert 'request("/api/records/upload"' in script
+    assert 'request("/api/records/import-preview"' in script
+    assert "/confirm`" in script and "/cancel`" in script
+    assert 'request("/api/records/upload"' not in script
     assert "No records have been received yet." in script
     assert "localStorage" not in script
     assert 'android:importantForAutofill="yes"' in (

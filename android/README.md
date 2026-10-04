@@ -52,4 +52,3 @@ Writes non-secret JSON + text under an operator-chosen evidence directory (defau
 ## Current version
 
 Android versionCode 346 / versionName 0.346.0 (JavaBridge thread-safety fix; remembered User ID).
-

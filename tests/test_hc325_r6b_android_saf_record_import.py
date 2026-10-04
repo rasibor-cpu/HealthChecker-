@@ -204,7 +204,9 @@ def test_stale_and_cancel_callbacks_are_cleared():
 
 def test_upload_contract_unchanged():
     js = _read(MOBILE_JS)
-    assert 'request("/api/records/upload"' in js
+    # HC-358: the client uses the server-enforced preview/confirm protocol.
+    assert 'request("/api/records/import-preview"' in js
+    assert 'request("/api/records/upload"' not in js
     # HC329: the multipart body is now built from whichever source supplied
     # the bytes (native bridge Blob, or the <input> File as a fallback) —
     # both are normalized into a `payload` with `.blob`/`.name` before this
