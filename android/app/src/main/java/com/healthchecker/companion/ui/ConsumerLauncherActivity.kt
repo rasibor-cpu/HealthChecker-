@@ -89,6 +89,24 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             if (!isFirstPartyBridgeCall()) return false
             return prefs.clearConsumerNavigationState()
         }
+
+        @JavascriptInterface
+        fun readRememberedUserId(): String {
+            if (!isFirstPartyBridgeCall()) return ""
+            return prefs.getRememberedUserId().orEmpty()
+        }
+
+        @JavascriptInterface
+        fun saveRememberedUserId(userId: String?): Boolean {
+            if (!isFirstPartyBridgeCall()) return false
+            return prefs.saveRememberedUserId(userId)
+        }
+
+        @JavascriptInterface
+        fun clearRememberedUserId(): Boolean {
+            if (!isFirstPartyBridgeCall()) return false
+            return prefs.clearRememberedUserId()
+        }
     }
 
     private inner class TrustedDeviceBridge {

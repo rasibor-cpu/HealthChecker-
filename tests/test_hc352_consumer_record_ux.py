@@ -257,10 +257,10 @@ def test_mobile_route_serves_versioned_consumer_assets(tmp_path):
     assert page.headers["cache-control"] == "no-store"
     assert "+ ADD RECORD" in page.text
     assert "VIEW LAST RECORD" in page.text
-    assert 'hc352_mobile_record_ux.css?v=hc345' in page.text
-    assert 'mobile_consumer.js?v=hc345' in page.text
+    assert 'hc352_mobile_record_ux.css?v=hc346' in page.text
+    assert 'mobile_consumer.js?v=hc346' in page.text
 
-    stylesheet = client.get("/css/hc352_mobile_record_ux.css?v=hc345")
-    script = client.get("/js/health_vault/mobile_consumer.js?v=hc345")
+    stylesheet = client.get("/css/hc352_mobile_record_ux.css?v=hc346")
+    script = client.get("/js/health_vault/mobile_consumer.js?v=hc346")
     assert stylesheet.status_code == 200 and ".mobile-upload-review" in stylesheet.text
     assert script.status_code == 200 and 'fetch("/api/records/preview"' in script.text

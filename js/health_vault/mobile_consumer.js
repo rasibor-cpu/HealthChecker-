@@ -479,15 +479,41 @@
     else await restoreSafeNavigationState();
   }
 
+  // Only the non-secret User ID is remembered (natively, encrypted); never a
+  // password, token or PIN.
+  function rememberedBridge() {
+    return window.HCNavigationState && typeof HCNavigationState.readRememberedUserId === "function"
+      ? HCNavigationState : null;
+  }
+
+  function loadRememberedUserId() {
+    const bridge = rememberedBridge();
+    let remembered = "";
+    try { remembered = bridge ? String(bridge.readRememberedUserId() || "") : ""; } catch (_) {}
+    if (remembered) byId("mobile_user_id").value = remembered;
+    byId("mobile_remember_user_id").checked = !!remembered;
+  }
+
+  function saveRememberedUserId(userId) {
+    const bridge = rememberedBridge();
+    if (!bridge) return;
+    try {
+      if (byId("mobile_remember_user_id").checked && userId) bridge.saveRememberedUserId(userId);
+      else bridge.clearRememberedUserId();
+    } catch (_) {}
+  }
+
   async function login() {
     const error = byId("mobile_login_error");
     error.textContent = "";
     rememberDeviceRequested = !!byId("mobile_remember_device")?.checked;
     try {
+      const userId = byId("mobile_user_id").value.trim();
       const body = await request("/api/auth/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: byId("mobile_user_id").value.trim(), password: byId("mobile_password").value })
+        body: JSON.stringify({ user_id: userId, password: byId("mobile_password").value })
       });
+      saveRememberedUserId(userId);
       await finishLogin(body);
     } catch (err) { error.textContent = err.message; }
   }
@@ -1749,6 +1775,7 @@
     }
   }
 
+  loadRememberedUserId();
   byId("mobile_login_form").addEventListener("submit", event => {
     event.preventDefault();
     login();

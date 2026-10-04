@@ -6,7 +6,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>HealthChecker+</title>
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc345" />
+  <link rel="stylesheet" href="/css/hc352_mobile_record_ux.css?v=hc346" />
 </head>
 <body class="mobile-consumer light-theme">
   <header class="mobile-app-header">HealthChecker+</header>
@@ -18,6 +18,10 @@
         <input id="mobile_user_id" name="username" autocomplete="username" required />
         <label for="mobile_password">Password</label>
         <input id="mobile_password" name="password" type="password" autocomplete="current-password" required />
+        <label class="mobile-checkbox-row">
+          <input id="mobile_remember_user_id" type="checkbox" />
+          <span>Remember my User ID on this device (never your password)</span>
+        </label>
         <label id="mobile_remember_device_label" class="mobile-checkbox-row" hidden>
           <input id="mobile_remember_device" type="checkbox" />
           <span>Remember this device for faster, biometric sign-in</span>
@@ -243,6 +247,6 @@
   <script src="/js/health_vault/json_contract.js"></script>
   <script src="/js/health_vault/consumer_nav.js"></script>
   <script src="/js/health_vault/health_snapshot.js"></script>
-  <script src="/js/health_vault/mobile_consumer.js?v=hc345"></script>
+  <script src="/js/health_vault/mobile_consumer.js?v=hc346"></script>
 </body>
 </html>

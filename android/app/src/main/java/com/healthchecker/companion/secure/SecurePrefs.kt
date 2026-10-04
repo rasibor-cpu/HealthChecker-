@@ -146,6 +146,22 @@ class SecurePrefs(context: Context) {
             .remove(KEY_CONSUMER_RECORD_ID)
             .commit()
 
+    /**
+     * Convenience-only sign-in identifier. Deliberately NOT removed by
+     * [clearUserScopedState]; it is never a credential, token or PIN.
+     */
+    fun getRememberedUserId(): String? =
+        prefs.getString(KEY_REMEMBERED_USER_ID, null)?.takeIf { REMEMBERED_USER_ID_PATTERN.matches(it) }
+
+    fun saveRememberedUserId(userId: String?): Boolean {
+        val safe = userId?.trim().orEmpty()
+        if (!REMEMBERED_USER_ID_PATTERN.matches(safe)) return false
+        return prefs.edit().putString(KEY_REMEMBERED_USER_ID, safe).commit()
+    }
+
+    fun clearRememberedUserId(): Boolean =
+        prefs.edit().remove(KEY_REMEMBERED_USER_ID).commit()
+
     fun getChangesToken(): String? = prefs.getString(KEY_CHANGES, null)
 
     fun getChangesTokenScope(): String? = prefs.getString(KEY_CHANGES_SCOPE, null)
@@ -224,5 +240,7 @@ class SecurePrefs(context: Context) {
         private const val KEY_TRUSTED_DEVICE_TOKEN = "trusted_device_token"
         private const val KEY_CONSUMER_ROUTE = "consumer_safe_route"
         private const val KEY_CONSUMER_RECORD_ID = "consumer_safe_record_id"
+        private const val KEY_REMEMBERED_USER_ID = "remembered_user_id"
+        private val REMEMBERED_USER_ID_PATTERN = Regex("^[A-Za-z0-9._@-]{1,64}$")
     }
 }
