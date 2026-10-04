@@ -59,6 +59,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     private lateinit var connectionPanel: View
     private lateinit var connectionMessage: TextView
     private var originPolicy: ConsumerOriginPolicy? = null
+    private val bridgeAuthorization = FirstPartyBridgeAuthorization()
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var originRecoveryInFlight = false
     private val grantedSafUris = mutableListOf<Uri>()
@@ -98,7 +99,8 @@ class ConsumerLauncherActivity : AppCompatActivity() {
                 prefs.hasTrustedDeviceCredential()
 
         @JavascriptInterface
-        fun supportsFastReturn(): Boolean = canUseTrustedDevicePrompt()
+        fun supportsFastReturn(): Boolean =
+            isFirstPartyBridgeCall() && canUseTrustedDevicePrompt()
 
         @JavascriptInterface
         fun deviceId(): String {
@@ -128,11 +130,15 @@ class ConsumerLauncherActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun requestFastReturn() {
-            if (!isFirstPartyBridgeCall() ||
-                !canUseTrustedDevicePrompt() ||
-                !prefs.hasTrustedDeviceCredential()
-            ) return
-            runOnUiThread { showTrustedDevicePrompt() }
+            if (!isFirstPartyBridgeCall() || !prefs.hasTrustedDeviceCredential()) return
+            runOnUiThread {
+                if (isFirstPartyBridgeCall() &&
+                    canUseTrustedDevicePrompt() &&
+                    prefs.hasTrustedDeviceCredential()
+                ) {
+                    showTrustedDevicePrompt()
+                }
+            }
         }
     }
 
@@ -333,24 +339,60 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             }
         }
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean =
-                handleNavigation(request?.url?.toString())
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                if (request?.isForMainFrame != false) bridgeAuthorization.invalidate()
+                return handleNavigation(request?.url?.toString())
+            }
 
             @Deprecated("Deprecated in Android")
-            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
-                handleNavigation(url)
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                bridgeAuthorization.invalidate()
+                return handleNavigation(url)
+            }
+
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                bridgeAuthorization.invalidate()
+                super.onPageStarted(view, url, favicon)
+            }
+
+            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                super.onPageCommitVisible(view, url)
+                bridgeAuthorization.confirmCommittedPage(
+                    currentUrl = view?.url,
+                    committedUrl = url,
+                    policy = originPolicy,
+                )
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                if (bridgeAuthorization.isAuthorized()) {
+                    bridgeAuthorization.confirmCommittedPage(
+                        currentUrl = view?.url,
+                        committedUrl = url,
+                        policy = originPolicy,
+                    )
+                }
+            }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (ConsumerOriginLock.mustRecover(url, originPolicy?.origin)) {
+                    bridgeAuthorization.invalidate()
                     recoverToGovernedOrigin()
                     return
                 }
+                bridgeAuthorization.confirmCommittedPage(
+                    currentUrl = view?.url,
+                    committedUrl = url,
+                    policy = originPolicy,
+                )
                 if (originPolicy?.isAllowed(url) == true) showWebView()
                 applyCurrentRouteScreenshotPolicy()
             }
 
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                bridgeAuthorization.invalidate()
                 handler?.cancel()
                 showConnectionError(getString(R.string.consumer_tls_error))
                 SafeLog.w("consumer_tls_rejected")
@@ -361,6 +403,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame != true) return
+                bridgeAuthorization.invalidate()
                 val failed = request.url?.toString()
                 if (ConsumerOriginLock.mustRecover(failed, originPolicy?.origin)) {
                     recoverToGovernedOrigin()
@@ -396,6 +439,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     }
 
     private fun loadConsumer() {
+        bridgeAuthorization.invalidate()
         if (::webView.isInitialized) {
             webView.stopLoading()
         }
@@ -445,6 +489,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     }
 
     private fun showConnectionError(message: String) {
+        bridgeAuthorization.invalidate()
         connectionMessage.text = message
         webView.visibility = View.GONE
         connectionPanel.visibility = View.VISIBLE
@@ -494,7 +539,7 @@ class ConsumerLauncherActivity : AppCompatActivity() {
     }
 
     private fun isFirstPartyBridgeCall(): Boolean =
-        ::webView.isInitialized && originPolicy?.isAllowed(webView.url) == true
+        bridgeAuthorization.isAuthorized()
 
     @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")

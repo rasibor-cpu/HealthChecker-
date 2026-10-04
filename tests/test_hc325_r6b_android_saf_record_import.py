@@ -120,7 +120,7 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     assert "ScreenshotPolicy.isSensitiveRoute(route)" in launcher
     assert "fun saveSafeState(route: String?, recordId: String?): Boolean" in launcher
     assert "fun requestFastReturn()" in launcher
-    assert "runOnUiThread { showTrustedDevicePrompt() }" in launcher
+    assert "runOnUiThread {" in launcher
     assert "if (!isFirstPartyBridgeCall()) return" in launcher
     assert "isAuthorizedOrigin = { isFirstPartyBridgeCall() }" in launcher
     assert 'android.permission.USE_BIOMETRIC' in _read(
@@ -143,6 +143,50 @@ def test_javascript_bridges_match_the_approved_native_contracts():
     assert "<iframe" not in mobile.lower()
     assert 'window.HCScreenshotPolicy.setRoute(active ? "password_recovery" : "dashboard")' in js
     assert "window.HCScreenshotPolicy.setRoute(name)" in js
+
+
+def test_javascript_bridge_authorization_uses_main_thread_navigation_cache():
+    launcher = _read(LAUNCHER)
+    authorization = _read(
+        ANDROID / "java/com/healthchecker/companion/ui/FirstPartyBridgeAuthorization.kt"
+    )
+
+    bridge_check = re.search(
+        r"private fun isFirstPartyBridgeCall\(\): Boolean\s*=\s*([^\n]+)",
+        launcher,
+    )
+    assert bridge_check
+    assert "bridgeAuthorization.isAuthorized()" in bridge_check.group(1)
+    assert "webView" not in bridge_check.group(1)
+    assert "originPolicy" not in bridge_check.group(1)
+    assert "@Volatile" in authorization
+    assert "Looper.myLooper() == Looper.getMainLooper()" in authorization
+    assert "currentUrl == committedUrl" in authorization
+
+    assert "override fun onPageStarted" in launcher
+    assert "override fun onPageCommitVisible" in launcher
+    assert "override fun doUpdateVisitedHistory" in launcher
+    assert "bridgeAuthorization.invalidate()" in launcher
+    assert "currentUrl = view?.url" in launcher
+    assert "policy = originPolicy" in launcher
+
+    fast_return = launcher.split("fun requestFastReturn()", 1)[1].split(
+        "\n        }\n    }", 1
+    )[0]
+    before_ui_dispatch = fast_return.split("runOnUiThread", 1)[0]
+    assert "webView" not in before_ui_dispatch
+    assert "window" not in before_ui_dispatch
+
+    for bridge_name in ("ConsumerNavigationBridge", "TrustedDeviceBridge", "ScreenshotRouteBridge"):
+        bridge = launcher.split(f"private inner class {bridge_name}", 1)[1].split(
+            "\n    private ", 1
+        )[0]
+        assert "isFirstPartyBridgeCall()" in bridge
+    trusted = launcher.split("private inner class TrustedDeviceBridge", 1)[1].split(
+        "\n    private ", 1
+    )[0]
+    assert "fun supportsFastReturn(): Boolean =\n            isFirstPartyBridgeCall()" in trusted
+    assert "isAuthorizedOrigin = { isFirstPartyBridgeCall() }" in launcher
 
 
 def test_stale_and_cancel_callbacks_are_cleared():
