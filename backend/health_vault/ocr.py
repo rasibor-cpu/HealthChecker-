@@ -1,9 +1,14 @@
-"""OCR provider abstraction — parsers never hardcode OCR vendors."""
+"""OCR provider abstraction — parsers never hardcode OCR vendors.
+
+HC-359 adds an offline/local vision provider for image uploads.  Medical image
+bytes are never sent to a network OCR service by this module.
+"""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any
 
 
@@ -26,18 +31,22 @@ class OCRResult:
 
 
 class OCRProvider(ABC):
-    """Replaceable OCR backend (EasyOCR, Tesseract, Azure, Vision, Textract, OpenAI)."""
+    """Replaceable OCR backend. Providers must make PHI routing explicit."""
 
     name: str = "base"
 
     @abstractmethod
-    def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
+    def extract(
+        self,
+        content: bytes | None,
+        *,
+        mime_type: str | None = None,
+        filename: str | None = None,
+    ) -> OCRResult:
         raise NotImplementedError
 
 
 class NullOCRProvider(OCRProvider):
-    """Default: no OCR — returns empty text. Safe for JSON/text imports."""
-
     name = "null"
 
     def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
@@ -45,7 +54,7 @@ class NullOCRProvider(OCRProvider):
 
 
 class PassthroughTextOCRProvider(OCRProvider):
-    """If content is already text/JSON, decode without external OCR."""
+    """Decode text/JSON inputs without invoking a vision model."""
 
     name = "passthrough_text"
 
@@ -69,17 +78,103 @@ class PassthroughTextOCRProvider(OCRProvider):
         )
 
 
-# Registry of future providers (stubs register readiness only)
+class RapidLocalVisionOCRProvider(OCRProvider):
+    """Offline image OCR backed by RapidOCR + ONNX Runtime.
+
+    The engine is imported and constructed lazily so existing JSON/text imports
+    keep working when the optional HC-359 dependency set is not installed.
+    Failure is returned as control metadata; medical values are never guessed.
+    """
+
+    name = "rapidocr_local"
+    _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
+
+    def __init__(self) -> None:
+        self._engine = None
+        self._engine_lock = Lock()
+
+    @staticmethod
+    def _is_image(mime_type: str | None, filename: str | None) -> bool:
+        mime = (mime_type or "").lower()
+        name = (filename or "").lower()
+        return mime.startswith("image/") or name.endswith(RapidLocalVisionOCRProvider._IMAGE_EXTENSIONS)
+
+    def _get_engine(self):
+        if self._engine is None:
+            with self._engine_lock:
+                if self._engine is None:
+                    from rapidocr import RapidOCR
+                    self._engine = RapidOCR()
+        return self._engine
+
+    def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
+        if not content:
+            return OCRResult(text="", confidence=0.0, provider=self.name, meta={"reason": "empty_content"})
+        if not self._is_image(mime_type, filename):
+            return OCRResult(
+                text="",
+                confidence=0.0,
+                provider=self.name,
+                meta={"reason": "unsupported_binary_type", "mime_type": mime_type},
+            )
+        try:
+            result = self._get_engine()(content)
+        except (ImportError, ModuleNotFoundError) as exc:
+            return OCRResult(
+                text="",
+                confidence=0.0,
+                provider=self.name,
+                meta={"reason": "local_ocr_unavailable", "error_type": type(exc).__name__},
+            )
+        except Exception as exc:
+            return OCRResult(
+                text="",
+                confidence=0.0,
+                provider=self.name,
+                meta={"reason": "local_ocr_failed", "error_type": type(exc).__name__},
+            )
+
+        texts = [str(x).strip() for x in (getattr(result, "txts", None) or ()) if str(x).strip()]
+        scores = [float(x) for x in (getattr(result, "scores", None) or ()) if x is not None]
+        text = "\n".join(texts)
+        confidence = sum(scores) / len(scores) if scores else (0.0 if not text else 0.5)
+        return OCRResult(
+            text=text,
+            confidence=max(0.0, min(float(confidence), 1.0)),
+            provider=self.name,
+            pages=[text] if text else [],
+            meta={
+                "reason": "ok" if text else "no_text_detected",
+                "local_only": True,
+                "line_count": len(texts),
+            },
+        )
+
+
+class LocalFirstOCRProvider(OCRProvider):
+    """Text passthrough plus local-only vision OCR for image binaries."""
+
+    name = "local_first"
+
+    def __init__(self) -> None:
+        self._text = PassthroughTextOCRProvider()
+        self._vision = RapidLocalVisionOCRProvider()
+
+    def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
+        text_result = self._text.extract(content, mime_type=mime_type, filename=filename)
+        if text_result.text or text_result.meta.get("reason") != "binary_requires_vision_ocr":
+            return text_result
+        return self._vision.extract(content, mime_type=mime_type, filename=filename)
+
+
 FUTURE_OCR_PROVIDERS = (
-    "EasyOCR",
-    "Tesseract",
     "Azure OCR",
     "Google Vision",
     "AWS Textract",
     "OpenAI Vision",
 )
 
-_ACTIVE: OCRProvider = PassthroughTextOCRProvider()
+_ACTIVE: OCRProvider = LocalFirstOCRProvider()
 
 
 def set_ocr_provider(provider: OCRProvider) -> None:
