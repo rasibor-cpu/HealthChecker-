@@ -192,6 +192,18 @@ class ImportPipeline:
             timings["ocr_ms"] = (time.perf_counter() - t_ocr) * 1000
             self.bus.publish(OCR_COMPLETED, ocr_result.to_dict())
 
+            # HC-359 — make local vision OCR state explicit during preview.
+            # These are control-plane warnings only; never synthesize clinical values.
+            ocr_reason = str((ocr_result.meta or {}).get("reason") or "")
+            is_image = str(mime or "").lower().startswith("image/")
+            if is_image and not ocr_result.text:
+                if ocr_reason == "local_ocr_unavailable":
+                    warnings.append("Local image OCR is unavailable; no clinical measurements were extracted")
+                elif ocr_reason == "local_ocr_failed":
+                    warnings.append("Local image OCR failed; no clinical measurements were extracted")
+                else:
+                    warnings.append("No readable text was detected in this image")
+
             # --- Determine parser + extract ---
             parse_ctx = {
                 "document_id": document.id,
@@ -378,6 +390,10 @@ class ImportPipeline:
             clinical_conf = self.confidence.clinical_from_flags(flags)
 
             if dry_run:
+                # An image with no extracted measurements is never silently
+                # presented as confirm-ready.  The user may inspect the preview,
+                # but must supply a readable/recognised image before commit.
+                image_without_measurements = is_image and not measurements
                 return {
                     "ok": True,
                     "dry_run": True,
@@ -387,7 +403,10 @@ class ImportPipeline:
                     "source_system": document.source_system,
                     "primary_category": document.primary_category,
                     "secondary_categories": list(document.secondary_categories or []),
-                    "requires_review": bool(document.requires_review),
+                    "requires_review": bool(document.requires_review or image_without_measurements),
+                    "ocr": ocr_result.to_dict(),
+                    "clinical_data_detected": bool(measurements),
+                    "confirmable": not image_without_measurements,
                     "parser": parsed.get("parser"),
                     "measurements": [
                         m.to_dict() if hasattr(m, "to_dict") else m for m in measurements
