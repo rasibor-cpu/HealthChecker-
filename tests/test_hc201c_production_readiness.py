@@ -101,7 +101,7 @@ def test_ocr_passthrough_json():
     r = get_ocr_provider().extract(b'{"a":1}', mime_type="application/json", filename="a.json")
     assert r.text
     assert r.confidence == 1.0
-    assert "EasyOCR" in FUTURE_OCR_PROVIDERS
+    # HC-359 implements local vision OCR; FUTURE_OCR_PROVIDERS now lists only optional cloud backends.\n    assert "EasyOCR" not in FUTURE_OCR_PROVIDERS\n    assert {"Azure OCR", "Google Vision", "AWS Textract", "OpenAI Vision"}.issubset(set(FUTURE_OCR_PROVIDERS))
 
 
 def test_ocr_null_provider():
