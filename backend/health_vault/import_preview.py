@@ -152,10 +152,20 @@ class ImportPreviewService:
         )
         categories = [c for c in [parsed.get("primary_category"), *(parsed.get("secondary_categories") or [])] if c]
         ok = bool(parsed.get("ok"))
+        ocr = parsed.get("ocr") if isinstance(parsed.get("ocr"), dict) else {}
+        ocr_meta = ocr.get("meta") if isinstance(ocr.get("meta"), dict) else {}
+        confirmable = bool(parsed.get("confirmable", True))
         return {
             "document_type": parsed.get("document_type"),
             "source": parsed.get("source_system"),
             "parser": parser_id,
+            "ocr": {
+                "provider": ocr.get("provider"),
+                "confidence": ocr.get("confidence"),
+                "status": ocr_meta.get("reason"),
+                "local_only": bool(ocr_meta.get("local_only")),
+            },
+            "clinical_data_detected": bool(parsed.get("clinical_data_detected", measurements)),
             "record_count": 0 if duplicate else 1,
             "observation_count": len(measurements),
             "metrics": metrics[:50],
@@ -166,7 +176,7 @@ class ImportPreviewService:
             "requires_review": bool(parsed.get("requires_review")),
             "warnings": [str(w) for w in (parsed.get("warnings") or [])][:20],
             "errors": errors[:20],
-            "eligible": ok and not errors and not duplicate,
+            "eligible": ok and not errors and not duplicate and confirmable,
         }
 
     def _owned(self, token: str, user_id: str) -> _Session:
