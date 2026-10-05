@@ -93,3 +93,63 @@ def test_ocr_unavailable_image_cannot_be_confirmed():
     assert preview["eligible"] is False
     assert preview["preview_token"] is None
     assert preview["ocr"]["status"] == "local_ocr_unavailable"
+
+
+def test_scanned_pdf_without_measurements_stays_review_only():
+    def dry(*_args):
+        return {
+            "ok": True,
+            "measurements": [],
+            "clinical_data_detected": False,
+            "confirmable": False,
+            "requires_review": True,
+            "ocr": {
+                "provider": "local_pdf",
+                "confidence": 0.0,
+                "meta": {"reason": "no_text_detected", "local_only": True, "pdf_kind": "scanned_pdf"},
+            },
+            "warnings": ["No readable text was detected in this image"],
+            "errors": [],
+        }
+
+    preview = ImportPreviewService(dry, _commit).create(
+        "patient-A", b"pdf-bytes", "scan.pdf", "application/pdf"
+    )
+    assert preview["eligible"] is False
+    assert preview["preview_token"] is None
+    assert preview["requires_review"] is True
+    assert preview["ocr"]["provider"] == "local_pdf"
+    assert preview["ocr"]["status"] == "no_text_detected"
+
+
+def test_scanned_pdf_with_measurements_can_be_confirmable():
+    def dry(*_args):
+        return {
+            "ok": True,
+            "document_type": "laboratory_pdf",
+            "source_system": "healthchecker_plus",
+            "measurements": [
+                {"metric": "creatinine", "value": 90, "units": "umol/L"},
+                {"metric": "egfr", "value": 70, "units": "mL/min/1.73m2"},
+            ],
+            "requires_review": False,
+            "clinical_data_detected": True,
+            "confirmable": True,
+            "ocr": {
+                "provider": "local_pdf",
+                "confidence": 0.91,
+                "meta": {"reason": "scanned_pdf_local_ocr", "local_only": True, "pdf_kind": "scanned_pdf"},
+            },
+            "warnings": [],
+            "errors": [],
+        }
+
+    preview = ImportPreviewService(dry, lambda *_a: {"ok": True}).create(
+        "patient-A", b"pdf-bytes", "scan.pdf", "application/pdf"
+    )
+    assert preview["eligible"] is True
+    assert preview["preview_token"]
+    assert preview["clinical_data_detected"] is True
+    assert preview["observation_count"] == 2
+    assert preview["ocr"]["provider"] == "local_pdf"
+    assert preview["ocr"]["status"] == "scanned_pdf_local_ocr"

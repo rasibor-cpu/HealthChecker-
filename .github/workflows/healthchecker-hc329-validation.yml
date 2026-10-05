@@ -2,7 +2,7 @@ name: HealthChecker Release Validation
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, agents/hc-352-consumer-ui-polish ]
   workflow_dispatch:
 
 permissions:
@@ -46,7 +46,12 @@ jobs:
             tests/test_hc304br1_proxy_topology.py \
             tests/test_hc319d_mobile_consumer_launcher.py \
             tests/test_hc331_vault_import_semantics.py \
-            tests/test_hc356_dashboard_freshness.py
+            tests/test_hc356_dashboard_freshness.py \
+            tests/test_hc358_import_preview_protocol.py \
+            tests/test_hc358_import_atomicity.py \
+            tests/test_hc359_local_vision_ocr.py \
+            tests/test_hc359_import_preview_ocr_gate.py \
+            tests/test_hc359_scanned_pdf_and_screenshots.py
 
   android-unit:
     runs-on: ubuntu-latest
