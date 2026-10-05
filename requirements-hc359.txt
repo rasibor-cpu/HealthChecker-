@@ -1,0 +1,5 @@
+# HC-359 local/offline vision OCR dependencies.
+# Keep separate from the production hash lock until Windows x86-64 CPython 3.12
+# lock regeneration and release verification are completed.
+rapidocr==3.9.2
+onnxruntime==1.30.0
