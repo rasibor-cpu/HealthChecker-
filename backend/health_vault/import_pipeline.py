@@ -1,9 +1,9 @@
 """
-Autonomous Import Pipeline — single orchestration path for all health record imports.
+Autonomous Import Pipeline â€” single orchestration path for all health record imports.
 
-Document Received → Parser → OCR → Extract → Validate → Duplicate Detection →
-Store Document → Store Measurements → Timeline → Trends → Doctor Visit →
-Audit → Notify UI
+Document Received â†’ Parser â†’ OCR â†’ Extract â†’ Validate â†’ Duplicate Detection â†’
+Store Document â†’ Store Measurements â†’ Timeline â†’ Trends â†’ Doctor Visit â†’
+Audit â†’ Notify UI
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ class ImportPipeline:
                     "measurements": [],
                     "confidence": None,
                     "validation": None,
-                    "warnings": ["Duplicate content — import skipped; referencing original"],
+                    "warnings": ["Duplicate content â€” import skipped; referencing original"],
                     "errors": [],
                     "imported_at": utc_now(),
                     "sha256": sha256,
@@ -192,14 +192,19 @@ class ImportPipeline:
             timings["ocr_ms"] = (time.perf_counter() - t_ocr) * 1000
             self.bus.publish(OCR_COMPLETED, ocr_result.to_dict())
 
-            # HC-359 — make local vision OCR state explicit during preview.
+            # HC-359 â€” make local vision OCR state explicit during preview.
             # These are control-plane warnings only; never synthesize clinical values.
             ocr_reason = str((ocr_result.meta or {}).get("reason") or "")
-            is_image = str(mime or "").lower().startswith("image/")
+            is_image = str(mime or "").lower().startswith("image/") or (
+                (ocr_result.meta or {}).get("pdf_kind") == "scanned_pdf"
+                or ocr_reason in {"malformed_pdf", "resource_limit", "pdf_renderer_unavailable"}
+            )
             if is_image and not ocr_result.text:
                 if ocr_reason == "local_ocr_unavailable":
                     warnings.append("Local image OCR is unavailable; no clinical measurements were extracted")
-                elif ocr_reason == "local_ocr_failed":
+                elif ocr_reason in {"pdf_renderer_unavailable", "resource_limit", "malformed_pdf"}:
+                    warnings.append(f"PDF could not be processed locally ({ocr_reason}); no clinical measurements were extracted")
+                elif ocr_reason in {"local_ocr_failed"}:
                     warnings.append("Local image OCR failed; no clinical measurements were extracted")
                 else:
                     warnings.append("No readable text was detected in this image")
@@ -516,7 +521,7 @@ class ImportPipeline:
                 IMPORT_COMPLETED,
                 {"document_id": document.id, "overall_confidence": conf.overall_confidence},
             )
-            # HC-301 — evaluate Guardian after confirmed import (non-fatal)
+            # HC-301 â€” evaluate Guardian after confirmed import (non-fatal)
             try:
                 from backend.health_vault.guardian.health_guardian import HealthGuardian
 

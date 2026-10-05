@@ -1,4 +1,4 @@
-"""OCR provider abstraction — parsers never hardcode OCR vendors.
+"""OCR provider abstraction â€” parsers never hardcode OCR vendors.
 
 HC-359 adds an offline/local vision provider for image uploads.  Medical image
 bytes are never sent to a network OCR service by this module.
@@ -6,8 +6,10 @@ bytes are never sent to a network OCR service by this module.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -104,7 +106,10 @@ class RapidLocalVisionOCRProvider(OCRProvider):
             with self._engine_lock:
                 if self._engine is None:
                     from rapidocr import RapidOCR
-                    self._engine = RapidOCR()
+                    import rapidocr
+
+                    model_root = Path(rapidocr.__file__).resolve().parent / "models"
+                    self._engine = RapidOCR(params={"Global.model_root_dir": str(model_root)})
         return self._engine
 
     def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
@@ -151,6 +156,102 @@ class RapidLocalVisionOCRProvider(OCRProvider):
         )
 
 
+class LocalPdfOCRProvider(OCRProvider):
+    """Local-only PDF text extraction with scanned-page OCR fallback.
+
+    Embedded text is used first; pages are only rasterised and OCR'd when the
+    PDF has no useful embedded text. Nothing leaves the host.
+    """
+
+    name = "local_pdf"
+    MAX_BYTES = 20 * 1024 * 1024
+    MAX_PAGES = 10
+    RENDER_DPI = 200
+    MAX_RENDER_PIXELS = 4000
+    MIN_EMBEDDED_CHARS = 20
+
+    def __init__(self, vision: "RapidLocalVisionOCRProvider | None" = None) -> None:
+        self._vision = vision or RapidLocalVisionOCRProvider()
+
+    @staticmethod
+    def is_pdf(content: bytes | None, mime_type: str | None, filename: str | None) -> bool:
+        if "pdf" in (mime_type or "").lower() or (filename or "").lower().endswith(".pdf"):
+            return True
+        return bool(content) and content[:5] == b"%PDF-"
+
+    def _result(self, reason: str, *, text: str = "", conf: float = 0.0, pages=None, **meta) -> OCRResult:
+        return OCRResult(
+            text=text,
+            confidence=conf,
+            provider=self.name,
+            pages=pages or [],
+            meta={"reason": reason, "local_only": True, **meta},
+        )
+
+    def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
+        if not content:
+            return self._result("empty_content")
+        if len(content) > self.MAX_BYTES:
+            return self._result("resource_limit", limit="max_bytes")
+        try:
+            import pymupdf
+        except ImportError:
+            return self._result("pdf_renderer_unavailable")
+        try:
+            doc = pymupdf.open(stream=content, filetype="pdf")
+        except Exception as exc:
+            return self._result("malformed_pdf", error_type=type(exc).__name__)
+        try:
+            page_count = doc.page_count
+            if page_count > self.MAX_PAGES:
+                return self._result("resource_limit", limit="max_pages", page_count=page_count)
+            embedded = []
+            try:
+                for i in range(page_count):
+                    embedded.append((doc.load_page(i).get_text() or "").strip())
+            except Exception as exc:
+                return self._result("malformed_pdf", error_type=type(exc).__name__)
+            if sum(len(re.sub(r"\s", "", t)) for t in embedded) >= self.MIN_EMBEDDED_CHARS:
+                return self._result(
+                    "embedded_pdf_text", text="\n".join(t for t in embedded if t),
+                    conf=1.0, pages=embedded, pdf_kind="embedded_text", page_count=page_count,
+                )
+            return self._ocr_pages(doc, page_count, pymupdf)
+        finally:
+            doc.close()
+
+    def _ocr_pages(self, doc, page_count: int, pymupdf) -> OCRResult:
+        pages: list[str] = []
+        confs: list[float] = []
+        for i in range(page_count):
+            try:
+                page = doc.load_page(i)
+                zoom = self.RENDER_DPI / 72.0
+                rect = page.rect
+                longest = max(rect.width, rect.height) * zoom
+                if longest > self.MAX_RENDER_PIXELS:
+                    zoom *= self.MAX_RENDER_PIXELS / longest
+                png = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False).tobytes("png")
+            except Exception as exc:
+                return self._result("malformed_pdf", error_type=type(exc).__name__)
+            r = self._vision.extract(png, mime_type="image/png", filename=f"page-{i + 1}.png")
+            reason = (r.meta or {}).get("reason")
+            if reason == "local_ocr_unavailable":
+                return self._result("local_ocr_unavailable", pdf_kind="scanned_pdf", page_count=page_count)
+            if reason == "local_ocr_failed":
+                return self._result("local_ocr_failed", pdf_kind="scanned_pdf", page_count=page_count, failed_page=i + 1)
+            pages.append(r.text)
+            if r.text:
+                confs.append(r.confidence)
+        text = "\n".join(t for t in pages if t)
+        if not text:
+            return self._result("no_text_detected", pages=pages, pdf_kind="scanned_pdf", page_count=page_count)
+        return self._result(
+            "scanned_pdf_local_ocr", text=text, conf=sum(confs) / len(confs), pages=pages,
+            pdf_kind="scanned_pdf", page_count=page_count,
+        )
+
+
 class LocalFirstOCRProvider(OCRProvider):
     """Text passthrough plus local-only vision OCR for image binaries."""
 
@@ -159,8 +260,11 @@ class LocalFirstOCRProvider(OCRProvider):
     def __init__(self) -> None:
         self._text = PassthroughTextOCRProvider()
         self._vision = RapidLocalVisionOCRProvider()
+        self._pdf = LocalPdfOCRProvider(self._vision)
 
     def extract(self, content: bytes | None, *, mime_type: str | None = None, filename: str | None = None) -> OCRResult:
+        if LocalPdfOCRProvider.is_pdf(content, mime_type, filename):
+            return self._pdf.extract(content, mime_type=mime_type, filename=filename)
         text_result = self._text.extract(content, mime_type=mime_type, filename=filename)
         if text_result.text or text_result.meta.get("reason") != "binary_requires_vision_ocr":
             return text_result

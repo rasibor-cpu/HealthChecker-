@@ -373,6 +373,11 @@ class HealthCheckerVaultImportParser(GenericJsonParser):
 
 def register_builtin_parsers(registry=None) -> None:
     from backend.health_vault.parsers.clinical_lab import ClinicalLabPanelParser
+    from backend.health_vault.parsers.ocr_screenshot import (
+        CgmScreenshotParser,
+        GlucoseMeterScreenshotParser,
+        WearableScreenshotParser,
+    )
 
     reg = registry or DEFAULT_REGISTRY
     for cls in (
@@ -383,6 +388,9 @@ def register_builtin_parsers(registry=None) -> None:
         LifeLabsParser,
         LibreParser,
         BloodPressureParser,
+        GlucoseMeterScreenshotParser,
+        CgmScreenshotParser,
+        WearableScreenshotParser,
         HospitalReportParser,
         AIAssistedParser,
         GenericJsonParser,
