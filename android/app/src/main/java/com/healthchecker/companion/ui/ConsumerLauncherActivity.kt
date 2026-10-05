@@ -147,6 +147,12 @@ class ConsumerLauncherActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun openDeviceData() {
+            if (!isFirstPartyBridgeCall()) return
+            runOnUiThread { if (isFirstPartyBridgeCall()) openNativeSettings() }
+        }
+
+        @JavascriptInterface
         fun requestFastReturn() {
             if (!isFirstPartyBridgeCall() || !prefs.hasTrustedDeviceCredential()) return
             runOnUiThread {

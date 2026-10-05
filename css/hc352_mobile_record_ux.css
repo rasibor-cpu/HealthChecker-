@@ -165,3 +165,7 @@ body.mobile-consumer .mobile-recovery-codes {
     white-space: pre-wrap;
     line-height: 1.7;
 }
+
+.mobile-not-current { display: inline-block; padding: 2px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 0.8em; opacity: 0.85; }
+.mobile-upload-details p { margin: 4px 0; overflow-wrap: anywhere; }
+.mobile-upload-warning { color: #b45309; }

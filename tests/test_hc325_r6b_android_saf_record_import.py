@@ -103,6 +103,7 @@ def test_javascript_bridges_match_the_approved_native_contracts():
         ("deviceId", "", "String"),
         ("saveCredential", "deviceId: String?, token: String?", "Boolean"),
         ("clearCredential", "", "Boolean"),
+        ("openDeviceData", "", ""),
         ("requestFastReturn", "", ""),
         ("readSelectedRecordBase64", "", "String"),
     ])

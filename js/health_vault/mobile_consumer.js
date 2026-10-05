@@ -1091,6 +1091,13 @@
         renderList(clearContent("mobile_trends"), Object.entries(trends), "No trends available.", (card, row) => {
           const trend = row[1] || {};
           text(card, label(row[0]));
+          // The backend decides currentness; the client only labels it.
+          if (trend.currentness !== "current") {
+            const measured = trend.latest_measured_at || trend.measured_at;
+            text(card, "Not current", "mobile-not-current");
+            text(card, measured ? `Last measured ${String(measured).slice(0, 10)} · ${trend.sample_count || 0} samples` : `Measurement date unavailable · ${trend.sample_count || 0} samples`, "muted");
+            return;
+          }
           text(card, `${trend.label || trend.direction || "Not enough data"} · Latest ${trend.latest == null ? "not available" : trend.latest} · ${trend.sample_count || 0} samples`, "muted");
         });
         ok();
@@ -1893,6 +1900,17 @@
     byId("mobile_upload_status").textContent = "Selection canceled. Nothing was imported.";
   });
   byId("mobile_add_record").addEventListener("click", () => showView("import"));
+  const deviceDataButton = byId("mobile_open_device_data");
+  if (deviceDataButton) {
+    deviceDataButton.addEventListener("click", () => {
+      const bridge = window.HCNavigationState;
+      if (bridge && typeof bridge.openDeviceData === "function") {
+        bridge.openDeviceData();
+      } else {
+        setMobileStatus("Device data is available in the HealthChecker Android app.");
+      }
+    });
+  }
   byId("mobile_view_last_record").addEventListener("click", () => {
     if (recentReceivedRecord) openRecord(recentReceivedRecord.document_id);
   });
