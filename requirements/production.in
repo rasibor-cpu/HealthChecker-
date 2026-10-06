@@ -1,4 +1,4 @@
-﻿# HC-306F-R1 production direct dependencies for Companion Host (Windows x86-64 CPython 3.12)
+# HC-306F-R1 production direct dependencies for Companion Host (Windows x86-64 CPython 3.12)
 # Generated for target: CPython 3.12.10 Windows amd64
 # Do not float versions. Lock with pip-compile --generate-hashes.
 fastapi==0.141.1
@@ -8,3 +8,5 @@ PyMuPDF==1.28.2
 # HC-359 local-first vision OCR
 rapidocr==3.9.2
 onnxruntime==1.30.0
+# HC-360 encrypted Health Vault runtime (mirrors requirements-hc311.txt exact pin)
+cryptography==45.0.7

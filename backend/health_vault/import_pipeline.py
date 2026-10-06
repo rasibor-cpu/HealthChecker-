@@ -399,6 +399,11 @@ class ImportPipeline:
                 # presented as confirm-ready.  The user may inspect the preview,
                 # but must supply a readable/recognised image before commit.
                 image_without_measurements = is_image and not measurements
+                if image_without_measurements and ocr_result.text:
+                    warnings.append(
+                        "Text was read locally but no supported, unambiguous clinical readings "
+                        "were recognised; nothing can be imported from this file"
+                    )
                 return {
                     "ok": True,
                     "dry_run": True,

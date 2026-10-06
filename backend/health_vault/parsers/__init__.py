@@ -219,7 +219,9 @@ class BloodPressureParser(_Base):
 
     def can_parse(self, ctx: dict[str, Any]) -> bool:
         b = _blob(ctx)
-        return any(x in b for x in ("blood_pressure", "systolic", "diastolic")) or ctx.get(
+        return any(x in b for x in ("blood_pressure", "systolic", "diastolic")) or re.search(
+            r"blood\s*pressure", b
+        ) is not None or ctx.get(
             "document_type"
         ) == "blood_pressure_screenshot" or re.search(r"\bbp\b", b) is not None
 

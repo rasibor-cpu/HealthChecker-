@@ -51,7 +51,10 @@ jobs:
             tests/test_hc358_import_atomicity.py \
             tests/test_hc359_local_vision_ocr.py \
             tests/test_hc359_import_preview_ocr_gate.py \
-            tests/test_hc359_scanned_pdf_and_screenshots.py
+            tests/test_hc359_scanned_pdf_and_screenshots.py \
+            tests/test_hc360_production_lock.py \
+            tests/test_hc360_ocr_import_qualification.py \
+            tests/test_hc360_ocr_locality.py
 
   android-unit:
     runs-on: ubuntu-latest

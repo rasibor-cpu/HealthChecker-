@@ -98,7 +98,9 @@ class CgmScreenshotParser(_Base):
 class WearableScreenshotParser(_Base):
     id = "wearable_screenshot_parser"
     name = "WearableScreenshotParser"
-    priority = 19
+    # Above SamsungHealthParser (20) so explicitly labelled readings beat its
+    # contentless "ecg_result" placeholder; below BloodPressureParser (21).
+    priority = 20.5
     supported_types = ["wearable_screenshot"]
 
     def can_parse(self, ctx: dict[str, Any]) -> bool:
@@ -109,9 +111,8 @@ class WearableScreenshotParser(_Base):
 
     def parse(self, ctx: dict[str, Any]) -> dict[str, Any]:
         text = _text(ctx)
-        notes = ["Wearable screenshot parser"]
+        note = "Wearable screenshot parser"
         measurements = []
-        review = False
         for rx, metric, units, lo, hi in (
             (_HR_RE, "heart_rate", "bpm", 25, 250),
             (_SPO2_RE, "spo2", "%", 50, 100),
@@ -120,17 +121,10 @@ class WearableScreenshotParser(_Base):
             if not vals:
                 continue
             if len(vals) != 1 or not lo <= next(iter(vals)) <= hi:
-                review = True
-                notes.append(f"Ambiguous or implausible {metric} reading; review required")
-                continue
+                # Fail closed for the whole document: a partial extract would
+                # silently omit the disputed reading from the preview.
+                return _review(note, f"Ambiguous or implausible {metric} reading; review required")
             measurements.append(create_measurement(
                 document_id=ctx.get("document_id"), metric=metric, value=vals.pop(), units=units, confidence=0.55,
             ))
-        out: dict[str, Any] = {
-            "measurements": measurements,
-            "confidence": 0.55 if measurements else 0.1,
-            "notes": notes,
-        }
-        if review:
-            out["requires_review"] = True
-        return out
+        return {"measurements": measurements, "confidence": 0.55 if measurements else 0.1, "notes": [note]}
