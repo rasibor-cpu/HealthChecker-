@@ -95,13 +95,23 @@ def test_event_bus_handler_isolation():
     assert good == [1]
 
 
+@pytest.fixture(autouse=True)
+def _restore_ocr_provider():
+    """Tests swap the process-global OCR provider; never leak it to later tests."""
+    previous = get_ocr_provider()
+    yield
+    set_ocr_provider(previous)
+
+
 # --- OCR ---
 def test_ocr_passthrough_json():
     set_ocr_provider(PassthroughTextOCRProvider())
     r = get_ocr_provider().extract(b'{"a":1}', mime_type="application/json", filename="a.json")
     assert r.text
     assert r.confidence == 1.0
-    # HC-359 implements local vision OCR; FUTURE_OCR_PROVIDERS now lists only optional cloud backends.\n    assert "EasyOCR" not in FUTURE_OCR_PROVIDERS\n    assert {"Azure OCR", "Google Vision", "AWS Textract", "OpenAI Vision"}.issubset(set(FUTURE_OCR_PROVIDERS))
+    # HC-359 implements local vision OCR; FUTURE_OCR_PROVIDERS now lists only optional cloud backends.
+    assert "EasyOCR" not in FUTURE_OCR_PROVIDERS
+    assert {"Azure OCR", "Google Vision", "AWS Textract", "OpenAI Vision"}.issubset(set(FUTURE_OCR_PROVIDERS))
 
 
 def test_ocr_null_provider():

@@ -6,12 +6,37 @@ bytes are never sent to a network OCR service by this module.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 from typing import Any
+
+
+class LocalOCRAssetsError(ImportError):
+    """Required offline OCR model assets are absent or fail integrity checks."""
+
+
+# Default RapidOCR 3.9.2 models are shipped inside the hash-locked wheel
+# (requirements/production.txt). They are pinned here so the runtime never
+# falls back to RapidOCR's first-use network download of a missing/altered model.
+RAPIDOCR_MODEL_SHA256 = {
+    "PP-OCRv6_det_small.onnx": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f",
+    "PP-OCRv6_rec_small.onnx": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884",
+    "ch_ppocr_mobile_v2.0_cls_mobile.onnx": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+}
+
+
+def verify_local_model_assets(model_root: Path) -> None:
+    for name, expected in RAPIDOCR_MODEL_SHA256.items():
+        path = model_root / name
+        if not path.is_file():
+            raise LocalOCRAssetsError(f"missing_model:{name}")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != expected:
+            raise LocalOCRAssetsError(f"model_hash_mismatch:{name}")
 
 
 @dataclass
@@ -109,6 +134,7 @@ class RapidLocalVisionOCRProvider(OCRProvider):
                     import rapidocr
 
                     model_root = Path(rapidocr.__file__).resolve().parent / "models"
+                    verify_local_model_assets(model_root)
                     self._engine = RapidOCR(params={"Global.model_root_dir": str(model_root)})
         return self._engine
 
