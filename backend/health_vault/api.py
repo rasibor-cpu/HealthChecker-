@@ -49,6 +49,12 @@ except Exception:  # pragma: no cover - FastAPI optional at import time
     Request = Any  # type: ignore[misc,assignment]
 
 _ABS_PATH_RE = re.compile(r"(?i)([a-z]:\\|\\\\|/home/|/Users/|/var/|/tmp/)")
+_RECORD_PREVIEW_HEADERS = {
+    "Cache-Control": "no-store, private",
+    "Pragma": "no-cache",
+    "Vary": "Authorization",
+    "X-Content-Type-Options": "nosniff",
+}
 _BANNED_PATH_KEYS = {
     "path",
     "filepath",
