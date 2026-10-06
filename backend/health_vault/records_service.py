@@ -843,6 +843,23 @@ class RecordsService:
                 return None
         return None
 
+    def preview_record(
+        self, patient_id: str, content: bytes, filename: str, mime_type: str
+    ) -> dict[str, Any]:
+        """Parse a candidate upload through the canonical pipeline without committing."""
+        return self.batch_service.pipeline.run(
+            {
+                "patient_id": patient_id,
+                "content": content,
+                "filename": sanitize_filename(filename),
+                "mime_type": mime_type,
+                "source_system": "healthchecker_plus",
+                "acquisition_method": "manual_upload",
+                "provenance": "manual_upload",
+            },
+            dry_run=True,
+        )
+
     def upload_record(
         self,
         patient_id: str,
