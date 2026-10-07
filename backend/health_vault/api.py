@@ -96,6 +96,32 @@ def _strip_banned_path_keys(body: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+_MAX_RECORD_MULTIPART_BODY_BYTES = 31 * 1024 * 1024
+
+
+async def _read_request_body_limited(request: Request, limit: int) -> bytes:
+    """Read an ASGI request body without allowing unbounded fallback buffering."""
+    raw_length = request.headers.get("content-length")
+    if raw_length:
+        try:
+            declared_length = int(raw_length)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("invalid_content_length") from exc
+        if declared_length < 0:
+            raise ValueError("invalid_content_length")
+        if declared_length > limit:
+            raise ValueError("file_too_large")
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise ValueError("file_too_large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _parse_single_multipart(content_type: str, payload: bytes) -> tuple[str, str, bytes]:
     """Dependency-free fallback for the single-file HC-317B upload contract."""
     match = re.search(r"boundary=(?:\"([^\"]+)\"|([^;]+))", content_type)
@@ -1444,14 +1470,20 @@ def create_health_vault_app(
                 return _auth_error(exc)
 
             try:
+                payload = await _read_request_body_limited(
+                    request,
+                    _MAX_RECORD_MULTIPART_BODY_BYTES,
+                )
                 filename, mime_type, content = _parse_single_multipart(
                     request.headers.get("Content-Type") or "",
-                    await request.body(),
+                    payload,
                 )
             except ValueError as exc:
+                code = str(exc)
                 return JSONResponse(
-                    {"ok": False, "error": str(exc)},
-                    status_code=400,
+                    {"ok": False, "error": code, "code": code},
+                    status_code=413 if code == "file_too_large" else 400,
+                    headers=_RECORD_PREVIEW_HEADERS,
                 )
 
             try:
