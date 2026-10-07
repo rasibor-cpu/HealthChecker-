@@ -59,7 +59,7 @@ def test_empty_image_never_fabricates_text():
 def test_image_byte_limit_fails_closed_before_engine(monkeypatch):
     provider = RapidLocalVisionOCRProvider()
     provider._engine = _Engine()
-    monkeypatch.setattr(provider, "MAX_IMAGE_BYTES", 4)
+    monkeypatch.setattr(RapidLocalVisionOCRProvider, "MAX_IMAGE_BYTES", 4)
     result = provider.extract(blank_png(), mime_type="image/png", filename="large.png")
     assert result.text == ""
     assert result.meta["reason"] == "resource_limit"
@@ -70,7 +70,7 @@ def test_image_byte_limit_fails_closed_before_engine(monkeypatch):
 def test_image_pixel_limit_fails_closed_before_engine(monkeypatch):
     provider = RapidLocalVisionOCRProvider()
     provider._engine = _Engine()
-    monkeypatch.setattr(provider, "MAX_IMAGE_PIXELS", 1)
+    monkeypatch.setattr(RapidLocalVisionOCRProvider, "MAX_IMAGE_PIXELS", 1)
     result = provider.extract(blank_png(), mime_type="image/png", filename="wide.png")
     assert result.text == ""
     assert result.meta["reason"] == "resource_limit"
