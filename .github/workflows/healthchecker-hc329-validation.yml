@@ -31,6 +31,8 @@ jobs:
             tests/test_hc329_t52_startup_wrapper_regression.py \
             tests/test_hc329_consumer_theme_account_recovery.py \
             tests/test_hc329_clinical_rules_parity.py \
+            tests/test_hc317b_records_backend.py \
+            tests/test_hc317c_consumer_records_ui.py \
             tests/test_hc320b_production_security_closure.py \
             tests/test_hc320c_production_runtime_connectivity.py \
             tests/test_hc318b_authentication_foundation.py \
@@ -55,6 +57,9 @@ jobs:
             tests/test_hc360_production_lock.py \
             tests/test_hc360_ocr_import_qualification.py \
             tests/test_hc360_ocr_locality.py
+
+      - name: Validate consumer import JavaScript syntax
+        run: node --check js/health_vault/records.js
 
   android-unit:
     runs-on: ubuntu-latest
