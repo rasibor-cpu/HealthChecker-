@@ -28,6 +28,7 @@ MAX_STAGED_BYTES = 30 * 1024 * 1024
 MAX_ACTIVE_BYTES_PER_USER = 64 * 1024 * 1024
 MAX_ACTIVE_BYTES_TOTAL = 256 * 1024 * 1024
 MAX_SESSION_RECORDS = 1000
+MAX_CONCURRENT_PREVIEW_ANALYSES = 2
 
 
 def configured_ttl_seconds() -> int:
@@ -77,6 +78,12 @@ class ImportPreviewService:
         self._clock = clock
         self._sessions: dict[str, _Session] = {}
         self._guard = threading.Lock()
+        # OCR and parser dry-runs are the expensive pre-commit phase. Bound
+        # them independently from staged-session storage so valid large scans
+        # cannot exhaust the worker pool before admission controls run.
+        self._analysis_slots = threading.BoundedSemaphore(
+            MAX_CONCURRENT_PREVIEW_ANALYSES
+        )
         # Serialises the final Vault commit so concurrent confirmations of
         # overlapping content cannot interleave duplicate checks and writes.
         self._commit_lock = threading.Lock()
@@ -120,7 +127,12 @@ class ImportPreviewService:
         if len(content) > MAX_STAGED_BYTES:
             raise PreviewError("file_too_large", 413)
         digest = hashlib.sha256(content).hexdigest()
-        parsed = self._dry_run(user_id, content, filename, mime_type)
+        if not self._analysis_slots.acquire(blocking=False):
+            raise PreviewError("preview_busy", 503)
+        try:
+            parsed = self._dry_run(user_id, content, filename, mime_type)
+        finally:
+            self._analysis_slots.release()
         with self._guard:
             self._purge()
             now = self._clock()
