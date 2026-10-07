@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -9,7 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.health_vault.api import create_health_vault_app
+from backend.health_vault.api import (
+    _read_request_body_limited,
+    create_health_vault_app,
+)
 from backend.health_vault.import_preview import ImportPreviewService, PreviewError
 from backend.health_vault.vault_store import VaultStore
 
@@ -204,3 +208,38 @@ def test_failed_commit_leaves_preview_retryable_and_vault_clean():
     assert err.value.code == "import_failed"
     assert svc.confirm("u", token)["document_id"] == "d1"
     assert calls["n"] == 2
+
+
+
+class _ChunkedRequest:
+    def __init__(self, chunks, content_length=None):
+        self._chunks = list(chunks)
+        self.yielded = 0
+        self.headers = {}
+        if content_length is not None:
+            self.headers["content-length"] = str(content_length)
+
+    async def stream(self):
+        for chunk in self._chunks:
+            self.yielded += 1
+            yield chunk
+
+
+def test_fallback_body_reader_stops_at_streaming_limit():
+    request = _ChunkedRequest([b"1234", b"5678", b"should-not-be-read"])
+    with pytest.raises(ValueError, match="^file_too_large$"):
+        asyncio.run(_read_request_body_limited(request, 6))
+    assert request.yielded == 2
+
+
+def test_fallback_body_reader_rejects_oversized_content_length_before_streaming():
+    request = _ChunkedRequest([b"should-not-be-read"], content_length=7)
+    with pytest.raises(ValueError, match="^file_too_large$"):
+        asyncio.run(_read_request_body_limited(request, 6))
+    assert request.yielded == 0
+
+
+def test_fallback_body_reader_accepts_payload_at_limit():
+    request = _ChunkedRequest([b"123", b"456"], content_length=6)
+    assert asyncio.run(_read_request_body_limited(request, 6)) == b"123456"
+    assert request.yielded == 2
