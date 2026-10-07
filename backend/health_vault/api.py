@@ -49,6 +49,12 @@ except Exception:  # pragma: no cover - FastAPI optional at import time
     Request = Any  # type: ignore[misc,assignment]
 
 _ABS_PATH_RE = re.compile(r"(?i)([a-z]:\\|\\\\|/home/|/Users/|/var/|/tmp/)")
+_RECORD_PREVIEW_HEADERS = {
+    "Cache-Control": "no-store, private",
+    "Pragma": "no-cache",
+    "Vary": "Authorization",
+    "X-Content-Type-Options": "nosniff",
+}
 _BANNED_PATH_KEYS = {
     "path",
     "filepath",
@@ -88,6 +94,32 @@ def _strip_banned_path_keys(body: dict[str, Any]) -> dict[str, Any]:
         if key in _BANNED_PATH_KEYS:
             cleaned.pop(key, None)
     return cleaned
+
+
+_MAX_RECORD_MULTIPART_BODY_BYTES = 31 * 1024 * 1024
+
+
+async def _read_request_body_limited(request: Request, limit: int) -> bytes:
+    """Read an ASGI request body without allowing unbounded fallback buffering."""
+    raw_length = request.headers.get("content-length")
+    if raw_length:
+        try:
+            declared_length = int(raw_length)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("invalid_content_length") from exc
+        if declared_length < 0:
+            raise ValueError("invalid_content_length")
+        if declared_length > limit:
+            raise ValueError("file_too_large")
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise ValueError("file_too_large")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _parse_single_multipart(content_type: str, payload: bytes) -> tuple[str, str, bytes]:
@@ -222,6 +254,11 @@ def create_health_vault_app(
     dashboard_service = DashboardService(vault)
     from backend.health_vault.records_service import RecordsService
     records_service = RecordsService(vault)
+    from backend.health_vault.import_preview import ImportPreviewService, PreviewError
+    import_previews = ImportPreviewService(
+        records_service.preview_record, records_service.upload_record
+    )
+    app.state.import_previews = import_previews
     from backend.health_vault.auth import AuthenticationError, AuthenticationService
     enrollment_password = bootstrap_password
     if production_mode and not (Path(vault.root) / "auth_registry.json").exists():
@@ -1293,47 +1330,218 @@ def create_health_vault_app(
         )
         return JSONResponse(payload)
 
-    # Register the static upload route before the document-id route so Starlette
-    # does not interpret "upload" as a document identifier and return 405.
+    def _preview_error(exc: "PreviewError") -> JSONResponse:
+        return JSONResponse(
+            {"ok": False, "error": exc.code, "code": exc.code},
+            status_code=exc.status_code,
+            headers=_RECORD_PREVIEW_HEADERS,
+        )
+
+    def _upload_requires_preview() -> JSONResponse:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "PREVIEW_CONFIRMATION_REQUIRED",
+                "code": "PREVIEW_CONFIRMATION_REQUIRED",
+                "errors": ["PREVIEW_CONFIRMATION_REQUIRED"],
+            },
+            status_code=428,
+            headers=_RECORD_PREVIEW_HEADERS,
+        )
+
+    @app.post("/api/records/import-preview/{token}/confirm")
+    async def confirm_record_import(token: str, request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        try:
+            result = await run_in_threadpool(import_previews.confirm, pid, token)
+        except PreviewError as exc:
+            return _preview_error(exc)
+        return JSONResponse(
+            _sanitize_value(result),
+            headers=_RECORD_PREVIEW_HEADERS,
+        )
+
+    @app.post("/api/records/import-preview/{token}/cancel")
+    async def cancel_record_import(token: str, request: Request) -> JSONResponse:
+        try:
+            pid = _get_authenticated_patient(request)
+        except AuthenticationError as exc:
+            return _auth_error(exc)
+        try:
+            result = await run_in_threadpool(import_previews.cancel, pid, token)
+        except PreviewError as exc:
+            return _preview_error(exc)
+        return JSONResponse(
+            result,
+            headers=_RECORD_PREVIEW_HEADERS,
+        )
+
+    # Register the static import routes before the document-id route so Starlette
+    # does not interpret route names as document identifiers.
     if multipart_ok:
+
+        @app.post("/api/records/import-preview")
+        async def create_record_import_preview(
+            request: Request,
+            file: UploadFile = File(...),
+        ) -> JSONResponse:
+            try:
+                pid = _get_authenticated_patient(request)
+            except AuthenticationError as exc:
+                await file.close()
+                return _auth_error(exc)
+
+            try:
+                content = await file.read(30 * 1024 * 1024 + 1)
+            finally:
+                await file.close()
+
+            filename = sanitize_filename(file.filename or "upload.bin")
+            mime_type = file.content_type or "application/octet-stream"
+
+            try:
+                result = await run_in_threadpool(
+                    import_previews.create,
+                    pid,
+                    content,
+                    filename,
+                    mime_type,
+                )
+            except PreviewError as exc:
+                return _preview_error(exc)
+
+            return JSONResponse(
+                _sanitize_value(result),
+                headers=_RECORD_PREVIEW_HEADERS,
+            )
+
         @app.post("/api/records/upload")
         async def upload_health_record(
             request: Request,
-            file: UploadFile = File(...)
+            file: UploadFile = File(...),
+        ) -> JSONResponse:
+            try:
+                pid = _get_authenticated_patient(request)
+            except AuthenticationError as exc:
+                await file.close()
+                return _auth_error(exc)
+
+            if not getattr(
+                request.app.state,
+                "allow_direct_record_upload",
+                False,
+            ):
+                await file.close()
+                return _upload_requires_preview()
+
+            content = await file.read()
+            filename = sanitize_filename(file.filename or "upload.bin")
+            mime_type = file.content_type or "application/octet-stream"
+
+            # Parsing/OCR/import work can take several seconds. Keep it off the
+            # ASGI event loop so /healthz remains responsive to the production
+            # supervisor while a consumer upload is processed.
+            result = await run_in_threadpool(
+                records_service.upload_record,
+                pid,
+                content,
+                filename,
+                mime_type,
+            )
+
+            code = 200 if result.get("ok") else 400
+            return JSONResponse(
+                _sanitize_value(result),
+                status_code=code,
+            )
+
+    else:
+
+        @app.post("/api/records/import-preview")
+        async def create_record_import_preview_fallback(
+            request: Request,
         ) -> JSONResponse:
             try:
                 pid = _get_authenticated_patient(request)
             except AuthenticationError as exc:
                 return _auth_error(exc)
-            content = await file.read()
-            filename = sanitize_filename(file.filename or "upload.bin")
-            mime_type = file.content_type or "application/octet-stream"
-            # Parsing/OCR/import work can take several seconds. Keep it off the
-            # ASGI event loop so /healthz remains responsive to the production
-            # supervisor while a consumer upload is processed.
-            result = await run_in_threadpool(
-                records_service.upload_record, pid, content, filename, mime_type
+
+            try:
+                payload = await _read_request_body_limited(
+                    request,
+                    _MAX_RECORD_MULTIPART_BODY_BYTES,
+                )
+                filename, mime_type, content = _parse_single_multipart(
+                    request.headers.get("Content-Type") or "",
+                    payload,
+                )
+            except ValueError as exc:
+                code = str(exc)
+                return JSONResponse(
+                    {"ok": False, "error": code, "code": code},
+                    status_code=413 if code == "file_too_large" else 400,
+                    headers=_RECORD_PREVIEW_HEADERS,
+                )
+
+            try:
+                result = await run_in_threadpool(
+                    import_previews.create,
+                    pid,
+                    content,
+                    filename,
+                    mime_type,
+                )
+            except PreviewError as exc:
+                return _preview_error(exc)
+
+            return JSONResponse(
+                _sanitize_value(result),
+                headers=_RECORD_PREVIEW_HEADERS,
             )
-            code = 200 if result.get("ok") else 400
-            return JSONResponse(_sanitize_value(result), status_code=code)
-    else:
+
         @app.post("/api/records/upload")
-        async def upload_health_record_fallback(request: Request) -> JSONResponse:
+        async def upload_health_record_fallback(
+            request: Request,
+        ) -> JSONResponse:
             try:
                 pid = _get_authenticated_patient(request)
             except AuthenticationError as exc:
                 return _auth_error(exc)
+
+            if not getattr(
+                request.app.state,
+                "allow_direct_record_upload",
+                False,
+            ):
+                return _upload_requires_preview()
+
             try:
                 filename, mime_type, content = _parse_single_multipart(
-                    request.headers.get("Content-Type") or "", await request.body()
+                    request.headers.get("Content-Type") or "",
+                    await request.body(),
                 )
             except ValueError as exc:
-                return JSONResponse({"ok": False, "errors": [str(exc)]}, status_code=400)
+                return JSONResponse(
+                    {"ok": False, "errors": [str(exc)]},
+                    status_code=400,
+                )
+
             result = await run_in_threadpool(
-                records_service.upload_record, pid, content, filename, mime_type
+                records_service.upload_record,
+                pid,
+                content,
+                filename,
+                mime_type,
             )
+
             code = 200 if result.get("ok") else 400
-            return JSONResponse(_sanitize_value(result), status_code=code)
+            return JSONResponse(
+                _sanitize_value(result),
+                status_code=code,
+            )
 
     @app.get("/api/records/{document_id}")
     async def get_health_record_details(document_id: str, request: Request) -> JSONResponse:

@@ -219,7 +219,9 @@ class BloodPressureParser(_Base):
 
     def can_parse(self, ctx: dict[str, Any]) -> bool:
         b = _blob(ctx)
-        return any(x in b for x in ("blood_pressure", "systolic", "diastolic")) or ctx.get(
+        return any(x in b for x in ("blood_pressure", "systolic", "diastolic")) or re.search(
+            r"blood\s*pressure", b
+        ) is not None or ctx.get(
             "document_type"
         ) == "blood_pressure_screenshot" or re.search(r"\bbp\b", b) is not None
 
@@ -373,6 +375,11 @@ class HealthCheckerVaultImportParser(GenericJsonParser):
 
 def register_builtin_parsers(registry=None) -> None:
     from backend.health_vault.parsers.clinical_lab import ClinicalLabPanelParser
+    from backend.health_vault.parsers.ocr_screenshot import (
+        CgmScreenshotParser,
+        GlucoseMeterScreenshotParser,
+        WearableScreenshotParser,
+    )
 
     reg = registry or DEFAULT_REGISTRY
     for cls in (
@@ -383,6 +390,9 @@ def register_builtin_parsers(registry=None) -> None:
         LifeLabsParser,
         LibreParser,
         BloodPressureParser,
+        GlucoseMeterScreenshotParser,
+        CgmScreenshotParser,
+        WearableScreenshotParser,
         HospitalReportParser,
         AIAssistedParser,
         GenericJsonParser,

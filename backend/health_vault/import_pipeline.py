@@ -1,9 +1,9 @@
 """
-Autonomous Import Pipeline — single orchestration path for all health record imports.
+Autonomous Import Pipeline â€” single orchestration path for all health record imports.
 
-Document Received → Parser → OCR → Extract → Validate → Duplicate Detection →
-Store Document → Store Measurements → Timeline → Trends → Doctor Visit →
-Audit → Notify UI
+Document Received â†’ Parser â†’ OCR â†’ Extract â†’ Validate â†’ Duplicate Detection â†’
+Store Document â†’ Store Measurements â†’ Timeline â†’ Trends â†’ Doctor Visit â†’
+Audit â†’ Notify UI
 """
 
 from __future__ import annotations
@@ -68,7 +68,9 @@ class ImportPipeline:
         self.ocr = get_ocr_provider()
         self.last_perf: dict[str, float] = {}
 
-    def run(self, request: dict[str, Any]) -> dict[str, Any]:
+    def run(self, request: dict[str, Any], *, dry_run: bool = False) -> dict[str, Any]:
+        """Canonical import. ``dry_run`` parses/validates only and never writes
+        to the Vault, import log or audit trail."""
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         req = dict(request or {})
@@ -98,6 +100,19 @@ class ImportPipeline:
             # --- Duplicate detection (before store) ---
             dup = self._find_duplicate(sha256, req.get("measured_at"), filename, document_type)
             if dup is not None:
+                if dry_run:
+                    return {
+                        "ok": True,
+                        "dry_run": True,
+                        "duplicate": True,
+                        "status": "Duplicate",
+                        "original_document_id": dup.get("id"),
+                        "document_type": document_type,
+                        "measurements": [],
+                        "warnings": ["Duplicate content - already in your records"],
+                        "errors": [],
+                        "sha256": sha256,
+                    }
                 self.bus.publish(
                     DUPLICATE_DETECTED,
                     {"original_id": dup.get("id"), "sha256": sha256},
@@ -111,7 +126,7 @@ class ImportPipeline:
                     "measurements": [],
                     "confidence": None,
                     "validation": None,
-                    "warnings": ["Duplicate content — import skipped; referencing original"],
+                    "warnings": ["Duplicate content â€” import skipped; referencing original"],
                     "errors": [],
                     "imported_at": utc_now(),
                     "sha256": sha256,
@@ -176,6 +191,23 @@ class ImportPipeline:
                     pass
             timings["ocr_ms"] = (time.perf_counter() - t_ocr) * 1000
             self.bus.publish(OCR_COMPLETED, ocr_result.to_dict())
+
+            # HC-359 â€” make local vision OCR state explicit during preview.
+            # These are control-plane warnings only; never synthesize clinical values.
+            ocr_reason = str((ocr_result.meta or {}).get("reason") or "")
+            is_image = str(mime or "").lower().startswith("image/") or (
+                (ocr_result.meta or {}).get("pdf_kind") == "scanned_pdf"
+                or ocr_reason in {"malformed_pdf", "resource_limit", "pdf_renderer_unavailable"}
+            )
+            if is_image and not ocr_result.text:
+                if ocr_reason == "local_ocr_unavailable":
+                    warnings.append("Local image OCR is unavailable; no clinical measurements were extracted")
+                elif ocr_reason in {"pdf_renderer_unavailable", "resource_limit", "malformed_pdf"}:
+                    warnings.append(f"PDF could not be processed locally ({ocr_reason}); no clinical measurements were extracted")
+                elif ocr_reason in {"local_ocr_failed"}:
+                    warnings.append("Local image OCR failed; no clinical measurements were extracted")
+                else:
+                    warnings.append("No readable text was detected in this image")
 
             # --- Determine parser + extract ---
             parse_ctx = {
@@ -362,6 +394,39 @@ class ImportPipeline:
             ]
             clinical_conf = self.confidence.clinical_from_flags(flags)
 
+            if dry_run:
+                # An image with no extracted measurements is never silently
+                # presented as confirm-ready.  The user may inspect the preview,
+                # but must supply a readable/recognised image before commit.
+                image_without_measurements = is_image and not measurements
+                if image_without_measurements and ocr_result.text:
+                    warnings.append(
+                        "Text was read locally but no supported, unambiguous clinical readings "
+                        "were recognised; nothing can be imported from this file"
+                    )
+                return {
+                    "ok": True,
+                    "dry_run": True,
+                    "duplicate": False,
+                    "status": "parsed" if measurements else "partial",
+                    "document_type": document.document_type,
+                    "source_system": document.source_system,
+                    "primary_category": document.primary_category,
+                    "secondary_categories": list(document.secondary_categories or []),
+                    "requires_review": bool(document.requires_review or image_without_measurements),
+                    "ocr": ocr_result.to_dict(),
+                    "clinical_data_detected": bool(measurements),
+                    "confirmable": not image_without_measurements,
+                    "parser": parsed.get("parser"),
+                    "measurements": [
+                        m.to_dict() if hasattr(m, "to_dict") else m for m in measurements
+                    ],
+                    "measured_at": document.measured_at,
+                    "warnings": warnings,
+                    "errors": errors,
+                    "sha256": sha256,
+                }
+
             # --- Store (immutable append) ---
             t_store = time.perf_counter()
             document.status = "parsed" if measurements else "partial"
@@ -415,7 +480,12 @@ class ImportPipeline:
                 storage=storage_conf,
             )
             # Persist confidence on index import record
-            self._attach_confidence(document.id, conf.to_dict())
+            # The document is already committed; a metadata failure must not
+            # report the import as failed.
+            try:
+                self._attach_confidence(document.id, conf.to_dict())
+            except Exception as cexc:
+                warnings.append(f"confidence_persist_skipped:{type(cexc).__name__}")
 
             timings["total_ms"] = (time.perf_counter() - t0) * 1000
             self.last_perf = timings
@@ -448,12 +518,15 @@ class ImportPipeline:
                 "perf_ms": {k: round(v, 3) for k, v in timings.items()},
                 "ui_notify": True,
             }
-            self._append_import_log(result)
+            try:
+                self._append_import_log(result)
+            except Exception as lexc:
+                result.setdefault("warnings", []).append(f"import_log_skipped:{type(lexc).__name__}")
             self.bus.publish(
                 IMPORT_COMPLETED,
                 {"document_id": document.id, "overall_confidence": conf.overall_confidence},
             )
-            # HC-301 — evaluate Guardian after confirmed import (non-fatal)
+            # HC-301 â€” evaluate Guardian after confirmed import (non-fatal)
             try:
                 from backend.health_vault.guardian.health_guardian import HealthGuardian
 
@@ -474,6 +547,15 @@ class ImportPipeline:
             return result
 
         except Exception as exc:
+            if dry_run:
+                return {
+                    "ok": False,
+                    "dry_run": True,
+                    "duplicate": False,
+                    "measurements": [],
+                    "warnings": warnings,
+                    "errors": errors + [f"parse_exception:{type(exc).__name__}"],
+                }
             self.bus.publish(IMPORT_FAILED, {"error": type(exc).__name__})
             fail = {
                 "ok": False,
@@ -488,7 +570,10 @@ class ImportPipeline:
                 "imported_at": utc_now(),
                 "perf_ms": {"total_ms": round((time.perf_counter() - t0) * 1000, 3)},
             }
-            self._append_import_log(fail)
+            try:
+                self._append_import_log(fail)
+            except Exception:
+                pass
             return fail
 
     def _normalize_input(

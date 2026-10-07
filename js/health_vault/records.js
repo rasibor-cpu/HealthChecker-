@@ -19,6 +19,10 @@
       this.metricAliases = [];
       this.selectedFile = null;
       this.previewUrl = null;
+      this.importPreviewToken = null;
+      this.importPreviewFile = null;
+      this.importEpoch = 0;
+      this.importBusy = false;
       this.listRequest = null;
       this.detailRequest = null;
       this.intelligenceByDocument = new Map();
@@ -490,7 +494,14 @@
     }
 
     selectFile(file) {
+      // Invalidate any outstanding preview response before changing the file.
+      this.importEpoch += 1;
+      const token = this.importPreviewToken;
+      this.importPreviewToken = null;
+      this.importPreviewFile = null;
+      if (token) this.cancelImportPreview(token);
       this.clearDocumentPreview();
+      this.clearImportPreviewDetails();
       this.selectedFile = file || null;
       const input = document.getElementById("records_file_input");
       if (!file && input) input.value = "";
@@ -499,10 +510,13 @@
         ? `${file.name} · ${this.formatBytes(file.size)} · ${file.type || "unknown type"}`
         : "No file selected.";
       const submit = document.getElementById("records_upload_submit_btn");
-      if (submit) submit.disabled = !file;
+      if (submit) {
+        submit.disabled = !file || this.importBusy;
+        submit.textContent = "Review secure import";
+      }
       if (file) {
         this.renderDocumentPreview(file);
-        this.text("records_upload_status", "Review the local preview, then confirm secure import.");
+        this.text("records_upload_status", "Review the local document preview, then request the server preview. No record is imported until you explicitly confirm.");
       }
     }
 
@@ -564,34 +578,149 @@
       }
     }
 
-    async uploadSelected() {
-      if (!this.selectedFile || !this.isAuthenticated()) return;
-      const submit = document.getElementById("records_upload_submit_btn");
-      if (submit) submit.disabled = true;
-      this.text("records_upload_status", "Confirmed. Uploading securely and processing through HealthChecker intake…");
-      const form = new FormData();
-      form.append("file", this.selectedFile, this.selectedFile.name);
+    clearImportPreviewDetails() {
+      const host = document.getElementById("records_server_preview");
+      const summary = document.getElementById("records_server_preview_summary");
+      const measurements = document.getElementById("records_server_preview_measurements");
+      const warnings = document.getElementById("records_server_preview_warnings");
+      if (summary) summary.textContent = "";
+      if (measurements) {
+        while (measurements.firstChild) measurements.removeChild(measurements.firstChild);
+      }
+      if (warnings) warnings.textContent = "";
+      if (host) host.hidden = true;
+    }
+
+    renderImportPreviewDetails(body) {
+      const host = document.getElementById("records_server_preview");
+      const summary = document.getElementById("records_server_preview_summary");
+      const measurements = document.getElementById("records_server_preview_measurements");
+      const warnings = document.getElementById("records_server_preview_warnings");
+      if (!host) return;
+
+      const categories = Array.isArray(body.categories) ? body.categories.filter(Boolean) : [];
+      const range = body.date_range || {};
+      const count = Number(body.observation_count || 0);
+
+      if (summary) {
+        const parts = [
+          `${count} extracted observation${count === 1 ? "" : "s"}`,
+          categories.length ? `Categories: ${categories.join(", ")}` : "",
+          range.from ? `From: ${range.from}` : "",
+          range.to && range.to !== range.from ? `To: ${range.to}` : ""
+        ].filter(Boolean);
+        summary.textContent = parts.join(" · ");
+      }
+
+      if (measurements) {
+        while (measurements.firstChild) measurements.removeChild(measurements.firstChild);
+        const rows = Array.isArray(body.measurement_preview) ? body.measurement_preview : [];
+        rows.forEach(row => {
+          const item = document.createElement("li");
+          const metric = row && row.metric != null ? String(row.metric) : "Measurement";
+          const value = row && row.value != null ? String(row.value) : "value unavailable";
+          const units = row && row.units ? ` ${String(row.units)}` : "";
+          const measured = row && row.measured_at ? ` · ${String(row.measured_at)}` : "";
+          const flag = row && row.flag ? ` · ${String(row.flag)}` : "";
+          item.textContent = `${metric}: ${value}${units}${measured}${flag}`;
+          measurements.appendChild(item);
+        });
+
+        if (!rows.length) {
+          const item = document.createElement("li");
+          item.textContent = "No individual extracted measurement values were returned for this document.";
+          measurements.appendChild(item);
+        }
+      }
+
+      if (warnings) {
+        const values = Array.isArray(body.warnings) ? body.warnings.filter(Boolean) : [];
+        warnings.textContent = values.length ? `Warnings: ${values.join("; ")}` : "No preview warnings.";
+      }
+
+      host.hidden = false;
+    }
+
+    async cancelImportPreview(token) {
+      // Best effort: the server also expires unused previews automatically.
+      if (!token) return;
       try {
-        const response = await this.request("/api/records/upload", { method: "POST", body: form });
-        const body = await response.json();
-        const state = body.status || (response.ok ? "imported" : "failed");
-        const messages = [].concat(body.warnings || [], body.errors || []).filter(Boolean);
-        if (!response.ok) {
-          this.text("records_upload_status", `Upload ${this.label(state)}. ${messages.join(" ") || "Please review the file and try again."}`);
+        await this.request(`/api/records/import-preview/${encodeURIComponent(token)}/cancel`, {
+          method: "POST",
+        });
+      } catch (_error) {
+        // A failed cancellation must not reactivate an abandoned preview.
+      }
+    }
+
+    async uploadSelected() {
+      if (!this.selectedFile || !this.isAuthenticated() || this.importBusy) return;
+      const submit = document.getElementById("records_upload_submit_btn");
+      const file = this.selectedFile;
+      const epoch = this.importEpoch;
+      const confirming = !!(this.importPreviewToken && this.importPreviewFile === file);
+      this.importBusy = true;
+      if (submit) submit.disabled = true;
+      try {
+        if (!confirming) {
+          const form = new FormData();
+          form.append("file", file, file.name);
+          this.text("records_upload_status", "Preparing authenticated server preview. No vault record has been committed…");
+          const response = await this.request("/api/records/import-preview", { method: "POST", body: form });
+          const body = await this.readJson(response);
+          const token = body.preview_token || null;
+          if (epoch !== this.importEpoch || file !== this.selectedFile) {
+            if (token) await this.cancelImportPreview(token);
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(body.code || body.error || "preview_failed");
+          }
+          if (!body.eligible || !token) {
+            this.text("records_upload_status", body.duplicate
+              ? "This document is already in your vault. Nothing was imported."
+              : `Not eligible for import. ${[].concat(body.errors || [], body.warnings || []).join(" ")}`.trim());
+            return;
+          }
+          this.importPreviewToken = token;
+          this.importPreviewFile = file;
+          this.renderImportPreviewDetails(body);
+          const metrics = Number(body.observation_count || 0);
+          const summary = `${body.filename || file.name} · ${metrics} extracted observation${metrics === 1 ? "" : "s"}`;
+          this.text("records_upload_status", `Server preview ready: ${summary}. Review this summary and the local document preview. Select “Confirm import now” to commit to the vault, or Cancel to discard.`);
+          if (submit) submit.textContent = "Confirm import now";
           return;
         }
-        const outcome = state === "duplicate" ? "Duplicate detected" :
-          (state === "requires_review" ? "Uploaded — review required" : `Upload ${this.label(state)}`);
-        this.text("records_upload_status", `${outcome}. ${messages.join(" ")}`.trim());
+
+        // This path can only be reached on a separate, explicit second click.
+        const token = this.importPreviewToken;
+        this.text("records_upload_status", "Confirming the preview and securely committing to the vault…");
+        const response = await this.request(
+          `/api/records/import-preview/${encodeURIComponent(token)}/confirm`,
+          { method: "POST" }
+        );
+        const body = await this.readJson(response);
+        if (epoch !== this.importEpoch || file !== this.selectedFile) return;
+        if (!response.ok || body.ok === false) {
+          throw new Error(body.code || body.error || "confirm_failed");
+        }
+        this.importPreviewToken = null;
+        this.importPreviewFile = null;
+        this.clearImportPreviewDetails();
+        if (submit) submit.textContent = "Review secure import";
+        this.text("records_upload_status", body.already_confirmed
+          ? "Import was already confirmed. Your vault was not charged with a duplicate record."
+          : "Import confirmed. Your document is securely stored.");
         await this.refreshRecords();
         const dashboard = this.dashboard();
         if (dashboard) await dashboard.refresh();
         if (body.document_id) await this.openDetail(body.document_id);
       } catch (error) {
-        if (error.message !== "authentication_required") {
-          this.text("records_upload_status", "Upload failed because the service could not be reached. Your file was not stored by this page.");
+        if (epoch === this.importEpoch && error.message !== "authentication_required") {
+          this.text("records_upload_status", `Secure import could not complete (${error.message || "service unavailable"}). Please review the status before retrying.`);
         }
       } finally {
+        this.importBusy = false;
         if (submit) submit.disabled = !this.selectedFile;
       }
     }
