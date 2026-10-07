@@ -283,3 +283,48 @@ def test_preview_global_staged_bytes_reject_without_cross_user_eviction(monkeypa
     assert error.value.code == "preview_capacity_exceeded"
     assert error.value.status_code == 503
     assert service.status_of(first["preview_token"]) == preview_module.PREVIEWED
+
+
+
+def test_preview_terminal_metadata_is_pruned_at_capacity(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_SESSION_RECORDS", 2)
+    service = ImportPreviewService(
+        lambda *_args: {
+            "ok": False,
+            "confirmable": False,
+            "measurements": [],
+            "errors": ["synthetic_rejection"],
+        },
+        lambda *_args: {"ok": True, "document_id": "unused"},
+    )
+
+    for index in range(3):
+        result = service.create(
+            "user-a",
+            f"payload-{index}".encode(),
+            f"rejected-{index}.json",
+            "application/json",
+        )
+        assert result["preview_token"] is None
+
+    assert len(service._sessions) == 2
+    assert {session.filename for session in service._sessions.values()} == {
+        "rejected-1.json",
+        "rejected-2.json",
+    }
+
+
+def test_preview_metadata_capacity_never_evicts_active_sessions(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_SESSION_RECORDS", 2)
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_PER_USER", 100)
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_TOTAL", 100)
+    service = _eligible_preview_service()
+
+    first = service.create("user-a", b"a", "first.json", "application/json")
+    second = service.create("user-b", b"b", "second.json", "application/json")
+    with pytest.raises(PreviewError) as error:
+        service.create("user-c", b"c", "third.json", "application/json")
+
+    assert error.value.code == "preview_capacity_exceeded"
+    assert service.status_of(first["preview_token"]) == preview_module.PREVIEWED
+    assert service.status_of(second["preview_token"]) == preview_module.PREVIEWED
