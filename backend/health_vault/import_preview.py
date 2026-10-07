@@ -27,6 +27,7 @@ MAX_ACTIVE_PER_USER = 10
 MAX_STAGED_BYTES = 30 * 1024 * 1024
 MAX_ACTIVE_BYTES_PER_USER = 64 * 1024 * 1024
 MAX_ACTIVE_BYTES_TOTAL = 256 * 1024 * 1024
+MAX_SESSION_RECORDS = 1000
 
 
 def configured_ttl_seconds() -> int:
@@ -95,6 +96,24 @@ class ImportPreviewService:
             if session.expires_at + self._ttl <= now:
                 self._sessions.pop(token, None)
 
+    def _prune_terminal_for_capacity(self) -> None:
+        """Bound retained preview metadata without evicting active sessions."""
+        if len(self._sessions) < MAX_SESSION_RECORDS:
+            return
+        terminal = sorted(
+            (
+                session for session in self._sessions.values()
+                if session.status != PREVIEWED
+            ),
+            key=lambda session: session.created_at,
+        )
+        for session in terminal:
+            if len(self._sessions) < MAX_SESSION_RECORDS:
+                break
+            self._sessions.pop(session.token, None)
+        if len(self._sessions) >= MAX_SESSION_RECORDS:
+            raise PreviewError("preview_capacity_exceeded", 503)
+
     def create(self, user_id: str, content: bytes, filename: str, mime_type: str) -> dict[str, Any]:
         if not content:
             raise PreviewError("empty_file", 400)
@@ -137,6 +156,9 @@ class ImportPreviewService:
                     # Never evict another user's pending clinical preview.
                     raise PreviewError("preview_capacity_exceeded", 503)
 
+            # Terminal entries are pruned before admitting new metadata. If the
+            # cap is still full, every retained entry is active and protected.
+            self._prune_terminal_for_capacity()
             session = _Session(
                 token=token,
                 user_id=user_id,
