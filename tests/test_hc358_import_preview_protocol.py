@@ -328,3 +328,74 @@ def test_preview_metadata_capacity_never_evicts_active_sessions(monkeypatch):
     assert error.value.code == "preview_capacity_exceeded"
     assert service.status_of(first["preview_token"]) == preview_module.PREVIEWED
     assert service.status_of(second["preview_token"]) == preview_module.PREVIEWED
+
+
+
+def test_preview_analysis_concurrency_fails_closed_when_busy(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_CONCURRENT_PREVIEW_ANALYSES", 1)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocking_dry_run(*_args):
+        entered.set()
+        assert release.wait(timeout=5)
+        return {
+            "ok": True,
+            "confirmable": True,
+            "measurements": [{"metric": "synthetic"}],
+            "errors": [],
+        }
+
+    service = ImportPreviewService(
+        blocking_dry_run,
+        lambda *_args: {"ok": True, "document_id": "synthetic"},
+    )
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(
+            service.create,
+            "user-a",
+            b"first",
+            "first.json",
+            "application/json",
+        )
+        assert entered.wait(timeout=5)
+        with pytest.raises(PreviewError) as error:
+            service.create(
+                "user-b",
+                b"second",
+                "second.json",
+                "application/json",
+            )
+        assert error.value.code == "preview_busy"
+        assert error.value.status_code == 503
+        release.set()
+        assert first.result(timeout=5)["eligible"] is True
+
+
+def test_preview_analysis_slot_is_released_after_parser_failure(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_CONCURRENT_PREVIEW_ANALYSES", 1)
+    calls = {"count": 0}
+
+    def dry_run(*_args):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("synthetic_parser_failure")
+        return {
+            "ok": True,
+            "confirmable": True,
+            "measurements": [{"metric": "synthetic"}],
+            "errors": [],
+        }
+
+    service = ImportPreviewService(
+        dry_run,
+        lambda *_args: {"ok": True, "document_id": "synthetic"},
+    )
+    with pytest.raises(RuntimeError, match="synthetic_parser_failure"):
+        service.create("user-a", b"first", "first.json", "application/json")
+    assert service.create(
+        "user-a",
+        b"second",
+        "second.json",
+        "application/json",
+    )["eligible"] is True
