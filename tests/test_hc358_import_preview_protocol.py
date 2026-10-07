@@ -14,6 +14,7 @@ from backend.health_vault.api import (
     _read_request_body_limited,
     create_health_vault_app,
 )
+from backend.health_vault import import_preview as preview_module
 from backend.health_vault.import_preview import ImportPreviewService, PreviewError
 from backend.health_vault.vault_store import VaultStore
 
@@ -243,3 +244,42 @@ def test_fallback_body_reader_accepts_payload_at_limit():
     request = _ChunkedRequest([b"123", b"456"], content_length=6)
     assert asyncio.run(_read_request_body_limited(request, 6)) == b"123456"
     assert request.yielded == 2
+
+
+
+def _eligible_preview_service():
+    return ImportPreviewService(
+        lambda *_args: {
+            "ok": True,
+            "confirmable": True,
+            "measurements": [{"metric": "synthetic"}],
+            "errors": [],
+        },
+        lambda *_args: {"ok": True, "document_id": "synthetic"},
+    )
+
+
+def test_preview_staged_bytes_evict_oldest_for_same_user(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_PER_USER", 6)
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_TOTAL", 100)
+    service = _eligible_preview_service()
+
+    first = service.create("user-a", b"1234", "first.json", "application/json")
+    second = service.create("user-a", b"5678", "second.json", "application/json")
+
+    assert service.status_of(first["preview_token"]) == preview_module.CANCELLED
+    assert service.status_of(second["preview_token"]) == preview_module.PREVIEWED
+
+
+def test_preview_global_staged_bytes_reject_without_cross_user_eviction(monkeypatch):
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_PER_USER", 100)
+    monkeypatch.setattr(preview_module, "MAX_ACTIVE_BYTES_TOTAL", 6)
+    service = _eligible_preview_service()
+
+    first = service.create("user-a", b"1234", "first.json", "application/json")
+    with pytest.raises(PreviewError) as error:
+        service.create("user-b", b"5678", "second.json", "application/json")
+
+    assert error.value.code == "preview_capacity_exceeded"
+    assert error.value.status_code == 503
+    assert service.status_of(first["preview_token"]) == preview_module.PREVIEWED
