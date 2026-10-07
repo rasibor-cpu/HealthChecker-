@@ -169,6 +169,16 @@ class ImportPreviewService:
             "record_count": 0 if duplicate else 1,
             "observation_count": len(measurements),
             "metrics": metrics[:50],
+            "measurement_preview": [
+                {
+                    "metric": m.get("metric"),
+                    "value": m.get("value"),
+                    "units": m.get("units") or m.get("unit"),
+                    "measured_at": m.get("measured_at"),
+                    "flag": m.get("flag"),
+                }
+                for m in measurements[:50]
+            ],
             "categories": categories,
             "date_range": {"from": dates[0], "to": dates[-1]} if dates else None,
             "duplicate": duplicate,

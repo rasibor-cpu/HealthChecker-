@@ -155,13 +155,30 @@ def test_legacy_timeline_and_import_ignore_forged_patient_identity(tmp_path):
     assert "robert-private" not in timeline.text
     assert "private-robert-timeline" not in timeline.text
 
-    imported = client.post(
-        "/api/records/upload",
-        headers=headers,
-        data={"patient_id": "00000"},
-        files={"file": ("secondary.json", b'{"systolic":120,"diastolic":70}', "application/json")},
-    )
-    assert imported.status_code == 200
+    payload = json.dumps({
+        "source": "synthetic_lab", "patient_id": "00000",
+        "measured_at": "2026-08-16T10:00:00Z",
+        "extracted_measurements": [
+            {"metric": "glucose", "value": 5.8, "units": "mmol/L", "flag": "normal"}
+        ],
+    }).encode("utf-8")
+    upload_kwargs = {
+        "headers": headers,
+        "data": {"patient_id": "00000"},
+        "files": {"file": ("secondary.json", payload, "application/json")},
+    }
+    direct = client.post("/api/records/upload", **upload_kwargs)
+    assert direct.status_code == 428
+    assert direct.json()["code"] == "PREVIEW_CONFIRMATION_REQUIRED"
+    assert not any(row.get("original_filename") == "secondary.json" for row in store.list_documents())
+
+    preview = client.post("/api/records/import-preview", **upload_kwargs)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["eligible"] is True
+    assert not any(row.get("original_filename") == "secondary.json" for row in store.list_documents())
+    token = preview.json()["preview_token"]
+    imported = client.post(f"/api/records/import-preview/{token}/confirm", headers=headers)
+    assert imported.status_code == 200, imported.text
     assert imported.json()["ok"] is True
     created = next(row for row in store.list_documents() if row["id"] == imported.json()["document_id"])
     assert created["patient_id"] == "secondary"

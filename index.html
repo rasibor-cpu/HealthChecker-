@@ -520,6 +520,13 @@ textarea{
       <pre id="records_document_preview_text" hidden class="small" style="max-height:50vh; overflow:auto; white-space:pre-wrap; word-break:break-word;"></pre>
       <p class="small muted" style="margin-bottom:0;">Check that this is the intended document, then confirm import. The preview is created locally on this device.</p>
     </section>
+    <section id="records_server_preview" class="records-detail-section" hidden aria-live="polite" style="margin-top:12px;">
+      <h5 style="margin:0 0 8px;">Extracted clinical preview — not imported yet</h5>
+      <div id="records_server_preview_summary" class="small"></div>
+      <ul id="records_server_preview_measurements" class="small"></ul>
+      <div id="records_server_preview_warnings" class="small muted"></div>
+      <p class="small muted" style="margin-bottom:0;">Review these extracted values before confirming. Nothing is committed to the vault until you confirm.</p>
+    </section>
     <div class="records-upload-actions">
       <button id="records_upload_submit_btn" type="button" disabled>Confirm secure import</button>
       <button id="records_upload_cancel_btn" type="button" class="secondary">Cancel</button>

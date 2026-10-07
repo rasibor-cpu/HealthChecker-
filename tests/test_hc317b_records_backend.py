@@ -38,12 +38,26 @@ def test_records_upload_and_lifecycle(temp_vault_with_app):
     }
     file_bytes = json.dumps(clinical_payload).encode("utf-8")
 
-    upload_resp = client.post(
-        "/api/records/upload",
-        headers={"Authorization": f"Bearer {token_a}"},
-        files={"file": ("lab_report.json", file_bytes, "application/json")},
-    )
-    assert upload_resp.status_code == 200
+    headers = {"Authorization": f"Bearer {token_a}"}
+    file = {"file": ("lab_report.json", file_bytes, "application/json")}
+    direct = client.post("/api/records/upload", headers=headers, files=file)
+    assert direct.status_code == 428
+    assert direct.json()["code"] == "PREVIEW_CONFIRMATION_REQUIRED"
+    assert store.list_documents() == []
+
+    preview = client.post("/api/records/import-preview", headers=headers, files=file)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["eligible"] is True
+    assert store.list_documents() == []
+    preview_body = preview.json()
+    assert preview_body["measurement_preview"]
+    first_measurement = preview_body["measurement_preview"][0]
+    assert first_measurement["metric"]
+    assert "value" in first_measurement
+    assert "units" in first_measurement
+    token = preview_body["preview_token"]
+    upload_resp = client.post(f"/api/records/import-preview/{token}/confirm", headers=headers)
+    assert upload_resp.status_code == 200, upload_resp.text
     res = upload_resp.json()
     assert res["ok"] is True
     doc_id = res["document_id"]
@@ -234,13 +248,26 @@ def test_listing_filters_and_upload_identity_binding(temp_vault_with_app):
     labs = client.get("/api/records?category=laboratory_report&status=imported", headers=headers).json()["records"]
     assert [row["document_id"] for row in labs] == ["lab-a"]
 
-    payload = json.dumps({"patient_id": "patient-B", "measured_at": "2026-08-16T10:00:00Z"}).encode()
-    uploaded = client.post(
-        "/api/records/upload",
-        headers=headers,
-        files={"file": ("../identity.json", payload, "application/json")},
-    )
-    assert uploaded.status_code == 200
+    payload = json.dumps({
+        "source": "synthetic_lab", "patient_id": "patient-B",
+        "measured_at": "2026-08-16T10:00:00Z",
+        "extracted_measurements": [
+            {"metric": "glucose", "value": 5.8, "units": "mmol/L", "flag": "normal"}
+        ],
+    }).encode()
+    file = {"file": ("../identity.json", payload, "application/json")}
+    direct = client.post("/api/records/upload", headers=headers, files=file)
+    assert direct.status_code == 428
+    assert direct.json()["code"] == "PREVIEW_CONFIRMATION_REQUIRED"
+    before = len(store.list_documents())
+    preview = client.post("/api/records/import-preview", headers=headers, files=file)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["eligible"] is True
+    assert len(store.list_documents()) == before
+    token = preview.json()["preview_token"]
+    uploaded = client.post(f"/api/records/import-preview/{token}/confirm", headers=headers)
+    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.json()["ok"] is True
     doc_id = uploaded.json()["document_id"]
     stored = next(doc for doc in store.list_documents() if doc["id"] == doc_id)
     assert stored["patient_id"] == "patient-A"

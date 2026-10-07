@@ -58,7 +58,10 @@ def test_records_ui_assets_and_navigation_contract():
     assert 'params.set("q"' in js
     assert "device_data" in js
     assert "clinical_document" in js
-    assert '"/api/records/upload"' in js
+    assert '"/api/records/import-preview"' in js
+    assert '/confirm`' in js
+    assert '/cancel`' in js
+    assert '"/api/records/upload"' not in js
     assert "`/api/records/${encodeURIComponent(documentId)}`" in js
     assert "`/api/records/download/${encodeURIComponent(documentId)}`" in js
     assert "getAuthorizationHeaders" in dashboard
@@ -95,12 +98,20 @@ def test_authenticated_upload_list_detail_and_encrypted_download(records_app):
         }
     ).encode("utf-8")
 
-    upload = client.post(
-        "/api/records/upload",
-        headers=headers,
-        files={"file": ("consumer-record.json", payload, "application/json")},
-    )
-    assert upload.status_code == 200
+    file = {"file": ("consumer-record.json", payload, "application/json")}
+    direct = client.post("/api/records/upload", headers=headers, files=file)
+    assert direct.status_code == 428
+    assert direct.json()["code"] == "PREVIEW_CONFIRMATION_REQUIRED"
+    assert store.list_documents() == []
+
+    preview = client.post("/api/records/import-preview", headers=headers, files=file)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["eligible"] is True
+    assert store.list_documents() == []
+    token = preview.json()["preview_token"]
+    upload = client.post(f"/api/records/import-preview/{token}/confirm", headers=headers)
+    assert upload.status_code == 200, upload.text
+    assert upload.json()["ok"] is True
     document_id = upload.json()["document_id"]
     assert document_id
 
@@ -262,4 +273,17 @@ def test_hc358_consumer_uat_remediation_contract():
     assert "URL.createObjectURL(file)" in records
     assert "URL.revokeObjectURL(this.previewUrl)" in records
     assert 'form.append("file"' in records
-    assert records.index("renderDocumentPreview(file)") < records.index('this.request("/api/records/upload"')
+    assert records.index("renderDocumentPreview(file)") < records.index('this.request("/api/records/import-preview"')
+    assert 'this.importPreviewToken = token' in records
+    assert 'this.importPreviewFile = file' in records
+    assert 'body.eligible' in records
+    assert '"Confirm import now"' in records
+    assert "renderImportPreviewDetails(body)" in records
+    assert "body.measurement_preview" in records
+    assert 'document.createElement("li")' in records
+    assert "item.textContent" in records
+    assert "records_server_preview" in html
+    assert "records_server_preview_measurements" in html
+    assert '/confirm`' in records
+    assert '/cancel`' in records
+    assert 'this.request("/api/records/upload"' not in records
