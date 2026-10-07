@@ -7,7 +7,9 @@ bytes are never sent to a network OCR service by this module.
 from __future__ import annotations
 
 import hashlib
+import io
 import re
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,8 +36,11 @@ def verify_local_model_assets(model_root: Path) -> None:
         path = model_root / name
         if not path.is_file():
             raise LocalOCRAssetsError(f"missing_model:{name}")
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != expected:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != expected:
             raise LocalOCRAssetsError(f"model_hash_mismatch:{name}")
 
 
@@ -115,6 +120,9 @@ class RapidLocalVisionOCRProvider(OCRProvider):
 
     name = "rapidocr_local"
     _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff")
+    MAX_IMAGE_BYTES = 20 * 1024 * 1024
+    MAX_IMAGE_PIXELS = 25_000_000
+    MAX_IMAGE_EDGE = 10_000
 
     def __init__(self) -> None:
         self._engine = None
@@ -125,6 +133,33 @@ class RapidLocalVisionOCRProvider(OCRProvider):
         mime = (mime_type or "").lower()
         name = (filename or "").lower()
         return mime.startswith("image/") or name.endswith(RapidLocalVisionOCRProvider._IMAGE_EXTENSIONS)
+
+    @classmethod
+    def _validate_image_resource(cls, content: bytes) -> tuple[str, dict[str, Any]] | None:
+        if len(content) > cls.MAX_IMAGE_BYTES:
+            return "resource_limit", {"limit": "max_image_bytes", "size_bytes": len(content)}
+        try:
+            from PIL import Image
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(io.BytesIO(content)) as image:
+                    width, height = image.size
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+            return "resource_limit", {"limit": "pillow_decompression_bomb"}
+        except Exception as exc:
+            return "malformed_image", {"error_type": type(exc).__name__}
+        pixels = width * height
+        if width > cls.MAX_IMAGE_EDGE or height > cls.MAX_IMAGE_EDGE:
+            return "resource_limit", {
+                "limit": "max_image_edge", "width": width, "height": height,
+            }
+        if pixels > cls.MAX_IMAGE_PIXELS:
+            return "resource_limit", {
+                "limit": "max_image_pixels", "width": width, "height": height,
+                "pixels": pixels,
+            }
+        return None
 
     def _get_engine(self):
         if self._engine is None:
@@ -147,6 +182,13 @@ class RapidLocalVisionOCRProvider(OCRProvider):
                 confidence=0.0,
                 provider=self.name,
                 meta={"reason": "unsupported_binary_type", "mime_type": mime_type},
+            )
+        resource_error = self._validate_image_resource(content)
+        if resource_error is not None:
+            reason, meta = resource_error
+            return OCRResult(
+                text="", confidence=0.0, provider=self.name,
+                meta={"reason": reason, "local_only": True, **meta},
             )
         try:
             result = self._get_engine()(content)
