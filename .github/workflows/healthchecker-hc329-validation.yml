@@ -61,6 +61,35 @@ jobs:
       - name: Validate consumer import JavaScript syntax
         run: node --check js/health_vault/records.js
 
+
+  windows-production-lock:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "x64"
+          cache: pip
+          cache-dependency-path: requirements/production.txt
+      - name: Verify Windows x86-64 CPython 3.12
+        shell: pwsh
+        run: python -c "import platform, struct, sys; assert sys.version_info[:2] == (3, 12); assert struct.calcsize('P') * 8 == 64; assert platform.system() == 'Windows'; print(platform.platform(), platform.machine(), sys.version)"
+      - name: Install production dependencies from hashes
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r requirements/production.txt
+      - name: Install qualification harness
+        shell: pwsh
+        run: python -m pip install pytest
+      - name: Verify locked runtime and local OCR qualification
+        shell: pwsh
+        run: |
+          python -c "import cryptography; assert cryptography.__version__ == '45.0.7'"
+          python -m pytest -q tests/test_hc360_production_lock.py tests/test_hc360_ocr_import_qualification.py tests/test_hc360_ocr_locality.py
+
   android-unit:
     runs-on: ubuntu-latest
     timeout-minutes: 30
