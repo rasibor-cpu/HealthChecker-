@@ -25,6 +25,8 @@ EXPIRED = "EXPIRED"
 DEFAULT_TTL_SECONDS = 900
 MAX_ACTIVE_PER_USER = 10
 MAX_STAGED_BYTES = 30 * 1024 * 1024
+MAX_ACTIVE_BYTES_PER_USER = 64 * 1024 * 1024
+MAX_ACTIVE_BYTES_TOTAL = 256 * 1024 * 1024
 
 
 def configured_ttl_seconds() -> int:
@@ -102,17 +104,39 @@ class ImportPreviewService:
         parsed = self._dry_run(user_id, content, filename, mime_type)
         with self._guard:
             self._purge()
-            active = [
-                s for s in self._sessions.values()
-                if s.user_id == user_id and s.status == PREVIEWED
-            ]
-            if len(active) >= MAX_ACTIVE_PER_USER:
-                oldest = min(active, key=lambda s: s.created_at)
-                oldest.status = CANCELLED
-                oldest.content = None
             now = self._clock()
             token = secrets.token_urlsafe(32)
             summary = self._summarise(parsed, filename)
+            if summary["eligible"]:
+                active = [
+                    session for session in self._sessions.values()
+                    if session.user_id == user_id and session.status == PREVIEWED
+                ]
+                user_bytes = sum(
+                    len(session.content) for session in active
+                    if session.content is not None
+                )
+                # Preserve the existing oldest-preview eviction policy, but
+                # apply it to both session count and retained bytes.
+                while active and (
+                    len(active) >= MAX_ACTIVE_PER_USER
+                    or user_bytes + len(content) > MAX_ACTIVE_BYTES_PER_USER
+                ):
+                    oldest = min(active, key=lambda session: session.created_at)
+                    if oldest.content is not None:
+                        user_bytes -= len(oldest.content)
+                    oldest.status = CANCELLED
+                    oldest.content = None
+                    active.remove(oldest)
+
+                total_bytes = sum(
+                    len(session.content) for session in self._sessions.values()
+                    if session.status == PREVIEWED and session.content is not None
+                )
+                if total_bytes + len(content) > MAX_ACTIVE_BYTES_TOTAL:
+                    # Never evict another user's pending clinical preview.
+                    raise PreviewError("preview_capacity_exceeded", 503)
+
             session = _Session(
                 token=token,
                 user_id=user_id,
