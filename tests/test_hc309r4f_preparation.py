@@ -397,8 +397,10 @@ def test_fixed_seed_bounded_adversarial_matrix_is_redacted():
 
 
 def _open_stdin_result(*, trickle: bool = False, env: dict[str, str] | None = None) -> tuple[subprocess.CompletedProcess[bytes], float, set[int]]:
+    # Observe the preparation interpreter itself, not the Windows venv redirector.
+    # The latter creates an expected base-Python child before the module starts.
     process = subprocess.Popen(
-        [sys.executable, "-B", "-m", "backend.health_vault.companion_host.r4f_preparation"],
+        [sys._base_executable if sys.platform == "win32" else sys.executable, "-B", "-m", "backend.health_vault.companion_host.r4f_preparation"],
         cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
     )
     assert process.stdin is not None and process.stdout is not None and process.stderr is not None
@@ -504,7 +506,7 @@ def test_cli_creates_no_file_and_no_child_process(tmp_path: Path):
                 except OSError: break
     except FileNotFoundError: pass
     process = subprocess.Popen(
-        [sys.executable, "-B", "-m", "backend.health_vault.companion_host.r4f_preparation"],
+        [sys._base_executable if sys.platform == "win32" else sys.executable, "-B", "-m", "backend.health_vault.companion_host.r4f_preparation"],
         cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     assert process.stdin is not None; process.stdin.write(json.dumps(_fixture()).encode()); process.stdin.close()
