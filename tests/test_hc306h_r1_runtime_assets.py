@@ -210,7 +210,14 @@ def test_protected_status_from_temp_release_via_trusted_proxy_path(tmp_path: Pat
             if key == "backend" or key.startswith("backend."):
                 del sys.modules[key]
         sys.path = [str(release)] + [
-            p for p in sys.path if "HealthChecker-" not in str(p).replace("/", "\\")
+            p for p in sys.path
+            if not (
+                Path(p).resolve() == ROOT.resolve()
+                or (
+                    Path(p).resolve().is_relative_to(ROOT.resolve())
+                    and "site-packages" not in Path(p).parts
+                )
+            )
         ]
 
         from backend.health_vault.companion_host.app import build_activated_app
