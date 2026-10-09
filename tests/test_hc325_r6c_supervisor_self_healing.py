@@ -300,7 +300,9 @@ def _start_supervisor(config_path: Path, tmp_path: Path, extra_env: dict | None 
     fake_path = _write_fake_uvicorn(tmp_path / "fake-pythonpath")
     control = _control_dir(tmp_path)
     env = os.environ.copy()
-    env["HEALTHCHECKER_MANAGED_PYTHON"] = sys.executable
+    # Synthetic Uvicorn uses only stdlib and PYTHONPATH; skip the Windows venv
+    # redirector so the supervisor directly owns the interpreter being tested.
+    env["HEALTHCHECKER_MANAGED_PYTHON"] = sys._base_executable if sys.platform == "win32" else sys.executable
     existing = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(fake_path) + ((";" + existing) if existing else "")
     env["HC325_R6C_FAKE_CONTROL"] = str(control)
