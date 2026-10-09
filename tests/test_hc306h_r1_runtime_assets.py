@@ -168,7 +168,8 @@ def test_packaged_import_with_bytecode_disabled_creates_no_cache(tmp_path: Path)
     code = (
         "import sys\n"
         f"rel = r'''{release}'''\n"
-        "sys.path = [rel] + [p for p in sys.path if 'HealthChecker-' not in str(p).replace('/','\\\\')]\n"
+        f"source_root = r'''{ROOT}'''\n"
+        "sys.path = [rel] + [p for p in sys.path if not (str(p).lower() == source_root.lower() or str(p).lower().startswith(source_root.lower() + chr(92)))]\n"
         "import backend.health_vault.companion_host.scheduled_host as sh\n"
         "from pathlib import Path\n"
         "print('ok', Path(sh.__file__).resolve().as_posix().startswith(Path(rel).resolve().as_posix().replace('\\\\','/')))\n"
@@ -209,7 +210,14 @@ def test_protected_status_from_temp_release_via_trusted_proxy_path(tmp_path: Pat
             if key == "backend" or key.startswith("backend."):
                 del sys.modules[key]
         sys.path = [str(release)] + [
-            p for p in sys.path if "HealthChecker-" not in str(p).replace("/", "\\")
+            p for p in sys.path
+            if not (
+                Path(p).resolve() == ROOT.resolve()
+                or (
+                    Path(p).resolve().is_relative_to(ROOT.resolve())
+                    and "site-packages" not in Path(p).parts
+                )
+            )
         ]
 
         from backend.health_vault.companion_host.app import build_activated_app
