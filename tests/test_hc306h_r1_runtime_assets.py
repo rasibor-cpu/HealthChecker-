@@ -1,5 +1,5 @@
 """
-HC-306H-R1 â€” Runtime-asset packaging + bytecode immutability (adversarial).
+HC-306H-R1 — Runtime-asset packaging + bytecode immutability (adversarial).
 
 TEMP-only synthetic releases/vaults. Never opens permanent monitoring vault,
 vault_storage, or private_imports. Never installs scheduled tasks.
@@ -251,11 +251,11 @@ def test_protected_status_from_temp_release_via_trusted_proxy_path(tmp_path: Pat
         body = hz.json()
         assert "ok" in body or "status" in body
 
-        # Direct protected status without proxy proof â†’ 403
+        # Direct protected status without proxy proof → 403
         direct = client.get("/api/companion/status")
         assert direct.status_code == 403
 
-        # Trusted synthetic proxy path â†’ gate passes; status handler returns 200
+        # Trusted synthetic proxy path → gate passes; status handler returns 200
         headers = {
             "X-Forwarded-Proto": "https",
             "X-Forwarded-Host": "phone-host.example.ts.net",
