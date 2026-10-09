@@ -149,9 +149,12 @@ def test_scenario_a_healthy_chain_via_powershell_parent(tmp_path: Path):
         "server.serve_forever()\n",
         encoding="utf-8",
     )
+    # This synthetic child needs only stdlib; bypass the Windows venv redirector
+    # so the PID reported by Process.Start owns the test socket itself.
+    test_python = sys._base_executable if sys.platform == "win32" else sys.executable
     supervisor_script = (
         "$psi = New-Object System.Diagnostics.ProcessStartInfo; "
-        f"$psi.FileName = '{sys.executable}'; "
+        f"$psi.FileName = '{test_python}'; "
         f"$psi.Arguments = '\"{child_script_path}\"'; "
         "$psi.UseShellExecute = $false; "
         "$psi.CreateNoWindow = $true; "
